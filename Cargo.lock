@@ -148,6 +148,7 @@ name = "toile-cli"
 version = "0.1.0"
 dependencies = [
  "rayon",
+ "toile-doc",
  "toile-engine",
  "toile-mesh",
  "toile-sim",

@@ -259,6 +259,10 @@ fn run_size(target: usize) {
 }
 
 pub fn run(args: &[String]) {
+    if args.iter().any(|a| a == "--incr") {
+        run_incremental();
+        return;
+    }
     let sizes: Vec<usize> = if let Some(i) = args.iter().position(|a| a == "--verts") {
         vec![args[i + 1].parse().expect("--verts N")]
     } else {
@@ -329,6 +333,128 @@ fn run_mesh() {
         "hash             {h1:#018x}  reproducibilidad: {}",
         if h1 == h2 {
             "OK (bit-idéntica)"
+        } else {
+            "FALLÓ"
+        }
+    );
+}
+
+/// Spike 2 — vía A síncrona: drag storm sobre el pipeline incremental.
+fn run_incremental() {
+    use toile_doc::model::{Command, Doc, Piece};
+    use toile_engine::couture::ShapePipeline;
+
+    let storm = || -> (f64, usize, usize, usize, Vec<f64>, f64, u64) {
+        let mut doc = Doc {
+            pieces: vec![Piece {
+                contour: bodice_contour(),
+            }],
+        };
+
+        let t0 = Instant::now();
+        let mut pipe = ShapePipeline::build(&doc.pieces[0].contour, 256, 2.0e-5);
+        let build_ms = t0.elapsed().as_secs_f64() * 1000.0;
+
+        let n = pipe.pos2d.len();
+        let (mut cx, mut cy) = (0.0, 0.0);
+        for p in &pipe.pos2d {
+            cx += p[0];
+            cy += p[1];
+        }
+        cx /= n as f64;
+        cy /= n as f64;
+
+        let mut state = State::new(n);
+        for i in 0..n {
+            state.px[i] = (pipe.pos2d[i][0] - cx) as f32;
+            state.py[i] = 0.35;
+            state.pz[i] = (pipe.pos2d[i][1] - cy) as f32;
+        }
+        let mut cons = pipe.constraints(1.0e-8);
+        let sdf = SdfGrid::sphere(128, 1.4 / 127.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
+
+        // Drapeado inicial: 1 s de tiempo de sim.
+        for _ in 0..600 {
+            xpbd::substep(&mut state, &cons, &sdf, DT);
+        }
+
+        // Storm: 120 frames a 60 Hz, el vértice hombro-sisa oscila ±3 cm.
+        const POINT: usize = 68;
+        let base = doc.pieces[0].contour[POINT];
+        let mut derive_ms = Vec::with_capacity(120);
+        for f in 0..120u32 {
+            let t = f64::from(f) / 120.0;
+            let osc = 0.03 * (t * std::f64::consts::TAU * 2.0).sin();
+            Command::MovePoint {
+                piece: 0,
+                point: POINT,
+                to: [base[0] + osc, base[1] + osc * 0.5],
+            }
+            .apply(&mut doc);
+            let t0 = Instant::now();
+            let rests = pipe.derive(&doc.pieces[0].contour);
+            cons.rest.copy_from_slice(rests);
+            derive_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
+            for _ in 0..10 {
+                xpbd::substep(&mut state, &cons, &sdf, DT);
+            }
+        }
+
+        // Re-convergencia tras soltar: substeps hasta v_max < 1 cm/s.
+        let max_speed = |s: &State| -> f32 {
+            let mut m = 0.0f32;
+            for i in 0..s.len() {
+                let v2 = s.vx[i] * s.vx[i] + s.vy[i] * s.vy[i] + s.vz[i] * s.vz[i];
+                m = m.max(v2);
+            }
+            m.sqrt()
+        };
+        let mut steps = 0usize;
+        let mut prev_e = f32::MAX;
+        let mut rising = false;
+        while max_speed(&state) > 0.01 && steps < 6000 {
+            xpbd::substep(&mut state, &cons, &sdf, DT);
+            steps += 1;
+            let e = xpbd::kinetic_energy(&state);
+            if e > prev_e {
+                rising = true;
+            } else if rising {
+                xpbd::zero_velocities(&mut state);
+                rising = false;
+            }
+            prev_e = e;
+        }
+        let conv_s = steps as f64 / 600.0;
+
+        (
+            build_ms,
+            pipe.n_boundary(),
+            pipe.n_interior(),
+            pipe.edges.len(),
+            derive_ms,
+            conv_s,
+            xpbd::position_hash(&state),
+        )
+    };
+
+    let (build_ms, nb, ni, ne, derive_ms, conv_s, h1) = storm();
+    let (_, _, _, _, _, _, h2) = storm();
+
+    let avg = derive_ms.iter().sum::<f64>() / derive_ms.len() as f64;
+    let max = derive_ms.iter().cloned().fold(0.0f64, f64::max);
+    println!("\n── spike 2 · vía A síncrona · drag storm 120 frames ──");
+    println!(
+        "malla            {} frontera + {} interior · {} aristas",
+        nb, ni, ne
+    );
+    println!("build (una vez)  {build_ms:7.1} ms (CDT + clasificación + matriz MVC)");
+    println!("derive por edit  {avg:7.3} ms promedio · {max:.3} ms máximo  (presupuesto: <5 ms)");
+    println!("re-convergencia  {conv_s:7.2} s de sim tras soltar  (presupuesto: 2–3 s)");
+    println!(
+        "estado           {} · determinismo storm completo: {}",
+        if h1 != 0 { "sin NaN" } else { "?" },
+        if h1 == h2 {
+            "OK (bit-idéntico)"
         } else {
             "FALLÓ"
         }

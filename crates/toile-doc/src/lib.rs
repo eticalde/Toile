@@ -6,3 +6,5 @@
 //! coalescing por gesto. Serialización JSON canónica y diffable.
 //!
 //! Ver `docs/architecture.html` §2.1.
+
+pub mod model;

@@ -590,3 +590,22 @@ pub fn position_hash(state: &State) -> u64 {
     eat(&state.pz);
     h
 }
+
+/// Energía cinética total (masa unitaria) — el sensor del kinetic damping.
+pub fn kinetic_energy(state: &State) -> f32 {
+    let mut e = 0.0f32;
+    for i in 0..state.len() {
+        e += state.vx[i] * state.vx[i] + state.vy[i] * state.vy[i] + state.vz[i] * state.vz[i];
+    }
+    e * 0.5
+}
+
+/// Kinetic damping (Provot): al detectar un pico de energía cinética se
+/// anulan todas las velocidades — la tela se asienta en el equilibrio
+/// estático en vez de columpiarse. Mecanismo explícito de convergencia
+/// del ADR §2.3. Determinista.
+pub fn zero_velocities(state: &mut State) {
+    state.vx.fill(0.0);
+    state.vy.fill(0.0);
+    state.vz.fill(0.0);
+}

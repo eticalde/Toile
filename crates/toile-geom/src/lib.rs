@@ -5,3 +5,5 @@
 //! workspace puede testear con goldens.
 //!
 //! Ver `docs/architecture.html` §2.7.
+
+pub mod sample;

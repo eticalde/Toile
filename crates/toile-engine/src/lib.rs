@@ -8,3 +8,5 @@
 //! testeable en CI sin ventana. La consumen `toile-cli` y `toile-app`.
 //!
 //! Ver `docs/architecture.html` §2.4 y §2.7.
+
+pub mod couture;
