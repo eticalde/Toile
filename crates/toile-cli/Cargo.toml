@@ -11,3 +11,4 @@ path = "src/main.rs"
 
 [dependencies]
 toile-engine = { path = "../toile-engine" }
+toile-sim = { path = "../toile-sim" }

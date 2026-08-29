@@ -7,3 +7,5 @@
 //!
 //! Expone el trait `ClothSolver` para que la implementación sea desafiable
 //! sin re-arquitectura. Ver `docs/architecture.html` §2.3–2.5.
+
+pub mod xpbd;
