@@ -7,10 +7,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Punto de datos del hardware piso Linux (runner de 4 vCPU) — Spike 1.
+  # Puntos de datos del hardware piso — Spike 1: Linux 4 vCPU y
+  # macos-latest (Apple Silicon M1/M2 de 3-4 núcleos).
   bench:
     if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
