@@ -279,33 +279,8 @@ pub fn run(args: &[String]) {
     run_mesh();
 }
 
-/// Contorno tipo delantero de corpiño: recto en costados y hombro, cóncavo
-/// en sisa y escote — la concavidad es el caso que importa (ADR §3.4).
 fn bodice_contour() -> Vec<[f64; 2]> {
-    let mut pts: Vec<[f64; 2]> = Vec::new();
-    let line = |pts: &mut Vec<[f64; 2]>, a: [f64; 2], b: [f64; 2], n: usize| {
-        for i in 0..n {
-            let t = i as f64 / n as f64;
-            pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
-        }
-    };
-    let quad = |pts: &mut Vec<[f64; 2]>, a: [f64; 2], c: [f64; 2], b: [f64; 2], n: usize| {
-        for i in 0..n {
-            let t = i as f64 / n as f64;
-            let u = 1.0 - t;
-            pts.push([
-                u * u * a[0] + 2.0 * u * t * c[0] + t * t * b[0],
-                u * u * a[1] + 2.0 * u * t * c[1] + t * t * b[1],
-            ]);
-        }
-    };
-    line(&mut pts, [0.0, 0.0], [0.50, 0.0], 20); // cintura
-    line(&mut pts, [0.50, 0.0], [0.52, 0.45], 18); // costado
-    quad(&mut pts, [0.52, 0.45], [0.36, 0.50], [0.38, 0.68], 30); // sisa (cóncava)
-    line(&mut pts, [0.38, 0.68], [0.18, 0.72], 10); // hombro
-    quad(&mut pts, [0.18, 0.72], [0.16, 0.56], [0.0, 0.60], 26); // escote (cóncavo)
-    line(&mut pts, [0.0, 0.60], [0.0, 0.0], 24); // centro frente
-    pts
+    toile_engine::couture::demo_bodice_contour()
 }
 
 fn run_mesh() {

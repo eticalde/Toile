@@ -41,3 +41,5 @@ jobs:
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo build --workspace
       - run: cargo test --workspace
+      # Goldens de determinismo (release): misma constante en ARM y x86.
+      - run: cargo test --workspace --release -- --ignored

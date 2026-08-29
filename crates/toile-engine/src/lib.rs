@@ -10,4 +10,5 @@
 //! Ver `docs/architecture.html` §2.4 y §2.7.
 
 pub mod couture;
+pub mod golden;
 pub mod sync;
