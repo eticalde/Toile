@@ -4,8 +4,20 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
+  # Punto de datos del hardware piso Linux (runner de 4 vCPU) — Spike 1.
+  bench:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo run --release -p toile-cli -- bench
+
+
   test:
     strategy:
       fail-fast: false

@@ -224,6 +224,187 @@ pub fn vertex_normals(state: &State, tris: &[u32], out: &mut [f32]) {
     }
 }
 
+/// Constraints reordenadas por color: dentro de un color, ningún par de
+/// constraints comparte vértice — escrituras disjuntas, paralelizables sin
+/// atomics y bit-idénticas con 1 u 8 hilos (ADR §2.4).
+pub struct ColoredConstraints {
+    pub cons: DistanceConstraints,
+    pub ranges: Vec<std::ops::Range<usize>>,
+}
+
+/// Coloreo greedy determinista en el orden canónico de entrada: primer
+/// color libre en ambos vértices (bitmask u64 → máximo 64 colores; una
+/// malla de tela ronda los ~15).
+pub fn color_constraints(cons: &DistanceConstraints, n_verts: usize) -> ColoredConstraints {
+    let m = cons.len();
+    let mut used: Vec<u64> = vec![0; n_verts];
+    let mut color_of = vec![0u32; m];
+    let mut n_colors = 0usize;
+    for ((&a, &b), color) in cons.a.iter().zip(&cons.b).zip(color_of.iter_mut()) {
+        let (a, b) = (a as usize, b as usize);
+        let col = (!(used[a] | used[b])).trailing_zeros() as usize;
+        assert!(col < 64, "grafo de constraints con más de 64 colores");
+        used[a] |= 1 << col;
+        used[b] |= 1 << col;
+        *color = col as u32;
+        n_colors = n_colors.max(col + 1);
+    }
+
+    // Grupos por color, y DENTRO de cada color orden por vértice menor:
+    // recupera localidad de caché que el coloreo destruye. Determinista
+    // (clave de orden total: vértice menor, luego índice original).
+    let mut groups: Vec<Vec<usize>> = vec![Vec::new(); n_colors];
+    for (i, &c) in color_of.iter().enumerate() {
+        groups[c as usize].push(i);
+    }
+    for g in &mut groups {
+        g.sort_by_key(|&i| (cons.a[i].min(cons.b[i]), i));
+    }
+    let mut cc = DistanceConstraints {
+        a: Vec::with_capacity(m),
+        b: Vec::with_capacity(m),
+        rest: Vec::with_capacity(m),
+        compliance: Vec::with_capacity(m),
+    };
+    let mut ranges = Vec::with_capacity(n_colors);
+    for g in &groups {
+        let start = cc.a.len();
+        for &i in g {
+            cc.a.push(cons.a[i]);
+            cc.b.push(cons.b[i]);
+            cc.rest.push(cons.rest[i]);
+            cc.compliance.push(cons.compliance[i]);
+        }
+        ranges.push(start..cc.a.len());
+    }
+    ColoredConstraints { cons: cc, ranges }
+}
+
+/// Puntero crudo compartible entre hilos. La seguridad no la da el tipo:
+/// la da el invariante de quien lo usa (índices disjuntos por hilo).
+#[derive(Clone, Copy)]
+struct Ptr(*mut f32);
+unsafe impl Send for Ptr {}
+unsafe impl Sync for Ptr {}
+
+impl Ptr {
+    /// El acceso pasa por un método sobre `self` para que las closures
+    /// capturen el struct completo (Sync) y no el campo `*mut f32` suelto
+    /// (captura disjunta de edition 2021+, que rompería el `Sync`).
+    ///
+    /// # Safety
+    /// El llamador garantiza que `i` está en rango y que ningún otro hilo
+    /// accede al mismo índice durante la fase.
+    #[inline(always)]
+    unsafe fn at(self, i: usize) -> *mut f32 {
+        unsafe { self.0.add(i) }
+    }
+}
+
+/// Substep XPBD paralelo: mismas fases que [`substep`], con las constraints
+/// coloreadas. Corre en el pool de rayon activo — con 1 hilo o N produce
+/// bits idénticos porque dentro de cada color las escrituras son disjuntas
+/// y no hay reducciones.
+pub fn substep_colored(state: &mut State, cc: &ColoredConstraints, sdf: &SdfGrid, dt: f32) {
+    use rayon::prelude::*;
+    const GRAVITY: f32 = -9.81;
+    const MIN_CHUNK: usize = 4096;
+    let n = state.len();
+
+    let px = Ptr(state.px.as_mut_ptr());
+    let py = Ptr(state.py.as_mut_ptr());
+    let pz = Ptr(state.pz.as_mut_ptr());
+    let vx = Ptr(state.vx.as_mut_ptr());
+    let vy = Ptr(state.vy.as_mut_ptr());
+    let vz = Ptr(state.vz.as_mut_ptr());
+    let qx = Ptr(state.qx.as_mut_ptr());
+    let qy = Ptr(state.qy.as_mut_ptr());
+    let qz = Ptr(state.qz.as_mut_ptr());
+    let inv_mass = &state.inv_mass;
+
+    // Integración: cada índice lo escribe exactamente una iteración.
+    (0..n)
+        .into_par_iter()
+        .with_min_len(MIN_CHUNK)
+        .for_each(|i| unsafe {
+            *qx.at(i) = *px.at(i);
+            *qy.at(i) = *py.at(i);
+            *qz.at(i) = *pz.at(i);
+            if inv_mass[i] > 0.0 {
+                *vy.at(i) += GRAVITY * dt;
+                *px.at(i) += *vx.at(i) * dt;
+                *py.at(i) += *vy.at(i) * dt;
+                *pz.at(i) += *vz.at(i) * dt;
+            }
+        });
+
+    // Constraints por color. SAFETY: dentro de un color ningún par de
+    // constraints comparte vértice → lecturas y escrituras a px/py/pz de
+    // esta fase son disjuntas entre iteraciones.
+    let inv_dt2 = 1.0 / (dt * dt);
+    let cons = &cc.cons;
+    for r in &cc.ranges {
+        (r.start..r.end)
+            .into_par_iter()
+            .with_min_len(MIN_CHUNK)
+            .for_each(|c| unsafe {
+                let (ia, ib) = (cons.a[c] as usize, cons.b[c] as usize);
+                let (wa, wb) = (inv_mass[ia], inv_mass[ib]);
+                let w = wa + wb;
+                if w == 0.0 {
+                    return;
+                }
+                let dx = *px.at(ib) - *px.at(ia);
+                let dy = *py.at(ib) - *py.at(ia);
+                let dz = *pz.at(ib) - *pz.at(ia);
+                let len = (dx * dx + dy * dy + dz * dz).sqrt();
+                if len <= 1.0e-9 {
+                    return;
+                }
+                let alpha = cons.compliance[c] * inv_dt2;
+                let corr = (len - cons.rest[c]) / ((w + alpha) * len);
+                let (sx, sy, sz) = (corr * dx, corr * dy, corr * dz);
+                *px.at(ia) += wa * sx;
+                *py.at(ia) += wa * sy;
+                *pz.at(ia) += wa * sz;
+                *px.at(ib) -= wb * sx;
+                *py.at(ib) -= wb * sy;
+                *pz.at(ib) -= wb * sz;
+            });
+    }
+
+    // Colisión SDF y velocidades: por índice, disjuntas.
+    let eps = sdf.cell * 0.5;
+    (0..n)
+        .into_par_iter()
+        .with_min_len(MIN_CHUNK)
+        .for_each(|i| unsafe {
+            let (x, y, z) = (*px.at(i), *py.at(i), *pz.at(i));
+            let d = sdf.sample(x, y, z);
+            if d < 0.0 {
+                let gx = sdf.sample(x + eps, y, z) - d;
+                let gy = sdf.sample(x, y + eps, z) - d;
+                let gz = sdf.sample(x, y, z + eps) - d;
+                let glen = (gx * gx + gy * gy + gz * gz).sqrt().max(1.0e-9);
+                let push = -d / glen;
+                *px.at(i) += gx * push;
+                *py.at(i) += gy * push;
+                *pz.at(i) += gz * push;
+            }
+        });
+
+    let inv_dt = 1.0 / dt;
+    const DAMPING: f32 = 0.999;
+    (0..n)
+        .into_par_iter()
+        .with_min_len(MIN_CHUNK)
+        .for_each(|i| unsafe {
+            *vx.at(i) = (*px.at(i) - *qx.at(i)) * inv_dt * DAMPING;
+            *vy.at(i) = (*py.at(i) - *qy.at(i)) * inv_dt * DAMPING;
+            *vz.at(i) = (*pz.at(i) - *qz.at(i)) * inv_dt * DAMPING;
+        });
+}
+
 /// Hash FNV-1a de los bits de las posiciones — el germen de los goldens de
 /// determinismo: misma escena, mismos substeps → mismo hash, siempre.
 pub fn position_hash(state: &State) -> u64 {

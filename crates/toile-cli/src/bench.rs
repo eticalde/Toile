@@ -130,53 +130,100 @@ fn build(target: usize) -> Scene {
     }
 }
 
-fn run_size(target: usize) {
-    const DT: f32 = 1.0 / 600.0; // 60 Hz visual · 10 substeps nominales
-    const WARMUP: usize = 30;
-    const TIMED: usize = 240;
+const DT: f32 = 1.0 / 600.0; // 60 Hz visual · 10 substeps nominales
+const WARMUP: usize = 30;
+const TIMED: usize = 240;
 
+/// Corre WARMUP+TIMED substeps sobre una escena fresca y devuelve
+/// (ms por substep cronometrado, hash final de posiciones).
+fn measure(target: usize, mut step: impl FnMut(&mut Scene)) -> (f64, u64) {
     let mut scene = build(target);
-    let n = scene.state.len();
-    println!(
-        "\n── {} vértices · {} constraints · {} triángulos ──",
-        n,
-        scene.cons.len(),
-        scene.tris.len() / 3
-    );
-
     for _ in 0..WARMUP {
-        xpbd::substep(&mut scene.state, &scene.cons, &scene.sdf, DT);
+        step(&mut scene);
     }
     let t = Instant::now();
     for _ in 0..TIMED {
-        xpbd::substep(&mut scene.state, &scene.cons, &scene.sdf, DT);
+        step(&mut scene);
     }
-    let ms_substep = t.elapsed().as_secs_f64() * 1000.0 / TIMED as f64;
+    let ms = t.elapsed().as_secs_f64() * 1000.0 / TIMED as f64;
+    (ms, xpbd::position_hash(&scene.state))
+}
+
+fn run_size(target: usize) {
+    let probe = build(target);
+    let n = probe.state.len();
+    let colored = xpbd::color_constraints(&probe.cons, n);
+    let n_colors = colored.ranges.len();
+    println!(
+        "\n── {} vértices · {} constraints · {} triángulos · {} colores ──",
+        n,
+        probe.cons.len(),
+        probe.tris.len() / 3,
+        n_colors
+    );
+
+    // Baseline secuencial (orden original barajado).
+    let (ms_mono, hash_mono) = measure(target, |s| {
+        xpbd::substep(&mut s.state, &s.cons, &s.sdf, DT);
+    });
+    let (_, hash_mono2) = measure(target, |s| {
+        xpbd::substep(&mut s.state, &s.cons, &s.sdf, DT);
+    });
+
+    // Coloring: barrido de hilos — mismo orden de colores en todos,
+    // por lo tanto los bits deben ser idénticos entre sí (ADR §2.4).
+    let all = std::thread::available_parallelism()
+        .map(|v| v.get())
+        .unwrap_or(8);
+    let mut colored_runs = Vec::new();
+    for t in [1usize, 4, 8, all] {
+        if colored_runs.iter().any(|&(tt, _, _)| tt == t) {
+            continue;
+        }
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(t)
+            .build()
+            .unwrap();
+        let (ms, hash) = measure(target, |s| {
+            pool.install(|| xpbd::substep_colored(&mut s.state, &colored, &s.sdf, DT));
+        });
+        colored_runs.push((t, ms, hash));
+    }
 
     let mut normals = vec![0.0f32; n * 3];
+    let mut scene = build(target);
+    for _ in 0..WARMUP {
+        xpbd::substep(&mut scene.state, &scene.cons, &scene.sdf, DT);
+    }
     let t = Instant::now();
     for _ in 0..60 {
         xpbd::vertex_normals(&scene.state, &scene.tris, &mut normals);
     }
     let ms_normals = t.elapsed().as_secs_f64() * 1000.0 / 60.0;
 
-    let hash = xpbd::position_hash(&scene.state);
-
-    // Determinismo: reconstruir la escena desde cero y repetir exactamente
-    // los mismos substeps debe dar bits idénticos.
-    let mut scene2 = build(target);
-    for _ in 0..WARMUP + TIMED {
-        xpbd::substep(&mut scene2.state, &scene2.cons, &scene2.sdf, DT);
-    }
-    let deterministic = xpbd::position_hash(&scene2.state) == hash;
-
-    let per_frame = (16.6 / ms_substep).floor();
-    println!("substep     {ms_substep:7.3} ms  → {per_frame:.0} substeps por frame de 16.6 ms");
-    println!("normales    {ms_normals:7.3} ms  (cadencia visual)");
+    let frame = |ms: f64| (16.6 / ms).floor();
     println!(
-        "hash        {hash:#018x}  determinismo: {}",
-        if deterministic {
-            "OK (2 corridas bit-idénticas)"
+        "mono-hilo        {ms_mono:7.3} ms/substep  → {:.0} substeps/frame",
+        frame(ms_mono)
+    );
+    for &(t, ms, _) in &colored_runs {
+        println!(
+            "coloring ×{t:<2}     {ms:7.3} ms/substep  → {:.0} substeps/frame · speedup {:.2}× vs mono",
+            frame(ms),
+            ms_mono / ms
+        );
+    }
+    println!("normales         {ms_normals:7.3} ms (cadencia visual)");
+    let par_ok = colored_runs.windows(2).all(|w| w[0].2 == w[1].2);
+    println!(
+        "determinismo     secuencial: {} · paralelo (todos los conteos de hilos): {}",
+        if hash_mono == hash_mono2 {
+            "OK"
+        } else {
+            "FALLÓ"
+        },
+        if par_ok {
+            "OK (bit-idéntico)"
         } else {
             "FALLÓ"
         }
@@ -189,7 +236,7 @@ pub fn run(args: &[String]) {
     } else {
         vec![20_000, 50_000]
     };
-    println!("toile bench — kernel XPBD mono-hilo, acceso barajado (Spike 1)");
+    println!("toile bench — kernel XPBD, acceso barajado (Spike 1)");
     for s in sizes {
         run_size(s);
     }
