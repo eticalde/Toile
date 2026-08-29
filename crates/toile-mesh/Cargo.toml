@@ -6,5 +6,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+spade = "2"
 toile-doc = { path = "../toile-doc" }
 toile-geom = { path = "../toile-geom" }

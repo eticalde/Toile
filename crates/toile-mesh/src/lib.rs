@@ -5,3 +5,5 @@
 //! baricéntrica para cambios de topología, métricas de calidad de malla.
 //!
 //! Ver `docs/architecture.html` §2.2 y §2.7.
+
+pub mod cdt;
