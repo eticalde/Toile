@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toile — ADR-001 Arquitectura</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fafaf7;
+  --surface:#ffffff;
+  --ink:#23282e;
+  --muted:#6a7480;
+  --chalk:#2f5fd0;        /* tiza de sastre */
+  --thread:#c2403a;       /* papel carbón / hilo rojo */
+  --line:#dcdcd4;
+  --grid:rgba(35,40,46,.10);
+  --chip-bg:rgba(47,95,208,.08);
+  --thread-bg:rgba(194,64,58,.07);
+  --display:"Archivo",-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --body:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#18271f;      /* mat de corte */
+    --surface:#1e2f26;
+    --ink:#e7eae2;        /* tiza */
+    --muted:#96a69a;
+    --chalk:#a5bdfa;
+    --thread:#f0907f;
+    --line:#31453a;
+    --grid:rgba(231,234,226,.07);
+    --chip-bg:rgba(165,189,250,.12);
+    --thread-bg:rgba(240,144,127,.10);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:var(--body);
+  font-size:16.5px;
+  line-height:1.65;
+  color:var(--ink);
+  background-color:var(--paper);
+  background-image:radial-gradient(var(--grid) 1px, transparent 1px);
+  background-size:26px 26px;
+}
+@media (prefers-color-scheme: dark){
+  body{
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size:39px 39px;
+  }
+}
+a{color:var(--chalk)}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--chalk);outline-offset:2px;border-radius:2px}
+code,.crate{font-family:var(--mono);font-size:.86em;background:var(--chip-bg);padding:.08em .38em;border-radius:3px;white-space:nowrap}
+
+/* ---------- hero ---------- */
+.hero{
+  border-bottom:2px solid var(--ink);
+  padding:3.2rem 1.5rem 2.4rem;
+}
+.hero-inner{
+  max-width:1080px;margin:0 auto;
+  display:flex;gap:3rem;align-items:center;justify-content:space-between;flex-wrap:wrap;
+}
+.eyebrow{
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 .9rem;
+}
+.eyebrow a{color:inherit;text-decoration:none}
+.eyebrow a:hover{color:var(--chalk)}
+h1{
+  font-family:var(--display);
+  font-variation-settings:"wdth" 118;
+  font-weight:880;
+  font-size:clamp(2.5rem,6vw,4.2rem);
+  line-height:.98;letter-spacing:-.015em;text-transform:uppercase;
+  margin:0 0 .8rem;
+}
+.hero-sub{max-width:34rem;color:var(--muted);margin:0 0 1.6rem}
+.titleblock{
+  display:inline-grid;grid-template-columns:auto auto auto;
+  border:1.5px solid var(--ink);
+  font-family:var(--mono);font-size:.78rem;
+  background:var(--surface);
+}
+.titleblock div{padding:.5rem .9rem}
+.titleblock div + div{border-left:1.5px solid var(--ink)}
+.titleblock b{display:block;font-weight:500;color:var(--muted);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase}
+.hero-figure{flex:0 1 300px;min-width:240px;color:var(--ink)}
+.hero-figure svg{width:100%;height:auto;display:block}
+.hero-figure .draw{stroke-dasharray:1200;stroke-dashoffset:0}
+@media (prefers-reduced-motion: no-preference){
+  .hero-figure .draw{animation:trace 1.4s ease-out}
+  @keyframes trace{from{stroke-dashoffset:1200}to{stroke-dashoffset:0}}
+}
+
+/* ---------- layout ---------- */
+.wrap{
+  max-width:1080px;margin:0 auto;padding:2.5rem 1.5rem 4rem;
+  display:grid;grid-template-columns:215px minmax(0,1fr);gap:3rem;
+}
+nav.toc{position:sticky;top:1.5rem;align-self:start;font-size:.85rem}
+nav.toc p{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:0 0 .7rem}
+nav.toc ol{list-style:none;margin:0;padding:0}
+nav.toc li{margin:.32rem 0}
+nav.toc li.sub{margin-left:.95rem;font-size:.8rem}
+nav.toc a{text-decoration:none;color:var(--ink);border-left:2px solid transparent;padding-left:.55rem;display:inline-block}
+nav.toc li.sub a{color:var(--muted)}
+nav.toc a:hover{border-left-color:var(--chalk);color:var(--chalk)}
+@media (max-width:880px){
+  .wrap{grid-template-columns:1fr;gap:1.5rem}
+  nav.toc{position:static}
+  nav.toc ol{display:flex;flex-wrap:wrap;gap:.25rem .9rem}
+  nav.toc li.sub{display:none}
+}
+main{max-width:72ch}
+
+/* ---------- section headers ---------- */
+section{margin:0 0 3.6rem}
+h2{
+  font-family:var(--display);font-variation-settings:"wdth" 112;font-weight:820;
+  font-size:1.7rem;line-height:1.15;text-transform:uppercase;letter-spacing:.005em;
+  margin:0 0 1.2rem;padding-top:2.2rem;
+  border-top:2px solid var(--ink);
+}
+h2 .num{font-family:var(--mono);font-weight:400;font-size:.8rem;color:var(--muted);display:block;letter-spacing:.2em;margin-bottom:.35rem}
+/* etiqueta de pieza: cabecera de cada eje con su flecha de hilo */
+.axis{margin:2.6rem 0 1rem}
+.axis h3{
+  font-family:var(--display);font-variation-settings:"wdth" 108;font-weight:750;
+  font-size:1.13rem;text-transform:uppercase;letter-spacing:.02em;margin:0 0 .2rem;
+}
+.axis .tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:.15rem}
+.axis svg{display:block;color:var(--muted);margin-top:.35rem}
+
+/* ---------- bloques decisión / descartado ---------- */
+.decision,.discarded{margin:1rem 0;padding:.15rem 0 .15rem 1.1rem}
+.decision{border-left:3px solid var(--chalk)}
+.discarded{border-left:3px dashed var(--thread)}
+.decision > b:first-child,.discarded > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;
+  display:block;margin-bottom:.3rem;
+}
+.decision > b:first-child{color:var(--chalk)}
+.discarded > b:first-child{color:var(--thread)}
+.decision p,.discarded p{margin:.5rem 0}
+
+/* ---------- swatches de propuestas ---------- */
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem;margin:1.3rem 0}
+.swatch{border:1.5px solid var(--line);background:var(--surface);padding:.85rem 1rem;border-radius:3px}
+.swatch b{font-family:var(--display);font-variation-settings:"wdth" 108;font-weight:720;font-size:.95rem;display:block;line-height:1.25}
+.swatch i{display:block;font-style:normal;color:var(--muted);font-size:.8rem;margin:.2rem 0 .6rem}
+.chip{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.18em .6em;border-radius:2px;background:var(--chip-bg);color:var(--chalk);
+}
+.chip.no{background:var(--thread-bg);color:var(--thread);text-decoration:line-through;text-decoration-thickness:1px}
+
+/* ---------- listas con piquetes ---------- */
+ol,ul{padding-left:1.4rem}
+li{margin:.45rem 0}
+ul.notch{list-style:none;padding-left:1.15rem}
+ul.notch li{position:relative}
+ul.notch li::before{
+  content:"";position:absolute;left:-1.15rem;top:.62em;
+  border-left:.42em solid var(--chalk);border-top:.3em solid transparent;border-bottom:.3em solid transparent;
+}
+ol.plan{counter-reset:paso;list-style:none;padding-left:2.1rem}
+ol.plan li{counter-increment:paso;position:relative;margin:.9rem 0}
+ol.plan li::before{
+  content:counter(paso);position:absolute;left:-2.1rem;top:.1em;
+  font-family:var(--mono);font-size:.8rem;width:1.5em;height:1.5em;line-height:1.45em;text-align:center;
+  border:1.5px solid var(--ink);border-radius:50%;background:var(--surface);
+}
+
+/* ---------- tablas ---------- */
+.tscroll{overflow-x:auto;margin:1.2rem 0;border:1.5px solid var(--line);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);text-align:left;
+}
+th,td{padding:.6rem .85rem;border-bottom:1px dashed var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td:first-child{white-space:nowrap}
+
+/* ---------- misc ---------- */
+.lead{font-size:1.06rem}
+.lead::first-letter{
+  font-family:var(--display);font-weight:880;font-size:3.1em;float:left;
+  line-height:.8;padding:.06em .12em 0 0;color:var(--chalk);
+}
+hr{border:none;border-top:1.5px dashed var(--line);margin:2rem 0}
+.refs{font-size:.9rem}
+.refs li{margin:.55rem 0}
+.refs span{color:var(--muted)}
+footer{border-top:2px solid var(--ink);margin-top:1rem;padding:1.4rem 1.5rem 3rem;font-size:.8rem;color:var(--muted)}
+footer .fin{max-width:1080px;margin:0 auto;font-family:var(--mono)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="eyebrow"><a href="https://github.com/eticalde/Toile">Toile</a> · Documentación</p>
+      <h1>Arquitectura<br>v1</h1>
+      <p class="hero-sub">Architecture Decision Record — cómo se construye Toile y por qué. Resultado del panel de arquitectura: cuatro propuestas investigadas, criticadas adversarialmente y sintetizadas en un acuerdo.</p>
+      <div class="titleblock" role="group" aria-label="Datos del documento">
+        <div><b>Documento</b>ADR-001</div>
+        <div><b>Estado</b>Acordado</div>
+        <div><b>Fecha</b>2026-08-29</div>
+      </div>
+    </div>
+    <div class="hero-figure" aria-hidden="true">
+      <!-- pieza de patrón: delantero con pinza, piquetes y flecha al hilo -->
+      <svg viewBox="0 0 260 310" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path class="draw" d="M78 18 C99 34 161 34 182 18 L196 92 C212 120 216 128 214 156 C186 148 180 162 182 186 L192 284 L68 284 L78 186 C80 162 74 148 46 156 C44 128 48 120 64 92 Z"/>
+        <g stroke-width="1.2">
+          <path d="M108 284 L124 208 L140 284"/>
+          <circle cx="124" cy="208" r="2.6"/>
+        </g>
+        <g stroke-width="2">
+          <path d="M46 152 l7 -8"/><path d="M214 152 l-7 -8"/><path d="M74 284 v-9"/><path d="M186 284 v-9"/>
+        </g>
+        <g stroke-width="1.3">
+          <line x1="130" y1="70" x2="130" y2="170"/>
+          <path d="M124 80 l6 -10 l6 10"/><path d="M124 160 l6 10 l6 -10"/>
+        </g>
+        <g stroke="none" fill="currentColor" font-family="IBM Plex Mono,monospace" font-size="9.5" opacity=".75">
+          <text x="130" y="245" text-anchor="middle">ADR-001 · V1</text>
+          <text x="130" y="260" text-anchor="middle">CORTAR 1 · AL HILO</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contenido">
+  <p>Contenido</p>
+  <ol>
+    <li><a href="#decision">1 · La decisión</a></li>
+    <li><a href="#ejes">2 · Decisión por eje</a></li>
+    <li class="sub"><a href="#doc">2.1 Documento y undo</a></li>
+    <li class="sub"><a href="#incremental">2.2 Derivación incremental</a></li>
+    <li class="sub"><a href="#solver">2.3 Solver de tela</a></li>
+    <li class="sub"><a href="#concurrencia">2.4 Concurrencia</a></li>
+    <li class="sub"><a href="#gpu">2.5 CPU vs GPU</a></li>
+    <li class="sub"><a href="#ui">2.6 UI</a></li>
+    <li class="sub"><a href="#crates">2.7 Workspace</a></li>
+    <li class="sub"><a href="#deps">2.8 Dependencias</a></li>
+    <li><a href="#consensos">3 · Consensos y abiertos</a></li>
+    <li><a href="#riesgos">4 · Riesgos</a></li>
+    <li><a href="#plan">5 · Plan de validación</a></li>
+    <li><a href="#refs">6 · Referencias</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="decision">
+  <h2><span class="num">§ 1</span>La decisión en un párrafo</h2>
+  <p class="lead">Toile v1 se construye como un <strong>workspace Rust de 7 crates sin framework conceptual</strong> (ni ECS ni motor de incrementalidad): el esqueleto y la disciplina de <em>Bobina</em> con el núcleo geométrico-físico de <em>Aguja</em>, más injertos puntuales de las otras dos propuestas. El documento 2D es un struct plano con IDs estables, mutado solo por comandos reversibles (undo/redo por command pattern); una capa de derivación <strong>pura por pieza</strong> —cuya clasificación forma/topología la decide el <em>tipo</em> de comando, no una heurística— alimenta a un <strong>solver XPBD small-steps residente</strong> que nunca se resetea: los cambios de forma llegan como nuevo estado de reposo (re-muestreo con conectividad fija + reproyección PMVC por SpMV precomputada, &lt;5&nbsp;ms) y los cambios de topología como remallado local en sombra con transferencia baricéntrica del estado 3D vivo. Dos hilos (UI a 60&nbsp;fps / sim a paso fijo que se duerme al converger), comunicación solo por mensajes tipados (crossbeam latest-wins hacia la sim, snapshots por arc-swap hacia la UI), determinismo en dos niveles verificado en CI, CPU-first con coloreo de grafo determinista, UI con eframe/egui + wgpu, y todo el árbol de dependencias MIT/Apache/BSD/Zlib verificado.</p>
+  <p>El requisito innegociable (&lt;200&nbsp;ms de feedback, re-convergencia 2–3&nbsp;s) se cumple <strong>por construcción, no por optimización</strong>: en XPBD el estado de la sim son posiciones y velocidades; la forma vive en los valores de reposo, y cambiarlos es cambiar números que el solver lee en el siguiente substep.</p>
+
+  <hr>
+  <p><strong>De dónde sale este documento.</strong> Un panel de 13 agentes: cuatro perspectivas investigaron de forma independiente y propusieron una arquitectura completa; cada propuesta recibió una crítica adversarial comparada contra las demás y una réplica de su defensor con concesiones. Un moderador sintetizó el acuerdo. Las concesiones hechas por el propio defensor de una propuesta pesaron doble.</p>
+  <div class="swatches">
+    <div class="swatch"><b>Trame</b><i>ECS de dos mundos (bevy_ecs)</i><span class="chip no">Rechazada</span></div>
+    <div class="swatch"><b>Salsa-Couture</b><i>Núcleo documental incremental</i><span class="chip">Adoptar con cambios</span></div>
+    <div class="swatch"><b>Aguja</b><i>Solver residente como corazón</i><span class="chip">Adoptar con cambios</span></div>
+    <div class="swatch"><b>Bobina</b><i>XPBD warm-start sobre arte previo</i><span class="chip">Adoptar con cambios</span></div>
+  </div>
+</section>
+
+<section id="ejes">
+  <h2><span class="num">§ 2</span>Decisión por eje</h2>
+
+  <div class="axis" id="doc">
+    <span class="tag">Eje 2.1</span>
+    <h3>Modelo de documento y undo/redo</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+  <div class="decision">
+    <b>Decisión</b>
+    <p><code>toile-doc</code>: entidades en structs planos (Pieza, PuntoDeControl, Piquete, Costura, Simetría, <strong>Pin</strong>) con <strong>keys generacionales estables propias</strong> (~100 líneas, sin dependencia) que <strong>nunca se reciclan</strong> — un comando de borrado retiene la key completa para que delete+undo restaure <em>la misma</em> key, de modo que costuras y simetrías que la referencian sobrevivan al ciclo undo/redo. Mutación exclusivamente por <strong>comandos reversibles</strong> (apply/invert) con <strong>coalescing por gesto de arrastre</strong> (un drag = una entrada de undo). El <strong>mapa de muestreo persistente</strong> (curva → nº de muestras) vive <strong>dentro de la revisión del documento</strong>, no en la capa de malla: deshacer un cambio de topología lo restaura por construcción (corrección concedida por Aguja). Serialización JSON canónica y diffable con serde (arrays ordenados por ID, floats con formato estable).</p>
+    <p><strong>Injerto de Salsa-Couture, la idea superior de ese eje:</strong> los pines/arrastre en 3D se persisten como <strong>entidades Pin del documento</strong> — serializables, undoables, diffables y reproducibles en CI; solo el drag-en-curso queda efímero en el hilo de sim y se comitea como comando al soltar. El 2D sigue siendo la única fuente de verdad geométrica sin modos especiales.</p>
+  </div>
+  <div class="discarded">
+    <b>Descartado</b>
+    <p>El World-documento de bevy_ecs (Trame): para 2–6 piezas la ventaja de rendimiento del ECS es irrelevante (concedido por su propio defensor — pesa doble), las secuencias ordenadas de un contorno no caben en el modelo de queries, <code>Entity</code> no es serializable (exige un sistema paralelo Uid+índice), el undo no existe en el ecosistema Bevy (discussion #1107 abierta desde 2020) y la API rompe 3–4 veces al año. También descartado: documento dentro de la base salsa (acoplaría undo y serialización a la maquinaria de memoización — concedido por Salsa-Couture).</p>
+  </div>
+
+  <div class="axis" id="incremental">
+    <span class="tag">Eje 2.2 · la clave del &lt;200 ms</span>
+    <h3>Estrategia de derivación incremental</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+  <div class="decision">
+    <b>Decisión</b>
+    <p>La clasificación del cambio la decide <strong>el tipo de comando</strong> (MovePoint <em>es</em> forma; AddSeam <em>es</em> topología) — el principio de Bobina, adoptado por Aguja y Salsa en sus réplicas; el diff estructural queda para sincronización y replay. La capa de derivación son <strong>funciones puras por pieza</strong> con dirty-tracking a mano detrás de una interfaz propia (salsa demovido a opción futura — concedido por su defensor).</p>
+    <p><strong>Cambio de forma</strong> (mover punto, ajustar tangente — el caso ~95%): la conectividad de la malla <strong>no cambia</strong> — los vértices de frontera se re-muestrean en las <strong>mismas fracciones de longitud de arco</strong>; los interiores se reposicionan con la <strong>matriz PMVC precomputada aplicada por SpMV</strong> (sub-ms para 10k vértices; sin factorización, sin álgebra dispersa); se recalculan rest lengths y ángulos de flexión (O(aristas), sub-ms). Total <strong>&lt;5&nbsp;ms</strong> para la pieza editada. El mensaje <code>RestStateUpdate</code> completo (~0.2&nbsp;MB/pieza, latest-wins) llega al solver, que hace hot-swap entre substeps conservando posiciones y velocidades: <strong>el primer frame visualmente actualizado llega en el siguiente tick visual (≤33&nbsp;ms)</strong> — margen ×6 sobre el presupuesto — y el kinetic damping produce la re-convergencia de 2–3&nbsp;s. Es la receta que Sensitive Couture (SIGGRAPH 2011) validó en un Core 2 Duo; en M-series el margen sobra sin matrices de sensibilidad (que quedan documentadas como upgrade v2).</p>
+    <p><strong>Nota injertada de Trame vía crítica:</strong> PMVC (Lipman 2007), <em>no</em> MVC plano — las piezas de patronaje son cóncavas por norma (sisas, escotes) y MVC produce pesos negativos; el interpolador va detrás de un trait con fallback a coordenadas armónicas (Cholesky disperso cacheado, p.&nbsp;ej. faer) si las piezas cóncavas de los tests muestran artefactos.</p>
+    <p><strong>Cambio de topología</strong> (agregar punto, piquete, nueva costura): <strong>remallado-en-sombra</strong> (la mejor aportación de Aguja): la re-CDT + refinement con spade corre en un worker <strong>mientras el solver sigue integrando con la malla vieja</strong>; al terminar, swap atómico entre substeps con <strong>transferencia baricéntrica</strong> del estado 3D (localización en el espacio 2D de reposo) y <strong>blend temporal de 5–10 frames</strong> contra el pop (de Bobina). Solo la pieza afectada y las costuras incidentes se tocan; presupuesto &lt;500&nbsp;ms. Un <strong>contador de generación topológica por pieza</strong> (Aguja) convierte cualquier misclasificación en error ruidoso en el acto, nunca en corrupción silenciosa del warm start. Un <strong>detector de calidad de malla</strong> (Trame/Sensitive Couture: ratio incírculo/arista) promueve automáticamente a re-triangulación local en background cuando ediciones de forma acumuladas degradan los triángulos.</p>
+  </div>
+  <div class="discarded">
+    <b>Descartado</b>
+    <p><code>Changed&lt;T&gt;</code> de bevy_ecs como maquinaria de sincronización (el comando ya sabe qué cambió — concedido por Trame); salsa en el núcleo v1 (para un grafo de ~4 queries estático, dirty-flags tipados hacen lo mismo sin macros ni modelo mental nuevo — concedido por Salsa); Laplacian smoothing iterativo del interior (Bobina v1: hacía el rest state dependiente del <em>historial</em> de edición, rompiendo «mismo archivo → mismo drapeado» — concedido por Bobina como «la crítica más certera del panel»).</p>
+  </div>
+
+  <div class="axis" id="solver">
+    <span class="tag">Eje 2.3</span>
+    <h3>Solver de tela</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+  <div class="decision">
+    <b>Decisión</b>
+    <p><strong>XPBD con small steps</strong> (Macklin et al. 2019: N substeps de 1 iteración baten a 1 paso de N iteraciones), detrás del <strong>trait <code>ClothSolver</code></strong> (Trame) para que sea desafiable sin re-arquitectura. Alcance v1: constraints de <strong>distancia con anisotropía urdimbre/trama/bies</strong> (una compliance por arista según su ángulo respecto a la línea de hilo — costo marginal ~cero, valor de dominio central: defensa de Aguja aceptada), <strong>bending isométrico</strong>, <strong>costuras</strong> emparejadas por fracción de longitud de arco con attach vértice→punto-sobre-arista y ratio de embebido (fruncido soportado por construcción), compliance≈0 en régimen y <strong>cosido progresivo con fuerza capada</strong> en el drapeado inicial (Blender) más rampa de rigidez tras edits grandes (las costuras dominan el condicionamiento — Sensitive Couture), <strong>colisión contra el avatar fijo por SDF</strong> horneado una vez (gltf + parry3d, 256³/narrow-band en f16 ≈ 32&nbsp;MB, sample trilineal O(1)), <strong>kinetic damping</strong> como mecanismo explícito de convergencia estática, y <strong>sleep por islas de acoplamiento</strong> (union-find sobre el grafo de costuras — piezas cosidas duermen y despiertan juntas; el sleep por pieza suelta acumula violación en la frontera). <strong>Fuera de v1</strong> (feature flags presupuestados aparte): auto-colisión completa y prendas multicapa.</p>
+    <p>El razonamiento anti-alternativas de Aguja se adopta como canon: Projective Dynamics queda descalificado porque su prefactorización global <em>«prevents simulated meshes from changing topology at runtime»</em> (cita de Small Steps) — fatal para un editor; IPC/C-IPC es el estándar de oro en robustez pero su Newton+barrera+CCD no cabe en un loop de 200&nbsp;ms en 4 núcleos — queda como modo de validación offline futuro.</p>
+  </div>
+  <div class="discarded">
+    <b>Descartado</b>
+    <p>Estática StVK/Newton como motor del editor (liga la factorización al rest state — cada drag la invalida); ArcSim como código (licencia non-commercial: inspiración de papers sí, ni una línea al árbol MIT); strain limiting en v1 queda como <strong>desacuerdo residual con spike</strong> (§3).</p>
+  </div>
+
+  <div class="axis" id="concurrencia">
+    <span class="tag">Eje 2.4</span>
+    <h3>Concurrencia y determinismo</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+  <div class="decision">
+    <b>Decisión</b>
+    <p><strong>Dos hilos de larga vida + workers</strong>: hilo UI (winit/egui, 60&nbsp;fps, solo edita el documento y pinta — <strong>toda</strong> la derivación, vía A incluida, corre fuera del hilo UI en un worker con cancelación last-wins, concesión de Bobina); hilo sim (dueño exclusivo del SimState, paso <strong>fijo</strong>, avanza por conteo de substeps, drena el buzón entre substeps, se <strong>parquea en <code>recv()</code></strong> al converger — 0% CPU, la laptop no se derrite); pool rayon dentro del solver. Comunicación exclusivamente por mensajes: <code>RestStateUpdate</code>/<code>PieceReplace</code>/<code>PinUpdate</code> por crossbeam-channel latest-wins; snapshots de posiciones+normales por <strong>arc-swap</strong> (el triple-buffer artesanal de Trame se descartó como NIH; el crate <code>triple_buffer</code> se descartó por licencia MPL). Los mensajes son pequeños y serializables → <strong>replay de sesiones</strong> para reproducir bugs (aportación única de Bobina).</p>
+    <p><strong>Determinismo en dos niveles verificables</strong> (la formulación honesta que los cuatro terminaron adoptando): (a) <strong>hash bit-exacto por plataforma</strong> en CI (macOS ARM y Linux x86, cada uno contra su golden) como garantía de diseño vía CLI batch; (b) <strong>comparación con tolerancia entre plataformas</strong>, promoviendo el hash cruzado a requisito solo cuando CI lo demuestre sostenido. Mecánica (injerto del diseño de Aguja/Trame, «el más fuerte del panel» según la crítica): <strong>coloreo greedy determinista sobre IDs estables con escrituras disjuntas dentro de cada color</strong> — cero atomics, cero reducciones dependientes del scheduler, bit-idéntico con 1 u 8 hilos <em>por construcción</em> (precedente: Avian PR #771); orden canónico total por ID (jamás iterar HashMap); inserción en spade en orden canónico; f32 IEEE estricto sin fast-math ni FMA implícito; inner loop confinado a +,−,×,÷,sqrt; <code>libm</code> para transcendentales auxiliares (receta rapier — se descartó vendorizar aproximaciones propias, concedido por Aguja). En interactivo, la garantía es convergencia-al-mismo-equilibrio como test estadístico, no bit-exactitud de trayectoria (la secuencia depende del timing de los gestos en <em>cualquier</em> arquitectura con mailbox).</p>
+  </div>
+  <div class="discarded">
+    <b>Descartado</b>
+    <p>Executor paralelo de schedules bevy_ecs con detector de ambigüedades en CI (el no-determinismo que vigilaba solo existía por haber elegido bevy_ecs); paralelismo oportunista/work-stealing sobre floats (lección de rapier: enhanced-determinism es incompatible con él).</p>
+  </div>
+
+  <div class="axis" id="gpu">
+    <span class="tag">Eje 2.5</span>
+    <h3>CPU vs GPU y camino de evolución</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+  <div class="decision">
+    <b>Decisión</b>
+    <p><strong>CPU-first, y CPU como referencia de los goldens para siempre.</strong> SoA de <code>Vec&lt;f32&gt;</code> planos, SIMD explícito con <code>wide</code> (f32x8 — conscientes de que son 2 ops NEON en Apple Silicon), coloring + rayon <strong>en v1 salvo que el benchmark de semana 1 demuestre que mono-hilo cumple el presupuesto completo</strong> (carga de la prueba invertida — concesión de Bobina). Presupuesto de escena defendible: 20–50k vértices; en el hardware piso la degradación es elegante y matemática, no un hack: el compliance de XPBD hace la rigidez independiente de los substeps — menos substeps = mismo material, convergencia más lenta dentro de los 2–3&nbsp;s permitidos; si no alcanza, sube el particle distance (knob único a la Marvelous Designer). <strong>GPU (wgpu compute) es un backend futuro detrás del mismo trait <code>ClothSolver</code></strong> — mismos colores, mismos buffers SoA, un dispatch por color, sin atomics flotantes — determinista solo por-dispositivo y por eso <strong>jamás referencia de tests</strong> (literatura de no-determinismo GPU). No se paga su costo (sincronización, readback, doble backend) hasta que un benchmark real lo exija.</p>
+  </div>
+  <div class="discarded">
+    <b>Descartado</b>
+    <p>GPU como requisito de v1 (el piso M1 8GB y la iGPU Linux lo desaconsejan); la promesa «cabe sobrado en 4 núcleos» sin medir (retirada por Trame: ~450M proyecciones/s con gather/scatter es memory-bound).</p>
+  </div>
+
+  <div class="axis" id="ui">
+    <span class="tag">Eje 2.6</span>
+    <h3>UI para la vista split</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+  <div class="decision">
+    <b>Decisión</b>
+    <p><strong>eframe/egui + wgpu, deliberadamente sin motor de juego.</strong> Split 2D/3D <strong>fijo artesanal</strong> en v1 (dos paneles en egui; egui_dock diferido para no encadenar dos dependencias de terceros al ciclo trimestral de breaking changes de egui — concesión de Salsa). Canvas 2D: <code>egui::Painter</code>/epaint para Béziers, asas y piquetes; <strong>lyon</strong> para tessellation de rellenos; picking y snapping con nearest-point y arc-length de <strong>kurbo</strong>; teselados cacheados. Viewport 3D: renderer wgpu propio y minimal (~1.5k líneas, módulo de la app) invocado vía <strong>paint-callback de egui-wgpu</strong> con el mismo device — Metal en macOS, Vulkan en Linux, gratis vía wgpu; patrón probado a escala industrial por rerun.io y en CAD por Foresight. El modo inmediato encaja con el diseño: la UI se re-deriva del documento cada frame, sin data-binding ni árbol retenido. <strong>Regla arquitectónica dura (Aguja):</strong> <code>toile-app</code> no puede importar <code>toile-sim</code> — solo <code>toile-engine</code> — lo que fuerza que todo lo que la UI hace sea expresable por la API headless y por tanto testeable en CI.</p>
+  </div>
+  <div class="discarded">
+    <b>Descartado</b>
+    <p>Bevy completo (churn + tiempos de compilación); Slint (dual-licensing con fricción); iced (riesgo de integración 3D); Qt (la autopsia de Valentina vía Patro: la GUI Qt fue «probablemente la parte principal» del costo que mató al proyecto); xilem/vello en el núcleo (pre-1.0 — concedido por Salsa antes de que se lo sacaran).</p>
+  </div>
+
+  <div class="axis" id="crates">
+    <span class="tag">Eje 2.7</span>
+    <h3>Estructura de crates del workspace</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+  <div class="decision">
+    <b>Decisión</b>
+    <p>7 crates — el esqueleto de Bobina más el orquestador de Aguja, con avatar, sync y couture como <strong>módulos</strong>, no crates (concesión de Salsa: 9 → menos):</p>
+  </div>
+  <div class="tscroll"><table>
+    <thead><tr><th>Crate</th><th>Responsabilidad</th></tr></thead>
+    <tbody>
+      <tr><td><code>toile-doc</code></td><td>Documento fuente de verdad: entidades con keys estables nunca recicladas, comandos reversibles con coalescing, pines como entidades, mapa de muestreo en la revisión, JSON canónico diffable</td></tr>
+      <tr><td><code>toile-geom</code></td><td>Geometría 2D pura y determinista sobre kurbo: arclength, nearest-point, muestreo por fracciones de arco, simetrías</td></tr>
+      <tr><td><code>toile-mesh</code></td><td>spade CDT+refinement por pieza (inserción canónica por ID), matriz PMVC cacheada (trait interpolador, fallback armónico), transferencia baricéntrica, métricas de calidad</td></tr>
+      <tr><td><code>toile-sim</code></td><td>Solver XPBD small-steps residente: SoA, coloreo determinista, anisotropía, costuras (conjunto <strong>global</strong> inter-pieza con dueño e indexación propios — corrección concedida por Trame), SDF, kinetic damping, sleep por islas; trait <code>ClothSolver</code></td></tr>
+      <tr><td><code>toile-engine</code></td><td>Orquestación headless: módulo <em>couture</em> (compilador de ediciones: comando → RestStateDelta/RemeshPlan), módulo <em>avatar</em> (gltf + parry3d → bake SDF cacheado en disco con header versionado), módulo <em>sync</em> (canales, snapshots), hilos, API pública. Lo consumen CLI y app</td></tr>
+      <tr><td><code>toile-cli</code></td><td><code>toile drape archivo.json --steps N --export obj --hash</code>, <code>toile check</code>; goldens en CI sin ventana — cargo build y listo; harness de benchmarks</td></tr>
+      <tr><td><code>toile-app</code></td><td>Cliente delgado: eframe/egui, canvas 2D, módulo <em>render</em> wgpu propio; solo importa <code>toile-engine</code></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="axis" id="deps">
+    <span class="tag">Eje 2.8</span>
+    <h3>Crates externos clave</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+  <p>Todos verificados activos 2025–2026, cero GPL en el árbol:</p>
+  <div class="tscroll"><table>
+    <thead><tr><th>Crate</th><th>Licencia</th><th>Rol</th></tr></thead>
+    <tbody>
+      <tr><td><code>kurbo</code> v0.13</td><td>MIT/Apache-2.0</td><td>Béziers: arclength, nearest-point (Linebender)</td></tr>
+      <tr><td><code>spade</code> v2.15</td><td>MIT/Apache-2.0</td><td>CDT + Delaunay refinement, predicados exactos</td></tr>
+      <tr><td><code>glam</code></td><td>MIT/Apache-2.0</td><td>Álgebra vectorial</td></tr>
+      <tr><td><code>wide</code></td><td>Zlib/MIT/Apache</td><td>SIMD portable f32x8 (NEON/AVX2)</td></tr>
+      <tr><td><code>rayon</code></td><td>MIT/Apache-2.0</td><td>Paralelismo por colores, particiones estáticas</td></tr>
+      <tr><td><code>libm</code></td><td>MIT/Apache-2.0</td><td>Transcendentales reproducibles</td></tr>
+      <tr><td><code>parry3d</code> v0.30</td><td>Apache-2.0</td><td>Point-projection para el bake del SDF (Dimforge)</td></tr>
+      <tr><td><code>gltf</code></td><td>MIT/Apache-2.0</td><td>Carga del avatar</td></tr>
+      <tr><td><code>serde</code> / <code>serde_json</code> / <code>thiserror</code></td><td>MIT/Apache-2.0</td><td>Formato de proyecto</td></tr>
+      <tr><td><code>crossbeam-channel</code></td><td>MIT/Apache-2.0</td><td>Buzón de deltas latest-wins</td></tr>
+      <tr><td><code>arc-swap</code></td><td>MIT/Apache-2.0</td><td>Snapshots sin locks</td></tr>
+      <tr><td><code>clap</code> / <code>anyhow</code></td><td>MIT/Apache-2.0</td><td>CLI</td></tr>
+      <tr><td><code>winit</code> / <code>wgpu</code></td><td>Apache-2.0 · MIT/Apache-2.0</td><td>Ventana; Metal/Vulkan</td></tr>
+      <tr><td><code>egui</code> + <code>eframe</code> + <code>egui-wgpu</code> v0.36</td><td>MIT/Apache-2.0</td><td>UI inmediata, paint-callback 3D</td></tr>
+      <tr><td><code>lyon</code> v1.0.19</td><td>MIT/Apache-2.0</td><td>Tessellation del canvas 2D</td></tr>
+      <tr><td><code>bytemuck</code>, <code>rfd</code></td><td>MIT/Apache/Zlib · MIT</td><td>Buffers GPU; diálogos</td></tr>
+      <tr><td><code>faer</code> (condicional)</td><td>MIT</td><td>Solo si el fallback armónico se activa</td></tr>
+    </tbody>
+  </table></div>
+  <div class="discarded">
+    <b>Rechazados por licencia o riesgo</b>
+    <p>CGAL (GPL), ArcSim (non-commercial), Slint (dual-licensing), <code>triple_buffer</code> (MPL), Qt; bevy_ecs y salsa rechazados por costo/beneficio, no por licencia.</p>
+  </div>
+</section>
+
+<section id="consensos">
+  <h2><span class="num">§ 3</span>Consensos y desacuerdos residuales</h2>
+  <p><strong>Consensos reales</strong> — los cuatro convergieron:</p>
+  <ul class="notch">
+    <li><strong>El mecanismo del requisito innegociable es unánime:</strong> XPBD small-steps residente + conectividad fija por muestreo estable + hot-swap de rest state con warm start + remesh local con transferencia baricéntrica + SDF de avatar + kinetic damping + sleep. Ninguna propuesta compitió aquí: compitieron en el envoltorio.</li>
+    <li><strong>Sensitive Couture como referencia arquitectónica central</strong> (Bobina, la única que no lo citaba, lo adoptó en réplica).</li>
+    <li><strong>Sin framework en el centro:</strong> Trame degradó el ECS a hipótesis y lo sacó de la sim; Salsa demovió salsa a opción futura. Concesiones de los propios defensores — pesan doble y cierran el debate.</li>
+    <li><strong>egui + wgpu + winit</strong> para la UI; motor headless + CLI + goldens como contrato anti-Seamly2D; JSON diffable; dos hilos + mensajes; CPU como referencia; determinismo en dos niveles; benchmark de semana 1 con criterio escrito de recorte.</li>
+    <li><strong>Clasificación forma/topología por tipo de comando</strong> (principio de Bobina, adoptado por Aguja y compatible con la línea final de Salsa).</li>
+  </ul>
+  <p><strong>Desacuerdos residuales</strong> — y el spike que resuelve cada uno:</p>
+  <div class="tscroll"><table>
+    <thead><tr><th>#</th><th>Desacuerdo</th><th>Spike que lo resuelve</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><strong>Strain limiting en v1</strong>: Aguja lo concedió <em>fuera</em> (alcance solo-dev); la crítica a Bobina lo exigió <em>dentro</em> (las medidas del patrón son el producto) y Bobina lo concedió dentro. Dos concesiones en direcciones opuestas.</td><td><strong>Spike de fidelidad de medidas</strong>: drapear una pieza rectangular de dimensiones conocidas con substeps altos y medir el estiramiento bajo gravedad contra tolerancia sartorial (goldens de medida). Si excede, entra un pase simple de strain limiting post-solve en v1; si no, queda como flag post-v1.</td></tr>
+      <tr><td>2</td><td><strong>Valor residual de la detección de cambios de bevy_ecs</strong> para la clausura transitiva de un edit (simetrías, invalidación de costuras): Trame la defiende como seguro estructural; el resto la considera resuelta con emisión de eventos en el aplicador de comandos + tests. La línea base acordada es <em>sin</em> ECS.</td><td>El spike de 2 semanas definido por el propio Trame, ejecutado <strong>solo si</strong> aparecen bugs de propagación en la práctica: demostrar que change detection cubre la clausura transitiva con menos código y menos bugs que la emisión manual. Criterio de éxito escrito de antemano; si no lo pasa, no entra y nada más se entera.</td></tr>
+      <tr><td>3</td><td><strong>Bit-exactitud cross-arquitectura ARM↔x86</strong> como promesa: Aguja cree que el inner loop confinado a IEEE la da; Bobina/Trame la tratan como aspiración.</td><td>CI dual (macOS ARM + Linux x86) comparando hashes cruzados desde el primer spike, <strong>sin promesa pública</strong>: se promueve a garantía solo tras un período sostenido en verde.</td></tr>
+      <tr><td>4</td><td><strong>Interpolador del interior</strong> en piezas muy cóncavas: PMVC basta (mayoría) vs. hará falta el fallback armónico con faer (letra pequeña de Bobina).</td><td>Suite de piezas cóncavas reales (sisa, escote, tiro) con ediciones extremas; si PMVC produce foldovers, se activa el fallback tras el trait — decisión por artefacto observado, no por debate.</td></tr>
+      <tr><td>5</td><td><strong>Mono-hilo vs coloring+rayon en v1</strong> (Bobina quería posponer; el panel lo promovió).</td><td>Resuelto por el benchmark de semana 1 con carga de la prueba invertida: coloring entra <strong>salvo</strong> que mono-hilo cumpla el presupuesto completo en el piso.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="riesgos">
+  <h2><span class="num">§ 4</span>Top 5 riesgos y mitigación</h2>
+  <ol class="plan">
+    <li><strong>Rendimiento en el hardware piso</strong> (M1 8GB / Linux 4 núcleos): ~150–200M proyecciones/s con acceso gather/scatter memory-bound es plausible-optimista, no probado. <em>Mitigación:</em> benchmark de semana 1 con el patrón de acceso disperso <strong>real</strong> (no microbench denso) + SDF + normales; criterio escrito de recorte (primero particle distance, después substeps durante interacción — mismo material por el compliance); SIMD <code>wide</code> + coloring/rayon; sleep hace el costo sostenido ~0.</li>
+    <li><strong>Fidelidad física de XPBD</strong> (estiramiento game-grade; parámetros «se ve bien», no gramos/denier): riesgo directo contra la razón de ser de un software de patronaje. <em>Mitigación:</em> anisotropía de hilo en v1; substeps altos en el paso final de convergencia; spike de medidas (§3.1) que decide strain limiting; goldens contra medidas físicas; y el trait <code>ClothSolver</code> como plan B acotado (solver estático de «modo calidad» o IPC offline) sin tocar documento ni UI.</li>
+    <li><strong>Estabilidad del cosido y de las costuras</strong> (dominan el condicionamiento; el drapeado inicial con embebido puede oscilar o clavarse en mínimos locales; los primeros frames generan fuerzas extremas — advertencia explícita de Blender). <em>Mitigación:</em> cosido progresivo con fuerza capada + rampa de rigidez tras edits grandes; presupuesto explícito de tuning; test dorado de estabilidad estilo Sensitive Couture (drapeado desde posiciones aleatorias → mismo equilibrio); spike de costuras antes de construir encima.</li>
+    <li><strong>Degradación de malla y del interpolador en ediciones extremas</strong> (PMVC en cuellos degenerados, triángulos casi invertidos, «pop» del remallado). <em>Mitigación:</em> detector de calidad obligatorio desde v1 con promoción automática a re-CDT local en background; blend temporal de 5–10 frames; contador de generación topológica que hace imposible el warm start sobre topología inconsistente; fallback armónico tras trait.</li>
+    <li><strong>Ecosistema y bus factor</strong> (egui rompe API cada ~3 meses; spade y lyon son proyectos de una persona; el propio dev es uno — la lección Valentina/Seamly2D fue de gobernanza tanto como técnica). <em>Mitigación:</em> lockfile + pins con ventanas de upgrade planificadas; dependencias reemplazables detrás de traits propios (<code>Triangulator</code>, <code>ClothSolver</code>, interpolador); motor headless + CLI + formato abierto para que el proyecto sobreviva a su GUI y a su autor; política de procedencia de código en CONTRIBUTING.md (ArcSim/GPL = veneno del árbol MIT).</li>
+  </ol>
+</section>
+
+<section id="plan">
+  <h2><span class="num">§ 5</span>Plan de validación</h2>
+  <p>Orden por riesgo eliminado — cada spike mata el riesgo más caro que quede en pie:</p>
+  <ol class="plan">
+    <li><strong>Semana 1 — Benchmarks del piso</strong> (mata el riesgo #1, el único que invalidaría el presupuesto de escena): kernel XPBD coloreado con acceso disperso real + SDF + normales en M1 base 8GB y laptop Linux de 4 núcleos; CDT+refinement de spade con 10k vértices; <strong>golden de reproducibilidad de spade</strong> (¿misma malla siempre, también en refinement?). Salida: presupuesto de escena v1 confirmado o recortado por el criterio escrito; decisión mono-hilo vs coloring (§3.5).</li>
+    <li><strong>Spike vertical del hilo incremental</strong> (mata el riesgo del requisito innegociable): documento mínimo → comando MovePoint → re-muestreo + SpMV PMVC → <code>RestStateUpdate</code> → solver residente con warm start → snapshot. Medir el pipeline completo bajo <em>drag storm</em> a 60&nbsp;Hz con cancelación last-wins: feedback &lt;200&nbsp;ms y re-convergencia 2–3&nbsp;s, en el piso. Aquí arranca también la <strong>CI de determinismo en dos niveles</strong> (ARM + x86, hashes por plataforma + comparación cruzada — alimenta §3.3).</li>
+    <li><strong>Spike de costuras</strong> (mata el riesgo #3): dos piezas cosidas con longitudes distintas (embebido), cosido progresivo capado, drapeado inicial &lt;10&nbsp;s, test de estabilidad drapeado-aleatorio→mismo-equilibrio, edición de un borde cosido en caliente.</li>
+    <li><strong>Spike de fidelidad de medidas</strong> (mata el riesgo #2 y resuelve §3.1): goldens de estiramiento sobre geometrías conocidas; decide strain limiting en v1.</li>
+    <li><strong>Spike de topología</strong> (mata el riesgo #4): remallado-en-sombra con swap atómico + transferencia baricéntrica + blend; suite de piezas cóncavas para el interpolador (§3.4); undo de un cambio de topología restaurando el mapa de muestreo desde la revisión.</li>
+    <li><strong>Condicional:</strong> spike de change-detection de bevy_ecs (§3.2), solo si la propagación por eventos manuales exhibe bugs reales durante los pasos 2–5.</li>
+  </ol>
+</section>
+
+<section id="refs">
+  <h2><span class="num">§ 6</span>Referencias</h2>
+  <p>Todas las URLs provienen de las propuestas del panel.</p>
+  <ul class="refs">
+    <li><a href="https://www.jst.go.jp/erato/igarashi/publications/001/SensitiveCouture.pdf">Sensitive Couture for Interactive Garment Modeling and Editing</a> <span>— Umetani, Kaufman, Igarashi, Grinspun · SIGGRAPH 2011</span></li>
+    <li><a href="https://mmacklin.com/smallsteps.pdf">Small Steps in Physics Simulation</a> <span>— Macklin et al. · SCA 2019</span></li>
+    <li><a href="https://dl.acm.org/doi/10.1145/2994258.2994272">XPBD: Position-Based Simulation of Compliant Constrained Dynamics</a> <span>— Macklin, Müller, Chentanez · 2016</span></li>
+    <li><a href="https://carmencincotti.com/2022-08-08/xpbd-extended-position-based-dynamics/">XPBD explicado</a> <span>— Carmen Cincotti (+ repo webgpu_cloth_simulator)</span></li>
+    <li><a href="https://ipc-sim.github.io/C-IPC/">Codimensional Incremental Potential Contact (C-IPC)</a></li>
+    <li><a href="http://graphics.berkeley.edu/papers/Narain-AAR-2012-11/">ARCSim / Adaptive Anisotropic Remeshing</a> <span>— Narain et al. · 2012</span></li>
+    <li><a href="https://github.com/zhou13/arcsim/blob/master/LICENSE">ArcSim LICENSE</a> <span>— non-commercial</span></li>
+    <li><a href="https://erkaman.github.io/posts/gauss_seidel_graph_coloring.html">Parallelizing Gauss-Seidel via Graph Coloring</a> <span>— Arnebäck</span></li>
+    <li><a href="https://github.com/Jondolf/avian/pull/771">Avian PR #771 — Parallel Solver With Graph Coloring</a></li>
+    <li><a href="https://docs.rs/bevy_xpbd_3d">Avian (ex bevy_xpbd)</a></li>
+    <li><a href="https://rapier.rs/docs/user_guides/rust/determinism/">Rapier — Determinism</a></li>
+    <li><a href="https://dimforge.com/blog/2026/01/09/the-year-2025-in-dimforge/">Dimforge — 2025 review / 2026 goals</a></li>
+    <li><a href="https://lib.rs/crates/parry3d">parry3d</a></li>
+    <li><a href="https://docs.rs/spade/latest/spade/">spade</a> <span>· </span><a href="https://github.com/Stoeoef/spade">repo</a></li>
+    <li><a href="https://docs.rs/kurbo/latest/kurbo/">kurbo</a> <span>· </span><a href="https://github.com/linebender/kurbo">repo</a></li>
+    <li><a href="https://github.com/nical/lyon">lyon</a> <span>· </span><a href="https://lib.rs/crates/lyon">lib.rs</a></li>
+    <li><a href="https://github.com/emilk/egui">egui</a> <span>· </span><a href="https://lib.rs/crates/egui">lib.rs</a></li>
+    <li><a href="https://linebender.org/blog/tmil-23/">Linebender in November 2025</a></li>
+    <li><a href="https://github.com/salsa-rs/salsa">salsa</a></li>
+    <li><a href="https://rust-analyzer.github.io/blog/2023/07/24/durable-incrementality.html">Durable Incrementality</a> <span>— rust-analyzer</span></li>
+    <li><a href="https://developer.blender.org/docs/features/core/depsgraph/">Blender depsgraph</a></li>
+    <li><a href="https://developer.blender.org/T31269">Blender #31269 — sewing seams</a></li>
+    <li><a href="https://docs.rs/bevy_ecs/latest/bevy_ecs/">bevy_ecs</a></li>
+    <li><a href="https://docs.rs/bevy/latest/bevy/ecs/entity/struct.Entity.html">Bevy Entity / serialización</a></li>
+    <li><a href="https://bevy-cheatbook.github.io/programming/system-order.html">Bevy system order</a></li>
+    <li><a href="https://www.leafwing-studios.com/blog/ecs-gui-framework/">ECS-backed GUI framework</a> <span>— Leafwing</span></li>
+    <li><a href="https://ourmachinery.com/post/the-story-behind-the-truth-designing-a-data-model/">The Truth</a> <span>— Our Machinery</span></li>
+    <li><a href="https://thisweekinbevy.com/issue/2024-06-03-tiny-glade-vj-performances-and-2d-lighting">Tiny Glade</a> <span>— This Week in Bevy</span></li>
+    <li><a href="https://librearts.org/2017/12/valentina-seamly2d/">Valentina → Seamly2D</a> <span>— Libre Arts</span></li>
+    <li><a href="https://fabricesalvaire.github.io/Patro/design-notes/question-answer.html">Patro — Design Notes Q&amp;A</a></li>
+    <li><a href="https://support.marvelousdesigner.com/hc/en-us/articles/47358268602777-Particle-Distance-Setting">Marvelous Designer — Particle Distance</a></li>
+    <li><a href="https://arxiv.org/pdf/2603.20421">Hawkeye — GPU non-determinism</a> <span>— arXiv 2026</span></li>
+  </ul>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <p class="fin">TOILE · ADR-001 · <a href="https://github.com/eticalde/Toile">github.com/eticalde/Toile</a> · <a href="https://github.com/users/eticalde/projects/1">tablero v1</a></p>
+</footer>
+
+</body>
+</html>
