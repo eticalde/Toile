@@ -190,6 +190,21 @@ fn run_size(target: usize) {
         colored_runs.push((t, ms, hash));
     }
 
+    // SIMD (wide f32x8) sobre las mismas constraints coloreadas: cada lane
+    // ejecuta las mismas operaciones IEEE que el camino escalar, así que
+    // debería ser bit-idéntico a coloring.
+    let mut simd_runs = Vec::new();
+    for t in [1usize, 4] {
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(t)
+            .build()
+            .unwrap();
+        let (ms, hash) = measure(target, |s| {
+            pool.install(|| xpbd::substep_colored_simd(&mut s.state, &colored, &s.sdf, DT));
+        });
+        simd_runs.push((t, ms, hash));
+    }
+
     let mut normals = vec![0.0f32; n * 3];
     let mut scene = build(target);
     for _ in 0..WARMUP {
@@ -213,10 +228,18 @@ fn run_size(target: usize) {
             ms_mono / ms
         );
     }
+    for &(t, ms, _) in &simd_runs {
+        println!(
+            "simd f32x8 ×{t:<2}   {ms:7.3} ms/substep  → {:.0} substeps/frame · speedup {:.2}× vs mono",
+            frame(ms),
+            ms_mono / ms
+        );
+    }
     println!("normales         {ms_normals:7.3} ms (cadencia visual)");
     let par_ok = colored_runs.windows(2).all(|w| w[0].2 == w[1].2);
+    let simd_ok = simd_runs.iter().all(|&(_, _, h)| h == colored_runs[0].2);
     println!(
-        "determinismo     secuencial: {} · paralelo (todos los conteos de hilos): {}",
+        "determinismo     secuencial: {} · paralelo: {} · simd vs escalar: {}",
         if hash_mono == hash_mono2 {
             "OK"
         } else {
@@ -226,6 +249,11 @@ fn run_size(target: usize) {
             "OK (bit-idéntico)"
         } else {
             "FALLÓ"
+        },
+        if simd_ok {
+            "OK (bit-idéntico)"
+        } else {
+            "distinto"
         }
     );
 }

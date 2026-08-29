@@ -405,6 +405,177 @@ pub fn substep_colored(state: &mut State, cc: &ColoredConstraints, sdf: &SdfGrid
         });
 }
 
+/// Variante SIMD de [`substep_colored`]: misma estructura, con la
+/// aritmética de constraints en lotes de 8 (`wide::f32x8`) — gathers y
+/// scatters escalares (NEON/AVX2 sin gather por hardware), matemática
+/// vectorizada. Cada lane ejecuta las mismas operaciones IEEE que el
+/// camino escalar, así que el resultado debe ser bit-idéntico a él.
+pub fn substep_colored_simd(state: &mut State, cc: &ColoredConstraints, sdf: &SdfGrid, dt: f32) {
+    use rayon::prelude::*;
+    use wide::{CmpGt, f32x8};
+    const GRAVITY: f32 = -9.81;
+    const MIN_CHUNK: usize = 4096;
+    let n = state.len();
+
+    let px = Ptr(state.px.as_mut_ptr());
+    let py = Ptr(state.py.as_mut_ptr());
+    let pz = Ptr(state.pz.as_mut_ptr());
+    let vx = Ptr(state.vx.as_mut_ptr());
+    let vy = Ptr(state.vy.as_mut_ptr());
+    let vz = Ptr(state.vz.as_mut_ptr());
+    let qx = Ptr(state.qx.as_mut_ptr());
+    let qy = Ptr(state.qy.as_mut_ptr());
+    let qz = Ptr(state.qz.as_mut_ptr());
+    let inv_mass = &state.inv_mass;
+
+    // Integración: contigua → SIMD directo por bloques de 8. En la escena
+    // todos los inv_mass son > 0; el lane inactivo se maneja escalar en la
+    // cola. SAFETY: bloques disjuntos por iteración.
+    let blocks = n / 8;
+    (0..blocks)
+        .into_par_iter()
+        .with_min_len(MIN_CHUNK / 8)
+        .for_each(|blk| unsafe {
+            let i = blk * 8;
+            let load = |p: Ptr| f32x8::from(std::array::from_fn(|l| *p.at(i + l)));
+            let store = |p: Ptr, v: f32x8| {
+                let a = v.to_array();
+                for (l, x) in a.iter().enumerate() {
+                    *p.at(i + l) = *x;
+                }
+            };
+            let (pxv, pyv, pzv) = (load(px), load(py), load(pz));
+            store(qx, pxv);
+            store(qy, pyv);
+            store(qz, pzv);
+            let w = f32x8::from(std::array::from_fn(|l| inv_mass[i + l]));
+            let active = w.cmp_gt(f32x8::splat(0.0));
+            let vyv = load(vy) + active.blend(f32x8::splat(GRAVITY * dt), f32x8::splat(0.0));
+            store(vy, vyv);
+            let dtv = f32x8::splat(dt);
+            store(px, pxv + active.blend(load(vx) * dtv, f32x8::splat(0.0)));
+            store(py, pyv + active.blend(vyv * dtv, f32x8::splat(0.0)));
+            store(pz, pzv + active.blend(load(vz) * dtv, f32x8::splat(0.0)));
+        });
+    for (i, &im) in inv_mass.iter().enumerate().skip(blocks * 8) {
+        unsafe {
+            *qx.at(i) = *px.at(i);
+            *qy.at(i) = *py.at(i);
+            *qz.at(i) = *pz.at(i);
+            if im > 0.0 {
+                *vy.at(i) += GRAVITY * dt;
+                *px.at(i) += *vx.at(i) * dt;
+                *py.at(i) += *vy.at(i) * dt;
+                *pz.at(i) += *vz.at(i) * dt;
+            }
+        }
+    }
+
+    // Constraints por color, en lotes de 8. SAFETY: dentro de un color las
+    // constraints no comparten vértices → los 8 gathers de un lote leen
+    // posiciones que ningún otro lote del color escribe, y los scatters
+    // son disjuntos.
+    let inv_dt2 = f32x8::splat(1.0 / (dt * dt));
+    let cons = &cc.cons;
+    for r in &cc.ranges {
+        let m = r.end - r.start;
+        let batches = m / 8;
+        (0..batches)
+            .into_par_iter()
+            .with_min_len(MIN_CHUNK / 8)
+            .for_each(|bt| unsafe {
+                let c0 = r.start + bt * 8;
+                let ia: [usize; 8] = std::array::from_fn(|l| cons.a[c0 + l] as usize);
+                let ib: [usize; 8] = std::array::from_fn(|l| cons.b[c0 + l] as usize);
+                let gx =
+                    |p: Ptr, idx: &[usize; 8]| f32x8::from(std::array::from_fn(|l| *p.at(idx[l])));
+                let wa = f32x8::from(std::array::from_fn(|l| inv_mass[ia[l]]));
+                let wb = f32x8::from(std::array::from_fn(|l| inv_mass[ib[l]]));
+                let w = wa + wb;
+                let dx = gx(px, &ib) - gx(px, &ia);
+                let dy = gx(py, &ib) - gx(py, &ia);
+                let dz = gx(pz, &ib) - gx(pz, &ia);
+                let len = (dx * dx + dy * dy + dz * dz).sqrt();
+                let rest = f32x8::from(std::array::from_fn(|l| cons.rest[c0 + l]));
+                let compliance = f32x8::from(std::array::from_fn(|l| cons.compliance[c0 + l]));
+                let alpha = compliance * inv_dt2;
+                let valid = w.cmp_gt(f32x8::splat(0.0)) & len.cmp_gt(f32x8::splat(1.0e-9));
+                let corr = valid.blend((len - rest) / ((w + alpha) * len), f32x8::splat(0.0));
+                let sx = (corr * dx).to_array();
+                let sy = (corr * dy).to_array();
+                let sz = (corr * dz).to_array();
+                let waa = wa.to_array();
+                let wba = wb.to_array();
+                for l in 0..8 {
+                    *px.at(ia[l]) += waa[l] * sx[l];
+                    *py.at(ia[l]) += waa[l] * sy[l];
+                    *pz.at(ia[l]) += waa[l] * sz[l];
+                    *px.at(ib[l]) -= wba[l] * sx[l];
+                    *py.at(ib[l]) -= wba[l] * sy[l];
+                    *pz.at(ib[l]) -= wba[l] * sz[l];
+                }
+            });
+        // Cola escalar del color, misma fórmula que substep_colored.
+        for c in r.start + batches * 8..r.end {
+            unsafe {
+                let (ia, ib) = (cons.a[c] as usize, cons.b[c] as usize);
+                let (wa, wb) = (inv_mass[ia], inv_mass[ib]);
+                let w = wa + wb;
+                if w == 0.0 {
+                    continue;
+                }
+                let dx = *px.at(ib) - *px.at(ia);
+                let dy = *py.at(ib) - *py.at(ia);
+                let dz = *pz.at(ib) - *pz.at(ia);
+                let len = (dx * dx + dy * dy + dz * dz).sqrt();
+                if len <= 1.0e-9 {
+                    continue;
+                }
+                let alpha = cons.compliance[c] * (1.0 / (dt * dt));
+                let corr = (len - cons.rest[c]) / ((w + alpha) * len);
+                let (sx, sy, sz) = (corr * dx, corr * dy, corr * dz);
+                *px.at(ia) += wa * sx;
+                *py.at(ia) += wa * sy;
+                *pz.at(ia) += wa * sz;
+                *px.at(ib) -= wb * sx;
+                *py.at(ib) -= wb * sy;
+                *pz.at(ib) -= wb * sz;
+            }
+        }
+    }
+
+    // Colisión SDF (escalar: trilineal = gathers dispersos) y velocidades.
+    let eps = sdf.cell * 0.5;
+    (0..n)
+        .into_par_iter()
+        .with_min_len(MIN_CHUNK)
+        .for_each(|i| unsafe {
+            let (x, y, z) = (*px.at(i), *py.at(i), *pz.at(i));
+            let d = sdf.sample(x, y, z);
+            if d < 0.0 {
+                let gx = sdf.sample(x + eps, y, z) - d;
+                let gy = sdf.sample(x, y + eps, z) - d;
+                let gz = sdf.sample(x, y, z + eps) - d;
+                let glen = (gx * gx + gy * gy + gz * gz).sqrt().max(1.0e-9);
+                let push = -d / glen;
+                *px.at(i) += gx * push;
+                *py.at(i) += gy * push;
+                *pz.at(i) += gz * push;
+            }
+        });
+
+    let inv_dt = 1.0 / dt;
+    const DAMPING: f32 = 0.999;
+    (0..n)
+        .into_par_iter()
+        .with_min_len(MIN_CHUNK)
+        .for_each(|i| unsafe {
+            *vx.at(i) = (*px.at(i) - *qx.at(i)) * inv_dt * DAMPING;
+            *vy.at(i) = (*py.at(i) - *qy.at(i)) * inv_dt * DAMPING;
+            *vz.at(i) = (*pz.at(i) - *qz.at(i)) * inv_dt * DAMPING;
+        });
+}
+
 /// Hash FNV-1a de los bits de las posiciones — el germen de los goldens de
 /// determinismo: misma escena, mismos substeps → mismo hash, siempre.
 pub fn position_hash(state: &State) -> u64 {
