@@ -120,7 +120,7 @@ fn build(target: usize) -> Scene {
         }
     }
 
-    let sdf = SdfGrid::sphere(128, 1.4 / 127.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
+    let sdf = SdfGrid::sphere(256, 1.4 / 255.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
 
     Scene {
         state,
@@ -259,6 +259,10 @@ fn run_size(target: usize) {
 }
 
 pub fn run(args: &[String]) {
+    if args.iter().any(|a| a == "--incr-async") {
+        run_incremental_async();
+        return;
+    }
     if args.iter().any(|a| a == "--incr") {
         run_incremental();
         return;
@@ -371,7 +375,7 @@ fn run_incremental() {
             state.pz[i] = (pipe.pos2d[i][1] - cy) as f32;
         }
         let mut cons = pipe.constraints(1.0e-8);
-        let sdf = SdfGrid::sphere(128, 1.4 / 127.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
+        let sdf = SdfGrid::sphere(256, 1.4 / 255.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
 
         // Drapeado inicial: 1 s de tiempo de sim.
         for _ in 0..600 {
@@ -400,19 +404,15 @@ fn run_incremental() {
             }
         }
 
-        // Re-convergencia tras soltar: substeps hasta v_max < 1 cm/s.
-        let max_speed = |s: &State| -> f32 {
-            let mut m = 0.0f32;
-            for i in 0..s.len() {
-                let v2 = s.vx[i] * s.vx[i] + s.vy[i] * s.vy[i] + s.vz[i] * s.vz[i];
-                m = m.max(v2);
-            }
-            m.sqrt()
-        };
+        // Re-convergencia tras soltar: energía RMS bajo umbral sostenido.
         let mut steps = 0usize;
         let mut prev_e = f32::MAX;
         let mut rising = false;
-        while max_speed(&state) > 0.01 && steps < 6000 {
+        let mut quiet = 0u32;
+        let inv_n = 1.0 / n as f32;
+        // Mismo criterio de sueño que el hilo de sim (toile-engine::sync):
+        // energía al final de cada tick de 10 substeps, 3 ticks quietos.
+        while quiet < 3 && steps < 6000 {
             xpbd::substep(&mut state, &cons, &sdf, DT);
             steps += 1;
             let e = xpbd::kinetic_energy(&state);
@@ -423,6 +423,13 @@ fn run_incremental() {
                 rising = false;
             }
             prev_e = e;
+            if steps.is_multiple_of(10) {
+                if e * inv_n < 2.0e-6 {
+                    quiet += 1;
+                } else {
+                    quiet = 0;
+                }
+            }
         }
         let conv_s = steps as f64 / 600.0;
 
@@ -459,4 +466,128 @@ fn run_incremental() {
             "FALLÓ"
         }
     );
+}
+
+/// Spike 2 — pipeline asíncrono real: hilo de sim + buzón latest-wins +
+/// snapshots arc-swap. Mide la latencia comando → primer snapshot que ya
+/// incorpora la edición, bajo storm a 60 Hz reales.
+fn run_incremental_async() {
+    use std::time::Duration;
+    use toile_doc::model::{Command, Doc, Piece};
+    use toile_engine::{couture::ShapePipeline, sync};
+
+    let mut doc = Doc {
+        pieces: vec![Piece {
+            contour: bodice_contour(),
+        }],
+    };
+    let mut pipe = ShapePipeline::build(&doc.pieces[0].contour, 256, 2.0e-5);
+    let n = pipe.pos2d.len();
+    let (mut cx, mut cy) = (0.0, 0.0);
+    for p in &pipe.pos2d {
+        cx += p[0];
+        cy += p[1];
+    }
+    cx /= n as f64;
+    cy /= n as f64;
+    let mut state = State::new(n);
+    for i in 0..n {
+        state.px[i] = (pipe.pos2d[i][0] - cx) as f32;
+        state.py[i] = 0.35;
+        state.pz[i] = (pipe.pos2d[i][1] - cy) as f32;
+    }
+    let cons = pipe.constraints(1.0e-8);
+    let n_edges = cons.len();
+    let sdf = SdfGrid::sphere(256, 1.4 / 255.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
+
+    let handle = sync::spawn(state, cons, sdf, DT, 10);
+
+    // Drapeado inicial: esperar a que la sim converja y se duerma.
+    let t0 = Instant::now();
+    while !handle.snapshot().converged && t0.elapsed() < Duration::from_secs(15) {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let initial = t0.elapsed().as_secs_f64();
+
+    // Storm a 60 Hz reales: derivar en este hilo, mandar, esperar el
+    // primer snapshot con la generación aplicada.
+    const POINT: usize = 68;
+    let base = doc.pieces[0].contour[POINT];
+    let frame_dur = Duration::from_micros(16_667);
+    let mut latency_ms = Vec::with_capacity(120);
+    let mut derive_ms = Vec::with_capacity(120);
+    for f in 0..120u32 {
+        let frame_start = Instant::now();
+        let t = f64::from(f) / 120.0;
+        let osc = 0.03 * (t * std::f64::consts::TAU * 2.0).sin();
+        Command::MovePoint {
+            piece: 0,
+            point: POINT,
+            to: [base[0] + osc, base[1] + osc * 0.5],
+        }
+        .apply(&mut doc);
+        let td = Instant::now();
+        let rests = pipe.derive(&doc.pieces[0].contour);
+        derive_ms.push(td.elapsed().as_secs_f64() * 1000.0);
+        let generation = u64::from(f) + 1;
+        let sent = Instant::now();
+        handle.send_rests(generation, rests.to_vec());
+        loop {
+            if handle.snapshot().generation >= generation {
+                latency_ms.push(sent.elapsed().as_secs_f64() * 1000.0);
+                break;
+            }
+            if sent.elapsed() > Duration::from_millis(500) {
+                latency_ms.push(sent.elapsed().as_secs_f64() * 1000.0);
+                break;
+            }
+            std::thread::sleep(Duration::from_micros(100));
+        }
+        let spent = frame_start.elapsed();
+        if spent < frame_dur {
+            std::thread::sleep(frame_dur - spent);
+        }
+    }
+
+    // Re-convergencia (reloj de pared) tras soltar.
+    let t0 = Instant::now();
+    while !handle.snapshot().converged && t0.elapsed() < Duration::from_secs(15) {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let reconv = t0.elapsed().as_secs_f64();
+    let snap = handle.snapshot();
+    let nan_free = snap.positions.iter().all(|x| x.is_finite());
+    handle.stop();
+
+    let avg = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+    let max = |v: &[f64]| v.iter().cloned().fold(0.0f64, f64::max);
+    println!("\n── spike 2 · pipeline asíncrono · storm a 60 Hz reales ──");
+    println!(
+        "malla            {n} vértices · {n_edges} aristas · sim en hilo propio (10 substeps/tick)"
+    );
+    println!("drapeado inicial {initial:7.2} s de reloj hasta dormir  (presupuesto: <10 s)");
+    println!(
+        "derive (hilo UI) {:7.3} ms promedio · {:.3} ms máximo",
+        avg(&derive_ms),
+        max(&derive_ms)
+    );
+    println!(
+        "latencia edición {:7.3} ms promedio · {:.3} ms máximo  (presupuesto: <200 ms)",
+        avg(&latency_ms),
+        max(&latency_ms)
+    );
+    println!("re-convergencia  {reconv:7.2} s de reloj tras soltar  (presupuesto: 2–3 s)");
+    println!(
+        "estado final     {} · sim dormida: {}",
+        if nan_free { "sin NaN" } else { "NaN!" },
+        if handle_converged(&snap) {
+            "sí (0% CPU)"
+        } else {
+            "no"
+        }
+    );
+}
+
+fn handle_converged(s: &toile_engine::sync::Snapshot) -> bool {
+    s.converged
 }

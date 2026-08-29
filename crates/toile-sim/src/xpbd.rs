@@ -5,6 +5,16 @@
 //! desde el harness para reproducir el patrón gather/scatter de una malla
 //! CDT real (un microbench con acceso denso mentiría — ADR §5.1).
 
+/// Fricción PBD contra el avatar: fracción del desplazamiento tangencial
+/// del substep que se remueve en contacto. Sin ella la prenda resbala sin
+/// fin por el SDF y la convergencia estática nunca llega.
+const FRICTION: f32 = 0.3;
+
+/// En contacto, la velocidad se amortigua corriendo `q` hacia `p` (la
+/// velocidad PBD es (p−q)/dt): mata el bombeo de energía del jitter de
+/// normales del SDF trilineal sin tocar la tela en vuelo libre.
+const CONTACT_DAMP: f32 = 0.5;
+
 /// Estado de las partículas en Structure-of-Arrays.
 ///
 /// `qx/qy/qz` guardan la posición previa al substep: la velocidad se deriva
@@ -178,6 +188,19 @@ pub fn substep(state: &mut State, cons: &DistanceConstraints, sdf: &SdfGrid, dt:
             state.px[i] += gx * push;
             state.py[i] += gy * push;
             state.pz[i] += gz * push;
+            let (nx, ny, nz) = (gx / glen, gy / glen, gz / glen);
+            let (mx, my, mz) = (
+                state.px[i] - state.qx[i],
+                state.py[i] - state.qy[i],
+                state.pz[i] - state.qz[i],
+            );
+            let dn = mx * nx + my * ny + mz * nz;
+            state.px[i] -= FRICTION * (mx - dn * nx);
+            state.py[i] -= FRICTION * (my - dn * ny);
+            state.pz[i] -= FRICTION * (mz - dn * nz);
+            state.qx[i] += CONTACT_DAMP * (state.px[i] - state.qx[i]);
+            state.qy[i] += CONTACT_DAMP * (state.py[i] - state.qy[i]);
+            state.qz[i] += CONTACT_DAMP * (state.pz[i] - state.qz[i]);
         }
     }
 
@@ -390,6 +413,19 @@ pub fn substep_colored(state: &mut State, cc: &ColoredConstraints, sdf: &SdfGrid
                 *px.at(i) += gx * push;
                 *py.at(i) += gy * push;
                 *pz.at(i) += gz * push;
+                let (nx, ny, nz) = (gx / glen, gy / glen, gz / glen);
+                let (mx, my, mz) = (
+                    *px.at(i) - *qx.at(i),
+                    *py.at(i) - *qy.at(i),
+                    *pz.at(i) - *qz.at(i),
+                );
+                let dn = mx * nx + my * ny + mz * nz;
+                *px.at(i) -= FRICTION * (mx - dn * nx);
+                *py.at(i) -= FRICTION * (my - dn * ny);
+                *pz.at(i) -= FRICTION * (mz - dn * nz);
+                *qx.at(i) += CONTACT_DAMP * (*px.at(i) - *qx.at(i));
+                *qy.at(i) += CONTACT_DAMP * (*py.at(i) - *qy.at(i));
+                *qz.at(i) += CONTACT_DAMP * (*pz.at(i) - *qz.at(i));
             }
         });
 
@@ -561,6 +597,19 @@ pub fn substep_colored_simd(state: &mut State, cc: &ColoredConstraints, sdf: &Sd
                 *px.at(i) += gx * push;
                 *py.at(i) += gy * push;
                 *pz.at(i) += gz * push;
+                let (nx, ny, nz) = (gx / glen, gy / glen, gz / glen);
+                let (mx, my, mz) = (
+                    *px.at(i) - *qx.at(i),
+                    *py.at(i) - *qy.at(i),
+                    *pz.at(i) - *qz.at(i),
+                );
+                let dn = mx * nx + my * ny + mz * nz;
+                *px.at(i) -= FRICTION * (mx - dn * nx);
+                *py.at(i) -= FRICTION * (my - dn * ny);
+                *pz.at(i) -= FRICTION * (mz - dn * nz);
+                *qx.at(i) += CONTACT_DAMP * (*px.at(i) - *qx.at(i));
+                *qy.at(i) += CONTACT_DAMP * (*py.at(i) - *qy.at(i));
+                *qz.at(i) += CONTACT_DAMP * (*pz.at(i) - *qz.at(i));
             }
         });
 
@@ -608,4 +657,14 @@ pub fn zero_velocities(state: &mut State) {
     state.vx.fill(0.0);
     state.vy.fill(0.0);
     state.vz.fill(0.0);
+}
+
+/// Velocidad máxima — el sensor de convergencia (v_max < umbral ⇒ dormir).
+pub fn max_speed(state: &State) -> f32 {
+    let mut m = 0.0f32;
+    for i in 0..state.len() {
+        let v2 = state.vx[i] * state.vx[i] + state.vy[i] * state.vy[i] + state.vz[i] * state.vz[i];
+        m = m.max(v2);
+    }
+    m.sqrt()
 }

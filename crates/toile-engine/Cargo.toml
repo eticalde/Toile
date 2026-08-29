@@ -6,6 +6,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+arc-swap = "1"
+crossbeam-channel = "0.5"
 toile-doc = { path = "../toile-doc" }
 toile-geom = { path = "../toile-geom" }
 toile-mesh = { path = "../toile-mesh" }
