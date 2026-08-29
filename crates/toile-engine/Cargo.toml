@@ -1,0 +1,12 @@
+[package]
+name = "toile-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+toile-doc = { path = "../toile-doc" }
+toile-geom = { path = "../toile-geom" }
+toile-mesh = { path = "../toile-mesh" }
+toile-sim = { path = "../toile-sim" }

@@ -1,0 +1,12 @@
+[package]
+name = "toile-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Regla arquitectónica dura: toile-app solo importa toile-engine.
+# Nunca agregar toile-sim / toile-mesh / toile-doc aquí — todo pasa por la
+# API headless del engine (docs/architecture.html §2.6).
+[dependencies]
+toile-engine = { path = "../toile-engine" }

@@ -4,7 +4,21 @@ Software open source de patronaje digital: dibuja patrones en 2D, define las cos
 
 Una alternativa abierta a herramientas como CLO3D, con formato de archivo abierto y documentado.
 
-> **Estado**: fase de diseño. Aún no hay código — este README define el alcance de la v1.
+> **Estado**: arquitectura acordada ([ADR-001](https://eticalde.github.io/Toile/architecture.html)) y workspace Rust inicial. Fase actual: spikes de validación.
+
+## Arquitectura
+
+La arquitectura de la v1 está decidida y documentada en el **[ADR-001](https://eticalde.github.io/Toile/architecture.html)** (fuente en [`docs/architecture.html`](docs/architecture.html)): workspace Rust de 7 crates, solver XPBD residente con warm start, derivación incremental por tipo de comando, dos hilos comunicados por mensajes, UI con egui + wgpu. El documento incluye qué se descartó y por qué, los riesgos y el plan de spikes.
+
+## Desarrollo
+
+Requisitos: Rust estable (vía [rustup](https://rustup.rs)).
+
+```sh
+cargo build --workspace   # compila los 7 crates
+cargo test --workspace    # tests + goldens
+cargo run -p toile-cli    # CLI headless (`toile`)
+```
 
 ## Usuario objetivo
 
