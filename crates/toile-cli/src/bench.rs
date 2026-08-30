@@ -262,6 +262,10 @@ fn run_size(target: usize) {
 }
 
 pub fn run(args: &[String]) {
+    if args.iter().any(|a| a == "--topo") {
+        run_topo();
+        return;
+    }
     if args.iter().any(|a| a == "--measure") {
         run_measure();
         return;
@@ -1041,5 +1045,157 @@ fn run_measure() {
     }
     println!(
         "tolerancia sartorial: ±{TOL_PCT:.0}% · refinado = 10 s de sim extra sin kinetic damping"
+    );
+}
+
+/// Spike 5 — vía B: cambio de topología con transferencia baricéntrica del
+/// drapeado vivo, suite de foldovers del interpolador (§3.4) y undo.
+fn run_topo() {
+    use toile_engine::couture::{self, ShapePipeline};
+    use toile_mesh::transfer;
+
+    let hash_mesh = |p: &ShapePipeline| -> u64 {
+        let mut h: u64 = 0xcbf29ce484222325;
+        let mut eat = |x: u64| h = (h ^ x).wrapping_mul(0x100000001b3);
+        for v in &p.pos2d {
+            eat(v[0].to_bits());
+            eat(v[1].to_bits());
+        }
+        for &t in &p.tris {
+            eat(u64::from(t));
+        }
+        h
+    };
+
+    let run = || -> (f64, f64, f64, f64, u64) {
+        let contour_a = toile_engine::couture::demo_bodice_contour();
+        let pipe_a = ShapePipeline::build(&contour_a, 256, 2.0e-5);
+        let n = pipe_a.pos2d.len();
+        let (mut cx, mut cy) = (0.0, 0.0);
+        for p in &pipe_a.pos2d {
+            cx += p[0];
+            cy += p[1];
+        }
+        cx /= n as f64;
+        cy /= n as f64;
+        let mut state = State::new(n);
+        for i in 0..n {
+            state.px[i] = (pipe_a.pos2d[i][0] - cx) as f32;
+            state.py[i] = 0.35;
+            state.pz[i] = (pipe_a.pos2d[i][1] - cy) as f32;
+        }
+        let cons_a = pipe_a.constraints(1.0e-8);
+        let no_seams = Seams::default();
+        let sdf = SdfGrid::sphere(256, 1.4 / 255.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
+        for _ in 0..600 {
+            xpbd::substep(&mut state, &cons_a, &no_seams, &sdf, DT);
+        }
+        let e_before = xpbd::kinetic_energy(&state) / n as f32;
+
+        // Edición topológica: punto nuevo en el costado + hombro movido.
+        let mut contour_b = contour_a.clone();
+        let mid = [
+            (contour_b[29][0] + contour_b[30][0]) * 0.5 + 0.02,
+            (contour_b[29][1] + contour_b[30][1]) * 0.5,
+        ];
+        contour_b.insert(30, mid);
+        contour_b[69][0] += 0.03; // el hombro corrió un índice por el insert
+
+        // Vía B: rebuild + transferencia (en el engine real esto corre en
+        // sombra mientras el solver sigue con la malla vieja).
+        let t0 = Instant::now();
+        let pipe_b = ShapePipeline::build(&contour_b, 256, 2.0e-5);
+        let cons_b = pipe_b.constraints(1.0e-8);
+        let mut state_b = couture::transfer_state(&pipe_a, &state, &pipe_b);
+        let rebuild_ms = t0.elapsed().as_secs_f64() * 1000.0;
+        let nb = state_b.len();
+
+        // Pop: energía tras el primer substep con la malla nueva.
+        xpbd::substep(&mut state_b, &cons_b, &no_seams, &sdf, DT);
+        let e_after = xpbd::kinetic_energy(&state_b) / nb as f32;
+
+        // Re-convergencia con quietud sostenida.
+        let inv_n = 1.0 / nb as f32;
+        let (mut prev_e, mut rising, mut quiet, mut steps) = (f32::MAX, false, 0u32, 0usize);
+        while quiet < 3 && steps < 6000 {
+            xpbd::substep(&mut state_b, &cons_b, &no_seams, &sdf, DT);
+            steps += 1;
+            let e = xpbd::kinetic_energy(&state_b);
+            if e > prev_e {
+                rising = true;
+            } else if rising {
+                xpbd::zero_velocities(&mut state_b);
+                rising = false;
+            }
+            prev_e = e;
+            if steps.is_multiple_of(10) {
+                if e * inv_n < 2.0e-6 {
+                    quiet += 1;
+                } else {
+                    quiet = 0;
+                }
+            }
+        }
+        (
+            rebuild_ms,
+            f64::from(e_before),
+            f64::from(e_after),
+            steps as f64 / 600.0,
+            xpbd::position_hash(&state_b),
+        )
+    };
+
+    println!("\n── spike 5 · vía B: topología con transferencia baricéntrica ──");
+    let (rebuild_ms, e_before, e_after, reconv_s, h1) = run();
+    let (_, _, _, _, h2) = run();
+    println!("rebuild + transferencia {rebuild_ms:7.1} ms  (presupuesto: <500 ms)");
+    println!(
+        "energía/vért            {e_before:9.2e} antes del swap · {e_after:9.2e} tras el primer substep"
+    );
+    println!("re-convergencia         {reconv_s:7.2} s de sim tras el swap");
+    println!(
+        "determinismo            {}",
+        if h1 == h2 {
+            "OK (bit-idéntico)"
+        } else {
+            "FALLÓ"
+        }
+    );
+
+    // §3.4 — suite de foldovers del interpolador MVC en pieza cóncava.
+    println!("\n── §3.4 · foldovers del interpolador (MVC) en ediciones extremas ──");
+    let contour = toile_engine::couture::demo_bodice_contour();
+    let edits: [(&str, usize, [f64; 2]); 3] = [
+        ("hombro +2 cm (suave)     ", 68, [0.02, 0.0]),
+        ("hombro -10 cm (extrema)  ", 68, [-0.10, 0.0]),
+        ("sisa +12 cm (a través)   ", 50, [0.12, 0.0]),
+    ];
+    for (name, idx, d) in edits {
+        let mut pipe = ShapePipeline::build(&contour, 256, 2.0e-5);
+        let reference = pipe.pos2d.clone();
+        let tris = pipe.tris.clone();
+        let mut edited = contour.clone();
+        edited[idx][0] += d[0];
+        edited[idx][1] += d[1];
+        pipe.derive(&edited);
+        let flips = transfer::count_flipped(&reference, &pipe.pos2d, &tris);
+        println!(
+            "{name}  {flips} triángulos invertidos de {}  {}",
+            tris.len() / 3,
+            if flips == 0 { "✅" } else { "⚠️" }
+        );
+    }
+
+    // Undo: reconstruir desde el contorno original reproduce la malla
+    // bit-exacta (el mapa de muestreo vive en la revisión del documento).
+    let a1 = ShapePipeline::build(&contour, 256, 2.0e-5);
+    let a2 = ShapePipeline::build(&contour, 256, 2.0e-5);
+    println!(
+        "\nundo (rebuild del contorno original): malla {}",
+        if hash_mesh(&a1) == hash_mesh(&a2) {
+            "bit-idéntica ✅"
+        } else {
+            "DIFIERE ❌"
+        }
     );
 }

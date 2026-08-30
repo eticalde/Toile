@@ -31,6 +31,8 @@ pub struct ShapePipeline {
     pub edges: Vec<(u32, u32)>,
     /// Posiciones 2D actuales de todos los vértices (se actualizan en derive).
     pub pos2d: Vec<[f64; 2]>,
+    /// Triángulos de la malla (para transferencia y detección de foldovers).
+    pub tris: Vec<u32>,
     /// Buffer de salida: rest length por arista, en el orden de `edges`.
     rests: Vec<f32>,
 }
@@ -87,6 +89,7 @@ impl ShapePipeline {
             interior_verts,
             interp,
             edges,
+            tris: mesh.triangles,
             pos2d: mesh.vertices,
             rests: Vec::new(),
         };
@@ -245,4 +248,37 @@ pub fn pair_seam(
         vb.push(pb);
     }
     (va, vb)
+}
+
+/// Vía B — transferencia baricéntrica del estado 3D vivo a una malla nueva:
+/// cada vértice nuevo se localiza en el espacio 2D de reposo de la malla
+/// vieja e interpola posiciones y velocidades. El drapeado continúa sin
+/// resetear (ADR §2.2).
+pub fn transfer_state(
+    old: &ShapePipeline,
+    old_state: &toile_sim::xpbd::State,
+    new: &ShapePipeline,
+) -> toile_sim::xpbd::State {
+    let loc = toile_mesh::transfer::Locator::build(&old.pos2d, &old.tris);
+    let mut s = toile_sim::xpbd::State::new(new.pos2d.len());
+    for (i, p) in new.pos2d.iter().enumerate() {
+        let (t, b) = loc.locate(*p);
+        let (ia, ib, ic) = (
+            old.tris[t * 3] as usize,
+            old.tris[t * 3 + 1] as usize,
+            old.tris[t * 3 + 2] as usize,
+        );
+        let lerp3 = |va: &[f32], out: &mut [f32]| {
+            out[i] = (b[0] * f64::from(va[ia])
+                + b[1] * f64::from(va[ib])
+                + b[2] * f64::from(va[ic])) as f32;
+        };
+        lerp3(&old_state.px, &mut s.px);
+        lerp3(&old_state.py, &mut s.py);
+        lerp3(&old_state.pz, &mut s.pz);
+        lerp3(&old_state.vx, &mut s.vx);
+        lerp3(&old_state.vy, &mut s.vy);
+        lerp3(&old_state.vz, &mut s.vz);
+    }
+    s
 }
