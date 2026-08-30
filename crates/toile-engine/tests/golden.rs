@@ -13,7 +13,7 @@
 fn drape_bodice_golden() {
     assert_eq!(
         toile_engine::golden::drape_bodice_hash(),
-        0xdb04a0b231ac923f,
+        0x534dd0e5200e8e4a,
         "el drapeado dorado cambió de bits: o hay no-determinismo, o un \
          cambio de física legítimo que exige regenerar el golden (toile drape)"
     );

@@ -10,7 +10,7 @@
 use arc_swap::ArcSwap;
 use crossbeam_channel::{RecvTimeoutError, Sender, TryRecvError, unbounded};
 use std::sync::Arc;
-use toile_sim::xpbd::{self, DistanceConstraints, SdfGrid, State};
+use toile_sim::xpbd::{self, DistanceConstraints, SdfGrid, Seams, State};
 
 /// Convergencia por energía cinética promedio (RMS ~2 mm/s): un vértice
 /// suelto aleteando no debe impedir dormir al conjunto.
@@ -77,6 +77,7 @@ pub fn spawn(
     let published = snapshot.clone();
 
     let join = std::thread::spawn(move || {
+        let no_seams = Seams::default();
         let mut generation = 0u64;
         let mut substeps = 0u64;
         let mut converged = false;
@@ -152,7 +153,7 @@ pub fn spawn(
             let inv_n = 1.0 / state.len() as f32;
             let mut e_avg = 0.0f32;
             for _ in 0..substeps_per_tick {
-                xpbd::substep(&mut state, &cons, &sdf, dt);
+                xpbd::substep(&mut state, &cons, &no_seams, &sdf, dt);
                 substeps += 1;
                 let e = xpbd::kinetic_energy(&state);
                 e_avg = e * inv_n;

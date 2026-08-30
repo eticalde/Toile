@@ -8,7 +8,7 @@
 /// Fricción PBD contra el avatar: fracción del desplazamiento tangencial
 /// del substep que se remueve en contacto. Sin ella la prenda resbala sin
 /// fin por el SDF y la convergencia estática nunca llega.
-const FRICTION: f32 = 0.3;
+const FRICTION: f32 = 0.5;
 
 /// En contacto, la velocidad se amortigua corriendo `q` hacia `p` (la
 /// velocidad PBD es (p−q)/dt): mata el bombeo de energía del jitter de
@@ -64,9 +64,43 @@ pub struct DistanceConstraints {
     pub rest: Vec<f32>,
     /// Compliance XPBD por arista (la anisotropía urdimbre/trama vive aquí).
     pub compliance: Vec<f32>,
+    /// Strain limiting post-solve: ratio máximo de elongación (p.ej. 1.05);
+    /// 0.0 = desactivado. Clamp rígido, solo cuando la arista lo excede.
+    /// Sin él, el aro de una prenda cerrada se elonga bajo su peso y la
+    /// prenda se cuela por el avatar (§3.1 — resuelto por el spike 3).
+    pub strain_limit: f32,
 }
 
 impl DistanceConstraints {
+    pub fn len(&self) -> usize {
+        self.a.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.a.is_empty()
+    }
+}
+
+/// Costuras: attach vértice↔vértice inter-pieza con rest 0 (ADR §2.3).
+/// Conjunto GLOBAL del solver, con dueño e indexación propios — los pares
+/// referencian índices del estado combinado de todas las piezas.
+///
+/// `compliance` alto = costura blanda (cosido progresivo); ≈0 = costura
+/// firme en régimen. `max_step` capa la corrección por substep para que el
+/// drapeado inicial no genere fuerzas extremas (lección de Blender).
+#[derive(Default)]
+pub struct Seams {
+    pub a: Vec<u32>,
+    pub b: Vec<u32>,
+    pub compliance: f32,
+    pub max_step: f32,
+    /// Iteraciones del pase por substep (0 se trata como 1). Las costuras
+    /// son pocas y dominan el condicionamiento: iterarlas es barato y
+    /// cierra gaps que 1 sola pasada capada no puede contra la gravedad.
+    pub iterations: u32,
+}
+
+impl Seams {
     pub fn len(&self) -> usize {
         self.a.len()
     }
@@ -127,7 +161,13 @@ impl SdfGrid {
 
 /// Un substep XPBD completo: integración, 1 iteración de constraints
 /// (small steps: N substeps de 1 iteración), colisión SDF y velocidades.
-pub fn substep(state: &mut State, cons: &DistanceConstraints, sdf: &SdfGrid, dt: f32) {
+pub fn substep(
+    state: &mut State,
+    cons: &DistanceConstraints,
+    seams: &Seams,
+    sdf: &SdfGrid,
+    dt: f32,
+) {
     const GRAVITY: f32 = -9.81;
     let n = state.len();
 
@@ -171,6 +211,66 @@ pub fn substep(state: &mut State, cons: &DistanceConstraints, sdf: &SdfGrid, dt:
         state.px[ib] -= wb * sx;
         state.py[ib] -= wb * sy;
         state.pz[ib] -= wb * sz;
+    }
+
+    // Strain limiting post-solve: clamp rígido de aristas sobre-elongadas.
+    if cons.strain_limit > 0.0 {
+        for c in 0..cons.len() {
+            let (ia, ib) = (cons.a[c] as usize, cons.b[c] as usize);
+            let (wa, wb) = (state.inv_mass[ia], state.inv_mass[ib]);
+            let w = wa + wb;
+            if w == 0.0 {
+                continue;
+            }
+            let dx = state.px[ib] - state.px[ia];
+            let dy = state.py[ib] - state.py[ia];
+            let dz = state.pz[ib] - state.pz[ia];
+            let len = (dx * dx + dy * dy + dz * dz).sqrt();
+            let max_len = cons.rest[c] * cons.strain_limit;
+            if len <= max_len {
+                continue;
+            }
+            let corr = (len - max_len) / (w * len);
+            let (sx, sy, sz) = (corr * dx, corr * dy, corr * dz);
+            state.px[ia] += wa * sx;
+            state.py[ia] += wa * sy;
+            state.pz[ia] += wa * sz;
+            state.px[ib] -= wb * sx;
+            state.py[ib] -= wb * sy;
+            state.pz[ib] -= wb * sz;
+        }
+    }
+
+    // Costuras: attach con rest 0, corrección capada por substep.
+    if !seams.is_empty() {
+        let alpha = seams.compliance * inv_dt2;
+        for _ in 0..seams.iterations.max(1) {
+            for k in 0..seams.len() {
+                let (ia, ib) = (seams.a[k] as usize, seams.b[k] as usize);
+                let (wa, wb) = (state.inv_mass[ia], state.inv_mass[ib]);
+                let w = wa + wb;
+                if w == 0.0 {
+                    continue;
+                }
+                let dx = state.px[ib] - state.px[ia];
+                let dy = state.py[ib] - state.py[ia];
+                let dz = state.pz[ib] - state.pz[ia];
+                let len = (dx * dx + dy * dy + dz * dz).sqrt();
+                if len <= 1.0e-9 {
+                    continue;
+                }
+                // C = len (rest 0); corrección total capada en max_step.
+                let corr = (len / (w + alpha)).min(seams.max_step);
+                let scale = corr / len;
+                let (sx, sy, sz) = (scale * dx, scale * dy, scale * dz);
+                state.px[ia] += wa * sx;
+                state.py[ia] += wa * sy;
+                state.pz[ia] += wa * sz;
+                state.px[ib] -= wb * sx;
+                state.py[ib] -= wb * sy;
+                state.pz[ib] -= wb * sz;
+            }
+        }
     }
 
     // Colisión contra el SDF: proyección fuera + gradiente por diferencias
@@ -288,6 +388,7 @@ pub fn color_constraints(cons: &DistanceConstraints, n_verts: usize) -> ColoredC
         b: Vec::with_capacity(m),
         rest: Vec::with_capacity(m),
         compliance: Vec::with_capacity(m),
+        strain_limit: cons.strain_limit,
     };
     let mut ranges = Vec::with_capacity(n_colors);
     for g in &groups {

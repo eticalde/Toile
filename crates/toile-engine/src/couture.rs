@@ -128,6 +128,7 @@ impl ShapePipeline {
             b: self.edges.iter().map(|e| e.1).collect(),
             rest: self.rests.clone(),
             compliance: vec![compliance; self.edges.len()],
+            strain_limit: 0.0,
         }
     }
 
@@ -192,4 +193,55 @@ pub fn demo_bodice_contour() -> Vec<[f64; 2]> {
     quad(&mut pts, [0.18, 0.72], [0.16, 0.56], [0.0, 0.60], 26); // escote
     line(&mut pts, [0.0, 0.60], [0.0, 0.0], 24); // centro frente
     pts
+}
+
+impl ShapePipeline {
+    /// Vértice de frontera más cercano a una fracción del perímetro
+    /// (búsqueda binaria sobre las fracciones ordenadas, con wrap).
+    pub fn boundary_vertex_near(&self, fraction: f64) -> u32 {
+        let fr = fraction.rem_euclid(1.0);
+        let n = self.boundary_fracs.len();
+        let i = self.boundary_fracs.partition_point(|&x| x < fr);
+        let circ = |d: f64| d.abs().min(1.0 - d.abs());
+        let prev = (i + n - 1) % n;
+        let next = i % n;
+        if circ(self.boundary_fracs[prev] - fr) <= circ(self.boundary_fracs[next] - fr) {
+            self.boundary_verts[prev]
+        } else {
+            self.boundary_verts[next]
+        }
+    }
+}
+
+/// Empareja dos tramos de frontera para coserlos: `count` pares en
+/// fracciones relativas iguales de cada tramo — con largos distintos, el
+/// embebido (fruncido) emerge solo del desajuste. Para invertir la
+/// dirección de un lado, pásalo con el rango al revés `(f1, f0)`.
+/// Los índices de `b` llegan desplazados por `b_offset` (estado combinado).
+pub fn pair_seam(
+    a: &ShapePipeline,
+    range_a: (f64, f64),
+    b: &ShapePipeline,
+    range_b: (f64, f64),
+    b_offset: u32,
+    count: usize,
+) -> (Vec<u32>, Vec<u32>) {
+    let mut va = Vec::with_capacity(count);
+    let mut vb = Vec::with_capacity(count);
+    for k in 0..count {
+        let t = k as f64 / (count - 1) as f64;
+        let fa = range_a.0 + (range_a.1 - range_a.0) * t;
+        let fb = range_b.0 + (range_b.1 - range_b.0) * t;
+        let (pa, pb) = (
+            a.boundary_vertex_near(fa),
+            b.boundary_vertex_near(fb) + b_offset,
+        );
+        // El "más cercano" puede repetirse en tramos densos: sin duplicados.
+        if va.last() == Some(&pa) || vb.last() == Some(&pb) {
+            continue;
+        }
+        va.push(pa);
+        vb.push(pb);
+    }
+    (va, vb)
 }

@@ -6,7 +6,7 @@
 //! gather/scatter que deja una CDT, y 100% reproducible.
 
 use std::time::Instant;
-use toile_sim::xpbd::{self, DistanceConstraints, SdfGrid, State};
+use toile_sim::xpbd::{self, DistanceConstraints, SdfGrid, Seams, State};
 
 /// PRNG determinista minúsculo (Knuth MMIX) — sin dependencia externa.
 struct Lcg(u64);
@@ -99,6 +99,7 @@ fn build(target: usize) -> Scene {
         b: Vec::with_capacity(edges.len()),
         rest: Vec::with_capacity(edges.len()),
         compliance: Vec::with_capacity(edges.len()),
+        strain_limit: 0.0,
     };
     for (a, b, c) in &edges {
         let (ia, ib) = (*a as usize, *b as usize);
@@ -150,6 +151,7 @@ fn measure(target: usize, mut step: impl FnMut(&mut Scene)) -> (f64, u64) {
 }
 
 fn run_size(target: usize) {
+    let no_seams = Seams::default();
     let probe = build(target);
     let n = probe.state.len();
     let colored = xpbd::color_constraints(&probe.cons, n);
@@ -164,10 +166,10 @@ fn run_size(target: usize) {
 
     // Baseline secuencial (orden original barajado).
     let (ms_mono, hash_mono) = measure(target, |s| {
-        xpbd::substep(&mut s.state, &s.cons, &s.sdf, DT);
+        xpbd::substep(&mut s.state, &s.cons, &no_seams, &s.sdf, DT);
     });
     let (_, hash_mono2) = measure(target, |s| {
-        xpbd::substep(&mut s.state, &s.cons, &s.sdf, DT);
+        xpbd::substep(&mut s.state, &s.cons, &no_seams, &s.sdf, DT);
     });
 
     // Coloring: barrido de hilos — mismo orden de colores en todos,
@@ -208,7 +210,7 @@ fn run_size(target: usize) {
     let mut normals = vec![0.0f32; n * 3];
     let mut scene = build(target);
     for _ in 0..WARMUP {
-        xpbd::substep(&mut scene.state, &scene.cons, &scene.sdf, DT);
+        xpbd::substep(&mut scene.state, &scene.cons, &no_seams, &scene.sdf, DT);
     }
     let t = Instant::now();
     for _ in 0..60 {
@@ -259,6 +261,10 @@ fn run_size(target: usize) {
 }
 
 pub fn run(args: &[String]) {
+    if args.iter().any(|a| a == "--seams") {
+        run_seams();
+        return;
+    }
     if args.iter().any(|a| a == "--incr-async") {
         run_incremental_async();
         return;
@@ -320,6 +326,7 @@ fn run_mesh() {
 
 /// Spike 2 — vía A síncrona: drag storm sobre el pipeline incremental.
 fn run_incremental() {
+    let no_seams = Seams::default();
     use toile_doc::model::{Command, Doc, Piece};
     use toile_engine::couture::ShapePipeline;
 
@@ -354,7 +361,7 @@ fn run_incremental() {
 
         // Drapeado inicial: 1 s de tiempo de sim.
         for _ in 0..600 {
-            xpbd::substep(&mut state, &cons, &sdf, DT);
+            xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
         }
 
         // Storm: 120 frames a 60 Hz, el vértice hombro-sisa oscila ±3 cm.
@@ -375,7 +382,7 @@ fn run_incremental() {
             cons.rest.copy_from_slice(rests);
             derive_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
             for _ in 0..10 {
-                xpbd::substep(&mut state, &cons, &sdf, DT);
+                xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
             }
         }
 
@@ -388,7 +395,7 @@ fn run_incremental() {
         // Mismo criterio de sueño que el hilo de sim (toile-engine::sync):
         // energía al final de cada tick de 10 substeps, 3 ticks quietos.
         while quiet < 3 && steps < 6000 {
-            xpbd::substep(&mut state, &cons, &sdf, DT);
+            xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
             steps += 1;
             let e = xpbd::kinetic_energy(&state);
             if e > prev_e {
@@ -565,4 +572,268 @@ fn run_incremental_async() {
 
 fn handle_converged(s: &toile_engine::sync::Snapshot) -> bool {
     s.converged
+}
+
+/// Rectángulo CCW muestreado cada ~step; devuelve el contorno y las
+/// fracciones de las 4 esquinas: [fin_inferior, fin_derecho, fin_superior, 1].
+fn rect_contour(w: f64, h: f64, step: f64) -> (Vec<[f64; 2]>, [f64; 4]) {
+    let per = 2.0 * (w + h);
+    let mut pts = Vec::new();
+    let line = |pts: &mut Vec<[f64; 2]>, a: [f64; 2], b: [f64; 2]| {
+        let len = ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+        let n = (len / step).ceil() as usize;
+        for i in 0..n {
+            let t = i as f64 / n as f64;
+            pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        }
+    };
+    line(&mut pts, [0.0, 0.0], [w, 0.0]);
+    line(&mut pts, [w, 0.0], [w, h]);
+    line(&mut pts, [w, h], [0.0, h]);
+    line(&mut pts, [0.0, h], [0.0, 0.0]);
+    (pts, [w / per, (w + h) / per, (2.0 * w + h) / per, 1.0])
+}
+
+/// Spike 3 — dos piezas con largos de costura distintos (10% embebido),
+/// cosidas por ambos costados alrededor de la esfera.
+fn run_seams() {
+    use toile_engine::couture::{self, ShapePipeline};
+
+    const H_FRONT: f64 = 0.55;
+    const H_BACK: f64 = 0.50; // 10% más corto: embebido en el costado
+    const W: f64 = 0.46;
+    const MAX_AREA: f64 = 4.0e-5;
+    const RAMP_STEPS: usize = 450;
+    const SEAM_CAP: f32 = 0.002;
+
+    // (perturbación_x, perturbación_z) por corrida de estabilidad.
+    let build_and_drape =
+        |dx: f32, dz: f32, hot_edit: bool| -> (f64, f64, f64, f32, f32, [f32; 3], u64) {
+            let (front_c, ff) = rect_contour(W, H_FRONT, 0.01);
+            let (back_c, fb) = rect_contour(W, H_BACK, 0.01);
+            let mut front = ShapePipeline::build(&front_c, 192, MAX_AREA);
+            let back = ShapePipeline::build(&back_c, 192, MAX_AREA);
+            let (na, nb) = (front.pos2d.len(), back.pos2d.len());
+            let n = na + nb;
+
+            // Posicionamiento tipo poncho: ambas piezas horizontales sobre
+            // la esfera, con los bordes de hombro adyacentes sobre el polo
+            // (la gravedad hace el arreglo, estable como en el spike 2) y
+            // el cosido progresivo cierra hombro y costados al caer.
+            let mut state = State::new(n);
+            for i in 0..na {
+                state.px[i] = (front.pos2d[i][0] - W * 0.5) as f32 + dx;
+                state.py[i] = 0.32;
+                state.pz[i] = (0.005 + front.pos2d[i][1]) as f32 + dz;
+            }
+            for i in 0..nb {
+                state.px[na + i] = (back.pos2d[i][0] - W * 0.5) as f32 + dx;
+                state.py[na + i] = 0.32;
+                state.pz[na + i] = (-0.005 - back.pos2d[i][1]) as f32 + dz;
+            }
+
+            let ca = front.constraints(1.0e-8);
+            let cb = back.constraints(1.0e-8);
+            let n_edges_front = ca.len();
+            let mut cons = DistanceConstraints {
+                a: ca
+                    .a
+                    .iter()
+                    .chain(
+                        cb.a.iter()
+                            .map(|v| *v + na as u32)
+                            .collect::<Vec<_>>()
+                            .iter(),
+                    )
+                    .copied()
+                    .collect(),
+                b: ca
+                    .b
+                    .iter()
+                    .chain(
+                        cb.b.iter()
+                            .map(|v| *v + na as u32)
+                            .collect::<Vec<_>>()
+                            .iter(),
+                    )
+                    .copied()
+                    .collect(),
+                rest: ca.rest.iter().chain(cb.rest.iter()).copied().collect(),
+                compliance: ca
+                    .compliance
+                    .iter()
+                    .chain(cb.compliance.iter())
+                    .copied()
+                    .collect(),
+                strain_limit: 1.02,
+            };
+
+            // Hombro (bordes inferiores adyacentes sobre el polo) + costados
+            // derecho e izquierdo (largos distintos: el embebido del 10% lo
+            // absorbe el emparejamiento por fracciones relativas).
+            let (mut sa, mut sb) =
+                couture::pair_seam(&front, (0.0, ff[0]), &back, (0.0, fb[0]), na as u32, 40);
+            let (ra, rb) =
+                couture::pair_seam(&front, (ff[0], ff[1]), &back, (fb[0], fb[1]), na as u32, 60);
+            let (la, lb) =
+                couture::pair_seam(&front, (ff[2], ff[3]), &back, (fb[2], fb[3]), na as u32, 60);
+            sa.extend(ra);
+            sb.extend(rb);
+            sa.extend(la);
+            sb.extend(lb);
+            let n_pairs = sa.len();
+            let mut seams = Seams {
+                a: sa,
+                b: sb,
+                compliance: 1.0e-5,
+                max_step: SEAM_CAP,
+                iterations: 4,
+            };
+            let sdf = SdfGrid::sphere(256, 1.4 / 255.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
+
+            let t_drape = Instant::now();
+            // Drapeado inicial con cosido progresivo (rampa exponencial de
+            // compliance) y criterio de sueño sostenido.
+            let inv_n = 1.0 / n as f32;
+            let mut prev_e = f32::MAX;
+            let mut rising = false;
+            let mut quiet = 0u32;
+            let mut steps = 0usize;
+            while quiet < 3 && steps < 12000 {
+                if steps < RAMP_STEPS {
+                    let t = steps as f32 / RAMP_STEPS as f32;
+                    seams.compliance = 1.0e-5 * (1.0e-9f32 / 1.0e-5).powf(t);
+                } else {
+                    seams.compliance = 1.0e-9;
+                    seams.max_step = 0.01;
+                }
+                xpbd::substep(&mut state, &cons, &seams, &sdf, DT);
+                steps += 1;
+                let e = xpbd::kinetic_energy(&state);
+                if e > prev_e {
+                    rising = true;
+                } else if rising {
+                    xpbd::zero_velocities(&mut state);
+                    rising = false;
+                }
+                prev_e = e;
+                if steps.is_multiple_of(10) {
+                    if e * inv_n < 2.0e-6 {
+                        quiet += 1;
+                    } else {
+                        quiet = 0;
+                    }
+                }
+            }
+            let drape_s = steps as f64 / 600.0;
+            let drape_wall = t_drape.elapsed().as_secs_f64();
+
+            // Edición en caliente de un borde cosido: ensanchar el frente 3 cm
+            // por lado en la base y re-drapear.
+            let mut edit_s = 0.0;
+            if hot_edit {
+                let mut edited = front_c.clone();
+                for p in edited.iter_mut() {
+                    if p[1] < 1.0e-9 {
+                        // borde inferior: estirar en x alrededor del centro
+                        p[0] = W * 0.5 + (p[0] - W * 0.5) * (1.0 + 0.06 / W);
+                    }
+                }
+                cons.rest[..n_edges_front].copy_from_slice(&front.derive(&edited)[..n_edges_front]);
+                let mut quiet = 0u32;
+                let mut steps = 0usize;
+                prev_e = f32::MAX;
+                rising = false;
+                while quiet < 3 && steps < 9000 {
+                    xpbd::substep(&mut state, &cons, &seams, &sdf, DT);
+                    steps += 1;
+                    let e = xpbd::kinetic_energy(&state);
+                    if e > prev_e {
+                        rising = true;
+                    } else if rising {
+                        xpbd::zero_velocities(&mut state);
+                        rising = false;
+                    }
+                    prev_e = e;
+                    if steps.is_multiple_of(10) {
+                        if e * inv_n < 2.0e-6 {
+                            quiet += 1;
+                        } else {
+                            quiet = 0;
+                        }
+                    }
+                }
+                edit_s = steps as f64 / 600.0;
+            }
+
+            // Métricas de costura: separación entre pares.
+            let (mut gap_max, mut gap_sum) = (0.0f32, 0.0f32);
+            for k in 0..n_pairs {
+                let (ia, ib) = (seams.a[k] as usize, seams.b[k] as usize);
+                let g = ((state.px[ib] - state.px[ia]).powi(2)
+                    + (state.py[ib] - state.py[ia]).powi(2)
+                    + (state.pz[ib] - state.pz[ia]).powi(2))
+                .sqrt();
+                gap_max = gap_max.max(g);
+                gap_sum += g;
+            }
+            let mut com = [0.0f32; 3];
+            for i in 0..n {
+                com[0] += state.px[i];
+                com[1] += state.py[i];
+                com[2] += state.pz[i];
+            }
+            for c in com.iter_mut() {
+                *c *= inv_n;
+            }
+            (
+                drape_s,
+                drape_wall,
+                edit_s,
+                gap_max,
+                gap_sum / n_pairs as f32,
+                com,
+                xpbd::position_hash(&state),
+            )
+        };
+
+    println!("\n── spike 3 · dos piezas cosidas · 10% embebido en costados ──");
+    let (drape_s, drape_wall, edit_s, gap_max, gap_avg, com, h1) = build_and_drape(0.0, 0.0, true);
+    println!(
+        "drapeado inicial {drape_s:7.2} s de sim · {drape_wall:.2} s de pared (batch sin pacing)  (presupuesto: <10 s de pared)"
+    );
+    println!(
+        "costuras         gap máx {:.2} mm · prom {:.2} mm  (cosida ⇒ ~espaciado de malla)",
+        gap_max * 1000.0,
+        gap_avg * 1000.0
+    );
+    println!("edición cosida   {edit_s:7.2} s de sim para re-converger tras +6 cm de base");
+
+    // Estabilidad Sensitive Couture: perturbar la posición inicial y
+    // comparar el equilibrio alcanzado.
+    let runs = [(0.005f32, -0.004f32), (-0.005, 0.004)];
+    let mut com_spread = 0.0f32;
+    let mut gap_worst = gap_max;
+    for (dx, dz) in runs {
+        let (_, _, _, g, _, c, _) = build_and_drape(dx, dz, false);
+        gap_worst = gap_worst.max(g);
+        let d =
+            ((c[0] - com[0]).powi(2) + (c[1] - com[1]).powi(2) + (c[2] - com[2]).powi(2)).sqrt();
+        com_spread = com_spread.max(d);
+    }
+    println!(
+        "estabilidad      3 posiciones iniciales → centro de masa dentro de {:.1} mm · peor gap {:.2} mm",
+        com_spread * 1000.0,
+        gap_worst * 1000.0
+    );
+
+    let (_, _, _, _, _, _, h2) = build_and_drape(0.0, 0.0, true);
+    println!(
+        "determinismo     {}",
+        if h1 == h2 {
+            "OK (corrida completa bit-idéntica)"
+        } else {
+            "FALLÓ"
+        }
+    );
 }

@@ -7,12 +7,13 @@
 //! vez, así que también responde §3.3 (bit-exactitud cross-arquitectura).
 
 use crate::couture::{ShapePipeline, demo_bodice_contour};
-use toile_sim::xpbd::{self, SdfGrid, State};
+use toile_sim::xpbd::{self, SdfGrid, Seams, State};
 
 /// Drapea el corpiño demo 600 substeps, mueve el vértice hombro-sisa
 /// +2 cm (recompilación vía A con warm start) y drapea 600 más.
 pub fn drape_bodice_hash() -> u64 {
     const DT: f32 = 1.0 / 600.0;
+    let no_seams = Seams::default();
     let mut contour = demo_bodice_contour();
     let mut pipe = ShapePipeline::build(&contour, 256, 2.0e-5);
 
@@ -34,12 +35,12 @@ pub fn drape_bodice_hash() -> u64 {
     let sdf = SdfGrid::sphere(256, 1.4 / 255.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
 
     for _ in 0..600 {
-        xpbd::substep(&mut state, &cons, &sdf, DT);
+        xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
     }
     contour[68][0] += 0.02;
     cons.rest.copy_from_slice(pipe.derive(&contour));
     for _ in 0..600 {
-        xpbd::substep(&mut state, &cons, &sdf, DT);
+        xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
     }
     xpbd::position_hash(&state)
 }
