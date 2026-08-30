@@ -51,10 +51,20 @@ impl SimHandle {
     }
 
     pub fn stop(mut self) {
+        self.shutdown();
+    }
+
+    fn shutdown(&mut self) {
         let _ = self.tx.send(Msg::Stop);
         if let Some(j) = self.join.take() {
             let _ = j.join();
         }
+    }
+}
+
+impl Drop for SimHandle {
+    fn drop(&mut self) {
+        self.shutdown();
     }
 }
 

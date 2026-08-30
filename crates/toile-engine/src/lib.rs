@@ -11,4 +11,5 @@
 
 pub mod couture;
 pub mod golden;
+pub mod session;
 pub mod sync;

@@ -9,4 +9,5 @@ repository.workspace = true
 # Nunca agregar toile-sim / toile-mesh / toile-doc aquí — todo pasa por la
 # API headless del engine (docs/architecture.html §2.6).
 [dependencies]
+eframe = "0.36.1"
 toile-engine = { path = "../toile-engine" }
