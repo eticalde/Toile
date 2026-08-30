@@ -26,6 +26,8 @@ pub struct Snapshot {
     pub converged: bool,
     /// Posiciones xyz intercaladas.
     pub positions: Vec<f32>,
+    /// Normales por vértice xyz intercaladas (para el renderer).
+    pub normals: Vec<f32>,
 }
 
 enum Msg {
@@ -74,6 +76,7 @@ pub fn spawn(
     mut state: State,
     mut cons: DistanceConstraints,
     sdf: SdfGrid,
+    tris: Vec<u32>,
     dt: f32,
     substeps_per_tick: u32,
 ) -> SimHandle {
@@ -83,6 +86,7 @@ pub fn spawn(
         substeps: 0,
         converged: false,
         positions: Vec::new(),
+        normals: Vec::new(),
     }));
     let published = snapshot.clone();
 
@@ -193,11 +197,14 @@ pub fn spawn(
                 positions.push(state.py[i]);
                 positions.push(state.pz[i]);
             }
+            let mut normals = vec![0.0f32; state.len() * 3];
+            xpbd::vertex_normals(&state, &tris, &mut normals);
             published.store(Arc::new(Snapshot {
                 generation,
                 substeps,
                 converged,
                 positions,
+                normals,
             }));
         }
     });

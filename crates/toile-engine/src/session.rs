@@ -41,7 +41,7 @@ impl Session {
         }
         let cons = pipeline.constraints(1.0e-8);
         let sdf = SdfGrid::sphere(256, 1.4 / 255.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
-        let handle = sync::spawn(state, cons, sdf, 1.0 / 600.0, 10);
+        let handle = sync::spawn(state, cons, sdf, pipeline.tris.clone(), 1.0 / 600.0, 10);
         Session {
             pipeline,
             contour,
@@ -84,5 +84,12 @@ impl Session {
     /// Radio del avatar esfera (para dibujarlo en el viewport).
     pub fn avatar_radius(&self) -> f32 {
         0.15
+    }
+}
+
+impl Session {
+    /// Cantidad de vértices de la malla (dimensiona buffers de render).
+    pub fn n_vertices(&self) -> usize {
+        self.pipeline.pos2d.len()
     }
 }

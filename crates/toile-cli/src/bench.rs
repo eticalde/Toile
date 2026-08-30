@@ -491,7 +491,7 @@ fn run_incremental_async() {
     let n_edges = cons.len();
     let sdf = SdfGrid::sphere(256, 1.4 / 255.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
 
-    let handle = sync::spawn(state, cons, sdf, DT, 10);
+    let handle = sync::spawn(state, cons, sdf, pipe.tris.clone(), DT, 10);
 
     // Drapeado inicial: esperar a que la sim converja y se duerma.
     let t0 = Instant::now();

@@ -3111,6 +3111,7 @@ dependencies = [
 name = "toile-app"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "eframe",
  "toile-engine",
 ]

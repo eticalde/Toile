@@ -1,9 +1,11 @@
-//! Cliente de escritorio v0 — la vista split (issue #21).
+//! Cliente de escritorio — la vista split (issue #21).
 //!
 //! Izquierda: el patrón 2D con puntos de control arrastrables (vía A en
-//! vivo). Derecha: la tela drapeada, sombreada por CPU vía `egui::Mesh`
-//! con orden de pintor — placeholder deliberado del renderer wgpu del ADR
-//! §2.6, suficiente para 24k triángulos. Solo importa `toile-engine`.
+//! vivo). Derecha: la tela drapeada por el renderer wgpu propio (módulo
+//! `render`, ADR §2.6) — offscreen con depth buffer, sombreado suave con
+//! las normales que publica el hilo de sim. Solo importa `toile-engine`.
+
+mod render;
 
 use eframe::egui;
 use toile_engine::session::Session;
@@ -11,27 +13,44 @@ use toile_engine::session::Session;
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default().with_inner_size([1320.0, 780.0]),
+        renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
-    eframe::run_native("Toile", options, Box::new(|_cc| Ok(Box::new(App::new()))))
+    eframe::run_native("Toile", options, Box::new(|cc| Ok(Box::new(App::new(cc)))))
 }
+
+const CLOTH_COLOR: [f32; 3] = [0.86, 0.52, 0.37];
 
 struct App {
     session: Session,
+    rs: eframe::egui_wgpu::RenderState,
+    renderer: render::Renderer,
     drag: Option<usize>,
     yaw: f32,
     pitch: f32,
     dist: f32,
+    cloth_vertices: Vec<f32>,
 }
 
 impl App {
-    fn new() -> Self {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        let session = Session::demo_bodice();
+        let rs = cc
+            .wgpu_render_state
+            .clone()
+            .expect("eframe sin backend wgpu");
+        let n_verts = session.n_vertices();
+        let renderer =
+            render::Renderer::new(&rs, n_verts, session.triangles(), session.avatar_radius());
         Self {
-            session: Session::demo_bodice(),
+            session,
+            rs,
+            renderer,
             drag: None,
             yaw: 0.7,
             pitch: 0.35,
             dist: 1.15,
+            cloth_vertices: vec![0.0; n_verts * 9],
         }
     }
 
@@ -113,122 +132,64 @@ impl App {
     }
 
     fn viewport_panel(&mut self, ui: &mut egui::Ui, size: egui::Vec2) {
-        let (resp, painter) = ui.allocate_painter(size, egui::Sense::drag());
-        let rect = resp.rect;
-        painter.rect_filled(rect, 0.0, egui::Color32::from_rgb(17, 22, 20));
-
-        if resp.dragged() {
-            self.yaw += resp.drag_delta().x * 0.01;
-            self.pitch = (self.pitch + resp.drag_delta().y * 0.01).clamp(-1.4, 1.4);
-        }
-        if resp.hovered() {
-            let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-            if scroll != 0.0 {
-                self.dist = (self.dist * (1.0 - scroll * 0.002)).clamp(0.35, 4.0);
-            }
-        }
-
-        // Cámara orbital mirando al centro del avatar.
-        let target = [0.0f32, 0.02, 0.0];
-        let (sy, cy2) = self.yaw.sin_cos();
-        let (sp, cp) = self.pitch.sin_cos();
-        let eye = [
-            target[0] + self.dist * cp * sy,
-            target[1] + self.dist * sp,
-            target[2] + self.dist * cp * cy2,
-        ];
-        let fwd = norm3(sub3(target, eye));
-        let right = norm3(cross3(fwd, [0.0, 1.0, 0.0]));
-        let up = cross3(right, fwd);
-        let focal = 1.1 * f32::min(rect.width(), rect.height());
-        let center = rect.center();
-        let project = |p: [f32; 3]| -> ([f32; 2], f32) {
-            let d = sub3(p, eye);
-            let z = dot3(d, fwd);
-            let x = dot3(d, right);
-            let y = dot3(d, up);
-            ([center.x + focal * x / z, center.y - focal * y / z], z)
-        };
-
-        // Avatar: silueta de la esfera, detrás de la tela.
-        let r = self.session.avatar_radius();
-        let (c, zc) = project([0.0, 0.0, 0.0]);
-        if zc > 0.05 {
-            painter.circle_filled(
-                egui::pos2(c[0], c[1]),
-                focal * r / zc,
-                egui::Color32::from_rgb(52, 58, 56),
-            );
-        }
-
         let snap = self.session.snapshot();
-        if snap.positions.is_empty() {
-            painter.text(
-                rect.center(),
-                egui::Align2::CENTER_CENTER,
-                "drapeando…",
-                egui::FontId::proportional(16.0),
-                egui::Color32::GRAY,
-            );
-            return;
+        let ppp = ui.ctx().pixels_per_point();
+        let (w, h) = ((size.x * ppp) as u32, (size.y * ppp) as u32);
+
+        if !snap.positions.is_empty() {
+            // Intercalar pos + normal + color para el frame.
+            let n = snap.positions.len() / 3;
+            self.cloth_vertices.resize(n * 9, 0.0);
+            for i in 0..n {
+                let dst = &mut self.cloth_vertices[i * 9..i * 9 + 9];
+                dst[..3].copy_from_slice(&snap.positions[i * 3..i * 3 + 3]);
+                dst[3..6].copy_from_slice(&snap.normals[i * 3..i * 3 + 3]);
+                dst[6..9].copy_from_slice(&CLOTH_COLOR);
+            }
+
+            // Cámara orbital → MVP (wgpu clip z ∈ [0,1]).
+            let target = [0.0f32, 0.02, 0.0];
+            let (sy, cy) = self.yaw.sin_cos();
+            let (sp, cp) = self.pitch.sin_cos();
+            let eye = [
+                target[0] + self.dist * cp * sy,
+                target[1] + self.dist * sp,
+                target[2] + self.dist * cp * cy,
+            ];
+            let view = look_at(eye, target, [0.0, 1.0, 0.0]);
+            let proj = perspective(55f32.to_radians(), size.x / size.y.max(1.0), 0.02, 20.0);
+            let mvp = mul4(proj, view);
+            let light = norm3([0.35, 0.8, 0.45]);
+            let mut uniforms = [0.0f32; 20];
+            uniforms[..16].copy_from_slice(&mvp);
+            uniforms[16..19].copy_from_slice(&light);
+
+            self.renderer
+                .paint(&self.rs, w, h, &self.cloth_vertices, &uniforms);
         }
 
-        // Malla sombreada plana con orden de pintor (lejos → cerca).
-        let pos = &snap.positions;
-        let tris = self.session.triangles();
-        let light = norm3([0.35, 0.8, 0.45]);
-        let mut faces: Vec<(f32, [egui::Pos2; 3], egui::Color32)> =
-            Vec::with_capacity(tris.len() / 3);
-        for t in tris.chunks(3) {
-            let v = |k: usize| {
-                let i = t[k] as usize * 3;
-                [pos[i], pos[i + 1], pos[i + 2]]
-            };
-            let (a, b, c3) = (v(0), v(1), v(2));
-            let n = norm3(cross3(sub3(b, a), sub3(c3, a)));
-            let shade = 0.25 + 0.75 * dot3(n, light).abs();
-            let (pa, za) = project(a);
-            let (pb, zb) = project(b);
-            let (pc, zc3) = project(c3);
-            if za <= 0.05 || zb <= 0.05 || zc3 <= 0.05 {
-                continue;
+        if let Some(tex) = self.renderer.texture_id {
+            let resp = ui.add(egui::Image::from_texture((tex, size)).sense(egui::Sense::drag()));
+            if resp.dragged() {
+                self.yaw += resp.drag_delta().x * 0.01;
+                self.pitch = (self.pitch + resp.drag_delta().y * 0.01).clamp(-1.4, 1.4);
             }
-            let color = egui::Color32::from_rgb(
-                (215.0 * shade) as u8,
-                (128.0 * shade) as u8,
-                (92.0 * shade) as u8,
+            if resp.hovered() {
+                let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+                if scroll != 0.0 {
+                    self.dist = (self.dist * (1.0 - scroll * 0.002)).clamp(0.3, 4.0);
+                }
+            }
+            ui.painter().text(
+                resp.rect.left_top() + egui::vec2(10.0, 8.0),
+                egui::Align2::LEFT_TOP,
+                "3D — arrastra para orbitar · rueda para zoom",
+                egui::FontId::monospace(11.0),
+                egui::Color32::from_rgb(140, 145, 150),
             );
-            faces.push((
-                (za + zb + zc3) / 3.0,
-                [
-                    egui::pos2(pa[0], pa[1]),
-                    egui::pos2(pb[0], pb[1]),
-                    egui::pos2(pc[0], pc[1]),
-                ],
-                color,
-            ));
+        } else {
+            ui.allocate_space(size);
         }
-        faces.sort_by(|x, y| y.0.total_cmp(&x.0));
-        let mut mesh = egui::Mesh::default();
-        for (_, p, color) in &faces {
-            let base = mesh.vertices.len() as u32;
-            for q in p {
-                mesh.vertices.push(egui::epaint::Vertex {
-                    pos: *q,
-                    uv: egui::epaint::WHITE_UV,
-                    color: *color,
-                });
-            }
-            mesh.indices.extend_from_slice(&[base, base + 1, base + 2]);
-        }
-        painter.add(egui::Shape::mesh(mesh));
-        painter.text(
-            rect.left_top() + egui::vec2(10.0, 8.0),
-            egui::Align2::LEFT_TOP,
-            "3D — arrastra para orbitar · rueda para zoom",
-            egui::FontId::monospace(11.0),
-            egui::Color32::from_rgb(140, 145, 150),
-        );
     }
 }
 
@@ -261,6 +222,8 @@ impl eframe::App for App {
     }
 }
 
+// ── álgebra mínima (column-major, sin dependencias) ──────────────────────
+
 fn sub3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
@@ -280,4 +243,43 @@ fn cross3(a: [f32; 3], b: [f32; 3]) -> [f32; 3] {
 fn norm3(a: [f32; 3]) -> [f32; 3] {
     let l = dot3(a, a).sqrt().max(1.0e-9);
     [a[0] / l, a[1] / l, a[2] / l]
+}
+
+#[rustfmt::skip]
+fn look_at(eye: [f32; 3], target: [f32; 3], up: [f32; 3]) -> [f32; 16] {
+    let f = norm3(sub3(target, eye));
+    let s = norm3(cross3(f, up));
+    let u = cross3(s, f);
+    [
+        s[0], u[0], -f[0], 0.0,
+        s[1], u[1], -f[1], 0.0,
+        s[2], u[2], -f[2], 0.0,
+        -dot3(s, eye), -dot3(u, eye), dot3(f, eye), 1.0,
+    ]
+}
+
+/// Proyección perspectiva RH con clip z ∈ [0, 1] (convención wgpu).
+fn perspective(fov_y: f32, aspect: f32, near: f32, far: f32) -> [f32; 16] {
+    let f = 1.0 / (fov_y * 0.5).tan();
+    let mut m = [0.0f32; 16];
+    m[0] = f / aspect;
+    m[5] = f;
+    m[10] = far / (near - far);
+    m[11] = -1.0;
+    m[14] = near * far / (near - far);
+    m
+}
+
+fn mul4(a: [f32; 16], b: [f32; 16]) -> [f32; 16] {
+    let mut m = [0.0f32; 16];
+    for col in 0..4 {
+        for row in 0..4 {
+            let mut acc = 0.0;
+            for k in 0..4 {
+                acc += a[k * 4 + row] * b[col * 4 + k];
+            }
+            m[col * 4 + row] = acc;
+        }
+    }
+    m
 }
