@@ -100,6 +100,7 @@ fn build(target: usize) -> Scene {
         rest: Vec::with_capacity(edges.len()),
         compliance: Vec::with_capacity(edges.len()),
         strain_limit: 0.0,
+        strain_sweeps: 0,
     };
     for (a, b, c) in &edges {
         let (ia, ib) = (*a as usize, *b as usize);
@@ -261,6 +262,10 @@ fn run_size(target: usize) {
 }
 
 pub fn run(args: &[String]) {
+    if args.iter().any(|a| a == "--measure") {
+        run_measure();
+        return;
+    }
     if args.iter().any(|a| a == "--seams") {
         run_seams();
         return;
@@ -623,12 +628,12 @@ fn run_seams() {
             let mut state = State::new(n);
             for i in 0..na {
                 state.px[i] = (front.pos2d[i][0] - W * 0.5) as f32 + dx;
-                state.py[i] = 0.32;
+                state.py[i] = 0.16;
                 state.pz[i] = (0.005 + front.pos2d[i][1]) as f32 + dz;
             }
             for i in 0..nb {
                 state.px[na + i] = (back.pos2d[i][0] - W * 0.5) as f32 + dx;
-                state.py[na + i] = 0.32;
+                state.py[na + i] = 0.16;
                 state.pz[na + i] = (-0.005 - back.pos2d[i][1]) as f32 + dz;
             }
 
@@ -665,14 +670,35 @@ fn run_seams() {
                     .chain(cb.compliance.iter())
                     .copied()
                     .collect(),
-                strain_limit: 1.02,
+                strain_limit: 1.03,
+                strain_sweeps: 4,
             };
 
             // Hombro (bordes inferiores adyacentes sobre el polo) + costados
             // derecho e izquierdo (largos distintos: el embebido del 10% lo
             // absorbe el emparejamiento por fracciones relativas).
-            let (mut sa, mut sb) =
-                couture::pair_seam(&front, (0.0, ff[0]), &back, (0.0, fb[0]), na as u32, 40);
+            // Hombro en dos tramos: el 30% central queda abierto — el
+            // ESCOTE. El polo asoma por el agujero y la prenda queda
+            // bloqueada geométricamente (así se sostiene la ropa real:
+            // perímetro del escote ≪ circunferencia máxima del avatar).
+            let (mut sa, mut sb) = couture::pair_seam(
+                &front,
+                (0.0, ff[0] * 0.35),
+                &back,
+                (0.0, fb[0] * 0.35),
+                na as u32,
+                15,
+            );
+            let (ha, hb) = couture::pair_seam(
+                &front,
+                (ff[0] * 0.65, ff[0]),
+                &back,
+                (fb[0] * 0.65, fb[0]),
+                na as u32,
+                15,
+            );
+            sa.extend(ha);
+            sb.extend(hb);
             let (ra, rb) =
                 couture::pair_seam(&front, (ff[0], ff[1]), &back, (fb[0], fb[1]), na as u32, 60);
             let (la, lb) =
@@ -835,5 +861,185 @@ fn run_seams() {
         } else {
             "FALLÓ"
         }
+    );
+}
+
+/// Spike 4 — fidelidad de medidas: banner de dimensiones conocidas colgado
+/// del borde superior; el estiramiento medido contra tolerancia sartorial.
+fn run_measure() {
+    const W: usize = 81; // 0.40 m a 5 mm
+    const H: usize = 121; // 0.60 m a 5 mm
+    const S: f32 = 0.005;
+    const PATTERN_LEN: f32 = (H as f32 - 1.0) * S;
+    const TOL_PCT: f64 = 1.0; // tolerancia sartorial: 1%
+
+    struct Cfg {
+        name: &'static str,
+        /// kg por partícula: 1.0 = legacy; masa real = densidad·área/partícula.
+        mass: f32,
+        strain_limit: f32,
+        /// Compliances (estructural, shear, bending). Solo significan algo
+        /// relativas a la masa: un preset de tejido es el conjunto
+        /// (densidad, c_estructural, c_shear, c_bending), nunca sueltas.
+        c: [f32; 3],
+    }
+    // 200 g/m² (algodón medio): área por partícula = S² → 5.1·10⁻⁶ kg.
+    // Compliances calibradas a esa masa: estructural ~0.1% bajo peso
+    // propio, shear blando, bending libre (alpha >> w — sin bending rígido
+    // no hay sobre-restricción y la retícula no explota).
+    let real_mass = 0.2 * S * S;
+    let cfgs = [
+        Cfg {
+            name: "masa 1 kg · legacy  · sin lím",
+            mass: 1.0,
+            strain_limit: 0.0,
+            c: [1.0e-8, 5.0e-7, 1.0e-5],
+        },
+        Cfg {
+            name: "masa 1 kg · legacy  · 1.005 ",
+            mass: 1.0,
+            strain_limit: 1.005,
+            c: [1.0e-8, 5.0e-7, 1.0e-5],
+        },
+        Cfg {
+            name: "algodón físico      · sin lím",
+            mass: real_mass,
+            strain_limit: 0.0,
+            c: [1.0e-4, 1.0e-2, 10.0],
+        },
+        Cfg {
+            name: "algodón físico      · 1.005 ",
+            mass: real_mass,
+            strain_limit: 1.005,
+            c: [1.0e-4, 1.0e-2, 10.0],
+        },
+    ];
+
+    println!(
+        "\n── spike 4 · banner 0.40×0.60 m colgado · largo de patrón {:.0} mm ──",
+        f64::from(PATTERN_LEN) * 1000.0
+    );
+    let no_seams = Seams::default();
+    // SDF lejano: sin contacto, solo el costo del sample.
+    let sdf = SdfGrid::sphere(8, 1.0, [-4.0, -14.0, -4.0], [0.0, -10.0, 0.0], 0.1);
+
+    for cfg in &cfgs {
+        let n = W * H;
+        let mut state = State::new(n);
+        for j in 0..H {
+            for i in 0..W {
+                let v = j * W + i;
+                state.px[v] = i as f32 * S - 0.2;
+                state.py[v] = -(j as f32) * S;
+                // Jitter microscópico fuera del plano: sin él la retícula
+                // queda atrapada en z=0 exacto y la compresión no puede
+                // pandear (la tela real pandea al instante) — el modo
+                // zigzag en el plano diverge.
+                state.pz[v] = ((i * 7 + j * 13) % 17) as f32 * 1.0e-5;
+                state.inv_mass[v] = if j == 0 { 0.0 } else { 1.0 / cfg.mass };
+            }
+        }
+        // Estructurales + shear + bending, compliances del harness estándar.
+        let mut cons = DistanceConstraints {
+            a: Vec::new(),
+            b: Vec::new(),
+            rest: Vec::new(),
+            compliance: Vec::new(),
+            strain_limit: cfg.strain_limit,
+            strain_sweeps: 16,
+        };
+        let push = |a: usize, b: usize, c: f32, cons: &mut DistanceConstraints| {
+            cons.a.push(a as u32);
+            cons.b.push(b as u32);
+            let (dx, dy) = (state.px[b] - state.px[a], state.py[b] - state.py[a]);
+            cons.rest.push((dx * dx + dy * dy).sqrt());
+            cons.compliance.push(c);
+        };
+        for j in 0..H {
+            for i in 0..W {
+                let v = j * W + i;
+                if i + 1 < W {
+                    push(v, v + 1, cfg.c[0], &mut cons);
+                }
+                if j + 1 < H {
+                    push(v, v + W, cfg.c[0], &mut cons);
+                }
+                if i + 1 < W && j + 1 < H {
+                    push(v, v + W + 1, cfg.c[1], &mut cons);
+                    push(v + 1, v + W, cfg.c[1], &mut cons);
+                }
+                if i + 2 < W {
+                    push(v, v + 2, cfg.c[2], &mut cons);
+                }
+                if j + 2 < H {
+                    push(v, v + 2 * W, cfg.c[2], &mut cons);
+                }
+            }
+        }
+
+        // Asentar con quietud sostenida (mismo criterio que el engine).
+        let inv_n = 1.0 / n as f32;
+        let (mut prev_e, mut rising, mut quiet, mut steps) = (f32::MAX, false, 0u32, 0usize);
+        while quiet < 3 && steps < 12000 {
+            xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
+            steps += 1;
+            let e = xpbd::kinetic_energy(&state);
+            if e > prev_e {
+                rising = true;
+            } else if rising {
+                xpbd::zero_velocities(&mut state);
+                rising = false;
+            }
+            prev_e = e;
+            if steps.is_multiple_of(10) {
+                if e * inv_n < 2.0e-6 {
+                    quiet += 1;
+                } else {
+                    quiet = 0;
+                }
+            }
+        }
+
+        // Medición tras el settle (lo que el usuario vería al dormirse la sim).
+        let measure = |state: &State| -> (f64, f64) {
+            let (mut sum_pct, mut max_pct) = (0.0f64, 0.0f64);
+            for i in 0..W {
+                let mut len = 0.0f32;
+                for j in 0..H - 1 {
+                    let (a, b) = (j * W + i, (j + 1) * W + i);
+                    len += ((state.px[b] - state.px[a]).powi(2)
+                        + (state.py[b] - state.py[a]).powi(2)
+                        + (state.pz[b] - state.pz[a]).powi(2))
+                    .sqrt();
+                }
+                let pct = f64::from(len / PATTERN_LEN - 1.0) * 100.0;
+                sum_pct += pct;
+                max_pct = max_pct.max(pct);
+            }
+            (sum_pct / W as f64, max_pct)
+        };
+        let (avg_settle, max_settle) = measure(&state);
+
+        // Refinado: 6000 substeps SIN kinetic damping — ¿el estiramiento
+        // era material (queda) o déficit de iteraciones (se disuelve)?
+        for _ in 0..6000 {
+            xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
+        }
+        let (avg_ref, max_ref) = measure(&state);
+        let verdict = if !avg_ref.is_finite() {
+            "💥 INESTABLE"
+        } else if max_ref.abs() <= TOL_PCT {
+            "✅"
+        } else {
+            "❌"
+        };
+        println!(
+            "{}  settle {avg_settle:+7.2}% prom / {max_settle:+7.2}% máx  →  refinado {avg_ref:+6.2}% / {max_ref:+6.2}% máx ({:.1} mm) {verdict}",
+            cfg.name,
+            max_ref / 100.0 * f64::from(PATTERN_LEN) * 1000.0
+        );
+    }
+    println!(
+        "tolerancia sartorial: ±{TOL_PCT:.0}% · refinado = 10 s de sim extra sin kinetic damping"
     );
 }

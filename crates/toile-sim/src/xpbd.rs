@@ -69,6 +69,11 @@ pub struct DistanceConstraints {
     /// Sin él, el aro de una prenda cerrada se elonga bajo su peso y la
     /// prenda se cuela por el avatar (§3.1 — resuelto por el spike 3).
     pub strain_limit: f32,
+    /// Barridos del clamp por substep (0 se trata como 4). Knob de
+    /// fidelidad: 4 = interactivo (~1.4% residual en cadenas largas),
+    /// 16 = modo medida (~0.9%, spike 4). Cambia la física efectiva:
+    /// fijarlo POR ESCENA, nunca globalmente.
+    pub strain_sweeps: u32,
 }
 
 impl DistanceConstraints {
@@ -215,29 +220,36 @@ pub fn substep(
 
     // Strain limiting post-solve: clamp rígido de aristas sobre-elongadas.
     if cons.strain_limit > 0.0 {
-        for c in 0..cons.len() {
-            let (ia, ib) = (cons.a[c] as usize, cons.b[c] as usize);
-            let (wa, wb) = (state.inv_mass[ia], state.inv_mass[ib]);
-            let w = wa + wb;
-            if w == 0.0 {
-                continue;
+        // Barridos simétricos (2 adelante + 2 atrás): el clamp secuencial
+        // re-estira a los vecinos en la dirección del barrido; alternar la
+        // dirección converge en cadenas largas donde 4 pasadas iguales no.
+        for sweep in 0..cons.strain_sweeps.max(4) {
+            let m = cons.len();
+            for idx in 0..m {
+                let c = if sweep % 2 == 0 { idx } else { m - 1 - idx };
+                let (ia, ib) = (cons.a[c] as usize, cons.b[c] as usize);
+                let (wa, wb) = (state.inv_mass[ia], state.inv_mass[ib]);
+                let w = wa + wb;
+                if w == 0.0 {
+                    continue;
+                }
+                let dx = state.px[ib] - state.px[ia];
+                let dy = state.py[ib] - state.py[ia];
+                let dz = state.pz[ib] - state.pz[ia];
+                let len = (dx * dx + dy * dy + dz * dz).sqrt();
+                let max_len = cons.rest[c] * cons.strain_limit;
+                if len <= max_len {
+                    continue;
+                }
+                let corr = (len - max_len) / (w * len);
+                let (sx, sy, sz) = (corr * dx, corr * dy, corr * dz);
+                state.px[ia] += wa * sx;
+                state.py[ia] += wa * sy;
+                state.pz[ia] += wa * sz;
+                state.px[ib] -= wb * sx;
+                state.py[ib] -= wb * sy;
+                state.pz[ib] -= wb * sz;
             }
-            let dx = state.px[ib] - state.px[ia];
-            let dy = state.py[ib] - state.py[ia];
-            let dz = state.pz[ib] - state.pz[ia];
-            let len = (dx * dx + dy * dy + dz * dz).sqrt();
-            let max_len = cons.rest[c] * cons.strain_limit;
-            if len <= max_len {
-                continue;
-            }
-            let corr = (len - max_len) / (w * len);
-            let (sx, sy, sz) = (corr * dx, corr * dy, corr * dz);
-            state.px[ia] += wa * sx;
-            state.py[ia] += wa * sy;
-            state.pz[ia] += wa * sz;
-            state.px[ib] -= wb * sx;
-            state.py[ib] -= wb * sy;
-            state.pz[ib] -= wb * sz;
         }
     }
 
@@ -389,6 +401,7 @@ pub fn color_constraints(cons: &DistanceConstraints, n_verts: usize) -> ColoredC
         rest: Vec::with_capacity(m),
         compliance: Vec::with_capacity(m),
         strain_limit: cons.strain_limit,
+        strain_sweeps: cons.strain_sweeps,
     };
     let mut ranges = Vec::with_capacity(n_colors);
     for g in &groups {

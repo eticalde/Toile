@@ -129,6 +129,7 @@ impl ShapePipeline {
             rest: self.rests.clone(),
             compliance: vec![compliance; self.edges.len()],
             strain_limit: 0.0,
+            strain_sweeps: 0,
         }
     }
 
