@@ -8,3 +8,6 @@ repository.workspace = true
 [dependencies]
 rayon = "1"
 wide = "0.7"
+
+[lints]
+workspace = true

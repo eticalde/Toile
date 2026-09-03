@@ -1,6 +1,4 @@
-//! CLI headless: `toile drape`, `toile check`, goldens de CI y benchmarks.
-//!
-//! Ver `docs/architecture.html` §2.7.
+#![allow(missing_docs, reason = "a binary publishes no API surface")]
 
 mod bench;
 
@@ -16,7 +14,9 @@ fn main() {
         }
         _ => {
             println!("toile {}", env!("CARGO_PKG_VERSION"));
-            println!("subcomandos: bench [--verts N | --incr | --incr-async] · drape");
+            println!(
+                "subcomandos: bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape"
+            );
         }
     }
 }

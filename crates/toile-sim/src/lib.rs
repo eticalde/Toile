@@ -1,11 +1,7 @@
-//! Solver de tela XPBD small-steps residente.
+//! Resident XPBD cloth solver.
 //!
-//! Buffers SoA, coloreo de grafo determinista, anisotropía urdimbre/trama,
-//! costuras inter-pieza globales, colisión por SDF, kinetic damping y sleep
-//! por islas de acoplamiento. El solver nunca se resetea: los cambios de
-//! forma llegan como nuevo estado de reposo (hot-swap entre substeps).
-//!
-//! Expone el trait `ClothSolver` para que la implementación sea desafiable
-//! sin re-arquitectura. Ver `docs/architecture.html` §2.3–2.5.
+//! The solver is never reset. Shape edits arrive as new rest values and are
+//! swapped in between substeps, so an edit re-drapes instead of restarting.
 
+/// The solver itself: state, constraints, collision, stepping.
 pub mod xpbd;

@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toile — STD-001 Estilo Rust</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fafaf7;
+  --surface:#ffffff;
+  --ink:#23282e;
+  --muted:#6a7480;
+  --chalk:#2f5fd0;        /* tiza de sastre */
+  --thread:#c2403a;       /* papel carbón / hilo rojo */
+  --line:#dcdcd4;
+  --grid:rgba(35,40,46,.10);
+  --chip-bg:rgba(47,95,208,.08);
+  --thread-bg:rgba(194,64,58,.07);
+  --display:"Archivo",-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --body:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#18271f;      /* mat de corte */
+    --surface:#1e2f26;
+    --ink:#e7eae2;        /* tiza */
+    --muted:#96a69a;
+    --chalk:#a5bdfa;
+    --thread:#f0907f;
+    --line:#31453a;
+    --grid:rgba(231,234,226,.07);
+    --chip-bg:rgba(165,189,250,.12);
+    --thread-bg:rgba(240,144,127,.10);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:var(--body);
+  font-size:16.5px;
+  line-height:1.65;
+  color:var(--ink);
+  background-color:var(--paper);
+  background-image:radial-gradient(var(--grid) 1px, transparent 1px);
+  background-size:26px 26px;
+}
+@media (prefers-color-scheme: dark){
+  body{
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size:39px 39px;
+  }
+}
+a{color:var(--chalk)}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--chalk);outline-offset:2px;border-radius:2px}
+code,.crate{font-family:var(--mono);font-size:.86em;background:var(--chip-bg);padding:.08em .38em;border-radius:3px;white-space:nowrap}
+
+/* ---------- hero ---------- */
+.hero{
+  border-bottom:2px solid var(--ink);
+  padding:3.2rem 1.5rem 2.4rem;
+}
+.hero-inner{
+  max-width:1080px;margin:0 auto;
+  display:flex;gap:3rem;align-items:center;justify-content:space-between;flex-wrap:wrap;
+}
+.eyebrow{
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 .9rem;
+}
+.eyebrow a{color:inherit;text-decoration:none}
+.eyebrow a:hover{color:var(--chalk)}
+h1{
+  font-family:var(--display);
+  font-variation-settings:"wdth" 118;
+  font-weight:880;
+  font-size:clamp(2.5rem,6vw,4.2rem);
+  line-height:.98;letter-spacing:-.015em;text-transform:uppercase;
+  margin:0 0 .8rem;
+}
+.hero-sub{max-width:34rem;color:var(--muted);margin:0 0 1.6rem}
+.titleblock{
+  display:inline-grid;grid-template-columns:auto auto auto;
+  border:1.5px solid var(--ink);
+  font-family:var(--mono);font-size:.78rem;
+  background:var(--surface);
+}
+.titleblock div{padding:.5rem .9rem}
+.titleblock div + div{border-left:1.5px solid var(--ink)}
+.titleblock b{display:block;font-weight:500;color:var(--muted);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase}
+.hero-figure{flex:0 1 300px;min-width:240px;color:var(--ink)}
+.hero-figure svg{width:100%;height:auto;display:block}
+.hero-figure .draw{stroke-dasharray:1200;stroke-dashoffset:0}
+@media (prefers-reduced-motion: no-preference){
+  .hero-figure .draw{animation:trace 1.4s ease-out}
+  @keyframes trace{from{stroke-dashoffset:1200}to{stroke-dashoffset:0}}
+}
+
+/* ---------- layout ---------- */
+.wrap{
+  max-width:1080px;margin:0 auto;padding:2.5rem 1.5rem 4rem;
+  display:grid;grid-template-columns:215px minmax(0,1fr);gap:3rem;
+}
+nav.toc{position:sticky;top:1.5rem;align-self:start;font-size:.85rem}
+nav.toc p{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:0 0 .7rem}
+nav.toc ol{list-style:none;margin:0;padding:0}
+nav.toc li{margin:.32rem 0}
+nav.toc li.sub{margin-left:.95rem;font-size:.8rem}
+nav.toc a{text-decoration:none;color:var(--ink);border-left:2px solid transparent;padding-left:.55rem;display:inline-block}
+nav.toc li.sub a{color:var(--muted)}
+nav.toc a:hover{border-left-color:var(--chalk);color:var(--chalk)}
+@media (max-width:880px){
+  .wrap{grid-template-columns:1fr;gap:1.5rem}
+  nav.toc{position:static}
+  nav.toc ol{display:flex;flex-wrap:wrap;gap:.25rem .9rem}
+  nav.toc li.sub{display:none}
+}
+main{max-width:72ch}
+
+/* ---------- section headers ---------- */
+section{margin:0 0 3.6rem}
+h2{
+  font-family:var(--display);font-variation-settings:"wdth" 112;font-weight:820;
+  font-size:1.7rem;line-height:1.15;text-transform:uppercase;letter-spacing:.005em;
+  margin:0 0 1.2rem;padding-top:2.2rem;
+  border-top:2px solid var(--ink);
+}
+h2 .num{font-family:var(--mono);font-weight:400;font-size:.8rem;color:var(--muted);display:block;letter-spacing:.2em;margin-bottom:.35rem}
+/* etiqueta de pieza: cabecera de cada eje con su flecha de hilo */
+.axis{margin:2.6rem 0 1rem}
+.axis h3{
+  font-family:var(--display);font-variation-settings:"wdth" 108;font-weight:750;
+  font-size:1.13rem;text-transform:uppercase;letter-spacing:.02em;margin:0 0 .2rem;
+}
+.axis .tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:.15rem}
+.axis svg{display:block;color:var(--muted);margin-top:.35rem}
+
+/* ---------- bloques decisión / descartado ---------- */
+.decision,.discarded{margin:1rem 0;padding:.15rem 0 .15rem 1.1rem}
+.decision{border-left:3px solid var(--chalk)}
+.discarded{border-left:3px dashed var(--thread)}
+.decision > b:first-child,.discarded > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;
+  display:block;margin-bottom:.3rem;
+}
+.decision > b:first-child{color:var(--chalk)}
+.discarded > b:first-child{color:var(--thread)}
+.decision p,.discarded p{margin:.5rem 0}
+
+/* ---------- swatches de propuestas ---------- */
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem;margin:1.3rem 0}
+.swatch{border:1.5px solid var(--line);background:var(--surface);padding:.85rem 1rem;border-radius:3px}
+.swatch b{font-family:var(--display);font-variation-settings:"wdth" 108;font-weight:720;font-size:.95rem;display:block;line-height:1.25}
+.swatch i{display:block;font-style:normal;color:var(--muted);font-size:.8rem;margin:.2rem 0 .6rem}
+.chip{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.18em .6em;border-radius:2px;background:var(--chip-bg);color:var(--chalk);
+}
+.chip.no{background:var(--thread-bg);color:var(--thread);text-decoration:line-through;text-decoration-thickness:1px}
+
+/* ---------- listas con piquetes ---------- */
+ol,ul{padding-left:1.4rem}
+li{margin:.45rem 0}
+ul.notch{list-style:none;padding-left:1.15rem}
+ul.notch li{position:relative}
+ul.notch li::before{
+  content:"";position:absolute;left:-1.15rem;top:.62em;
+  border-left:.42em solid var(--chalk);border-top:.3em solid transparent;border-bottom:.3em solid transparent;
+}
+ol.plan{counter-reset:paso;list-style:none;padding-left:2.1rem}
+ol.plan li{counter-increment:paso;position:relative;margin:.9rem 0}
+ol.plan li::before{
+  content:counter(paso);position:absolute;left:-2.1rem;top:.1em;
+  font-family:var(--mono);font-size:.8rem;width:1.5em;height:1.5em;line-height:1.45em;text-align:center;
+  border:1.5px solid var(--ink);border-radius:50%;background:var(--surface);
+}
+
+/* ---------- tablas ---------- */
+.tscroll{overflow-x:auto;margin:1.2rem 0;border:1.5px solid var(--line);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);text-align:left;
+}
+th,td{padding:.6rem .85rem;border-bottom:1px dashed var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td:first-child{white-space:nowrap}
+
+/* ---------- misc ---------- */
+.lead{font-size:1.06rem}
+.lead::first-letter{
+  font-family:var(--display);font-weight:880;font-size:3.1em;float:left;
+  line-height:.8;padding:.06em .12em 0 0;color:var(--chalk);
+}
+hr{border:none;border-top:1.5px dashed var(--line);margin:2rem 0}
+.refs{font-size:.9rem}
+.refs li{margin:.55rem 0}
+.refs span{color:var(--muted)}
+footer{border-top:2px solid var(--ink);margin-top:1rem;padding:1.4rem 1.5rem 3rem;font-size:.8rem;color:var(--muted)}
+footer .fin{max-width:1080px;margin:0 auto;font-family:var(--mono)}
+/* ---------- bloques de código ---------- */
+pre{
+  font-family:var(--mono);font-size:.78rem;line-height:1.55;
+  background:var(--surface);border:1.5px solid var(--line);border-left-width:3px;
+  border-radius:3px;padding:.8rem 1rem;overflow-x:auto;margin:.7rem 0;
+}
+pre code{background:none;padding:0;white-space:pre;font-size:inherit;color:inherit}
+pre.no{border-left-color:var(--thread)}
+pre.si{border-left-color:var(--chalk)}
+.pair{display:grid;gap:.9rem;margin:1.2rem 0}
+@media(min-width:960px){.pair.two{grid-template-columns:1fr 1fr;align-items:start}}
+.lbl{font-family:var(--mono);font-size:.66rem;letter-spacing:.18em;text-transform:uppercase;margin:0 0 .25rem}
+.lbl.no{color:var(--thread)}
+.lbl.si{color:var(--chalk)}
+/* ---------- regla numerada ---------- */
+.rule{border-left:3px solid var(--ink);padding:.1rem 0 .1rem 1.1rem;margin:1.5rem 0}
+.rule > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:.35rem;
+}
+.rule p:first-of-type{font-weight:600;margin-top:0}
+.tag-ok,.tag-no{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;padding:.16em .55em;border-radius:2px;white-space:nowrap}
+.tag-ok{background:var(--chip-bg);color:var(--chalk)}
+.tag-no{background:var(--thread-bg);color:var(--thread)}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="eyebrow"><a href="./architecture.html">Toile</a> · Documentación</p>
+      <h1>Estilo<br>Rust</h1>
+      <p class="hero-sub">Cómo se escribe código en Toile. Reglas cortas, cada una con la herramienta que la hace cumplir — o la declaración explícita de que no hay ninguna y por eso se revisa a mano.</p>
+      <div class="titleblock">
+        <div><b>Documento</b>STD-001</div>
+        <div><b>Estado</b>Vigente</div>
+        <div><b>Fecha</b>2026-09-03</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<nav class="toc">
+  <p>Contenido</p>
+  <ol>
+    <li><a href="#p1">1 · Tres principios</a></li>
+    <li><a href="#p2">2 · Comentarios</a></li>
+    <li class="sub"><a href="#p2a">2.1 Doc vs. implementación</a></li>
+    <li class="sub"><a href="#p2b">2.2 Qué nunca va</a></li>
+    <li class="sub"><a href="#p2c">2.3 El caso <code>//!</code></a></li>
+    <li><a href="#p3">3 · Idioma</a></li>
+    <li><a href="#p4">4 · Estructura y modularización</a></li>
+    <li class="sub"><a href="#p4b">4.2 Límites de tamaño</a></li>
+    <li class="sub"><a href="#p4c">Cómo se parte</a></li>
+    <li class="sub"><a href="#p4d">4.4 Fixtures</a></li>
+    <li><a href="#p5">5 · Errores y panics</a></li>
+    <li><a href="#p6">6 · unsafe</a></li>
+    <li><a href="#p7">7 · Determinismo</a></li>
+    <li><a href="#p8">8 · Tests</a></li>
+    <li><a href="#p9">9 · Herramientas</a></li>
+    <li><a href="#p10">10 · Checklist de PR</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="p1">
+<h2><span class="num">§ 1</span>Tres principios</h2>
+
+<p class="lead">Toda regla de este documento se deriva de tres frases. Si una regla futura las contradice, gana la frase.</p>
+
+<div class="rule">
+  <b>Principio 1</b>
+  <p>El código dice <em>qué</em>. El comentario dice <em>por qué</em>.</p>
+  <p>Un comentario que se puede borrar sin perder información es ruido con costo de mantenimiento: envejece, miente y nadie lo actualiza. Si hace falta un párrafo para explicar qué hace una función, el arreglo es la función, no el párrafo.</p>
+</div>
+
+<div class="rule">
+  <b>Principio 2</b>
+  <p>La documentación de API y el comentario de implementación son cosas distintas, con lectores distintos.</p>
+  <p><code>///</code> y <code>//!</code> los lee quien <em>usa</em> el código sin abrirlo: describen contrato, invariantes, panics y seguridad. <code>//</code> lo lee quien <em>mantiene</em> el código con el archivo abierto: describe la decisión no obvia que tomó la línea de abajo.</p>
+</div>
+
+<div class="rule">
+  <b>Principio 3</b>
+  <p>Una regla sin herramienta que la haga cumplir es una intención, no una regla.</p>
+  <p>Cada sección termina diciendo qué la verifica. Cuando no existe herramienta, se dice, y esa regla pasa a la revisión manual del §10 — no se finge que está cubierta.</p>
+</div>
+</section>
+
+<section id="p2">
+<h2><span class="num">§ 2</span>Comentarios</h2>
+
+<div class="axis" id="p2a">
+    <span class="tag">Eje 2.1</span>
+    <h3>Documentación vs. implementación</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<div class="decision">
+  <b>Decisión</b>
+  <p><code>///</code> en todo item público. Primera línea: <strong>una oración, en imperativo o descriptiva, que cabe en una línea</strong>. Si hace falta más, va en un párrafo aparte después de una línea en blanco.</p>
+  <p>El motivo no es estético: rustdoc renderiza el primer párrafo en la tabla de items del módulo, junto al nombre. Un primer párrafo de seis líneas rompe esa tabla.</p>
+</div>
+
+<div class="pair two">
+  <div>
+    <p class="lbl no">No</p>
+<pre class="no"><code>/// Costuras: attach vértice↔vértice inter-pieza
+/// con rest 0 (ADR §2.3). Conjunto GLOBAL del
+/// solver, con dueño e indexación propios — los
+/// pares referencian índices del estado combinado
+/// de todas las piezas.
+pub struct Seams { .. }</code></pre>
+  </div>
+  <div>
+    <p class="lbl si">Sí</p>
+<pre class="si"><code>/// Vertex-to-vertex seam attachments, rest length 0.
+///
+/// Indices are global across all pieces: they address
+/// the combined solver state, not a single piece.
+pub struct Seams { .. }</code></pre>
+  </div>
+</div>
+
+<p>La segunda versión dice lo mismo en menos, y la única frase que un consumidor no puede deducir de las firmas — que los índices son globales — queda sola, donde se ve.</p>
+
+<div class="rule">
+  <b>Comentarios de implementación</b>
+  <p>Un <code>//</code> justifica una decisión que un lector competente cuestionaría.</p>
+  <p>Buenos candidatos: por qué una constante vale eso y no otra cosa, por qué el orden importa, qué pasa si borrás la línea, qué se intentó antes y falló. Malos candidatos: repetir el nombre de la función en prosa.</p>
+</div>
+
+<p>El repo ya tiene ejemplos del comentario correcto. Este es el mejor que hay hoy, y sobrevive traducido tal cual:</p>
+
+<pre class="si"><code>// A kinetic-damping zero leaves v=0 without the cloth being at
+// equilibrium, so sleep needs consecutive quiet ticks, not one.
+let mut quiet_ticks = 0u32;</code></pre>
+
+<p>Nadie deduce eso leyendo <code>quiet_ticks</code>. Ese comentario se gana su lugar.</p>
+
+<div class="axis" id="p2b">
+    <span class="tag">Eje 2.2</span>
+    <h3>Lo que nunca va en un comentario</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<ul class="notch">
+  <li><strong>Procedencia.</strong> <code>(issue #21)</code>, <code>Spike 4 (issue #36)</code>, <code>lección de Blender</code>. Eso lo responde <code>git log -S</code> y <code>git blame</code> con más precisión y sin envejecer. El issue se cierra; el archivo sigue ahí con la referencia muerta.</li>
+  <li><strong>Punteros a documentos renumerables.</strong> <code>ver docs/architecture.html §2.4</code> apunta a una numeración que cambia cuando el ADR se edita. Si el vínculo es esencial, nombrá el concepto (<code>see ADR: incremental derivation</code>), no el número.</li>
+  <li><strong>Reglas que ya viven donde se hacen cumplir.</strong> «Solo importa toile-engine» está en <code>Cargo.toml</code>, que es donde el compilador la aplica. Repetida en un comentario, se desincroniza en silencio.</li>
+  <li><strong>Narración de la estructura del archivo.</strong> «Izquierda el patrón 2D, derecha el 3D» describe dos funciones que están veinte líneas abajo y se llaman <code>pattern_panel</code> y <code>viewport_panel</code>.</li>
+  <li><strong>Estado temporal.</strong> «primera implementación», «por ahora», «el spike decide si…». Eso es una tarea, y las tareas van al tracker.</li>
+</ul>
+
+<div class="decision">
+  <b>Sí van</b>
+  <p>Separadores de sección en archivos largos, en una línea, con el ancho del archivo. El repo ya usa este formato y se queda:</p>
+<pre class="si"><code>// ── linear algebra (column-major) ─────────────────────────</code></pre>
+</div>
+
+<div class="axis" id="p2c">
+    <span class="tag">Eje 2.3</span>
+    <h3>El caso <code>//!</code></h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<p>El doc de módulo no es malo por definición — es malo casi siempre porque se usa como lugar donde narrar. Hay exactamente un caso donde gana su lugar.</p>
+
+<div class="decision">
+  <b>Decisión</b>
+  <p><strong>Un <code>//!</code> por crate, en su <code>lib.rs</code>, y documenta el invariante que el consumidor no puede deducir de las firmas.</strong> Máximo cuatro líneas.</p>
+  <p>Ese es el <em>front page</em> de rustdoc: lo primero que ve alguien que llega al crate desde docs.rs. Es el único comentario del repo con audiencia externa real.</p>
+</div>
+
+<div class="discarded">
+  <b>Descartado</b>
+  <p><code>//!</code> en binarios (<code>main.rs</code>) y en módulos internos. Rustdoc no los publica: el único lector posible ya abrió el archivo y tiene el código delante. Si el módulo necesita explicación para entenderse, el problema es el módulo.</p>
+</div>
+
+<p>El ejemplo que motivó este documento, y su reescritura:</p>
+
+<div class="pair">
+  <div>
+    <p class="lbl no">No — <code>toile-app/src/main.rs</code></p>
+<pre class="no"><code>//! Cliente de escritorio — la vista split (issue #21).
+//!
+//! Izquierda: el patrón 2D con puntos de control arrastrables (vía A en
+//! vivo). Derecha: la tela drapeada por el renderer wgpu propio (módulo
+//! `render`, ADR §2.6) — offscreen con depth buffer, sombreado suave con
+//! las normales que publica el hilo de sim. Solo importa `toile-engine`.</code></pre>
+  </div>
+  <div>
+    <p class="lbl si">Sí</p>
+<pre class="si"><code>mod render;</code></pre>
+    <p>Seis líneas a cero. Todo lo que decían está en el código o en <code>Cargo.toml</code>, salvo una cosa que <em>no</em> estaba en ningún lado y que sí merece un comentario — pero abajo, pegada a la línea que la necesita:</p>
+<pre class="si"><code>// The sim thread advances on its own clock; without this the
+// viewport only redraws on input events.
+ui.ctx().request_repaint();</code></pre>
+  </div>
+</div>
+
+<p>Y la versión buena de un <code>//!</code> de crate, sobre el mismo material:</p>
+
+<div class="pair two">
+  <div>
+    <p class="lbl no">No — <code>toile-sim/src/lib.rs</code>, 9 líneas</p>
+<pre class="no"><code>//! Solver de tela XPBD small-steps residente.
+//!
+//! Buffers SoA, coloreo de grafo determinista,
+//! anisotropía urdimbre/trama, costuras
+//! inter-pieza globales, colisión por SDF,
+//! kinetic damping y sleep por islas de
+//! acoplamiento. El solver nunca se resetea: los
+//! cambios de forma llegan como nuevo estado de
+//! reposo (hot-swap entre substeps).</code></pre>
+  </div>
+  <div>
+    <p class="lbl si">Sí — 3 líneas</p>
+<pre class="si"><code>//! Resident XPBD cloth solver.
+//!
+//! The solver is never reset. Shape edits arrive as
+//! new rest values and are hot-swapped between
+//! substeps, preserving positions and velocities.</code></pre>
+    <p>La lista de features se lee sola en la lista de items que rustdoc pone justo debajo. El invariante «nunca se resetea» no se lee en ningún lado, y es lo único que un consumidor tiene que saber antes de tocar la API.</p>
+  </div>
+</div>
+
+<div class="rule">
+  <b>Verificado por</b>
+  <p><code>clippy::too_long_first_doc_paragraph</code> (estable desde 1.82) para el primer párrafo. El límite de líneas del <code>//!</code> y la prohibición de procedencia <strong>no tienen lint</strong>: script propio (§9) y revisión manual.</p>
+</div>
+</section>
+
+<section id="p3">
+<h2><span class="num">§ 3</span>Idioma</h2>
+
+<div class="decision">
+  <b>Decisión</b>
+  <p><strong>Código en inglés. Documentación de producto en español.</strong></p>
+  <p>Inglés: identificadores, comentarios, doc comments, mensajes de commit, mensajes de <code>panic</code>/<code>expect</code>, nombres de tests, etiquetas de debug.</p>
+  <p>Español: <code>README.md</code>, <code>docs/*.html</code>, issues, y los textos que ve el usuario en la UI.</p>
+</div>
+
+<p>Dos razones, ninguna de gusto personal:</p>
+
+<ol>
+  <li><strong>El código ya está en inglés y los comentarios no.</strong> <code>boundary_fracs</code>, <code>pair_seam</code>, <code>transfer_state</code>, <code>strain_limit</code> conviven con «el aro de una prenda cerrada se elonga bajo su peso». Un archivo bilingüe obliga a cambiar de idioma cada tres líneas: es la peor de las dos opciones, peor que cualquiera de las dos puras.</li>
+  <li><strong>Toile es open source y busca contribuciones.</strong> El ADR nombra el bus factor de un solo desarrollador como riesgo #5 y propone «motor headless + CLI + formato abierto para que el proyecto sobreviva a su GUI y a su autor». Comentarios en español cierran esa puerta a la mayoría de quienes podrían cruzarla.</li>
+</ol>
+
+<div class="decision">
+  <b>Glosario de dominio</b>
+  <p>El patronaje tiene vocabulario técnico propio en ambos idiomas. En código se usa el término inglés estándar, siempre el mismo:</p>
+  <div class="tscroll">
+  <table>
+    <tr><th>Español</th><th>Código</th><th>Español</th><th>Código</th></tr>
+    <tr><td>pinza</td><td><code>dart</code></td><td>embebido / fruncido</td><td><code>ease</code></td></tr>
+    <tr><td>piquete</td><td><code>notch</code></td><td>sisa</td><td><code>armhole</code></td></tr>
+    <tr><td>aplomo / línea de hilo</td><td><code>grainline</code></td><td>escote</td><td><code>neckline</code></td></tr>
+    <tr><td>costura</td><td><code>seam</code></td><td>corpiño / delantero</td><td><code>bodice</code></td></tr>
+    <tr><td>patrón</td><td><code>pattern</code></td><td>drapeado</td><td><code>drape</code></td></tr>
+    <tr><td>pieza</td><td><code>piece</code></td><td>urdimbre / trama</td><td><code>warp</code> / <code>weft</code></td></tr>
+    <tr><td>doblez</td><td><code>fold</code></td><td>bies</td><td><code>bias</code></td></tr>
+    <tr><td>tizada</td><td><code>marker</code></td><td>talla / escalado</td><td><code>size</code> / <code>grading</code></td></tr>
+  </table>
+  </div>
+  <p><code>couture</code> se mantiene como nombre del módulo compilador de ediciones: es un nombre propio del proyecto, no una traducción.</p>
+</div>
+
+<div class="rule">
+  <b>Verificado por</b>
+  <p>No hay lint. Un comentario con caracteres fuera de ASCII es una señal barata y suficiente: script propio (§9). Hoy son <strong>300 líneas</strong> sobre 439 de comentario.</p>
+</div>
+</section>
+
+<section id="p4">
+<h2><span class="num">§ 4</span>Estructura y modularización</h2>
+
+<div class="axis" id="p4a">
+    <span class="tag">Eje 4.1</span>
+    <h3>Nombres</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<p>Se sigue <a href="https://rust-lang.github.io/api-guidelines/">Rust API Guidelines</a> sin excepciones locales. Los puntos que este repo va a tocar seguido:</p>
+
+<ul class="notch">
+  <li><strong>C-CASE</strong> &mdash; <code>snake_case</code> para funciones y m&oacute;dulos, <code>UpperCamelCase</code> para tipos, <code>SCREAMING_SNAKE</code> para constantes.</li>
+  <li><strong>C-CONV</strong> &mdash; <code>as_</code> (pr&eacute;stamo barato), <code>to_</code> (conversi&oacute;n cara), <code>into_</code> (consume). No se mezclan.</li>
+  <li><strong>C-GETTER</strong> &mdash; el getter se llama <code>contour()</code>, no <code>get_contour()</code>.</li>
+  <li><strong>C-CTOR</strong> &mdash; el constructor es <code>new</code>; las variantes describen su diferencia (<code>from_contour</code>, <code>with_capacity</code>).</li>
+  <li><strong>C-COMMON-TRAITS</strong> &mdash; todo tipo p&uacute;blico deriva <code>Debug</code>. <code>Clone</code>/<code>Copy</code>/<code>Default</code> cuando tengan sentido.</li>
+  <li><strong>C-CUSTOM-TYPE</strong> &mdash; un <code>bool</code> en una firma no dice qu&eacute; significa. <code>build_and_drape(dx, dz, true)</code> no se entiende en el sitio de llamada; un enum de dos variantes s&iacute;.</li>
+</ul>
+
+<div class="axis" id="p4b">
+    <span class="tag">Eje 4.2</span>
+    <h3>L&iacute;mites de tama&ntilde;o</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<div class="decision">
+  <b>Decisi&oacute;n</b>
+  <p><strong>Archivo: 300 l&iacute;neas. Funci&oacute;n: 60 l&iacute;neas como objetivo, 100 como l&iacute;mite duro.</strong></p>
+  <p>No es una regla est&eacute;tica. Un archivo que no entra en la cabeza de una persona tampoco entra en la ventana de atenci&oacute;n de quien lo revisa &mdash; humano o agente &mdash; y lo que sigue es exactamente lo que le pas&oacute; a este repo: cinco copias de la misma escena dentro de un mismo archivo, porque nadie ve&iacute;a las otras cuatro.</p>
+</div>
+
+<p>El l&iacute;mite se aplica al archivo, no al concepto: si un concepto necesita m&aacute;s de 300 l&iacute;neas, se parte en submódulos, no se le sube el l&iacute;mite.</p>
+
+<div class="axis" id="p4c">
+    <span class="tag">Eje 4.3</span>
+    <h3>C&oacute;mo se parte</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<div class="decision">
+  <b>Por concepto, nunca por longitud</b>
+  <p>Partir un archivo de 1.200 l&iacute;neas en cuatro de 300 no arregla nada si los cuatro siguen hablando de lo mismo. La prueba: <strong>cada m&oacute;dulo tiene que poder describirse en una frase sin la palabra &laquo;y&raquo;.</strong></p>
+  <p>Si la frase necesita un &laquo;y&raquo;, ah&iacute; est&aacute; la l&iacute;nea de corte.</p>
+</div>
+
+<div class="decision">
+  <b>Fachada</b>
+  <p>Cuando el m&oacute;dulo ya tiene consumidores, se parte hacia adentro: <code>foo.rs</code> pasa a declarar sus submódulos y re-exportar lo p&uacute;blico. Los <em>call sites</em> no cambian, y el refactor se puede verificar contra el golden sin tocar una sola l&iacute;nea fuera del crate.</p>
+</div>
+
+<pre class="si"><code>// toile-sim/src/xpbd.rs — la fachada, no la implementación
+mod color;
+mod contact;
+mod damping;
+mod metrics;
+mod normals;
+mod parallel;
+mod ptr;
+mod sdf;
+mod simd;
+mod solver;
+mod state;
+
+pub use color::{ColoredConstraints, color_constraints};
+pub use damping::{KineticDamper, zero_velocities};
+pub use metrics::{kinetic_energy, max_speed, position_hash};
+pub use normals::vertex_normals;
+pub use parallel::substep_colored;
+pub use sdf::SdfGrid;
+pub use simd::substep_colored_simd;
+pub use solver::substep;
+pub use state::{DistanceConstraints, Seams, State};</code></pre>
+
+<p>As&iacute; qued&oacute; el repo al aplicar la regla. Ning&uacute;n archivo pas&oacute; de 300 l&iacute;neas y el golden no se movi&oacute; ni un bit en todo el proceso:</p>
+
+<div class="tscroll">
+<table>
+  <tr><th>Antes</th><th>L&iacute;neas</th><th>Despu&eacute;s</th></tr>
+  <tr><td><code>toile-cli/bench.rs</code></td><td>1201</td><td><code>bench.rs</code> + <code>scene</code> · <code>kernel</code> · <code>incremental</code> · <code>seams</code> · <code>fidelity</code> · <code>topology</code></td></tr>
+  <tr><td><code>toile-sim/xpbd.rs</code></td><td>784</td><td>fachada + <code>state</code> · <code>sdf</code> · <code>contact</code> · <code>solver</code> · <code>color</code> · <code>ptr</code> · <code>parallel</code> · <code>simd</code> · <code>damping</code> · <code>metrics</code> · <code>normals</code></td></tr>
+  <tr><td><code>toile-app/render.rs</code></td><td>323</td><td><code>render.rs</code> + <code>sphere</code> + <code>shader.wgsl</code></td></tr>
+  <tr><td><code>toile-app/main.rs</code></td><td>285</td><td><code>main.rs</code> + <code>pattern</code> · <code>viewport</code> · <code>camera</code></td></tr>
+  <tr><td><code>toile-engine/couture.rs</code></td><td>284</td><td>fachada + <code>pipeline</code> · <code>seam</code> · <code>transfer</code>, y <code>demo</code> aparte</td></tr>
+  <tr><td><code>toile-engine/sync.rs</code></td><td>217</td><td>fachada + <code>handle</code> · <code>worker</code></td></tr>
+</table>
+</div>
+
+<p>Partir por concepto tuvo un efecto que partir por longitud no habr&iacute;a tenido: al aislar la resoluci&oacute;n de contacto en su propio m&oacute;dulo apareci&oacute; que estaba escrita <strong>tres veces</strong> &mdash;escalar, paralela y SIMD&mdash; y las tres colapsaron en una sola funci&oacute;n, bit por bit id&eacute;ntica.</p>
+
+<div class="decision">
+  <b>Un m&oacute;dulo es un concepto</b>
+  <p>No una fase del proyecto ni un experimento. Nada se llama <code>spike</code>, <code>v2</code>, <code>new_</code>, <code>tmp</code>, <code>utils</code> ni <code>helpers</code>: esos cuatro nombres son un contenedor sin criterio, y todo lo que cae adentro deja de tener due&ntilde;o.</p>
+  <p>Layout: <code>foo.rs</code> junto a <code>foo/</code> para los submódulos. No se usan <code>mod.rs</code>.</p>
+</div>
+
+<div class="axis" id="p4d">
+    <span class="tag">Eje 4.4</span>
+    <h3>Fixtures</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<div class="decision">
+  <b>Decisi&oacute;n</b>
+  <p>Una escena de prueba se define <strong>una vez</strong> y se importa. Si un literal aparece en dos archivos, ya es un fixture disfrazado y sube a su crate.</p>
+</div>
+
+<p>Es la regla que m&aacute;s deuda paga en este repo. La escena del corpi&ntilde;o &mdash;contorno, centroide, altura de suelta, SDF del avatar&mdash; estaba copiada en cinco archivos: cualquier cambio de la escena exig&iacute;a encontrar las cinco, y el d&iacute;a que alguien encontrara cuatro, el golden se romper&iacute;a sin que nadie supiera por qu&eacute;.</p>
+
+<div class="rule">
+  <b>Verificado por</b>
+  <p><code>clippy::too_many_lines</code> para funciones, y el script propio para el l&iacute;mite de archivo. La duplicaci&oacute;n de fixtures sigue siendo revisi&oacute;n manual (&sect;10).</p>
+</div>
+</section>
+
+<section id="p5">
+<h2><span class="num">§ 5</span>Errores, panics y validación</h2>
+
+<div class="decision">
+  <b>Decisión</b>
+  <p><strong>Los crates de librería devuelven <code>Result</code>. Solo los binarios hacen <code>unwrap</code>/<code>expect</code>.</strong></p>
+  <p>Tipos de error con <code>thiserror</code> en la librería, <code>anyhow</code> en <code>toile-cli</code> y <code>toile-app</code>. Ambos ya están presupuestados en el ADR §2.8.</p>
+</div>
+
+<p>Un <code>expect</code> en una librería convierte un dato de entrada malo en un crash del proceso del usuario. <code>cdt::triangulate</code> hace hoy <code>.expect("vértice inválido")</code>: un contorno con un <code>NaN</code>—perfectamente alcanzable desde un arrastre en la UI— mata la aplicación entera.</p>
+
+<div class="rule">
+  <b>Excepción</b>
+  <p><code>expect</code> es correcto para un invariante que el propio código garantiza. El mensaje explica <strong>el invariante</strong>, no el síntoma:</p>
+<pre class="si"><code>// no:  .expect("vértice inválido")
+// sí:  .expect("contour was validated as finite by Piece::new")</code></pre>
+</div>
+
+<div class="decision">
+  <b>Aserciones en el camino caliente</b>
+  <p><code>debug_assert!</code> para invariantes de solver que costaría verificar en release. <code>assert!</code> solo cuando continuar corrompería datos en silencio — como el <code>assert!(col &lt; 64)</code> del coloreo de grafo, que está bien donde está.</p>
+</div>
+
+<div class="rule">
+  <b>Verificado por</b>
+  <p><code>clippy::missing_panics_doc</code> (documenta los panics que quedan) y <code>clippy::missing_errors_doc</code>. <code>unwrap_used</code>/<code>expect_used</code> se activan <em>por crate de librería</em>, no en el workspace.</p>
+</div>
+</section>
+
+<section id="p6">
+<h2><span class="num">§ 6</span><code>unsafe</code></h2>
+
+<p>Esta es la excepción explícita al minimalismo del §2: en <code>unsafe</code>, el comentario es obligatorio y la extensión no se penaliza. Es el único lugar del repo donde la prosa es parte del contrato de corrección.</p>
+
+<div class="decision">
+  <b>Decisión</b>
+  <ul class="notch">
+    <li><code>unsafe fn</code> lleva sección <code># Safety</code> en su doc, con las precondiciones que el llamador debe garantizar.</li>
+    <li>Todo bloque <code>unsafe</code> lleva un comentario <code>// SAFETY:</code> inmediatamente arriba, que explica por qué las precondiciones se cumplen <em>acá</em>.</li>
+    <li>Una operación insegura por bloque. Un bloque que envuelve doce derefs no documenta ninguno.</li>
+    <li><code>unsafe_op_in_unsafe_fn</code> en <code>deny</code>: dentro de una <code>unsafe fn</code>, cada operación insegura sigue necesitando su bloque.</li>
+  </ul>
+</div>
+
+<p>El patrón <code>Ptr(*mut f32)</code> de <code>xpbd.rs</code> es el caso crítico del repo: su corrección depende por completo de una propiedad que el compilador no ve —que dentro de un color ningún par de constraints comparte vértice— y hoy son <strong>13 bloques sin <code>// SAFETY:</code></strong>. Es exactamente donde el comentario largo se justifica.</p>
+
+<div class="rule">
+  <b>Verificado por</b>
+  <p><code>clippy::missing_safety_doc</code> (default), <code>clippy::undocumented_unsafe_blocks</code>, <code>clippy::multiple_unsafe_ops_per_block</code>, <code>unsafe_op_in_unsafe_fn</code>.</p>
+</div>
+</section>
+
+<section id="p7">
+<h2><span class="num">§ 7</span>Determinismo — reglas duras</h2>
+
+<p>Toile promete que el mismo archivo produce el mismo drapeado, bit a bit, en ARM y en x86. Esa promesa se rompe con un cambio de una línea que en cualquier otro proyecto sería inocente. Estas reglas no son estilo: violarlas es un bug.</p>
+
+<div class="decision">
+  <b>Reglas</b>
+  <ul class="notch">
+    <li><strong>Nunca iterar un <code>HashMap</code>/<code>HashSet</code></strong> cuando el orden influya en el resultado. <code>BTreeMap</code>, o <code>Vec</code> con orden canónico explícito.</li>
+    <li><strong>Orden total y canónico</strong> en todo sort que alimente al solver: la clave incluye un desempate por índice. <code>sort_by_key(|i| (min_vertex, i))</code>, nunca <code>sort_unstable_by</code> sobre una clave con empates.</li>
+    <li><strong>El inner loop se limita a</strong> <code>+ − × ÷ sqrt</code> en <code>f32</code>. Transcendentales solo vía <code>libm</code>, y fuera del camino caliente.</li>
+    <li><strong>Sin <code>fast-math</code>, sin FMA implícito</strong>, sin reordenar expresiones de punto flotante «porque es equivalente»: en IEEE no lo es.</li>
+    <li><strong>Sin paralelismo oportunista</strong> sobre floats. El work-stealing es incompatible con el determinismo: el paralelismo entra solo por coloreo con escrituras disjuntas.</li>
+    <li><strong>Un cambio de física cambia el golden.</strong> Se regenera con <code>cargo run -p toile-cli -- drape</code> y se actualiza la constante <em>en el mismo commit</em>, con el porqué en el mensaje. Un golden actualizado sin justificación en el mensaje se rechaza en review.</li>
+  </ul>
+</div>
+
+<div class="decision">
+  <b>Paridad entre caminos del solver</b>
+  <p>Si existe más de una implementación del mismo substep (escalar, coloreada, SIMD), <strong>todas soportan el mismo conjunto de features</strong> o el que no lo hace se marca en su tipo, no en un comentario. Un camino paralelo que ignora en silencio las costuras produce física distinta con la misma firma.</p>
+</div>
+
+<div class="rule">
+  <b>Verificado por</b>
+  <p>El golden de <code>tests/golden.rs</code> corriendo en macOS ARM y Linux x86 contra la misma constante. Es la única verificación automática; el resto de las reglas es revisión manual, y son las primeras que un agente viola.</p>
+</div>
+</section>
+
+<section id="p8">
+<h2><span class="num">§ 8</span>Tests</h2>
+
+<div class="decision">
+  <b>Decisión</b>
+  <ul class="notch">
+    <li>Toda función pura de <code>toile-geom</code> y <code>toile-mesh</code> lleva unit tests en su archivo, en <code>#[cfg(test)] mod tests</code>.</li>
+    <li><code>cargo test --workspace</code> tiene que <strong>fallar</strong> si alguien rompe algo. Durante toda la fase de exploración no falló nunca, porque el único test del repo estaba <code>#[ignore]</code>: hoy son 24 y corren en cada PR.</li>
+    <li><code>#[ignore]</code> se reserva para goldens que exigen <code>--release</code>, y CI los corre explícitamente.</li>
+    <li>Los casos borde se testean antes que el camino feliz: contorno vacío, dos puntos iguales, <code>count &lt; 2</code>, <code>NaN</code> de entrada.</li>
+    <li>Nombre del test: <code>lo_que_se_espera</code>, no <code>test_foo</code>. <code>sample_closed_wraps_at_full_perimeter</code>.</li>
+  </ul>
+</div>
+
+<div class="rule">
+  <b>Verificado por</b>
+  <p>CI. Cobertura no se mide ni se persigue como número.</p>
+</div>
+</section>
+
+<section id="p9">
+<h2><span class="num">§ 9</span>Herramientas: qué hace cumplir qué</h2>
+
+<p>La respuesta corta a «¿hay un prettier para Rust?»: sí, <code>rustfmt</code>, y ya corre en CI. La respuesta larga es que <strong>rustfmt en canal estable no toca el contenido de los comentarios</strong> — por eso los bloques de seis líneas pasan <code>cargo fmt --check</code> hoy sin una queja.</p>
+
+<div class="tscroll">
+<table>
+  <tr><th>Regla</th><th>Herramienta</th><th>Estado</th></tr>
+  <tr><td>Formato del código</td><td><code>cargo +nightly fmt</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td>Ancho de línea (100)</td><td>rustfmt <code>max_width</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td>Ancho y wrap de comentarios (80)</td><td>rustfmt <code>comment_width</code> + <code>wrap_comments</code></td><td><span class="tag-ok">en CI</span> · nightly</td></tr>
+  <tr><td>Orden y granularidad de imports</td><td>rustfmt <code>group_imports</code> + <code>imports_granularity</code></td><td><span class="tag-ok">en CI</span> · nightly</td></tr>
+  <tr><td>Primer párrafo de doc corto</td><td><code>clippy::too_long_first_doc_paragraph</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td>Doc en items públicos</td><td><code>missing_docs</code> (rustc)</td><td><span class="tag-ok">en CI</span> · solo librerías</td></tr>
+  <tr><td>Funciones largas (100)</td><td><code>clippy::too_many_lines</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td><code>// SAFETY:</code> en cada bloque</td><td><code>clippy::undocumented_unsafe_blocks</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td><code>unsafe</code> explícito dentro de <code>unsafe fn</code></td><td><code>unsafe_op_in_unsafe_fn</code></td><td><span class="tag-ok">en CI</span> · deny</td></tr>
+  <tr><td>Comentarios en inglés</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td><code>//!</code> solo en <code>lib.rs</code>, ≤ 4 líneas</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td>Sin procedencia en la fuente</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td>Archivos ≤ 300 líneas</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td>El drapeado no cambia de bits</td><td><code>tests/golden.rs</code> · <code>tools/verify.sh</code></td><td><span class="tag-ok">en CI</span> · ARM + x86</td></tr>
+  <tr><td>Licencias del árbol (cero GPL)</td><td><code>cargo-deny</code></td><td><span class="tag-no">pendiente</span></td></tr>
+  <tr><td>Dependencias sin usar</td><td><code>cargo-machete</code></td><td><span class="tag-no">pendiente</span></td></tr>
+  <tr><td>Typos en código y docs</td><td><code>typos-cli</code></td><td><span class="tag-no">pendiente</span></td></tr>
+</table>
+</div>
+
+<div class="axis">
+    <span class="tag">9.1</span>
+    <h3>La decisión de nightly</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<div class="decision">
+  <b>Decisión</b>
+  <p><code>rustfmt.toml</code> declara las opciones inestables y CI corre <code>cargo +nightly fmt --check</code>. El <em>build</em> sigue siendo 100% estable: nightly se usa solo para formatear, que no afecta al binario.</p>
+</div>
+
+<pre class="si"><code># rustfmt.toml
+edition = "2024"
+style_edition = "2024"
+max_width = 100
+
+# nightly-only: sin esto rustfmt no toca los comentarios
+unstable_features = true
+wrap_comments = true
+comment_width = 80
+format_code_in_doc_comments = true
+imports_granularity = "Module"
+group_imports = "StdExternalCrate"</code></pre>
+
+<div class="discarded">
+  <b>Alternativa descartada</b>
+  <p>Quedarse en estable puro y no verificar comentarios. Era el estado del repo cuando se escribió este documento, y la razón por la que existe.</p>
+</div>
+
+<div class="axis">
+    <span class="tag">9.2</span>
+    <h3>Lints del workspace</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<p>Los lints se declaran una vez en el <code>Cargo.toml</code> raíz —estable desde Rust 1.74— y cada crate hereda con <code>[lints] workspace = true</code>. Los valores de abajo salen de correr <code>clippy::pedantic</code> sobre el repo: <strong>1.415 avisos</strong>, de los cuales 788 son <code>indexing_slicing</code>. Indexar es el idioma de un solver SoA, no un olor; se permite explícitamente en vez de dejar que ahogue todo lo demás.</p>
+
+<pre class="si"><code># Cargo.toml (raíz) — cada crate hereda con `[lints] workspace = true`
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+# priority = -1 so the individual allows below win over the group.
+pedantic = { level = "warn", priority = -1 }
+
+# Numeric code: indexing and narrowing casts are the idiom here, not a smell.
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+indexing_slicing = "allow"
+many_single_char_names = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+
+# One SAFETY comment covers a whole phase of identical indexed writes here;
+# splitting a nine-deref expression into nine blocks would document less.
+multiple_unsafe_ops_per_block = "allow"
+# Deliberate on the tiny accessors inside the solver's hot loop.
+inline_always = "allow"
+
+# The rules this project actually wants enforced.
+too_long_first_doc_paragraph = "warn"
+too_many_lines = "warn"
+undocumented_unsafe_blocks = "warn"</code></pre>
+
+<div class="axis">
+    <span class="tag">9.3</span>
+    <h3>Lo que ninguna herramienta cubre</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<p>Ni clippy ni rustfmt saben qué idioma hablás ni cuántas líneas debería tener un <code>//!</code>. Para eso hay tres caminos, de menos a más:</p>
+
+<div class="swatches">
+  <div class="swatch">
+    <b>Script en CI</b>
+    <i>tools/check-style.sh</i>
+    <span class="chip">elegido</span>
+    <p>Cuatro reglas: idioma, <code>//!</code> fuera de sitio o demasiado largo, procedencia, y tamaño de archivo. Solo <code>grep</code> y <code>find</code>, así que no hay nada que instalar en CI.</p>
+  </div>
+  <div class="swatch">
+    <b>ast-grep</b>
+    <i>reglas YAML sobre el AST</i>
+    <span class="chip no">no v1</span>
+    <p>Más preciso que grep y con autofix, pero es otra dependencia binaria para tres reglas.</p>
+  </div>
+  <div class="swatch">
+    <b>dylint</b>
+    <i>lints de rustc propios</i>
+    <span class="chip no">no v1</span>
+    <p>La solución correcta a gran escala: lints reales, con acceso al HIR. Desproporcionado para un repo de 3.700 líneas.</p>
+  </div>
+</div>
+
+<pre class="si"><code>#!/usr/bin/env bash
+# Project rules that neither rustfmt nor clippy can see (docs/style.html).
+# Uses only grep and find, so it runs anywhere CI puts a shell.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+export LC_ALL=en_US.UTF-8
+fail=0
+say() { printf '\033[31m✗ %s\033[0m\n' "$1"; fail=1; }
+
+COMMENT='^[[:space:]]*(//|///|//!)'
+WORD='(^|[^[:alnum:]])(que|para|los|las|una|este|esta|como|pero|porque|cuando|donde|desde|hasta|entre)([^[:alnum:]]|$)'
+
+# 1. Comments go in English. Spanish diacritics and inverted punctuation are
+#    unambiguous; a short stop-word list catches the unaccented rest. Plain
+#    non-ASCII is NOT an error: em dashes and multiplication signs belong in
+#    English prose too.
+if grep -rnE --include='*.rs' "$COMMENT.*([áéíóúñÁÉÍÓÚÑ¿¡]|$WORD)" crates; then
+  say "comentarios en español: el código va en inglés (§3)"
+fi
+
+# 2. A module doc belongs on a crate root, and stays short.
+for f in $(grep -rlE --include='*.rs' '^//!' crates); do
+  n=$(grep -c '^//!' "$f")
+  case "$f" in
+    */src/lib.rs) [ "$n" -gt 4 ] &amp;&amp; say "$f: doc de crate de $n líneas (máx 4) (§2.3)" ;;
+    *)            say "$f: //! fuera de un lib.rs (§2.3)" ;;
+  esac
+done
+
+# 3. Provenance belongs in the commit message, not the source.
+if grep -rnE --include='*.rs' "$COMMENT.*(issue #[0-9]|[Ss]pike [0-9]|§)" crates; then
+  say "procedencia en comentarios: eso va en el mensaje de commit (§2.2)"
+fi
+
+# 4. File size limit.
+for f in $(find crates -name '*.rs'); do
+  n=$(wc -l &lt; "$f")
+  [ "$n" -gt 300 ] &amp;&amp; say "$f: $n líneas (máx 300) (§4.2)"
+done
+
+[ $fail -eq 0 ] &amp;&amp; echo "✓ estilo"
+exit $fail</code></pre>
+</section>
+
+<section id="p10">
+<h2><span class="num">§ 10</span>Checklist de PR</h2>
+
+<p>Lo que las herramientas no verifican, y por lo tanto hay que mirar a ojo antes de mergear:</p>
+
+<ol class="plan">
+  <li><strong>¿Algún comentario nuevo sobreviviría a borrarlo?</strong> Si sí, borralo.</li>
+  <li><strong>¿Hay un literal que aparece en dos archivos?</strong> Es un fixture: subilo a su crate.</li>
+  <li><strong>¿El cambio toca la física?</strong> Entonces el golden cambió: regeneralo en este commit y justificá el porqué en el mensaje.</li>
+  <li><strong>¿Se agregó un camino de solver?</strong> Tiene que soportar las mismas features que los demás, o declararlo en el tipo.</li>
+  <li><strong>¿Hay un <code>unsafe</code> nuevo?</strong> <code># Safety</code> en la firma, <code>// SAFETY:</code> en el bloque, una operación por bloque.</li>
+  <li><strong>¿Hay un <code>expect</code> nuevo en una librería?</strong> Debería ser un <code>Result</code>.</li>
+  <li><strong>¿Se ordenó algo que alimenta al solver?</strong> La clave tiene que ser un orden total, con desempate por índice.</li>
+</ol>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <div class="fin">TOILE · STD-001 · <a href="https://github.com/eticalde/Toile">github.com/eticalde/Toile</a> · <a href="./architecture.html">ADR-001</a></div>
+</footer>
+
+</body>
+</html>

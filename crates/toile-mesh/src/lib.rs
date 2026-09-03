@@ -1,11 +1,11 @@
-//! Mallado por pieza y reproyección del interior.
+//! Per-piece meshing and interior reprojection.
 //!
-//! CDT + refinement (spade, inserción canónica por ID), matriz PMVC cacheada
-//! detrás de un trait interpolador (fallback armónico), transferencia
-//! baricéntrica para cambios de topología, métricas de calidad de malla.
-//!
-//! Ver `docs/architecture.html` §2.2 y §2.7.
+//! The same contour always triangulates to the same mesh, bit for bit. That is
+//! a requirement, not an optimisation: the goldens compare across machines.
 
+/// Constrained Delaunay triangulation and refinement.
 pub mod cdt;
+/// Reprojecting a piece's interior from its boundary.
 pub mod interp;
+/// Locating points in a mesh, to carry state onto a new one.
 pub mod transfer;

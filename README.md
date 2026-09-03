@@ -18,7 +18,10 @@ Requisitos: Rust estable (vía [rustup](https://rustup.rs)).
 cargo build --workspace   # compila los 7 crates
 cargo test --workspace    # tests + goldens
 cargo run -p toile-cli    # CLI headless (`toile`)
+./tools/verify.sh         # la puerta local: golden + fmt + estilo + clippy + tests
 ```
+
+Cómo se escribe código acá está en el **[STD-001](https://eticalde.github.io/Toile/style.html)** (fuente en [`docs/style.html`](docs/style.html)): comentarios, idioma, modularización, `unsafe`, determinismo, y qué herramienta hace cumplir cada regla. CI verifica todo lo que es verificable; el resto es el checklist de PR del §10.
 
 ## Usuario objetivo
 

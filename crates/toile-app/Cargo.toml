@@ -12,3 +12,6 @@ repository.workspace = true
 bytemuck = "1"
 eframe = { version = "0.36.1", features = ["wgpu"] }
 toile-engine = { path = "../toile-engine" }
+
+[lints]
+workspace = true

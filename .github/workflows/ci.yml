@@ -7,8 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # Puntos de datos del hardware piso — Spike 1: Linux 4 vCPU y
-  # macos-latest (Apple Silicon M1/M2 de 3-4 núcleos).
+  # Floor-hardware datapoints: Linux 4 vCPU and Apple Silicon.
   bench:
     if: github.event_name == 'workflow_dispatch'
     strategy:
@@ -22,24 +21,28 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo run --release -p toile-cli -- bench
 
-
   test:
     strategy:
       fail-fast: false
       matrix:
-        # macOS ARM y Linux x86 — las dos plataformas de los goldens de
-        # determinismo (docs/architecture.html §2.4).
+        # The two platforms the determinism goldens compare across.
         os: [macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      # Nightly only supplies rustfmt: comment formatting is nightly-only, and
+      # formatting never reaches the binary. Everything else builds on stable.
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo fmt --all --check
+      - run: cargo +nightly fmt --all --check
+      - run: ./tools/check-style.sh
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo build --workspace
       - run: cargo test --workspace
-      # Goldens de determinismo (release): misma constante en ARM y x86.
+      # Determinism goldens, in release: the same constant on ARM and x86.
       - run: cargo test --workspace --release -- --ignored

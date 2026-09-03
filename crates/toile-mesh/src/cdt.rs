@@ -1,25 +1,40 @@
-//! CDT + Delaunay refinement por pieza — Spike 1 (issue #33).
-//!
-//! Inserción en orden canónico (el orden del contorno es parte del contrato
-//! de determinismo: misma pieza → misma malla, siempre).
-
 use spade::{ConstrainedDelaunayTriangulation, Point2, RefinementParameters, Triangulation};
 
-/// Malla 2D de una pieza: vértices en metros y triángulos CCW.
+/// A piece meshed in 2D: vertices in metres, CCW triangles.
+#[allow(
+    missing_docs,
+    reason = "SoA buffers are named by their axis; a doc
+    per field would only restate the name"
+)]
+#[derive(Debug, Clone, Default)]
 pub struct PieceMesh {
     pub vertices: Vec<[f64; 2]>,
     pub triangles: Vec<u32>,
 }
 
-/// Triangula el interior de un contorno cerrado (polilínea CCW, sin el
-/// punto de cierre duplicado) con refinement hasta `max_area` por triángulo.
+/// Triangulates the interior of a closed CCW contour, refining until every
+/// triangle is under `max_area`.
+///
+/// The contour must not repeat its first point. Vertices are inserted in
+/// contour order: that order is part of the determinism contract, since spade
+/// resolves ties by insertion sequence.
+///
+/// A contour of fewer than three points has no interior and yields an empty
+/// mesh.
+///
+/// # Panics
+/// If a contour point is not representable as a spade coordinate — that is, if
+/// it is infinite or NaN.
 pub fn triangulate(contour: &[[f64; 2]], max_area: f64) -> PieceMesh {
+    if contour.len() < 3 {
+        return PieceMesh::default();
+    }
     let mut cdt = ConstrainedDelaunayTriangulation::<Point2<f64>>::new();
     let handles: Vec<_> = contour
         .iter()
         .map(|p| {
             cdt.insert(Point2::new(p[0], p[1]))
-                .expect("vértice inválido")
+                .expect("contour points must be finite")
         })
         .collect();
     for i in 0..handles.len() {
@@ -36,9 +51,9 @@ pub fn triangulate(contour: &[[f64; 2]], max_area: f64) -> PieceMesh {
         let p = v.position();
         vertices.push([p.x, p.y]);
     }
-    // spade triangula todo el hull convexo; las caras del hull que quedan
-    // fuera del contorno (la concavidad de una sisa) se filtran por
-    // centroide con even-odd — determinista.
+    // spade meshes the whole convex hull, so the faces filling a concavity
+    // (an armhole, a neckline) have to be dropped. Centroid even-odd rather
+    // than spade's own outer-face marking: it is exact on f64 and stable.
     let mut triangles = Vec::new();
     for f in cdt.inner_faces() {
         let [a, b, c] = f.vertices().map(|v| v.index() as u32);
@@ -58,7 +73,6 @@ pub fn triangulate(contour: &[[f64; 2]], max_area: f64) -> PieceMesh {
     }
 }
 
-/// Even-odd ray casting, f64 determinista.
 fn point_in_polygon(p: [f64; 2], poly: &[[f64; 2]]) -> bool {
     let mut inside = false;
     let n = poly.len();
@@ -75,11 +89,10 @@ fn point_in_polygon(p: [f64; 2], poly: &[[f64; 2]]) -> bool {
     inside
 }
 
-/// Hash FNV-1a de la malla completa (bits de coordenadas + índices):
-/// el golden de reproducibilidad de spade.
+/// FNV-1a over coordinate bits and indices — the reproducibility golden.
 pub fn mesh_hash(mesh: &PieceMesh) -> u64 {
-    let mut h: u64 = 0xcbf29ce484222325;
-    let mut eat = |x: u64| h = (h ^ x).wrapping_mul(0x100000001b3);
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut eat = |x: u64| h = (h ^ x).wrapping_mul(0x0100_0000_01b3);
     for v in &mesh.vertices {
         eat(v[0].to_bits());
         eat(v[1].to_bits());
@@ -88,4 +101,79 @@ pub fn mesh_hash(mesh: &PieceMesh) -> u64 {
         eat(u64::from(t));
     }
     h
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square(step: f64) -> Vec<[f64; 2]> {
+        let n = (1.0 / step) as usize;
+        let mut pts = Vec::new();
+        for (dx, dy, ox, oy) in [
+            (1.0, 0.0, 0.0, 0.0),
+            (0.0, 1.0, 1.0, 0.0),
+            (-1.0, 0.0, 1.0, 1.0),
+            (0.0, -1.0, 0.0, 1.0),
+        ] {
+            for i in 0..n {
+                let t = i as f64 / n as f64;
+                pts.push([ox + dx * t, oy + dy * t]);
+            }
+        }
+        pts
+    }
+
+    #[test]
+    fn a_square_meshes_to_a_covered_interior() {
+        let m = triangulate(&square(0.1), 0.02);
+        assert!(!m.triangles.is_empty());
+        assert!(m.triangles.len().is_multiple_of(3));
+        let area: f64 = m
+            .triangles
+            .chunks(3)
+            .map(|t| {
+                let (a, b, c) = (
+                    m.vertices[t[0] as usize],
+                    m.vertices[t[1] as usize],
+                    m.vertices[t[2] as usize],
+                );
+                ((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])).abs() / 2.0
+            })
+            .sum();
+        assert!((area - 1.0).abs() < 1.0e-9, "covered area was {area}");
+    }
+
+    #[test]
+    fn refinement_respects_max_area() {
+        let m = triangulate(&square(0.25), 0.01);
+        for t in m.triangles.chunks(3) {
+            let (a, b, c) = (
+                m.vertices[t[0] as usize],
+                m.vertices[t[1] as usize],
+                m.vertices[t[2] as usize],
+            );
+            let area = ((b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1])).abs() / 2.0;
+            assert!(area <= 0.01 + 1.0e-12, "triangle of area {area}");
+        }
+    }
+
+    #[test]
+    fn the_same_contour_meshes_to_the_same_bits() {
+        let c = square(0.1);
+        assert_eq!(
+            mesh_hash(&triangulate(&c, 0.02)),
+            mesh_hash(&triangulate(&c, 0.02))
+        );
+    }
+
+    #[test]
+    fn a_contour_without_an_interior_yields_an_empty_mesh() {
+        assert!(triangulate(&[], 0.1).triangles.is_empty());
+        assert!(
+            triangulate(&[[0.0, 0.0], [1.0, 0.0]], 0.1)
+                .triangles
+                .is_empty()
+        );
+    }
 }

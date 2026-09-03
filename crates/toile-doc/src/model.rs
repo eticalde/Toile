@@ -1,20 +1,23 @@
-//! Modelo mínimo para el Spike 2 (issue #34): una pieza con contorno de
-//! puntos de control y el comando MovePoint reversible.
-//!
-//! Deliberadamente sin keys generacionales todavía — el spike mide el
-//! pipeline incremental, no el modelo de documento completo (ese llega con
-//! los índices estables del ADR §2.1 cuando el editor exista).
-
-/// Pieza: polígono de control cerrado, en metros.
+/// A pattern piece: a closed control polygon, in metres.
+#[allow(missing_docs, reason = "one field, named by the doc above it")]
+#[derive(Debug, Clone, Default)]
 pub struct Piece {
     pub contour: Vec<[f64; 2]>,
 }
 
+/// The document: every piece on the work table.
+#[allow(missing_docs, reason = "one field, named by the doc above it")]
+#[derive(Debug, Clone, Default)]
 pub struct Doc {
     pub pieces: Vec<Piece>,
 }
 
-/// Comando reversible. `apply` devuelve el inverso — el germen del undo.
+/// A reversible edit to the document.
+#[allow(
+    missing_docs,
+    reason = "the variant names the edit and its fields name themselves"
+)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Command {
     MovePoint {
         piece: usize,
@@ -24,6 +27,17 @@ pub enum Command {
 }
 
 impl Command {
+    /// Applies the edit and returns the command that undoes it.
+    ///
+    /// The undo command may be dropped: a caller that is not building an undo
+    /// stack has no use for it.
+    ///
+    /// # Panics
+    /// If `piece` or `point` is out of range.
+    #[allow(
+        clippy::return_self_not_must_use,
+        reason = "the undo command is optional"
+    )]
     pub fn apply(&self, doc: &mut Doc) -> Command {
         match *self {
             Command::MovePoint { piece, point, to } => {
@@ -37,5 +51,46 @@ impl Command {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::float_cmp, reason = "moving a point stores the exact value")]
+
+    use super::*;
+
+    fn doc() -> Doc {
+        Doc {
+            pieces: vec![Piece {
+                contour: vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]],
+            }],
+        }
+    }
+
+    #[test]
+    fn apply_moves_the_point() {
+        let mut d = doc();
+        Command::MovePoint {
+            piece: 0,
+            point: 1,
+            to: [2.0, 3.0],
+        }
+        .apply(&mut d);
+        assert_eq!(d.pieces[0].contour[1], [2.0, 3.0]);
+    }
+
+    #[test]
+    fn the_returned_command_restores_the_original() {
+        let mut d = doc();
+        let before = d.pieces[0].contour.clone();
+        let undo = Command::MovePoint {
+            piece: 0,
+            point: 1,
+            to: [2.0, 3.0],
+        }
+        .apply(&mut d);
+        undo.apply(&mut d);
+        assert_eq!(d.pieces[0].contour, before);
     }
 }

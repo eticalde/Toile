@@ -1,20 +1,21 @@
-//! Golden de determinismo (ADR §2.4): drapear → editar → re-drapear debe
-//! producir SIEMPRE estos bits. CI lo corre en release sobre macOS ARM y
-//! Linux x86 contra la misma constante — si ambas pasan, el solver f32 es
-//! bit-idéntico cross-arquitectura (§3.3).
-//!
-//! Correr con: `cargo test --release -- --ignored`
-//! Si un cambio LEGÍTIMO de física altera el hash, regenerarlo con
-//! `toile drape` y actualizar la constante en el mismo commit, explicando
-//! el porqué en el mensaje.
+#![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
+/// Drape, edit, re-drape must always produce these bits.
+///
+/// CI runs this in release on macOS ARM and Linux x86 against the same
+/// constant. Both passing is what makes the f32 solver bit-identical across
+/// architectures rather than merely deterministic on one.
+///
+/// A legitimate physics change moves the hash. Regenerate it with
+/// `cargo run --release -p toile-cli -- drape` and update the constant in the
+/// same commit, saying why in the message.
 #[test]
-#[ignore = "golden en release: cargo test --release -- --ignored"]
+#[ignore = "release-only golden: cargo test --release -- --ignored"]
 fn drape_bodice_golden() {
     assert_eq!(
         toile_engine::golden::drape_bodice_hash(),
-        0x534dd0e5200e8e4a,
-        "el drapeado dorado cambió de bits: o hay no-determinismo, o un \
-         cambio de física legítimo que exige regenerar el golden (toile drape)"
+        0x534d_d0e5_200e_8e4a,
+        "the golden drape changed bits: either non-determinism crept in, or a \
+         legitimate physics change needs the golden regenerated"
     );
 }

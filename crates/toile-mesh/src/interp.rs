@@ -1,38 +1,41 @@
-//! Interpolación del interior desde la frontera — Spike 2 (issue #34).
-//!
-//! Mean Value Coordinates (Floater 2003) como primera implementación del
-//! trait de interpolación. El ADR §2.2 pide PMVC (Lipman 2007) para piezas
-//! cóncavas: MVC puede dar pesos negativos en sisas/escotes profundos — el
-//! Spike 5 decide con la suite de piezas cóncavas si el upgrade es
-//! necesario. La matriz se precomputa una vez; cada edición de forma es
-//! solo la multiplicación (matriz densa interior × frontera).
-//!
-//! Nota de determinismo: usa transcendentales de std (sqrt solamente en el
-//! camino de apply; atan no aparece). Los goldens cross-plataforma de la
-//! matriz se evalúan en este spike.
-
-/// Pesos densos: `weights[j * n_boundary + i]` = influencia del vértice de
-/// frontera `i` sobre el vértice interior `j`.
+/// Dense boundary-to-interior weights.
+///
+/// `weights[j * n_boundary + i]` is the influence of boundary vertex `i` on
+/// interior vertex `j`.
+#[allow(
+    missing_docs,
+    reason = "documented by the struct and the indexing note above"
+)]
+#[derive(Debug, Clone)]
 pub struct BoundaryInterp {
     pub n_boundary: usize,
     pub weights: Vec<f64>,
 }
 
-/// Precomputa los pesos MVC de cada punto interior respecto al polígono de
-/// frontera (cerrado, sin duplicar el punto inicial).
+/// Precomputes mean value coordinates (Floater 2003) for each interior point
+/// against a closed boundary polygon.
+///
+/// Weights are computed once; a shape edit is then just the matrix product in
+/// [`apply`], which is what keeps an edit under the interactive budget.
+///
+/// On strongly concave pieces — deep armholes, necklines — MVC can produce
+/// negative weights and fold triangles over. PMVC (Lipman 2007) is the
+/// documented replacement; the fold-over suite in `toile-cli` measures when it
+/// becomes necessary.
+///
+/// The boundary must be closed and must not repeat its first point.
 pub fn mvc_weights(boundary: &[[f64; 2]], interior: &[[f64; 2]]) -> BoundaryInterp {
     let n = boundary.len();
     let mut weights = vec![0.0f64; interior.len() * n];
 
     for (j, p) in interior.iter().enumerate() {
         let row = &mut weights[j * n..(j + 1) * n];
-        // Distancias y tan(α_i/2) por arista (v_i, v_{i+1}).
         let d: Vec<f64> = boundary
             .iter()
             .map(|v| ((v[0] - p[0]).powi(2) + (v[1] - p[1]).powi(2)).sqrt())
             .collect();
 
-        // Punto pegado a un vértice de frontera: peso delta.
+        // Sitting on a boundary vertex: the general formula divides by zero.
         if let Some(k) = d.iter().position(|&x| x < 1.0e-12) {
             row[k] = 1.0;
             continue;
@@ -68,7 +71,11 @@ pub fn mvc_weights(boundary: &[[f64; 2]], interior: &[[f64; 2]]) -> BoundaryInte
     }
 }
 
-/// Aplica la matriz: interior nuevo = pesos × frontera nueva.
+/// Reprojects the interior from a new boundary: `out = weights × boundary`.
+///
+/// # Panics
+/// If `boundary` is shorter than `interp.n_boundary`, or `out` is shorter than
+/// the number of interior points the weights were built for.
 pub fn apply(interp: &BoundaryInterp, boundary: &[[f64; 2]], out: &mut [[f64; 2]]) {
     let n = interp.n_boundary;
     for (j, o) in out.iter_mut().enumerate() {
@@ -79,5 +86,53 @@ pub fn apply(interp: &BoundaryInterp, boundary: &[[f64; 2]], out: &mut [[f64; 2]
             y += w * v[1];
         }
         *o = [x, y];
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn square() -> Vec<[f64; 2]> {
+        vec![[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
+    }
+
+    #[test]
+    fn every_row_is_a_partition_of_unity() {
+        let interior = vec![[0.5, 0.5], [0.25, 0.75], [0.9, 0.1]];
+        let w = mvc_weights(&square(), &interior);
+        for row in w.weights.chunks(w.n_boundary) {
+            assert!((row.iter().sum::<f64>() - 1.0).abs() < 1.0e-12);
+        }
+    }
+
+    #[test]
+    fn a_point_on_a_boundary_vertex_gets_a_delta_weight() {
+        let w = mvc_weights(&square(), &[[1.0, 0.0]]);
+        assert_eq!(w.weights, vec![0.0, 1.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn an_unchanged_boundary_reproduces_the_interior() {
+        let b = square();
+        let interior = vec![[0.5, 0.5], [0.25, 0.75], [0.9, 0.1]];
+        let w = mvc_weights(&b, &interior);
+        let mut out = vec![[0.0; 2]; interior.len()];
+        apply(&w, &b, &mut out);
+        for (got, want) in out.iter().zip(&interior) {
+            assert!((got[0] - want[0]).abs() < 1.0e-12, "{got:?} vs {want:?}");
+            assert!((got[1] - want[1]).abs() < 1.0e-12, "{got:?} vs {want:?}");
+        }
+    }
+
+    #[test]
+    fn a_uniform_scale_of_the_boundary_scales_the_interior() {
+        let b = square();
+        let w = mvc_weights(&b, &[[0.5, 0.5]]);
+        let scaled: Vec<[f64; 2]> = b.iter().map(|p| [p[0] * 2.0, p[1] * 2.0]).collect();
+        let mut out = [[0.0; 2]];
+        apply(&w, &scaled, &mut out);
+        assert!((out[0][0] - 1.0).abs() < 1.0e-12);
+        assert!((out[0][1] - 1.0).abs() < 1.0e-12);
     }
 }

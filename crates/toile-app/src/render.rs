@@ -1,53 +1,29 @@
-//! Renderer wgpu minimal (ADR §2.6) — módulo de la app, no un motor.
-//!
-//! Render a textura offscreen con depth buffer propio (patrón rerun.io),
-//! registrada en egui como textura nativa: el panel 3D la muestra con
-//! `ui.image`. Un pipeline, dos mallas en un buffer (tela dinámica +
-//! avatar estático), iluminación lambertiana a dos caras.
+mod sphere;
 
 use eframe::egui_wgpu::RenderState;
 use eframe::wgpu;
 
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
+const SHADER: &str = include_str!("render/shader.wgsl");
 
-const SHADER: &str = r#"
-struct Uniforms {
-    mvp: mat4x4<f32>,
-    light: vec4<f32>,
-};
-@group(0) @binding(0) var<uniform> u: Uniforms;
-
-struct VsOut {
-    @builtin(position) clip: vec4<f32>,
-    @location(0) normal: vec3<f32>,
-    @location(1) color: vec3<f32>,
-};
-
-@vertex
-fn vs_main(
-    @location(0) pos: vec3<f32>,
-    @location(1) normal: vec3<f32>,
-    @location(2) color: vec3<f32>,
-) -> VsOut {
-    var out: VsOut;
-    out.clip = u.mvp * vec4<f32>(pos, 1.0);
-    out.normal = normal;
-    out.color = color;
-    return out;
-}
-
-@fragment
-fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
-    let n = normalize(in.normal);
-    let shade = 0.22 + 0.78 * abs(dot(n, u.light.xyz));
-    return vec4<f32>(in.color * shade, 1.0);
-}
-"#;
-
-/// Vértice: posición + normal + color (interleaved, 9 f32).
+/// Position, normal and colour, interleaved.
 const VERTEX_STRIDE: u64 = 9 * 4;
 
+/// Sixteen matrix floats plus a padded light vector.
+const UNIFORM_BYTES: u64 = 80;
+
+const CLEAR: wgpu::Color = wgpu::Color {
+    r: 0.055,
+    g: 0.07,
+    b: 0.065,
+    a: 1.0,
+};
+
+/// Renders the drape to an offscreen texture that egui shows as an image.
+///
+/// One pipeline and two meshes in one pair of buffers: the cloth, re-uploaded
+/// each frame, and the avatar, written once.
 pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     vbuf: wgpu::Buffer,
@@ -63,8 +39,8 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    /// `cloth_tris` indexa los vértices de la tela; el avatar (esfera) se
-    /// genera aquí y vive tras la tela en el mismo par de buffers.
+    /// `cloth_tris` indexes the cloth vertices; the avatar sphere is generated
+    /// here and lives behind the cloth in the same buffers.
     pub fn new(
         rs: &RenderState,
         n_cloth_verts: usize,
@@ -72,80 +48,19 @@ impl Renderer {
         avatar_radius: f32,
     ) -> Self {
         let device = &rs.device;
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("toile"),
-            source: wgpu::ShaderSource::Wgsl(SHADER.into()),
-        });
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: None,
-            bind_group_layouts: &[Some(&bgl)],
-            immediate_size: 0,
-        });
-        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("toile-mesh"),
-            layout: Some(&layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                compilation_options: Default::default(),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: VERTEX_STRIDE,
-                    step_mode: wgpu::VertexStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3],
-                })],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: COLOR_FORMAT,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                cull_mode: None, // tela a dos caras
-                ..Default::default()
-            },
-            depth_stencil: Some(wgpu::DepthStencilState {
-                format: DEPTH_FORMAT,
-                depth_write_enabled: Some(true),
-                depth_compare: Some(wgpu::CompareFunction::Less),
-                stencil: Default::default(),
-                bias: Default::default(),
-            }),
-            multisample: Default::default(),
-            multiview_mask: None,
-            cache: None,
-        });
+        let (pipeline, bgl) = build_pipeline(device);
 
-        // Avatar: esfera UV estática, gris, apenas bajo el radio real para
-        // no pelear el z-buffer con la tela apoyada.
-        let (sphere_verts, sphere_idx) = uv_sphere(avatar_radius * 0.995, 40, 20);
+        // Just inside the real radius, so the avatar does not fight the cloth
+        // resting on it for the depth buffer.
+        let (sphere_verts, sphere_idx) = sphere::uv_sphere(avatar_radius * 0.995, 40, 20);
         let n_sphere_verts = sphere_verts.len() / 9;
 
-        let total_verts = n_cloth_verts + n_sphere_verts;
         let vbuf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("toile-vbuf"),
-            size: total_verts as u64 * VERTEX_STRIDE,
+            size: (n_cloth_verts + n_sphere_verts) as u64 * VERTEX_STRIDE,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        // La sección del avatar se escribe una sola vez.
         rs.queue.write_buffer(
             &vbuf,
             n_cloth_verts as u64 * VERTEX_STRIDE,
@@ -165,7 +80,7 @@ impl Renderer {
 
         let ubuf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("toile-ubuf"),
-            size: 80,
+            size: UNIFORM_BYTES,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -218,9 +133,9 @@ impl Renderer {
             COLOR_FORMAT,
             wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
         );
-        let color_view = color.create_view(&Default::default());
+        let color_view = color.create_view(&wgpu::TextureViewDescriptor::default());
         let depth = make(DEPTH_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT);
-        self.depth = Some(depth.create_view(&Default::default()));
+        self.depth = Some(depth.create_view(&wgpu::TextureViewDescriptor::default()));
 
         let mut renderer = rs.renderer.write();
         if let Some(old) = self.texture_id.take() {
@@ -232,8 +147,11 @@ impl Renderer {
         self.size = (w, h);
     }
 
-    /// Sube la tela del frame (pos+normal+color intercalados) y dibuja la
-    /// escena a la textura offscreen.
+    /// Uploads this frame's cloth and draws the scene to the offscreen texture.
+    ///
+    /// # Panics
+    /// If called before [`Renderer::new`] has established the targets, or if
+    /// `cloth_vertices` does not match the vertex count it was built with.
     pub fn paint(
         &mut self,
         rs: &RenderState,
@@ -249,8 +167,8 @@ impl Renderer {
         rs.queue
             .write_buffer(&self.ubuf, 0, bytemuck::cast_slice(uniforms));
 
-        let (_, color_view) = self.color.as_ref().unwrap();
-        let depth_view = self.depth.as_ref().unwrap();
+        let (_, color_view) = self.color.as_ref().expect("targets created above");
+        let depth_view = self.depth.as_ref().expect("targets created above");
         let mut encoder = rs
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -264,12 +182,7 @@ impl Renderer {
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.055,
-                            g: 0.07,
-                            b: 0.065,
-                            a: 1.0,
-                        }),
+                        load: wgpu::LoadOp::Clear(CLEAR),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -295,29 +208,66 @@ impl Renderer {
     }
 }
 
-/// Esfera UV con normales, como vértices intercalados pos+normal+color.
-fn uv_sphere(r: f32, seg: u32, rings: u32) -> (Vec<f32>, Vec<u32>) {
-    let color = [0.30f32, 0.33, 0.32];
-    let mut v = Vec::new();
-    for j in 0..=rings {
-        let phi = std::f32::consts::PI * j as f32 / rings as f32;
-        let (sp, cp) = phi.sin_cos();
-        for i in 0..=seg {
-            let theta = std::f32::consts::TAU * i as f32 / seg as f32;
-            let (st, ct) = theta.sin_cos();
-            let n = [sp * ct, cp, sp * st];
-            v.extend_from_slice(&[r * n[0], r * n[1], r * n[2], n[0], n[1], n[2]]);
-            v.extend_from_slice(&color);
-        }
-    }
-    let mut idx = Vec::new();
-    let stride = seg + 1;
-    for j in 0..rings {
-        for i in 0..seg {
-            let a = j * stride + i;
-            let b = a + stride;
-            idx.extend_from_slice(&[a, b, a + 1, a + 1, b, b + 1]);
-        }
-    }
-    (v, idx)
+fn build_pipeline(device: &wgpu::Device) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("toile"),
+        source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+    });
+    let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: None,
+            },
+            count: None,
+        }],
+    });
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
+        bind_group_layouts: &[Some(&bgl)],
+        immediate_size: 0,
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("toile-mesh"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module: &shader,
+            entry_point: Some("vs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            buffers: &[Some(wgpu::VertexBufferLayout {
+                array_stride: VERTEX_STRIDE,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3],
+            })],
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader,
+            entry_point: Some("fs_main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: COLOR_FORMAT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
+        primitive: wgpu::PrimitiveState {
+            cull_mode: None, // cloth is two-sided
+            ..wgpu::PrimitiveState::default()
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+    (pipeline, bgl)
 }

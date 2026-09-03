@@ -1,9 +1,7 @@
-//! Geometría 2D pura y determinista (sobre kurbo).
+//! Pure, deterministic 2D geometry.
 //!
-//! Arclength, nearest-point, muestreo por fracciones de longitud de arco,
-//! simetrías. Sin estado, sin hilos: funciones puras que el resto del
-//! workspace puede testear con goldens.
-//!
-//! Ver `docs/architecture.html` §2.7.
+//! Every function is total and side-effect free: same inputs, same bits, on
+//! every platform. The drape goldens rest on that.
 
+/// Sampling a contour by arc length.
 pub mod sample;

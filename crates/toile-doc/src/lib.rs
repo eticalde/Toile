@@ -1,10 +1,7 @@
-//! Documento 2D — la fuente de verdad de Toile.
+//! The 2D pattern document: Toile's single source of truth.
 //!
-//! Entidades (Pieza, PuntoDeControl, Piquete, Costura, Simetría, Pin) en
-//! structs planos con keys generacionales estables que nunca se reciclan.
-//! Mutación exclusivamente por comandos reversibles (apply/invert) con
-//! coalescing por gesto. Serialización JSON canónica y diffable.
-//!
-//! Ver `docs/architecture.html` §2.1.
+//! Every mutation goes through a reversible command, so undo is a property of
+//! the model rather than a feature layered on top of it.
 
+/// Document entities and the commands that mutate them.
 pub mod model;

@@ -7,3 +7,32 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/eticalde/Toile"
+
+[workspace.lints.rust]
+missing_docs = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+# priority = -1 so the individual allows below win over the group.
+pedantic = { level = "warn", priority = -1 }
+
+# Numeric code: indexing and narrowing casts are the idiom here, not a smell.
+cast_possible_truncation = "allow"
+cast_precision_loss = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+indexing_slicing = "allow"
+many_single_char_names = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+
+# One SAFETY comment covers a whole phase of identical indexed writes here;
+# splitting a nine-deref expression into nine blocks would document less.
+multiple_unsafe_ops_per_block = "allow"
+# Deliberate on the tiny accessors inside the solver's hot loop.
+inline_always = "allow"
+
+# The rules this project actually wants enforced.
+too_long_first_doc_paragraph = "warn"
+too_many_lines = "warn"
+undocumented_unsafe_blocks = "warn"

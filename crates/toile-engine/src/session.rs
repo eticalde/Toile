@@ -1,47 +1,44 @@
-//! Sesión de alto nivel — la API que consumen los clientes (app, CLI).
-//!
-//! `toile-app` solo puede importar `toile-engine` (regla dura del ADR
-//! §2.6): todo lo que la UI necesita pasa por aquí, sin exponer tipos del
-//! solver. v0: una pieza demo drapeando sobre el avatar esfera, con
-//! edición de contorno en vivo (vía A → hot-swap de rest state).
-
-use crate::couture::{ShapePipeline, demo_bodice_contour};
-use crate::sync::{self, SimHandle, Snapshot};
 use std::sync::Arc;
-use toile_sim::xpbd::{SdfGrid, State};
+use std::time::Instant;
 
+use crate::couture::ShapePipeline;
+use crate::demo;
+use crate::sync::{self, SimHandle, Snapshot};
+
+/// Simulated seconds per substep.
+const DT: f32 = 1.0 / 600.0;
+
+/// Substeps per published frame.
+const SUBSTEPS_PER_TICK: u32 = 10;
+
+/// A live editing session: one piece, draping, edited in place.
+///
+/// This is the whole surface a client gets. No solver type crosses it, which
+/// is what lets the desktop app depend on the engine alone.
 pub struct Session {
     pipeline: ShapePipeline,
     contour: Vec<[f64; 2]>,
     handle: SimHandle,
     generation: u64,
-    /// Duración de la última derivación (vía A), para el HUD.
+    /// How long the last recompile took, for the status bar.
     pub last_derive_ms: f64,
 }
 
 impl Session {
-    /// Pieza demo (delantero de corpiño) drapeando sobre la esfera, con la
-    /// sim corriendo en su hilo a paso fijo anclado a reloj.
+    /// The demo bodice, draping over the avatar on its own thread.
     pub fn demo_bodice() -> Session {
-        let contour = demo_bodice_contour();
-        let pipeline = ShapePipeline::build(&contour, 256, 2.0e-5);
-        let n = pipeline.pos2d.len();
-        let (mut cx, mut cy) = (0.0, 0.0);
-        for p in &pipeline.pos2d {
-            cx += p[0];
-            cy += p[1];
-        }
-        cx /= n as f64;
-        cy /= n as f64;
-        let mut state = State::new(n);
-        for i in 0..n {
-            state.px[i] = (pipeline.pos2d[i][0] - cx) as f32;
-            state.py[i] = 0.35;
-            state.pz[i] = (pipeline.pos2d[i][1] - cy) as f32;
-        }
+        let contour = demo::bodice_contour();
+        let pipeline = demo::pipeline(&contour);
+        let state = demo::drop_state(&pipeline);
         let cons = pipeline.constraints(1.0e-8);
-        let sdf = SdfGrid::sphere(256, 1.4 / 255.0, [-0.7, -0.7, -0.7], [0.0, 0.0, 0.0], 0.15);
-        let handle = sync::spawn(state, cons, sdf, pipeline.tris.clone(), 1.0 / 600.0, 10);
+        let handle = sync::spawn(
+            state,
+            cons,
+            demo::avatar_sdf(),
+            pipeline.tris.clone(),
+            DT,
+            SUBSTEPS_PER_TICK,
+        );
         Session {
             pipeline,
             contour,
@@ -51,45 +48,44 @@ impl Session {
         }
     }
 
-    /// Contorno de control de la pieza (metros, espacio del patrón).
+    /// The piece's control contour, in metres of pattern space.
     pub fn contour(&self) -> &[[f64; 2]] {
         &self.contour
     }
 
-    /// Triángulos de la malla (índices sobre las posiciones del snapshot).
+    /// Mesh triangles, indexing the snapshot's positions.
     pub fn triangles(&self) -> &[u32] {
         &self.pipeline.tris
     }
 
-    /// Último snapshot publicado por el hilo de sim (posiciones xyz
-    /// intercaladas; vacío hasta el primer tick).
+    /// Mesh vertex count, for sizing render buffers.
+    pub fn n_vertices(&self) -> usize {
+        self.pipeline.pos2d.len()
+    }
+
+    /// Radius of the sphere standing in for the avatar.
+    pub fn avatar_radius(&self) -> f32 {
+        demo::AVATAR_RADIUS
+    }
+
+    /// The latest snapshot from the sim thread; empty until the first tick.
     pub fn snapshot(&self) -> Arc<Snapshot> {
         self.handle.snapshot()
     }
 
-    /// Vía A en vivo: mueve un punto de control, recompila el estado de
-    /// reposo y lo manda al solver residente. No resetea nada.
+    /// Moves a control point and hot-swaps the resulting rest state.
+    ///
+    /// Out-of-range indices are ignored. Nothing is reset: the drape carries
+    /// on from where it was.
     pub fn move_point(&mut self, index: usize, to: [f64; 2]) {
         if index >= self.contour.len() {
             return;
         }
         self.contour[index] = to;
-        let t = std::time::Instant::now();
+        let t = Instant::now();
         let rests = self.pipeline.derive(&self.contour).to_vec();
         self.last_derive_ms = t.elapsed().as_secs_f64() * 1000.0;
         self.generation += 1;
         self.handle.send_rests(self.generation, rests);
-    }
-
-    /// Radio del avatar esfera (para dibujarlo en el viewport).
-    pub fn avatar_radius(&self) -> f32 {
-        0.15
-    }
-}
-
-impl Session {
-    /// Cantidad de vértices de la malla (dimensiona buffers de render).
-    pub fn n_vertices(&self) -> usize {
-        self.pipeline.pos2d.len()
     }
 }
