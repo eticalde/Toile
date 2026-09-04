@@ -1,63 +1,64 @@
 use eframe::egui;
 use toile_engine::session::Session;
 
+use crate::theme::Theme;
+use crate::widgets;
+
 /// Pixel radius within which a click grabs a control point.
 const GRAB_RADIUS: f32 = 14.0;
 
 /// Margin between the pattern's bounding box and the panel edge, in points.
 const MARGIN: f64 = 40.0;
 
-const BACKGROUND: egui::Color32 = egui::Color32::from_rgb(24, 26, 30);
-const OUTLINE: egui::Color32 = egui::Color32::from_rgb(210, 210, 200);
-const POINT: egui::Color32 = egui::Color32::from_rgb(95, 140, 235);
-const POINT_ACTIVE: egui::Color32 = egui::Color32::from_rgb(235, 90, 80);
-const LABEL: egui::Color32 = egui::Color32::from_rgb(140, 145, 150);
-
 /// Draws the 2D pattern and applies drags straight to the session.
 ///
 /// Every drag frame recompiles the rest state, so the 3D panel is already
 /// showing the edit by the time the pointer moves again.
-pub fn show(ui: &mut egui::Ui, size: egui::Vec2, session: &mut Session, drag: &mut Option<usize>) {
-    let (resp, painter) = ui.allocate_painter(size, egui::Sense::click_and_drag());
+pub fn show(
+    ui: &mut egui::Ui,
+    size: egui::Vec2,
+    theme: &Theme,
+    session: &mut Session,
+    drag: &mut Option<(usize, egui::Vec2)>,
+) {
+    let (resp, painter) = widgets::mat_canvas(ui, theme, size);
     let rect = resp.rect;
-    painter.rect_filled(rect, 0.0, BACKGROUND);
 
     let contour: Vec<[f64; 2]> = session.contour().to_vec();
     let view = View::fit(&contour, rect);
     let pts: Vec<egui::Pos2> = contour.iter().map(|&p| view.to_screen(p)).collect();
     painter.add(egui::Shape::closed_line(
         pts.clone(),
-        egui::Stroke::new(1.6, OUTLINE),
+        egui::Stroke::new(1.6, theme.outline),
     ));
 
     if resp.drag_started()
         && let Some(pos) = resp.interact_pointer_pos()
     {
-        *drag = nearest(&pts, pos);
+        *drag = nearest(&pts, pos).map(|i| (i, pts[i] - pos));
     }
     if resp.drag_stopped() {
         *drag = None;
     }
-    if let Some(i) = *drag
+    if let Some((i, offset)) = *drag
         && let Some(pos) = resp.interact_pointer_pos()
     {
-        session.move_point(i, view.to_pattern(pos));
+        session.move_point(i, view.to_pattern(pos + offset));
     }
 
     for (i, q) in pts.iter().enumerate() {
-        let (r, color) = if *drag == Some(i) {
-            (5.0, POINT_ACTIVE)
+        let (r, color) = if drag.is_some_and(|(j, _)| j == i) {
+            (5.0, theme.alert)
         } else {
-            (2.4, POINT)
+            (2.4, theme.accent)
         };
         painter.circle_filled(*q, r, color);
     }
-    painter.text(
-        rect.left_top() + egui::vec2(10.0, 8.0),
-        egui::Align2::LEFT_TOP,
-        "PATRÓN 2D — arrastra un punto",
-        egui::FontId::monospace(11.0),
-        LABEL,
+    widgets::canvas_label(
+        &painter,
+        theme,
+        rect,
+        "PATRÓN 2D — arrastra un punto · las costuras en azul",
     );
 }
 

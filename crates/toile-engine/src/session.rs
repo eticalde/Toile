@@ -73,6 +73,16 @@ impl Session {
         self.handle.snapshot()
     }
 
+    /// True when the sim has slept on the latest edit: nothing left to
+    /// animate.
+    ///
+    /// The published frame's own verdict is not enough: it may have been
+    /// captured before the last edit reached the sim thread.
+    pub fn settled(&self) -> bool {
+        let snap = self.handle.snapshot();
+        snap.converged && snap.generation == self.generation
+    }
+
     /// Moves a control point and hot-swaps the resulting rest state.
     ///
     /// Out-of-range indices are ignored. Nothing is reset: the drape carries

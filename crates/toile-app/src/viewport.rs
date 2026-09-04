@@ -4,10 +4,10 @@ use toile_engine::sync::Snapshot;
 
 use crate::camera::{Camera, norm3};
 use crate::render;
+use crate::theme::Theme;
+use crate::widgets::canvas_label;
 
-const CLOTH_COLOR: [f32; 3] = [0.86, 0.52, 0.37];
 const LIGHT_DIR: [f32; 3] = [0.35, 0.8, 0.45];
-const LABEL: egui::Color32 = egui::Color32::from_rgb(140, 145, 150);
 
 /// Floats per vertex in the renderer's buffer: position, normal, colour.
 const VERTEX_FLOATS: usize = 9;
@@ -17,18 +17,33 @@ pub struct Viewport {
     renderer: render::Renderer,
     camera: Camera,
     vertices: Vec<f32>,
+    cloth: [f32; 3],
 }
 
 impl Viewport {
-    pub fn new(rs: &RenderState, n_verts: usize, tris: &[u32], avatar_radius: f32) -> Self {
+    pub fn new(
+        rs: &RenderState,
+        theme: &Theme,
+        n_verts: usize,
+        tris: &[u32],
+        avatar_radius: f32,
+    ) -> Self {
         Self {
-            renderer: render::Renderer::new(rs, n_verts, tris, avatar_radius),
+            renderer: render::Renderer::new(rs, theme, n_verts, tris, avatar_radius),
             camera: Camera::default(),
             vertices: vec![0.0; n_verts * VERTEX_FLOATS],
+            cloth: theme.cloth,
         }
     }
 
-    pub fn show(&mut self, ui: &mut egui::Ui, size: egui::Vec2, rs: &RenderState, snap: &Snapshot) {
+    pub fn show(
+        &mut self,
+        ui: &mut egui::Ui,
+        size: egui::Vec2,
+        rs: &RenderState,
+        theme: &Theme,
+        snap: &Snapshot,
+    ) {
         if !snap.positions.is_empty() {
             self.upload(snap);
             let ppp = ui.ctx().pixels_per_point();
@@ -56,12 +71,11 @@ impl Viewport {
                 self.camera.zoom(scroll);
             }
         }
-        ui.painter().text(
-            resp.rect.left_top() + egui::vec2(10.0, 8.0),
-            egui::Align2::LEFT_TOP,
+        canvas_label(
+            ui.painter(),
+            theme,
+            resp.rect,
             "3D — arrastra para orbitar · rueda para zoom",
-            egui::FontId::monospace(11.0),
-            LABEL,
         );
     }
 
@@ -73,7 +87,7 @@ impl Viewport {
             let dst = &mut self.vertices[i * VERTEX_FLOATS..(i + 1) * VERTEX_FLOATS];
             dst[..3].copy_from_slice(&snap.positions[i * 3..i * 3 + 3]);
             dst[3..6].copy_from_slice(&snap.normals[i * 3..i * 3 + 3]);
-            dst[6..9].copy_from_slice(&CLOTH_COLOR);
+            dst[6..9].copy_from_slice(&self.cloth);
         }
     }
 

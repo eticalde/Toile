@@ -3,6 +3,8 @@ mod sphere;
 use eframe::egui_wgpu::RenderState;
 use eframe::wgpu;
 
+use crate::theme::Theme;
+
 const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const SHADER: &str = include_str!("render/shader.wgsl");
@@ -12,13 +14,6 @@ const VERTEX_STRIDE: u64 = 9 * 4;
 
 /// Sixteen matrix floats plus a padded light vector.
 const UNIFORM_BYTES: u64 = 80;
-
-const CLEAR: wgpu::Color = wgpu::Color {
-    r: 0.055,
-    g: 0.07,
-    b: 0.065,
-    a: 1.0,
-};
 
 /// Renders the drape to an offscreen texture that egui shows as an image.
 ///
@@ -34,6 +29,7 @@ pub struct Renderer {
     depth: Option<wgpu::TextureView>,
     pub texture_id: Option<eframe::egui::TextureId>,
     size: (u32, u32),
+    clear: wgpu::Color,
     n_cloth_verts: usize,
     n_indices: u32,
 }
@@ -43,6 +39,7 @@ impl Renderer {
     /// here and lives behind the cloth in the same buffers.
     pub fn new(
         rs: &RenderState,
+        theme: &Theme,
         n_cloth_verts: usize,
         cloth_tris: &[u32],
         avatar_radius: f32,
@@ -52,7 +49,8 @@ impl Renderer {
 
         // Just inside the real radius, so the avatar does not fight the cloth
         // resting on it for the depth buffer.
-        let (sphere_verts, sphere_idx) = sphere::uv_sphere(avatar_radius * 0.995, 40, 20);
+        let (sphere_verts, sphere_idx) =
+            sphere::uv_sphere(avatar_radius * 0.995, 40, 20, theme.avatar);
         let n_sphere_verts = sphere_verts.len() / 9;
 
         let vbuf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -103,6 +101,7 @@ impl Renderer {
             depth: None,
             texture_id: None,
             size: (0, 0),
+            clear: theme.clear_color(),
             n_cloth_verts,
             n_indices: indices.len() as u32,
         }
@@ -182,7 +181,7 @@ impl Renderer {
                     resolve_target: None,
                     depth_slice: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(CLEAR),
+                        load: wgpu::LoadOp::Clear(self.clear),
                         store: wgpu::StoreOp::Store,
                     },
                 })],

@@ -5,9 +5,9 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 
-# Regla arquitectónica dura: toile-app solo importa toile-engine.
-# Nunca agregar toile-sim / toile-mesh / toile-doc aquí — todo pasa por la
-# API headless del engine (docs/architecture.html §2.6).
+# Hard architectural rule: toile-app imports toile-engine only. Never add
+# toile-sim / toile-mesh / toile-doc here — everything goes through the
+# engine's headless API.
 [dependencies]
 bytemuck = "1"
 eframe = { version = "0.36.1", features = ["wgpu"] }

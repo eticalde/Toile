@@ -1,6 +1,5 @@
 /// A UV sphere as interleaved position, normal and colour.
-pub fn uv_sphere(r: f32, seg: u32, rings: u32) -> (Vec<f32>, Vec<u32>) {
-    const COLOR: [f32; 3] = [0.30, 0.33, 0.32];
+pub fn uv_sphere(r: f32, seg: u32, rings: u32, color: [f32; 3]) -> (Vec<f32>, Vec<u32>) {
     let mut v = Vec::new();
     for j in 0..=rings {
         let phi = std::f32::consts::PI * j as f32 / rings as f32;
@@ -10,7 +9,7 @@ pub fn uv_sphere(r: f32, seg: u32, rings: u32) -> (Vec<f32>, Vec<u32>) {
             let (st, ct) = theta.sin_cos();
             let n = [sp * ct, cp, sp * st];
             v.extend_from_slice(&[r * n[0], r * n[1], r * n[2], n[0], n[1], n[2]]);
-            v.extend_from_slice(&COLOR);
+            v.extend_from_slice(&color);
         }
     }
     let mut idx = Vec::new();
