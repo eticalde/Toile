@@ -10,16 +10,13 @@ pub fn uniform_fractions(n: usize) -> Vec<f64> {
 /// survives a shape edit and the solver can warm-start from it.
 ///
 /// `fractions` must be sorted ascending; the scan advances monotonically.
+///
+/// The arc-length table comes from `length::cumulative`, so a measurement a
+/// person reads and the mesh they see are built on the same sum.
 pub fn sample_closed(contour: &[[f64; 2]], fractions: &[f64]) -> Vec<[f64; 2]> {
     let n = contour.len();
-    let mut cum = Vec::with_capacity(n + 1);
-    let mut total = 0.0;
-    cum.push(0.0);
-    for i in 0..n {
-        let (a, b) = (contour[i], contour[(i + 1) % n]);
-        total += ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
-        cum.push(total);
-    }
+    let cum = crate::length::cumulative(contour);
+    let total = cum[n];
 
     let mut out = Vec::with_capacity(fractions.len());
     let mut seg = 0usize;
@@ -70,6 +67,47 @@ mod tests {
     fn sample_count_matches_fraction_count() {
         let f = uniform_fractions(37);
         assert_eq!(sample_closed(&square(), &f).len(), 37);
+    }
+
+    /// The five-node contour the bit table below was taken from.
+    fn awkward() -> Vec<[f64; 2]> {
+        vec![
+            [0.0, 0.0],
+            [0.37, 0.11],
+            [0.53, 0.61],
+            [0.19, 0.83],
+            [-0.07, 0.42],
+        ]
+    }
+
+    /// Every bit the sampler produced before the arc-length table was shared
+    /// with `length::cumulative`.
+    ///
+    /// The drape golden rests on this function: a rounding difference here
+    /// moves every rest length in the piece.
+    #[test]
+    fn sample_closed_is_unchanged_by_the_shared_cumulative() {
+        let expected: [[u64; 2]; 7] = [
+            [0x0000_0000_0000_0000, 0x0000_0000_0000_0000],
+            [0x3fd3_84d9_48ec_a3c3, 0x3fb7_3632_d342_ec42],
+            [0x3fdc_902c_d2c8_cb38, 0x3fd6_4cc9_8357_521a],
+            [0x3fdf_9481_79eb_a290, 0x3fe4_46eb_3166_f714],
+            [0x3fcc_f7a7_c022_85ae, 0x3fe9_cee7_1f69_d9cf],
+            [0x3fa5_e50e_b284_eddc, 0x3fe3_2155_1126_c01c],
+            [0xbfaa_c817_f8fa_2b38, 0x3fd4_1611_fabb_a069],
+        ];
+        let got = sample_closed(&awkward(), &uniform_fractions(7));
+        let bits: Vec<[u64; 2]> = got
+            .iter()
+            .map(|p| [p[0].to_bits(), p[1].to_bits()])
+            .collect();
+        assert_eq!(bits, expected);
+    }
+
+    #[test]
+    fn a_whole_turn_lands_back_on_the_first_node() {
+        let got = sample_closed(&square(), &[1.0]);
+        assert_eq!(got, vec![[0.0, 0.0]]);
     }
 
     #[test]

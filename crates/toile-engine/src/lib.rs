@@ -7,6 +7,8 @@
 pub mod couture;
 /// The shared demo scene, used by goldens, benchmarks and the app.
 pub mod demo;
+/// The document resolved into geometry, and the door the interface uses.
+pub mod draft;
 /// The determinism golden.
 pub mod golden;
 /// The client-facing editing session.

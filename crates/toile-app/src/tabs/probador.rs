@@ -27,7 +27,7 @@ const SEAMS: [(&str, &str, &str, bool); 5] = [
 const MISMATCH: &str = "tiro: los largos difieren 2.5 cm";
 const NOTE: &str = "Editar un punto en 2D re-drapea sin resetear la simulación.";
 
-/// The only tab that carries state of its own: a GPU viewport and a drag.
+/// The tab's own state: a GPU viewport and the drag in progress.
 pub struct State {
     rs: RenderState,
     viewport: Viewport,

@@ -1,6 +1,6 @@
 use toile_sim::xpbd::{SdfGrid, State};
 
-use crate::couture::ShapePipeline;
+use crate::couture::{self, ShapePipeline};
 
 /// Boundary samples taken around the demo contour.
 const SAMPLES: usize = 256;
@@ -10,9 +10,6 @@ const MAX_AREA: f64 = 2.0e-5;
 
 /// Radius of the sphere standing in for the avatar, in metres.
 pub const AVATAR_RADIUS: f32 = 0.15;
-
-/// Height the cloth is released from, in metres.
-const DROP_HEIGHT: f32 = 0.35;
 
 /// A front bodice panel with a concave armhole and neckline.
 ///
@@ -50,28 +47,19 @@ pub fn bodice_contour() -> Vec<[f64; 2]> {
 pub const SHOULDER_POINT: usize = 68;
 
 /// Meshes a contour at the demo's sampling density.
+///
+/// The two constants are the scene the goldens hash, so this stays a literal
+/// density rather than one derived from the contour.
+///
+/// # Panics
+/// If the contour is not finite, which this module's own contour is.
 pub fn pipeline(contour: &[[f64; 2]]) -> ShapePipeline {
-    ShapePipeline::build(contour, SAMPLES, MAX_AREA)
+    ShapePipeline::build(contour, SAMPLES, MAX_AREA).expect("the demo contour is finite")
 }
 
 /// Seeds the solver: the piece centred over the avatar and released flat.
 pub fn drop_state(pipeline: &ShapePipeline) -> State {
-    let n = pipeline.pos2d.len();
-    let (mut cx, mut cy) = (0.0, 0.0);
-    for p in &pipeline.pos2d {
-        cx += p[0];
-        cy += p[1];
-    }
-    cx /= n as f64;
-    cy /= n as f64;
-
-    let mut state = State::new(n);
-    for i in 0..n {
-        state.px[i] = (pipeline.pos2d[i][0] - cx) as f32;
-        state.py[i] = DROP_HEIGHT;
-        state.pz[i] = (pipeline.pos2d[i][1] - cy) as f32;
-    }
-    state
+    couture::drop_state(pipeline, couture::DROP_HEIGHT)
 }
 
 /// The avatar's collision field.
@@ -83,4 +71,25 @@ pub fn avatar_sdf() -> SdfGrid {
         [0.0, 0.0, 0.0],
         AVATAR_RADIUS,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use toile_sim::xpbd;
+
+    use super::*;
+
+    /// Every bit the seeding produced before it moved out of this module.
+    ///
+    /// The drape golden starts from this state, so a rounding difference here
+    /// is a different drape. A cheap rectangle stands in for the bodice: what
+    /// is under test is the arithmetic, not the scene.
+    #[test]
+    fn drop_state_is_unchanged_by_the_move_into_couture() {
+        let rectangle = [[0.0, 0.0], [0.30, 0.0], [0.30, 0.20], [0.0, 0.20]];
+        let pipe = ShapePipeline::build(&rectangle, 16, 0.01).expect("the rectangle is finite");
+        let state = drop_state(&pipe);
+        assert_eq!(state.px.len(), 21);
+        assert_eq!(xpbd::position_hash(&state), 0xc30d_7f61_e15f_378c);
+    }
 }

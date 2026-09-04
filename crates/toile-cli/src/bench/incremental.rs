@@ -1,6 +1,7 @@
+use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
-use toile_doc::model::{Command, Doc, Piece};
+use toile_doc::{Binding, Command, Doc, MeasureSet, Piece, PieceKey, Point, PointKey, Winding};
 use toile_engine::{demo, sync};
 use toile_sim::xpbd::{self, Seams};
 
@@ -14,6 +15,50 @@ const AMPLITUDE: f64 = 0.03;
 
 /// Substeps of initial drape before the storm starts.
 const DRAPE_SUBSTEPS: usize = 600;
+
+/// Centimetres per metre: the document is in centimetres and the solver is
+/// in metres, and this bench crosses that line the same way the editor does.
+const CM: f64 = 100.0;
+
+/// The document the storm edits: the demo bodice, one literal point per node.
+fn bodice_doc() -> (Doc, PieceKey, Vec<PointKey>) {
+    let mut doc = Doc::new(MeasureSet::default());
+    let points: Vec<PointKey> = demo::bodice_contour()
+        .into_iter()
+        .map(|[x, y]| doc.points.insert(Point::at(x * CM, y * CM)))
+        .collect();
+    let piece = doc
+        .pieces
+        .insert(Piece::polygon("Corpiño", points.clone(), Winding::Ccw));
+    (doc, piece, points)
+}
+
+/// The piece resolved into the metres the pipeline consumes.
+fn outline(doc: &Doc, piece: PieceKey) -> Vec<[f64; 2]> {
+    let env = BTreeMap::new();
+    let held = doc
+        .pieces
+        .get(piece)
+        .expect("the bench holds its own piece");
+    held.anchors()
+        .map(|key| {
+            let point = doc.points.get(key).expect("the contour cites live points");
+            let read =
+                |binding: &Binding| binding.eval(&env).expect("the bench binds literals only") / CM;
+            [read(&point.x), read(&point.y)]
+        })
+        .collect()
+}
+
+/// Moves one node of the piece, in metres, through the command path.
+fn move_node(doc: &mut Doc, point: PointKey, to: [f64; 2]) {
+    Command::MovePoint {
+        point,
+        to: [Binding::literal(to[0] * CM), Binding::literal(to[1] * CM)],
+    }
+    .apply(doc)
+    .expect("the storm moves a live point");
+}
 
 /// Where the shoulder point sits on frame `f` of the storm.
 fn storm_point(base: [f64; 2], f: u32) -> [f64; 2] {
@@ -36,14 +81,11 @@ struct Storm {
 /// are the pipeline's own cost with no scheduling noise.
 fn storm() -> Storm {
     let no_seams = Seams::default();
-    let mut doc = Doc {
-        pieces: vec![Piece {
-            contour: demo::bodice_contour(),
-        }],
-    };
+    let (mut doc, piece, points) = bodice_doc();
+    let mut contour = outline(&doc, piece);
 
     let t0 = Instant::now();
-    let mut pipe = demo::pipeline(&doc.pieces[0].contour);
+    let mut pipe = demo::pipeline(&contour);
     let build_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
     let mut state = demo::drop_state(&pipe);
@@ -53,17 +95,15 @@ fn storm() -> Storm {
         xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
     }
 
-    let base = doc.pieces[0].contour[demo::SHOULDER_POINT];
+    let base = contour[demo::SHOULDER_POINT];
     let mut derive_ms = Vec::with_capacity(FRAMES as usize);
     for f in 0..FRAMES {
-        Command::MovePoint {
-            piece: 0,
-            point: demo::SHOULDER_POINT,
-            to: storm_point(base, f),
-        }
-        .apply(&mut doc);
+        move_node(&mut doc, points[demo::SHOULDER_POINT], storm_point(base, f));
+        contour = outline(&doc, piece);
         let t0 = Instant::now();
-        let rests = pipe.derive(&doc.pieces[0].contour);
+        let rests = pipe
+            .derive(&contour)
+            .expect("the storm moves a point, never the node count");
         cons.rest.copy_from_slice(rests);
         derive_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
         for _ in 0..10 {
@@ -113,12 +153,9 @@ pub fn run_sync() {
 /// The asynchronous path: the real sim thread, the real mailbox, and a storm
 /// paced against the wall clock — which is what a user actually feels.
 pub fn run_async() {
-    let mut doc = Doc {
-        pieces: vec![Piece {
-            contour: demo::bodice_contour(),
-        }],
-    };
-    let mut pipe = demo::pipeline(&doc.pieces[0].contour);
+    let (mut doc, piece, points) = bodice_doc();
+    let mut contour = outline(&doc, piece);
+    let mut pipe = demo::pipeline(&contour);
     let n = pipe.pos2d.len();
     let cons = pipe.constraints(1.0e-8);
     let n_edges = cons.len();
@@ -135,21 +172,20 @@ pub fn run_async() {
     wait_for_sleep(&handle);
     let initial = t0.elapsed().as_secs_f64();
 
-    let base = doc.pieces[0].contour[demo::SHOULDER_POINT];
+    let base = contour[demo::SHOULDER_POINT];
     let frame_dur = Duration::from_micros(16_667);
     let mut latency_ms = Vec::with_capacity(FRAMES as usize);
     let mut derive_ms = Vec::with_capacity(FRAMES as usize);
     for f in 0..FRAMES {
         let frame_start = Instant::now();
-        Command::MovePoint {
-            piece: 0,
-            point: demo::SHOULDER_POINT,
-            to: storm_point(base, f),
-        }
-        .apply(&mut doc);
+        move_node(&mut doc, points[demo::SHOULDER_POINT], storm_point(base, f));
+        contour = outline(&doc, piece);
 
         let td = Instant::now();
-        let rests = pipe.derive(&doc.pieces[0].contour).to_vec();
+        let rests = pipe
+            .derive(&contour)
+            .expect("the storm moves a point, never the node count")
+            .to_vec();
         derive_ms.push(td.elapsed().as_secs_f64() * 1000.0);
 
         let generation = u64::from(f) + 1;

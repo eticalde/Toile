@@ -1,6 +1,25 @@
+use thiserror::Error;
 use toile_geom::sample;
+use toile_mesh::cdt::MeshError;
 use toile_mesh::{cdt, interp};
 use toile_sim::xpbd::DistanceConstraints;
+
+/// What stops an edited contour from becoming a rest state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum RestStateError {
+    /// A contour of a different length than the one the mesh was built from.
+    ///
+    /// Sampling by fraction would happily accept it and quietly corrupt the
+    /// warm start, so a change of node count is refused here instead: it is a
+    /// change of topology and belongs on the re-meshing path.
+    #[error("the contour has {got} nodes, but the mesh was built from {expected}")]
+    PointCount {
+        /// What `build` saw.
+        expected: usize,
+        /// What `derive` was handed.
+        got: usize,
+    },
+}
 
 /// Where a mesh vertex sits relative to the contour.
 enum VertexRole {
@@ -19,6 +38,7 @@ enum VertexRole {
 /// interpolation matrix, recompute rest lengths. The solver only ever sees
 /// changed numbers, never a changed mesh, so it warm-starts from the drape it
 /// already had.
+#[derive(Debug)]
 pub struct ShapePipeline {
     /// Sorted arc fractions of the boundary vertices; `boundary_verts[k]` sits
     /// at `boundary_fracs[k]`.
@@ -34,15 +54,25 @@ pub struct ShapePipeline {
     pub tris: Vec<u32>,
     /// Rest length per edge, in the order of `edges`.
     rests: Vec<f32>,
+    /// How many points the contour `build` saw had.
+    contour_len: usize,
 }
 
 impl ShapePipeline {
     /// Meshes a contour and precomputes its interpolation matrix. This is the
     /// slow path, run once per piece.
-    pub fn build(contour: &[[f64; 2]], n_samples: usize, max_area: f64) -> Self {
+    ///
+    /// # Errors
+    /// `MeshError` when the contour carries a coordinate the mesher cannot
+    /// place.
+    pub fn build(
+        contour: &[[f64; 2]],
+        n_samples: usize,
+        max_area: f64,
+    ) -> Result<ShapePipeline, MeshError> {
         let fractions = sample::uniform_fractions(n_samples);
         let boundary = sample::sample_closed(contour, &fractions);
-        let mesh = cdt::triangulate(&boundary, max_area);
+        let mesh = cdt::triangulate(&boundary, max_area)?;
 
         let roles: Vec<VertexRole> = mesh
             .vertices
@@ -90,14 +120,26 @@ impl ShapePipeline {
             tris: mesh.triangles,
             pos2d: mesh.vertices,
             rests: Vec::new(),
+            contour_len: contour.len(),
         };
         me.rests = vec![0.0; me.edges.len()];
         me.recompute_rests();
-        me
+        Ok(me)
     }
 
     /// Recompiles an edited contour into new rest lengths, in `edges` order.
-    pub fn derive(&mut self, contour: &[[f64; 2]]) -> &[f32] {
+    ///
+    /// # Errors
+    /// `RestStateError::PointCount` when the contour has gained or lost a
+    /// node since `build`. That is a topology edit wearing a shape edit's
+    /// clothes, and taking it would corrupt the warm start in silence.
+    pub fn derive(&mut self, contour: &[[f64; 2]]) -> Result<&[f32], RestStateError> {
+        if contour.len() != self.contour_len {
+            return Err(RestStateError::PointCount {
+                expected: self.contour_len,
+                got: contour.len(),
+            });
+        }
         let boundary_new = sample::sample_closed(contour, &self.boundary_fracs);
         for (k, &v) in self.boundary_verts.iter().enumerate() {
             self.pos2d[v as usize] = boundary_new[k];
@@ -108,7 +150,12 @@ impl ShapePipeline {
             self.pos2d[v as usize] = interior_new[k];
         }
         self.recompute_rests();
-        &self.rests
+        Ok(&self.rests)
+    }
+
+    /// How many points the contour this mesh was built from had.
+    pub fn contour_len(&self) -> usize {
+        self.contour_len
     }
 
     fn recompute_rests(&mut self) {
@@ -180,4 +227,54 @@ fn classify(p: [f64; 2], boundary: &[[f64; 2]], fractions: &[f64]) -> VertexRole
         }
     }
     VertexRole::Interior
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A rectangle, corners only: cheap to mesh and easy to edit.
+    fn rectangle() -> Vec<[f64; 2]> {
+        vec![[0.0, 0.0], [0.30, 0.0], [0.30, 0.20], [0.0, 0.20]]
+    }
+
+    fn pipeline() -> ShapePipeline {
+        ShapePipeline::build(&rectangle(), 16, 0.01).expect("the rectangle is finite")
+    }
+
+    #[test]
+    fn derive_with_a_different_point_count_is_an_error() {
+        let mut pipe = pipeline();
+        let mut grown = rectangle();
+        grown.push([0.15, 0.30]);
+        assert_eq!(
+            pipe.derive(&grown),
+            Err(RestStateError::PointCount {
+                expected: 4,
+                got: 5
+            })
+        );
+    }
+
+    #[test]
+    fn a_moved_node_keeps_the_mesh_and_changes_the_rest_lengths() {
+        let mut pipe = pipeline();
+        let before = pipe.rests.clone();
+        let mut edited = rectangle();
+        edited[1][0] += 0.05;
+        let after = pipe.derive(&edited).expect("the node count did not move");
+        assert_eq!(after.len(), before.len());
+        assert_ne!(after, before.as_slice());
+        assert_eq!(pipe.contour_len(), 4);
+    }
+
+    #[test]
+    fn a_contour_the_mesher_refuses_is_an_error_not_a_panic() {
+        let mut broken = rectangle();
+        broken[2][0] = f64::NAN;
+        assert_eq!(
+            ShapePipeline::build(&broken, 16, 0.01).err(),
+            Some(MeshError::NonFiniteVertex { index: 0 })
+        );
+    }
 }

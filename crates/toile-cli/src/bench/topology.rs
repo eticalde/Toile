@@ -89,7 +89,8 @@ fn foldovers() {
         let mut edited = contour.clone();
         edited[idx][0] += d[0];
         edited[idx][1] += d[1];
-        pipe.derive(&edited);
+        pipe.derive(&edited)
+            .expect("the bench moves a point, never the node count");
         let flips = transfer::count_flipped(&reference, &pipe.pos2d, &tris);
         println!(
             "{name}  {flips} triángulos invertidos de {}  {}",

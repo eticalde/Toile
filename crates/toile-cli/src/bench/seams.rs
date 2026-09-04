@@ -122,8 +122,9 @@ fn combine(front: &ShapePipeline, back: &ShapePipeline, na: u32) -> DistanceCons
 fn assemble(dx: f32, dz: f32) -> Garment {
     let (front_contour, ff) = rect_contour(W, H_FRONT, 0.01);
     let (back_contour, fb) = rect_contour(W, H_BACK, 0.01);
-    let front = ShapePipeline::build(&front_contour, SAMPLES, MAX_AREA);
-    let back = ShapePipeline::build(&back_contour, SAMPLES, MAX_AREA);
+    let finite = "the bench draws its own rectangles";
+    let front = ShapePipeline::build(&front_contour, SAMPLES, MAX_AREA).expect(finite);
+    let back = ShapePipeline::build(&back_contour, SAMPLES, MAX_AREA).expect(finite);
     let (na, nb) = (front.pos2d.len(), back.pos2d.len());
 
     let mut state = State::new(na + nb);
@@ -183,7 +184,10 @@ fn hot_edit(g: &mut Garment) -> f64 {
             p[0] = W * 0.5 + (p[0] - W * 0.5) * (1.0 + 0.06 / W);
         }
     }
-    let rests = g.front.derive(&edited);
+    let rests = g
+        .front
+        .derive(&edited)
+        .expect("the bench widens the hem, never the node count");
     g.cons.rest[..g.n_front_edges].copy_from_slice(&rests[..g.n_front_edges]);
     seconds(settle(&mut g.state, &g.cons, &g.seams, &g.sdf, 9_000))
 }

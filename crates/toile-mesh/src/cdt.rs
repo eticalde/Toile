@@ -1,4 +1,17 @@
 use spade::{ConstrainedDelaunayTriangulation, Point2, RefinementParameters, Triangulation};
+use thiserror::Error;
+
+/// What stops a contour from being meshed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum MeshError {
+    /// A point the mesher cannot place, because it is not a finite
+    /// coordinate. Reachable from a drag, so it is an error and not a panic.
+    #[error("contour point {index} is not a coordinate the mesher can place")]
+    NonFiniteVertex {
+        /// Where the offending point sits in the contour.
+        index: usize,
+    },
+}
 
 /// A piece meshed in 2D: vertices in metres, CCW triangles.
 #[allow(
@@ -6,7 +19,7 @@ use spade::{ConstrainedDelaunayTriangulation, Point2, RefinementParameters, Tria
     reason = "SoA buffers are named by their axis; a doc
     per field would only restate the name"
 )]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct PieceMesh {
     pub vertices: Vec<[f64; 2]>,
     pub triangles: Vec<u32>,
@@ -22,21 +35,21 @@ pub struct PieceMesh {
 /// A contour of fewer than three points has no interior and yields an empty
 /// mesh.
 ///
-/// # Panics
-/// If a contour point is not representable as a spade coordinate — that is, if
-/// it is infinite or NaN.
-pub fn triangulate(contour: &[[f64; 2]], max_area: f64) -> PieceMesh {
+/// # Errors
+/// `MeshError::NonFiniteVertex` for a contour point that is not a coordinate,
+/// which a drag can produce and which the caller reports rather than dying on.
+pub fn triangulate(contour: &[[f64; 2]], max_area: f64) -> Result<PieceMesh, MeshError> {
     if contour.len() < 3 {
-        return PieceMesh::default();
+        return Ok(PieceMesh::default());
     }
     let mut cdt = ConstrainedDelaunayTriangulation::<Point2<f64>>::new();
-    let handles: Vec<_> = contour
-        .iter()
-        .map(|p| {
-            cdt.insert(Point2::new(p[0], p[1]))
-                .expect("contour points must be finite")
-        })
-        .collect();
+    let mut handles = Vec::with_capacity(contour.len());
+    for (index, p) in contour.iter().enumerate() {
+        let handle = cdt
+            .insert(Point2::new(p[0], p[1]))
+            .map_err(|_| MeshError::NonFiniteVertex { index })?;
+        handles.push(handle);
+    }
     for i in 0..handles.len() {
         cdt.add_constraint(handles[i], handles[(i + 1) % handles.len()]);
     }
@@ -67,10 +80,10 @@ pub fn triangulate(contour: &[[f64; 2]], max_area: f64) -> PieceMesh {
             triangles.push(c);
         }
     }
-    PieceMesh {
+    Ok(PieceMesh {
         vertices,
         triangles,
-    }
+    })
 }
 
 fn point_in_polygon(p: [f64; 2], poly: &[[f64; 2]]) -> bool {
@@ -124,9 +137,13 @@ mod tests {
         pts
     }
 
+    fn mesh(contour: &[[f64; 2]], max_area: f64) -> PieceMesh {
+        triangulate(contour, max_area).expect("the test contours are finite")
+    }
+
     #[test]
     fn a_square_meshes_to_a_covered_interior() {
-        let m = triangulate(&square(0.1), 0.02);
+        let m = mesh(&square(0.1), 0.02);
         assert!(!m.triangles.is_empty());
         assert!(m.triangles.len().is_multiple_of(3));
         let area: f64 = m
@@ -146,7 +163,7 @@ mod tests {
 
     #[test]
     fn refinement_respects_max_area() {
-        let m = triangulate(&square(0.25), 0.01);
+        let m = mesh(&square(0.25), 0.01);
         for t in m.triangles.chunks(3) {
             let (a, b, c) = (
                 m.vertices[t[0] as usize],
@@ -161,19 +178,27 @@ mod tests {
     #[test]
     fn the_same_contour_meshes_to_the_same_bits() {
         let c = square(0.1);
-        assert_eq!(
-            mesh_hash(&triangulate(&c, 0.02)),
-            mesh_hash(&triangulate(&c, 0.02))
-        );
+        assert_eq!(mesh_hash(&mesh(&c, 0.02)), mesh_hash(&mesh(&c, 0.02)));
     }
 
     #[test]
     fn a_contour_without_an_interior_yields_an_empty_mesh() {
-        assert!(triangulate(&[], 0.1).triangles.is_empty());
-        assert!(
-            triangulate(&[[0.0, 0.0], [1.0, 0.0]], 0.1)
-                .triangles
-                .is_empty()
+        assert!(mesh(&[], 0.1).triangles.is_empty());
+        assert!(mesh(&[[0.0, 0.0], [1.0, 0.0]], 0.1).triangles.is_empty());
+    }
+
+    #[test]
+    fn a_non_finite_vertex_is_an_error_not_a_panic() {
+        let mut c = square(0.25);
+        c[3][1] = f64::NAN;
+        assert_eq!(
+            triangulate(&c, 0.1),
+            Err(MeshError::NonFiniteVertex { index: 3 })
+        );
+        c[3][1] = f64::INFINITY;
+        assert_eq!(
+            triangulate(&c, 0.1),
+            Err(MeshError::NonFiniteVertex { index: 3 })
         );
     }
 }

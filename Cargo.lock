@@ -3130,6 +3130,9 @@ dependencies = [
 [[package]]
 name = "toile-doc"
 version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "toile-engine"
@@ -3137,6 +3140,7 @@ version = "0.1.0"
 dependencies = [
  "arc-swap",
  "crossbeam-channel",
+ "thiserror 2.0.20",
  "toile-doc",
  "toile-geom",
  "toile-mesh",
@@ -3146,12 +3150,16 @@ dependencies = [
 [[package]]
 name = "toile-geom"
 version = "0.1.0"
+dependencies = [
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "toile-mesh"
 version = "0.1.0"
 dependencies = [
  "spade",
+ "thiserror 2.0.20",
  "toile-doc",
  "toile-geom",
 ]

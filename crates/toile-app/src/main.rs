@@ -1,6 +1,7 @@
 #![allow(missing_docs, reason = "a binary publishes no API surface")]
 
 mod camera;
+mod glyph;
 mod pattern;
 mod render;
 mod tabs;
@@ -9,6 +10,8 @@ mod viewport;
 mod widgets;
 
 use eframe::egui;
+use eframe::egui_wgpu::RenderState;
+use toile_engine::draft::Doc;
 use toile_engine::session::Session;
 
 use crate::tabs::Tab;
@@ -34,6 +37,8 @@ struct App {
     theme: Theme,
     tab: Tab,
     session: Session,
+    rs: RenderState,
+    patronaje: tabs::patronaje::State,
     probador: tabs::probador::State,
 }
 
@@ -46,13 +51,30 @@ impl App {
             .wgpu_render_state
             .clone()
             .expect("eframe was configured with the wgpu renderer");
-        let probador = tabs::probador::State::new(rs, &theme, &session);
+        let probador = tabs::probador::State::new(rs.clone(), &theme, &session);
         Self {
             theme,
-            tab: Tab::Probador,
+            tab: Tab::Patronaje,
             session,
+            rs,
+            patronaje: tabs::patronaje::State::default(),
             probador,
         }
+    }
+
+    /// Puts a document on the table.
+    ///
+    /// A document is a new session and therefore a new mesh, which the viewer
+    /// was not sized for, so its GPU side is rebuilt around the one that came
+    /// out. A document that does not drape leaves the table as it was.
+    fn open(&mut self, doc: Doc) {
+        let Ok(session) = Session::from_doc(doc) else {
+            return;
+        };
+        self.session = session;
+        self.probador = tabs::probador::State::new(self.rs.clone(), &self.theme, &self.session);
+        self.patronaje.selection = None;
+        self.patronaje.frame = true;
     }
 }
 
@@ -63,9 +85,13 @@ impl eframe::App for App {
         let mut workspace = tabs::Workspace {
             theme: &self.theme,
             session: &mut self.session,
+            patronaje: &mut self.patronaje,
             probador: &mut self.probador,
         };
         self.tab.show(ui, &mut workspace);
+        if let Some(doc) = self.patronaje.pending.take() {
+            self.open(doc);
+        }
         // The sim advances on its own clock, so a frame is only final once it
         // has both caught up with the last edit and gone back to sleep.
         if !self.session.settled() {

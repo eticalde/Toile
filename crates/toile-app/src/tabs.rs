@@ -43,7 +43,7 @@ impl Tab {
     pub fn status(self, session: &Session) -> Vec<String> {
         let fixed: &[&str] = match self {
             Self::Maniquies => &["maniquí Etienne", "12 medidas", "cm"],
-            Self::Patronaje => &["Delantero", "9 puntos", "1 pinza", "lateral 104.0 cm", "cm"],
+            Self::Patronaje => return patronaje::status(session),
             Self::Telas => &["Algodón popelina", "120 g/m²", "4 telas"],
             Self::Probador => {
                 let snap = session.snapshot();
@@ -80,25 +80,28 @@ impl Tab {
 pub struct Workspace<'a> {
     pub theme: &'a Theme,
     pub session: &'a mut Session,
+    pub patronaje: &'a mut patronaje::State,
     pub probador: &'a mut probador::State,
 }
 
 /// Library or tool column, on the left.
-pub fn left_panel(ui: &mut egui::Ui, theme: &Theme, add: impl FnOnce(&mut egui::Ui)) {
+pub fn left_panel<R>(ui: &mut egui::Ui, theme: &Theme, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Panel::left("left")
         .exact_size(LEFT_W)
         .resizable(false)
         .frame(egui::Frame::new().fill(theme.panel))
-        .show(ui, add);
+        .show(ui, add)
+        .inner
 }
 
 /// Inspector of whatever is selected, on the right.
-pub fn right_panel(ui: &mut egui::Ui, theme: &Theme, add: impl FnOnce(&mut egui::Ui)) {
+pub fn right_panel<R>(ui: &mut egui::Ui, theme: &Theme, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
     egui::Panel::right("right")
         .exact_size(RIGHT_W)
         .resizable(false)
         .frame(egui::Frame::new().fill(theme.panel))
-        .show(ui, add);
+        .show(ui, add)
+        .inner
 }
 
 /// The cutting mat filling whatever the panels left over, with its caption.

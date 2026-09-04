@@ -9,6 +9,9 @@ use crate::demo;
 /// threads, so the answer is a property of the code rather than of the machine.
 /// CI asserts it against one constant on macOS ARM and Linux x86 at once,
 /// which is also what tests cross-architecture bit-exactness.
+///
+/// # Panics
+/// If the scene it builds itself stops being a contour the mesher accepts.
 pub fn drape_bodice_hash() -> u64 {
     const DT: f32 = 1.0 / 600.0;
     const SUBSTEPS: usize = 600;
@@ -24,7 +27,10 @@ pub fn drape_bodice_hash() -> u64 {
         xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
     }
     contour[demo::SHOULDER_POINT][0] += 0.02;
-    cons.rest.copy_from_slice(pipe.derive(&contour));
+    let rests = pipe
+        .derive(&contour)
+        .expect("the golden moves a point, never the node count");
+    cons.rest.copy_from_slice(rests);
     for _ in 0..SUBSTEPS {
         xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
     }
