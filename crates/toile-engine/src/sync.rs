@@ -2,4 +2,4 @@ mod handle;
 mod worker;
 
 pub use handle::{SimHandle, spawn};
-pub use worker::Snapshot;
+pub use worker::{Snapshot, StaleMessage};

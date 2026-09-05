@@ -83,7 +83,7 @@ impl Draft {
             return Ok(Recompile::Shape(touched));
         }
         for &piece in &touched {
-            self.pieces.entry(piece).or_default().topology += 1;
+            *self.topologies.entry(piece).or_default() += 1;
         }
         Ok(Recompile::Topology(touched))
     }

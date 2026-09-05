@@ -31,6 +31,18 @@ pub enum Gesture {
     },
     /// Moving the chosen nodes.
     Drag(Box<Drag>),
+    /// Drawing a new piece, vertex by vertex.
+    ///
+    /// The piece itself is not here because it does not exist yet: no command
+    /// goes out until the contour closes, which is what lets Escape abort the
+    /// whole drawing without an entry to unwind.
+    Drawing {
+        /// The vertices already placed, in the order they were clicked, in
+        /// centimetres.
+        pending: Vec<[f64; 2]>,
+        /// Where the next vertex would land, snap and all, in centimetres.
+        rubber: [f64; 2],
+    },
 }
 
 /// The nodes taken in hand, as the gesture holds them.

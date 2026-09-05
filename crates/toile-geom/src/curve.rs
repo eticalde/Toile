@@ -55,6 +55,48 @@ pub fn flatten(
     out
 }
 
+/// The cubic cut in two at `t`, as the control net of each half.
+///
+/// De Casteljau. The two halves trace exactly the line the whole traced, so
+/// putting a node in the middle of a bending tract moves nothing that was
+/// already drawn: the shape is the invariant, and the node count is what
+/// changes. The last value computed is the split point itself, and it is
+/// shared — it closes the first net and opens the second.
+///
+/// `t` is the Bezier parameter, not a fraction of the arc length. The two part
+/// company by millimetres on a real contour, so a place caught off the drawn
+/// line is converted before it reaches here.
+///
+/// Every step is one `lerp` in a fixed order, so the same split gives the same
+/// bits on every run. Nothing here is checked and nothing can trap: a `t`
+/// outside the unit interval extends the curve instead of cutting it, which is
+/// the caller's business to refuse.
+pub fn subdivide(
+    p0: [f64; 2],
+    c1: [f64; 2],
+    c2: [f64; 2],
+    p1: [f64; 2],
+    t: f64,
+) -> ([[f64; 2]; 4], [[f64; 2]; 4]) {
+    let a = lerp(p0, c1, t);
+    let b = lerp(c1, c2, t);
+    let c = lerp(c2, p1, t);
+    let d = lerp(a, b, t);
+    let e = lerp(b, c, t);
+    let split = lerp(d, e, t);
+    ([p0, a, d, split], [split, e, c, p1])
+}
+
+/// The point `t` of the way from `a` to `b`.
+///
+/// Written as the weighted sum rather than `a + (b - a) * t` so that a `t` of
+/// zero lands on `a` and a `t` of one lands on `b`, both exactly: a split
+/// tract has to keep the nodes that were already there where they were.
+fn lerp(a: [f64; 2], b: [f64; 2], t: f64) -> [f64; 2] {
+    let s = 1.0 - t;
+    [s * a[0] + t * b[0], s * a[1] + t * b[1]]
+}
+
 /// The arc length of the cubic, by Gauss-Legendre quadrature.
 ///
 /// This is the true length of the curve, not the length of the polyline
@@ -165,6 +207,39 @@ mod tests {
         assert!(got.iter().all(|&p| p != p1));
         assert_eq!(flatten(p0, c1, c2, p1, 0), vec![p0]);
         assert_eq!(flatten(p0, c1, c2, p1, 1), vec![p0]);
+    }
+
+    /// How far `q` lies off the nearer of the two halves of a split.
+    fn off_the_split(halves: &([[f64; 2]; 4], [[f64; 2]; 4]), q: [f64; 2]) -> f64 {
+        let (first, second) = halves;
+        let of = |n: &[[f64; 2]; 4]| nearest(n[0], n[1], n[2], n[3], q).1;
+        of(first).min(of(second))
+    }
+
+    #[test]
+    fn the_two_halves_of_a_split_trace_the_curve_they_came_from() {
+        let (p0, c1, c2, p1) = wavy();
+        let halves = subdivide(p0, c1, c2, p1, 0.37);
+        // The ends are the nodes that were already there, to the bit, and the
+        // split point belongs to both halves rather than to one of them.
+        assert_eq!(halves.0[0], p0);
+        assert_eq!(halves.1[3], p1);
+        assert_eq!(halves.0[3], halves.1[0]);
+        for q in flatten(p0, c1, c2, p1, 64) {
+            let off = off_the_split(&halves, q);
+            assert!(off < 1.0e-9, "{off}");
+        }
+    }
+
+    #[test]
+    fn a_split_at_an_end_keeps_the_whole_curve_on_one_side() {
+        let (p0, c1, c2, p1) = wavy();
+        let (first, second) = subdivide(p0, c1, c2, p1, 0.0);
+        assert_eq!(first, [p0, p0, p0, p0]);
+        assert_eq!(second, [p0, c1, c2, p1]);
+        let (first, second) = subdivide(p0, c1, c2, p1, 1.0);
+        assert_eq!(first, [p0, c1, c2, p1]);
+        assert_eq!(second, [p1, p1, p1, p1]);
     }
 
     #[test]

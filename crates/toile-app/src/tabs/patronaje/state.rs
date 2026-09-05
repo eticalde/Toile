@@ -68,13 +68,17 @@ impl Selection {
 
 /// The tool in hand, out of the nine the panel offers.
 ///
-/// Only the two whose phases have arrived are here: a variant nothing can
+/// Only the ones whose phases have arrived are here: a variant nothing can
 /// choose would be a promise the tiles do not keep.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Tool {
     /// Choose and move what is already drawn.
     #[default]
     Select,
+    /// Put a node on the tract under the pointer.
+    Point,
+    /// Draw a new piece, vertex by vertex.
+    Line,
     /// Bend a straight tract, and pull the handles of a bent one.
     Curve,
 }
@@ -139,10 +143,9 @@ pub struct State {
     pub editing: Option<FieldEdit>,
     /// What the session last refused to do, while it stands.
     ///
-    /// A refused edit leaves the drawing where it was, but not always the
-    /// drape: a change of topology has no re-mesher yet, so the piece on the
-    /// stand stops following the table until one arrives. That is the sort of
-    /// thing a person has to be told, and the status bar is where.
+    /// A refused edit leaves the document exactly as it was, and nothing on
+    /// the mat marks that anything was asked for. That is the sort of thing a
+    /// person has to be told, and the status bar is where.
     pub refused: Option<String>,
 }
 

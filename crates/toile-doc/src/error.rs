@@ -47,6 +47,9 @@ pub enum DocError {
     /// A point the piece's contour does not run through.
     #[error("the piece has no node at that point")]
     NoSuchNode,
+    /// A point another piece still draws itself with.
+    #[error("the point still belongs to `{0}`")]
+    Shared(String),
     /// A flattening no tract can be asked for.
     #[error("a curve is flattened at {floor} to {ceiling} samples, and this asks for {got}")]
     Sampling {

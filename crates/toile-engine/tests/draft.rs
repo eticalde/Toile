@@ -178,3 +178,28 @@ fn a_click_that_edits_nothing_leaves_no_entry() {
     assert_eq!(draft.undo_depth(), 0);
     assert_eq!(draft.undo(), Ok(Recompile::Shape(Vec::new())));
 }
+
+/// A mesh is told apart from a stale rebuild by its topology count alone, so
+/// a count must never be reissued: removing the piece and undoing the removal
+/// climb the counter instead of rewinding it through the undo stack.
+#[test]
+fn the_topology_count_never_reissues_across_removal_and_undo() {
+    let (mut draft, piece) = front();
+    let node = draft.points_cm(piece)[1].0;
+    for (step, samples) in [(1, 24), (2, 12), (3, 6)] {
+        draft
+            .edit(Command::SetSamples {
+                piece,
+                node,
+                to: samples,
+            })
+            .expect("the tract takes the count");
+        assert_eq!(draft.topology(piece), step);
+    }
+    draft
+        .edit(Command::RemovePiece { piece })
+        .expect("the piece comes off the table");
+    assert_eq!(draft.topology(piece), 4, "the count survives the removal");
+    draft.undo().expect("the removal comes back out");
+    assert_eq!(draft.topology(piece), 5, "undo climbs it, never rewinds it");
+}

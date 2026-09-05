@@ -13,5 +13,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 thiserror = "2"
 
+# Tests only. The document stays free of numeric dependencies: a test that
+# cuts a curve in two has to compute the split the drawing tool will compute,
+# and computing it twice in two places would prove nothing.
+[dev-dependencies]
+toile-geom = { path = "../toile-geom" }
+
 [lints]
 workspace = true

@@ -1,9 +1,11 @@
 mod curve;
 mod name;
+mod topology;
 
 use curve::{set_samples, set_segment};
 pub(crate) use name::Naming;
 use name::{label_point, rename_piece, show_label};
+use topology::{add_piece, insert_node, remove_node, remove_piece};
 
 use crate::{
     Applied, Axis, Binding, ChangeClass, Command, Doc, DocError, Grain, MannequinKey, PieceKey,
@@ -18,8 +20,9 @@ impl Command {
     /// `DuplicatePieceName` for a name already taken, `UnknownMeasure` for a
     /// measurement the body does not carry, `NoSuchNode` for a contour that
     /// does not run through the node named, `Occupied` for a key another point
-    /// still holds, and `NotYetImplemented` for an edit whose tool has not
-    /// been built yet.
+    /// still holds, `Sampling` for a flattening no tract can be asked for,
+    /// `Shared` for a point another piece still draws itself with, and
+    /// `NotYetImplemented` for an edit whose tool has not been built yet.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
         self.apply_as(doc, Naming::Checked)
     }
@@ -45,11 +48,18 @@ impl Command {
             Command::ShowLabel { point, to } => show_label(doc, point, to),
             Command::SetSegment { piece, node, to } => set_segment(doc, piece, node, to),
             Command::SetSamples { piece, node, to } => set_samples(doc, piece, node, to),
-            Command::InsertNode { .. }
-            | Command::RemoveNode { .. }
-            | Command::AddPiece { .. }
-            | Command::RemovePiece { .. }
-            | Command::AddSeam { .. }
+            Command::InsertNode {
+                piece,
+                after,
+                identity,
+                value,
+                segment,
+                samples,
+            } => insert_node(doc, piece, after, identity, value, segment, samples),
+            Command::RemoveNode { piece, node } => remove_node(doc, piece, node),
+            Command::AddPiece { identity, piece } => add_piece(doc, identity, piece, naming),
+            Command::RemovePiece { piece } => remove_piece(doc, piece),
+            Command::AddSeam { .. }
             | Command::RemoveSeam { .. }
             | Command::AddNotch { .. }
             | Command::MoveNotch { .. }

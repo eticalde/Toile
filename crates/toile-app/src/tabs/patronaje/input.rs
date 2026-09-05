@@ -10,6 +10,8 @@ use super::tract;
 
 mod bend;
 mod drag;
+mod draw;
+mod node;
 mod take;
 
 /// The name a drag leaves in the undo stack.
@@ -26,6 +28,9 @@ pub fn update(
     ctx: &EditContext<'_>,
 ) -> (Gesture, Vec<Command>, Feedback) {
     match (gesture, event) {
+        // Before the general press: while a piece is being drawn, every event
+        // belongs to the drawing.
+        (Gesture::Drawing { pending, rubber }, event) => draw::update(pending, rubber, &event, ctx),
         (_, Input::Down(at, mods)) => press(at, mods, ctx),
         (Gesture::Pan { from }, Input::Move(at, _)) => (
             Gesture::Pan { from: at },
@@ -62,6 +67,11 @@ fn press(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>,
     if mods.space {
         return (Gesture::Pan { from: at }, Vec::new(), Feedback::default());
     }
+    // The Line tool draws wherever it is pressed: a node under the pointer is
+    // a snap candidate for the vertex, not something to take in hand.
+    if ctx.tool == Tool::Line {
+        return draw::start(at, mods, ctx);
+    }
     if let Some(key) = take::node_at(at, ctx) {
         return take::grab(key, at, mods, ctx);
     }
@@ -81,6 +91,9 @@ fn press(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>,
         );
     };
     let node = ctx.tracts[found.from].node;
+    if ctx.tool == Tool::Point {
+        return node::insert(ctx, &found);
+    }
     if ctx.tool == Tool::Curve
         && let Some(bent) = bend::draw(ctx, node, &ctx.tracts[found.from])
     {
@@ -115,6 +128,9 @@ fn swept(from: [f64; 2], to: [f64; 2], ctx: &EditContext<'_>) -> (Gesture, Vec<C
 
 /// A key pressed with nothing in hand.
 fn idle(key: Key, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, Feedback) {
+    if matches!(key, Key::Delete | Key::Backspace) {
+        return node::remove(ctx);
+    }
     let feedback = match (key, mods.command, mods.shift) {
         (Key::Escape, _, _) => Feedback {
             select: Some(Selection::None),
@@ -135,6 +151,8 @@ fn idle(key: Key, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, 
             ..Feedback::default()
         },
         (Key::V, false, _) => tool(Tool::Select),
+        (Key::P, false, _) => tool(Tool::Point),
+        (Key::L, false, _) => tool(Tool::Line),
         (Key::C, false, _) => tool(Tool::Curve),
         _ => Feedback::default(),
     };
@@ -163,6 +181,10 @@ fn reach(ctx: &EditContext<'_>, budget: f64) -> f64 {
 mod bending;
 #[cfg(test)]
 mod curving;
+#[cfg(test)]
+mod drawing;
+#[cfg(test)]
+mod pointing;
 #[cfg(test)]
 mod select;
 #[cfg(test)]

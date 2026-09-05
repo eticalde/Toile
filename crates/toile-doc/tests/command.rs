@@ -2,10 +2,10 @@
 
 use toile_doc::formula::Formula;
 use toile_doc::{
-    Applied, Axis, Binding, ChangeClass, Command, ContourNode, Dart, DartKey, DartWedge, Doc,
-    DocError, EdgeAnchor, EdgeRange, FoldDirection, Grain, Identity, MeasureSet, Notch, NotchKey,
-    Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey, SeamOrientation, SegmentEdit,
-    Symmetry, SymmetryKey, SymmetryKind, WedgeNode, Winding, block,
+    Applied, Axis, Binding, ChangeClass, Command, Dart, DartKey, DartWedge, Doc, DocError,
+    EdgeAnchor, EdgeRange, FoldDirection, Grain, Identity, MeasureSet, Notch, NotchKey, Piece,
+    PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey, SeamOrientation, SegmentEdit, Symmetry,
+    SymmetryKey, SymmetryKind, WedgeNode, Winding, block,
 };
 
 fn front(doc: &Doc) -> PieceKey {
@@ -117,8 +117,9 @@ fn topology(doc: &Doc) -> Vec<Command> {
             piece,
             after: Some(point),
             identity: Identity::New,
-            node: ContourNode::line(point),
             value: Point::at(0.0, 0.0),
+            segment: SegmentEdit::Line,
+            samples: 1,
         },
         Command::RemoveNode { piece, node: point },
         Command::SetSegment {
@@ -237,11 +238,13 @@ fn pinning_costs_the_derivation_nothing() {
 #[test]
 fn an_edit_whose_tool_has_not_arrived_is_an_error_not_a_panic() {
     let mut doc = block::trouser_front();
-    let piece = front(&doc);
-    let point = node(&doc, "cintura_cf");
     for command in [
-        Command::RemoveNode { piece, node: point },
-        Command::RemovePiece { piece },
+        Command::RemoveSeam {
+            seam: SeamKey::new(0, 0),
+        },
+        Command::RemoveNotch {
+            notch: NotchKey::new(0, 0),
+        },
     ] {
         assert_eq!(
             command.clone().apply(&mut doc),

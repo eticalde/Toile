@@ -1,13 +1,16 @@
 mod edit;
 mod error;
+mod pieces;
+mod remesh;
 mod slot;
 
 use std::sync::Arc;
 
 pub use error::SessionError;
+use remesh::Remesher;
 pub use slot::PieceSlot;
 
-use crate::couture::{self, ShapePipeline};
+use crate::couture::{self, COMPLIANCE, ShapePipeline};
 use crate::demo;
 use crate::draft::{Doc, Draft, PieceKey};
 use crate::sync::{self, SimHandle, Snapshot};
@@ -17,9 +20,6 @@ const DT: f32 = 1.0 / 600.0;
 
 /// Substeps per published frame.
 const SUBSTEPS_PER_TICK: u32 = 10;
-
-/// Uniform stretch compliance, until fabric presets bring anisotropy.
-const COMPLIANCE: f32 = 1.0e-8;
 
 /// The document a session edits, and the piece of it that drapes.
 struct Drafted {
@@ -36,10 +36,21 @@ pub struct Session {
     contour: Vec<[f64; 2]>,
     drafted: Option<Drafted>,
     handle: SimHandle,
+    /// The mesher, started the first time a topology edit needs it: a session
+    /// that only ever moves points never pays for a thread.
+    remesher: Option<Remesher>,
+    /// A shape edit arrived while the mesher was working, and has not reached
+    /// the solver yet.
+    moved_while_meshing: bool,
     generation: u64,
+    /// The generation the mesh on the table was installed at, for telling a
+    /// snapshot of the old triangulation from one of this mesh.
+    mesh_generation: u64,
     revision: u64,
     /// How long the last recompile took, for the status bar.
     pub last_derive_ms: f64,
+    /// How long the last rebuild took, for the status bar.
+    pub last_remesh_ms: f64,
 }
 
 impl Session {
@@ -113,6 +124,15 @@ impl Session {
         self.slot.pipeline().pos2d.len()
     }
 
+    /// The generation the mesh on the table was installed at.
+    ///
+    /// A snapshot carrying an earlier generation was published before this
+    /// mesh swapped in: its positions belong to the old triangulation, even
+    /// when the vertex counts happen to agree.
+    pub fn mesh_generation(&self) -> u64 {
+        self.mesh_generation
+    }
+
     /// Radius of the sphere standing in for the avatar.
     pub fn avatar_radius(&self) -> f32 {
         demo::AVATAR_RADIUS
@@ -154,9 +174,13 @@ impl Session {
             contour,
             drafted,
             handle,
+            remesher: None,
+            moved_while_meshing: false,
             generation: 0,
+            mesh_generation: 0,
             revision: 0,
             last_derive_ms: 0.0,
+            last_remesh_ms: 0.0,
         }
     }
 }

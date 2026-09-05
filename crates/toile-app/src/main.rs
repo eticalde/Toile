@@ -226,6 +226,12 @@ fn shortcut(ui: &egui::Ui) -> Option<Action> {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // The mesher answers on its own thread, and this is the once-a-frame
+        // collection that lands its rebuilds. It runs before the bars so a
+        // refused contour reaches the status bar on this very frame.
+        if let Err(why) = self.session.poll_remesh() {
+            self.patronaje.refused = Some(why.to_string());
+        }
         let revision = self.session.revision();
         let asked = bars::top(ui, &self.theme, &mut self.tab, &self.file, revision);
         bars::status(ui, &self.theme, self.tab, &self.session, &self.patronaje);
@@ -246,8 +252,11 @@ impl eframe::App for App {
             self.act(action);
         }
         // The sim advances on its own clock, so a frame is only final once it
-        // has both caught up with the last edit and gone back to sleep.
-        if !self.session.settled() {
+        // has both caught up with the last edit and gone back to sleep. A
+        // rebuild out with the mesher asks for frames on its own: queueing it
+        // does not move the generation, so a settled drape would otherwise
+        // stop the very frames that collect it.
+        if !self.session.settled() || self.session.remeshing() {
             ui.ctx().request_repaint();
         }
     }

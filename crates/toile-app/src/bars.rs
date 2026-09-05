@@ -85,11 +85,14 @@ pub fn status(
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                for (i, cell) in tab.status(session, patronaje).iter().enumerate() {
+                for (i, (cell, alert)) in tab.status(session, patronaje).iter().enumerate() {
                     if i > 0 {
                         ui.label(cell_text(" · ", theme.line));
                     }
-                    ui.label(cell_text(cell, theme.muted));
+                    // An alert is the one thing the bar exists to make seen:
+                    // a refusal in the quiet ink is a refusal nobody reads.
+                    let ink = if *alert { theme.alert } else { theme.muted };
+                    ui.label(cell_text(cell, ink));
                 }
             });
         });

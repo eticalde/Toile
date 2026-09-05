@@ -9,9 +9,14 @@
 /// ring order, the first containing triangle wins, and when numerical error
 /// leaves a point just outside every candidate, the one with the largest
 /// minimum barycentric wins — ties going to the lower triangle index.
-pub struct Locator<'a> {
-    verts: &'a [[f64; 2]],
-    tris: &'a [u32],
+///
+/// It owns the mesh it indexes rather than borrowing it: a locator is built on
+/// one thread and read on another, over a mesh the first thread goes on
+/// editing in the meantime.
+#[derive(Debug)]
+pub struct Locator {
+    verts: Vec<[f64; 2]>,
+    tris: Vec<u32>,
     min: [f64; 2],
     cell: [f64; 2],
     nx: usize,
@@ -19,9 +24,9 @@ pub struct Locator<'a> {
     bins: Vec<Vec<u32>>,
 }
 
-impl<'a> Locator<'a> {
+impl Locator {
     /// Bins every triangle of the mesh by its bounding box.
-    pub fn build(verts: &'a [[f64; 2]], tris: &'a [u32]) -> Self {
+    pub fn build(verts: &[[f64; 2]], tris: &[u32]) -> Self {
         let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
         for v in verts {
             for k in 0..2 {
@@ -59,14 +64,19 @@ impl<'a> Locator<'a> {
             }
         }
         Self {
-            verts,
-            tris,
+            verts: verts.to_vec(),
+            tris: tris.to_vec(),
             min: lo,
             cell,
             nx,
             ny,
             bins,
         }
+    }
+
+    /// The three vertices of a triangle, in the mesh's own indexing.
+    pub fn triangle(&self, t: usize) -> [u32; 3] {
+        [self.tris[t * 3], self.tris[t * 3 + 1], self.tris[t * 3 + 2]]
     }
 
     /// Returns the triangle containing `p` and its barycentric coordinates,

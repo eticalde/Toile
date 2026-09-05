@@ -64,8 +64,7 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
             let st = &mut *w.probador;
             pattern::show(ui, half, theme, w.session, &mut st.drag);
             gutter(ui, theme, full.y);
-            let snap = w.session.snapshot();
-            st.viewport.show(ui, half, &st.rs, theme, &snap);
+            st.viewport.show(ui, half, &st.rs, theme, w.session);
         });
     });
 }

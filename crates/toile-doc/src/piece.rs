@@ -122,9 +122,17 @@ impl ContourNode {
     /// bending one is flattened at exactly the count it names, so it answers
     /// to the whole of `SAMPLES`.
     pub fn takes_samples(&self, count: u16) -> bool {
-        let floor = if self.segment.bends() { SAMPLES.0 } else { 1 };
-        (floor..=SAMPLES.1).contains(&count)
+        samples_fit(self.segment.bends(), count)
     }
+}
+
+/// Whether a tract that bends, or does not, may be flattened at `count`.
+///
+/// The rule lives here rather than on `ContourNode` because the edit that
+/// inserts a node has to ask it about a tract the contour does not carry yet.
+pub(crate) fn samples_fit(bends: bool, count: u16) -> bool {
+    let floor = if bends { SAMPLES.0 } else { 1 };
+    (floor..=SAMPLES.1).contains(&count)
 }
 
 impl Winding {

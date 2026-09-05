@@ -1,4 +1,4 @@
-use eframe::egui::{Align2, FontId, Painter, Pos2, Rect, Stroke, StrokeKind, vec2};
+use eframe::egui::{Align2, FontId, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, vec2};
 use toile_engine::draft::{Draft, PieceKey, PointKey};
 
 use super::curve::{self, Bend};
@@ -141,6 +141,38 @@ fn guide(p: &Painter, ink: Stroke, from: Pos2, to: Pos2) {
         let tail = from + step * (along + DASH).min(span + GUIDE);
         p.line_segment([head, tail], ink);
         along += 2.0 * DASH;
+    }
+}
+
+/// The fewest placed vertices that let the contour close, mirrored from the
+/// drawing gesture: under it the first vertex wears no ring, because a click
+/// there would not close anything.
+const CLOSABLE: usize = 3;
+
+/// The piece being drawn: its vertices, the line through them, and the rubber
+/// line to wherever the pointer is.
+///
+/// Once the contour can close, the first vertex wears a ring — the one place
+/// a press ends the drawing instead of extending it, marked so nobody has to
+/// know it.
+pub fn drawing(p: &Painter, theme: &Theme, view: View, pending: &[[f64; 2]], rubber: [f64; 2]) {
+    let pts: Vec<Pos2> = pending.iter().map(|&at| view.to_screen(at)).collect();
+    if let Some(&last) = pts.last() {
+        p.line_segment(
+            [last, view.to_screen(rubber)],
+            Stroke::new(1.0, theme.accent.gamma_multiply(0.55)),
+        );
+    }
+    if pts.len() >= 2 {
+        p.add(Shape::line(pts.clone(), Stroke::new(1.5, theme.accent)));
+    }
+    for &at in &pts {
+        p.circle_filled(at, 3.0, theme.accent);
+    }
+    if pending.len() >= CLOSABLE
+        && let Some(&first) = pts.first()
+    {
+        p.circle_stroke(first, 8.0, Stroke::new(1.2, theme.measure));
     }
 }
 

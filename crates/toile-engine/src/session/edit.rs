@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use super::{Session, SessionError};
 use crate::draft::{Command, Recompile};
 
@@ -97,49 +95,21 @@ impl Session {
     }
 
     /// Pays whatever the last change to the document cost the drape.
+    ///
+    /// The two branches are the two budgets: a shape edit is derived here and
+    /// now, a topology edit goes to the mesher and comes back when it is
+    /// ready. Neither of them blocks on the solver.
     fn recompile(&mut self, what: Recompile) -> Result<(), SessionError> {
         let Some(piece) = self.piece() else {
             return Ok(());
         };
         match what {
             Recompile::Shape(pieces) if pieces.contains(&piece) => self.rederive(),
-            Recompile::Nothing | Recompile::Shape(_) => Ok(()),
-            Recompile::Topology(_) => Err(SessionError::NoRemesher),
+            Recompile::Topology(pieces) if pieces.contains(&piece) => {
+                self.remesh();
+                Ok(())
+            }
+            Recompile::Nothing | Recompile::Shape(_) | Recompile::Topology(_) => Ok(()),
         }
-    }
-
-    /// Re-derives the drafted piece from its current geometry.
-    ///
-    /// A piece that has stopped resolving keeps the mesh it had: the viewer
-    /// goes on showing the last good drape while the formula is fixed.
-    fn rederive(&mut self) -> Result<(), SessionError> {
-        let Some(drafted) = self.drafted.as_ref() else {
-            return Ok(());
-        };
-        let piece = drafted.piece;
-        let topology = drafted.draft.topology(piece);
-        let outline = drafted.draft.outline(piece).to_vec();
-        if outline.is_empty() {
-            return Ok(());
-        }
-        if topology != self.slot.topology() {
-            return Err(SessionError::TopologyMismatch {
-                piece,
-                expected: self.slot.topology(),
-                got: topology,
-            });
-        }
-        self.send(outline)
-    }
-
-    /// Derives a contour into rest lengths and hands them to the sim thread.
-    fn send(&mut self, contour: Vec<[f64; 2]>) -> Result<(), SessionError> {
-        let t = Instant::now();
-        let rests = self.slot.derive(&contour)?.to_vec();
-        self.last_derive_ms = t.elapsed().as_secs_f64() * 1000.0;
-        self.contour = contour;
-        self.generation += 1;
-        self.handle.send_rests(self.generation, rests);
-        Ok(())
     }
 }

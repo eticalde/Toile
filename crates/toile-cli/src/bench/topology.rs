@@ -1,7 +1,9 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use toile_engine::couture::{ShapePipeline, transfer_state};
 use toile_engine::demo;
+use toile_engine::draft::{Command, Draft, Identity, PieceKey, Point, SegmentEdit, block};
+use toile_engine::session::Session;
 use toile_mesh::transfer;
 use toile_sim::xpbd::{self, Seams};
 
@@ -9,6 +11,9 @@ use super::scene::{DT, same_bits, seconds, settle};
 
 /// Substeps of drape before the topology change.
 const DRAPE_SUBSTEPS: usize = 600;
+
+/// The budget one topology edit has, end to end.
+const BUDGET_MS: f64 = 500.0;
 
 struct Swap {
     rebuild_ms: f64,
@@ -100,6 +105,85 @@ fn foldovers() {
     }
 }
 
+/// What one topology edit costs the person, stage by stage.
+struct Front {
+    resolve_ms: f64,
+    remesh_ms: f64,
+    to_solver_ms: f64,
+    verts: (usize, usize),
+    nodes: (usize, usize),
+}
+
+/// A node at the middle of the first straight tract, pulled a centimetre out:
+/// the point tool of this phase, on the block the editor opens with.
+fn inserted(session: &Session) -> Command {
+    let piece = session.piece().expect("the session has a document");
+    let draft = session.draft().expect("the session has a document");
+    let nodes = draft.points_cm(piece);
+    let seat = seat(draft, piece);
+    let (after, from) = nodes[seat];
+    let to = nodes[(seat + 1) % nodes.len()].1;
+    Command::InsertNode {
+        piece,
+        after: Some(after),
+        identity: Identity::New,
+        value: Point::at(
+            f64::midpoint(from[0], to[0]),
+            f64::midpoint(from[1], to[1]) - 1.0,
+        ),
+        segment: SegmentEdit::Line,
+        samples: 1,
+    }
+}
+
+/// Where in the contour the first straight tract starts.
+fn seat(draft: &Draft, piece: PieceKey) -> usize {
+    draft
+        .doc()
+        .pieces
+        .get(piece)
+        .expect("the piece is live")
+        .contour
+        .iter()
+        .position(|node| !node.segment.bends())
+        .expect("the block draws at least one straight tract")
+}
+
+/// One topology edit on the trouser front, measured end to end.
+///
+/// This is the whole road the person walks: the document resolves, the mesher
+/// rebuilds off the interface thread, and the swap reaches the solver, which
+/// went on integrating the old mesh the entire time.
+fn front() -> Front {
+    let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
+    let verts_before = session.n_vertices();
+    let nodes_before = session.contour().len();
+    // A swap that carries nothing is not the case under test: the panel has to
+    // be draping when the mesh is pulled from under it.
+    while session.snapshot().substeps < DRAPE_SUBSTEPS as u64 {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+
+    let command = inserted(&session);
+    let t0 = Instant::now();
+    session.edit(command).expect("a node goes into the contour");
+    let resolve_ms = t0.elapsed().as_secs_f64() * 1000.0;
+    session
+        .wait_for_remesh()
+        .expect("the mesher rebuilds the piece");
+    // The solver publishes the new vertex count once it has taken the swap.
+    while session.snapshot().positions.len() != session.n_vertices() * 3 {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    Front {
+        resolve_ms,
+        remesh_ms: session.last_remesh_ms,
+        to_solver_ms: t0.elapsed().as_secs_f64() * 1000.0,
+        verts: (verts_before, session.n_vertices()),
+        nodes: (nodes_before, session.contour().len()),
+    }
+}
+
 fn mesh_hash(p: &ShapePipeline) -> u64 {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     let mut eat = |x: u64| h = (h ^ x).wrapping_mul(0x0100_0000_01b3);
@@ -131,6 +215,23 @@ pub fn run() {
     );
     println!("determinismo            {}", same_bits(a.hash, b.hash));
 
+    let front = front();
+    println!("\n── delantero del pantalón · insertar un nodo a mitad de drapeado ──");
+    println!(
+        "contorno                {} → {} nodos · malla {} → {} vértices",
+        front.nodes.0, front.nodes.1, front.verts.0, front.verts.1
+    );
+    println!(
+        "resolver el documento   {:7.1} ms  (el hilo de UI no espera más que esto)",
+        front.resolve_ms
+    );
+    println!("remallado en el worker  {:7.1} ms", front.remesh_ms);
+    println!(
+        "hasta el solver         {:7.1} ms  (presupuesto: <{BUDGET_MS:.0} ms) · {}",
+        front.to_solver_ms,
+        verdict(front.to_solver_ms)
+    );
+
     foldovers();
 
     // Undo rebuilds from the original contour: the sampling map lives in the
@@ -148,4 +249,9 @@ pub fn run() {
             "DIFIERE ❌"
         }
     );
+}
+
+/// Whether the edit stayed inside its budget.
+fn verdict(ms: f64) -> &'static str {
+    if ms < BUDGET_MS { "dentro" } else { "FUERA" }
 }

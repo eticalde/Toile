@@ -4,6 +4,13 @@ use toile_mesh::cdt::MeshError;
 use toile_mesh::{cdt, interp};
 use toile_sim::xpbd::DistanceConstraints;
 
+/// Uniform stretch compliance, until fabric presets bring anisotropy.
+///
+/// It lives beside the mesh rather than beside the session because a mesh swap
+/// carries its own constraints: the compliance the solver runs on and the one
+/// a rebuild is compiled at have to be the same number.
+pub const COMPLIANCE: f32 = 1.0e-8;
+
 /// What stops an edited contour from becoming a rest state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum RestStateError {

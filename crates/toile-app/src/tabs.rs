@@ -39,13 +39,14 @@ impl Tab {
         }
     }
 
-    /// The cells of the status bar, left to right.
+    /// The cells of the status bar, left to right, each saying whether it is
+    /// an alert.
     ///
     /// The drafting tab's own state comes along because some of what the bar
     /// has to report is not in the document: an edit the session refused
-    /// leaves the drawing untouched and the drape behind, and the bar is the
-    /// only place that says so.
-    pub fn status(self, session: &Session, patronaje: &patronaje::State) -> Vec<String> {
+    /// leaves the drawing untouched, and the bar is the only place that says
+    /// so.
+    pub fn status(self, session: &Session, patronaje: &patronaje::State) -> Vec<(String, bool)> {
         let fixed: &[&str] = match self {
             Self::Maniquies => &["maniquí Etienne", "12 medidas", "cm"],
             Self::Patronaje => return patronaje::status(session, patronaje),
@@ -58,14 +59,17 @@ impl Tab {
                     "sim corriendo"
                 };
                 return vec![
-                    format!("substeps {}", snap.substeps),
-                    sim.to_owned(),
-                    format!("derive {:.1} ms", session.last_derive_ms),
-                    "Etienne · Pantalón base · Algodón popelina".to_owned(),
+                    (format!("substeps {}", snap.substeps), false),
+                    (sim.to_owned(), false),
+                    (format!("derive {:.1} ms", session.last_derive_ms), false),
+                    (
+                        "Etienne · Pantalón base · Algodón popelina".to_owned(),
+                        false,
+                    ),
                 ];
             }
         };
-        fixed.iter().map(|s| (*s).to_owned()).collect()
+        fixed.iter().map(|s| ((*s).to_owned(), false)).collect()
     }
 
     pub fn show(self, ui: &mut egui::Ui, w: &mut Workspace<'_>) {

@@ -6,9 +6,22 @@ use crossbeam_channel::{RecvTimeoutError, Sender, TryRecvError, unbounded};
 use toile_sim::xpbd::{DistanceConstraints, SdfGrid, State};
 
 use super::worker::{Sim, Snapshot};
+use crate::couture::MeshSwap;
 
 enum Msg {
-    RestUpdate { generation: u64, rests: Vec<f32> },
+    RestUpdate {
+        generation: u64,
+        rests: Vec<f32>,
+    },
+    /// A piece re-meshed elsewhere, with the drape to carry onto it.
+    ///
+    /// Boxed because it is an order of magnitude wider than a rest update, and
+    /// an enum as wide as its widest variant would put a whole mesh on the
+    /// stack of every message the sim thread ever receives.
+    MeshSwap {
+        generation: u64,
+        swap: Box<MeshSwap>,
+    },
     Stop,
 }
 
@@ -23,6 +36,15 @@ impl SimHandle {
     /// Hot-swaps the rest state. Does not block.
     pub fn send_rests(&self, generation: u64, rests: Vec<f32>) {
         let _ = self.tx.send(Msg::RestUpdate { generation, rests });
+    }
+
+    /// Hands the sim a mesh built elsewhere. Does not block.
+    ///
+    /// The solver goes on integrating the mesh it has until the message
+    /// reaches the top of the mailbox, which is what keeps a topology edit off
+    /// the interface thread and out of the drape.
+    pub fn send_swap(&self, generation: u64, swap: Box<MeshSwap>) {
+        let _ = self.tx.send(Msg::MeshSwap { generation, swap });
     }
 
     /// The most recent published snapshot. Does not block.
@@ -132,7 +154,13 @@ enum Drained {
     Stop,
 }
 
-/// Empties the mailbox, applying the last rest update to arrive.
+/// Empties the mailbox in order, keeping whatever the messages leave behind.
+///
+/// This runs between ticks and never inside one, which is what makes a mesh
+/// swap safe: the state it carries onto the new mesh is always a whole
+/// substep's worth. A message the sim refuses is recorded rather than retried
+/// — it was compiled against a mesh that no longer exists, and the edit that
+/// replaced it has a message of its own further down the mailbox.
 fn drain(rx: &crossbeam_channel::Receiver<Msg>, first: Option<Msg>, sim: &mut Sim) -> Drained {
     let mut pending = first;
     loop {
@@ -144,9 +172,13 @@ fn drain(rx: &crossbeam_channel::Receiver<Msg>, first: Option<Msg>, sim: &mut Si
                 Err(TryRecvError::Disconnected) => return Drained::Stop,
             },
         };
-        match m {
+        let taken = match m {
             Msg::Stop => return Drained::Stop,
             Msg::RestUpdate { generation, rests } => sim.apply_rests(generation, &rests),
+            Msg::MeshSwap { generation, swap } => sim.apply_swap(generation, swap),
+        };
+        if let Err(why) = taken {
+            sim.refuse(why);
         }
     }
 }

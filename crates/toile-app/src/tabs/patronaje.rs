@@ -21,9 +21,11 @@ mod wire;
 
 use eframe::egui;
 pub use state::State;
-use toile_engine::draft::{Draft, PieceKey};
+use toile_engine::draft::{Command, Draft, PieceKey};
 use toile_engine::session::Session;
 
+use self::gesture::Gesture;
+use self::state::Tool;
 use self::wire::Verb;
 use crate::tabs::{Workspace, left_panel, right_panel};
 
@@ -47,9 +49,31 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let state = &mut *w.patronaje;
     let mut verbs = Vec::new();
     verbs.extend(left_panel(ui, theme, |ui| {
-        tree::product(ui, theme, draft, piece);
+        let plea = tree::product(ui, theme, draft, piece);
         tools::grid(ui, theme, state);
-        tools::history(ui, theme, ready)
+        let mut asked: Vec<Verb> = tools::history(ui, theme, ready).into_iter().collect();
+        match plea.filter(|_| !asking) {
+            // "+ Pieza" puts the Line tool in hand with the drawing already
+            // begun, so the very next click on the mat places a vertex. A
+            // drawing already in progress starts over: the row was pressed
+            // to start one.
+            Some(tree::Plea::Draw)
+                if matches!(state.gesture, Gesture::Idle | Gesture::Drawing { .. }) =>
+            {
+                state.tool = Tool::Line;
+                state.gesture = Gesture::Drawing {
+                    pending: Vec::new(),
+                    rubber: [0.0, 0.0],
+                };
+            }
+            Some(tree::Plea::Remove(key)) => {
+                asked.push(Verb::Begin("borrar pieza"));
+                asked.push(Verb::Edit(Box::new(Command::RemovePiece { piece: key })));
+                asked.push(Verb::End);
+            }
+            Some(tree::Plea::Draw) | None => {}
+        }
+        asked
     }));
     let asked = right_panel(ui, theme, |ui| {
         inspector::show(ui, theme, draft, piece, state)
@@ -76,9 +100,9 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
 ///
 /// A refused edit leaves the document exactly as it was, and the panels go on
 /// drawing it: the table never shows a state it cannot resolve. What must not
-/// be swallowed is the refusal itself. A change of topology has no re-mesher
-/// yet, so it comes back refused and the piece on the stand stops following
-/// the table — visibly, or it is the drawing quietly parting from the cloth.
+/// be swallowed is the refusal itself — the drawing goes on being edited
+/// either way, and a refusal nobody says is the piece on the stand quietly
+/// parting from the table.
 ///
 /// Answers whether what there is to say changed, which is what asks for the
 /// frame that says it.
@@ -115,9 +139,12 @@ fn apply(session: &mut Session, verbs: Vec<Verb>, said: &mut Option<String>) -> 
 }
 
 /// The cells of the status bar, measured off the document on the table.
-pub fn status(session: &Session, state: &State) -> Vec<String> {
+///
+/// Each cell says whether it is an alert: a refused edit and a broken contour
+/// are painted to be seen, and everything else stays quiet.
+pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
     let (Some(draft), Some(piece)) = (session.draft(), session.piece()) else {
-        return vec!["mesa vacía".to_owned(), "cm".to_owned()];
+        return vec![("mesa vacía".to_owned(), false), ("cm".to_owned(), false)];
     };
     let name = draft
         .doc()
@@ -125,20 +152,20 @@ pub fn status(session: &Session, state: &State) -> Vec<String> {
         .get(piece)
         .map_or_else(String::new, |held| held.name.clone());
     let mut cells = vec![
-        name,
-        format!("{} puntos", draft.points_cm(piece).len()),
-        side_cell(draft, piece),
+        (name, false),
+        (format!("{} puntos", draft.points_cm(piece).len()), false),
+        (side_cell(draft, piece), false),
     ];
     if !draft.defects(piece).is_empty() {
-        cells.push("contorno con defectos".to_owned());
+        cells.push(("contorno con defectos".to_owned(), true));
     }
     if let Some(why) = state.refused.as_deref() {
-        cells.push(format!("drapeado sin actualizar: {why}"));
+        cells.push((format!("rechazado: {why}"), true));
     }
     if let Some(label) = session.undo_label().filter(|label| !label.is_empty()) {
-        cells.push(format!("deshacer {label}"));
+        cells.push((format!("deshacer {label}"), false));
     }
-    cells.push("cm".to_owned());
+    cells.push(("cm".to_owned(), false));
     cells
 }
 
@@ -165,10 +192,10 @@ mod tests {
 
     use super::*;
 
-    /// The first change of topology has no re-mesher to answer it, so the
-    /// session refuses it and the piece on the stand stops following the
-    /// table. The drawing goes on being edited either way, which is exactly
-    /// why the refusal has to be said out loud instead of dropped.
+    /// The two edits the table takes in its stride say nothing: a shape edit
+    /// re-derives, a topology edit goes to the mesher. The one the document
+    /// refuses has to reach the status bar, because the drawing goes on being
+    /// edited either way.
     #[test]
     fn an_edit_the_session_refuses_is_said_in_the_status_bar() {
         let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
@@ -196,12 +223,22 @@ mod tests {
             node,
             to: 24,
         }));
-        assert!(apply(&mut session, vec![sampled], &mut state.refused));
+        assert!(!apply(&mut session, vec![sampled], &mut state.refused));
+        assert!(session.remeshing(), "the rebuild is out with the mesher");
+
+        // A sample count no tract may take: the document refuses it, and the
+        // table has to say so.
+        let refused = Verb::Edit(Box::new(Command::SetSamples {
+            piece,
+            node,
+            to: 4096,
+        }));
+        assert!(apply(&mut session, vec![refused], &mut state.refused));
         let cells = status(&session, &state);
         assert!(
             cells
                 .iter()
-                .any(|cell| cell.starts_with("drapeado sin actualizar")),
+                .any(|(cell, alert)| cell.starts_with("rechazado") && *alert),
             "{cells:?}"
         );
     }

@@ -1,7 +1,11 @@
+mod layout;
+mod pipeline;
 mod sphere;
 
 use eframe::egui_wgpu::RenderState;
 use eframe::wgpu;
+use layout::BufferPlan;
+use pipeline::build_pipeline;
 
 use crate::theme::Theme;
 
@@ -9,16 +13,13 @@ const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 const SHADER: &str = include_str!("render/shader.wgsl");
 
-/// Position, normal and colour, interleaved.
-const VERTEX_STRIDE: u64 = 9 * 4;
-
 /// Sixteen matrix floats plus a padded light vector.
 const UNIFORM_BYTES: u64 = 80;
 
 /// Renders the drape to an offscreen texture that egui shows as an image.
 ///
 /// One pipeline and two meshes in one pair of buffers: the cloth, re-uploaded
-/// each frame, and the avatar, written once.
+/// each frame, and the avatar, written on every (re)allocation.
 pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     vbuf: wgpu::Buffer,
@@ -31,7 +32,13 @@ pub struct Renderer {
     size: (u32, u32),
     clear: wgpu::Color,
     n_cloth_verts: usize,
-    n_indices: u32,
+    /// The index list as uploaded, kept so [`Renderer::fits`] can answer by
+    /// content: after a swap that happens to keep the counts, only the
+    /// triangles themselves say the buffers are stale.
+    indices: Vec<u32>,
+    /// The avatar's mesh, kept so a resize can re-upload it at its new offset.
+    sphere_verts: Vec<f32>,
+    sphere_idx: Vec<u32>,
 }
 
 impl Renderer {
@@ -51,30 +58,9 @@ impl Renderer {
         // resting on it for the depth buffer.
         let (sphere_verts, sphere_idx) =
             sphere::uv_sphere(avatar_radius * 0.995, 40, 20, theme.avatar);
-        let n_sphere_verts = sphere_verts.len() / 9;
 
-        let vbuf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("toile-vbuf"),
-            size: (n_cloth_verts + n_sphere_verts) as u64 * VERTEX_STRIDE,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        rs.queue.write_buffer(
-            &vbuf,
-            n_cloth_verts as u64 * VERTEX_STRIDE,
-            bytemuck::cast_slice(&sphere_verts),
-        );
-
-        let mut indices: Vec<u32> = cloth_tris.to_vec();
-        indices.extend(sphere_idx.iter().map(|&i| i + n_cloth_verts as u32));
-        let ibuf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("toile-ibuf"),
-            size: (indices.len() * 4) as u64,
-            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        rs.queue
-            .write_buffer(&ibuf, 0, bytemuck::cast_slice(&indices));
+        let plan = layout::plan(n_cloth_verts, cloth_tris, &sphere_verts, &sphere_idx);
+        let (vbuf, ibuf) = alloc_buffers(rs, &plan, &sphere_verts);
 
         let ubuf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("toile-ubuf"),
@@ -103,8 +89,37 @@ impl Renderer {
             size: (0, 0),
             clear: theme.clear_color(),
             n_cloth_verts,
-            n_indices: indices.len() as u32,
+            indices: plan.indices,
+            sphere_verts,
+            sphere_idx,
         }
+    }
+
+    /// The cloth vertex count the buffers are sized for.
+    pub fn n_cloth_verts(&self) -> usize {
+        self.n_cloth_verts
+    }
+
+    /// Whether the buffers on hand were built for exactly this cloth.
+    pub fn fits(&self, n_verts: usize, cloth_tris: &[u32]) -> bool {
+        let n_cloth_idx = self.indices.len() - self.sphere_idx.len();
+        n_verts == self.n_cloth_verts && *cloth_tris == self.indices[..n_cloth_idx]
+    }
+
+    /// Reallocates the mesh buffers for a new cloth topology and re-uploads
+    /// what does not change per frame: the indices and the avatar.
+    ///
+    /// The offscreen texture is left alone on purpose. It keeps showing the
+    /// last painted frame until the first [`Renderer::paint`] of the new
+    /// topology, which is what a mesh swap looks like when it does not
+    /// flicker.
+    pub fn resize(&mut self, rs: &RenderState, n_verts: usize, cloth_tris: &[u32]) {
+        let plan = layout::plan(n_verts, cloth_tris, &self.sphere_verts, &self.sphere_idx);
+        let (vbuf, ibuf) = alloc_buffers(rs, &plan, &self.sphere_verts);
+        self.vbuf = vbuf;
+        self.ibuf = ibuf;
+        self.n_cloth_verts = n_verts;
+        self.indices = plan.indices;
     }
 
     fn ensure_targets(&mut self, rs: &RenderState, w: u32, h: u32) {
@@ -150,7 +165,7 @@ impl Renderer {
     ///
     /// # Panics
     /// If called before [`Renderer::new`] has established the targets, or if
-    /// `cloth_vertices` does not match the vertex count it was built with.
+    /// `cloth_vertices` does not match the count the buffers are sized for.
     pub fn paint(
         &mut self,
         rs: &RenderState,
@@ -201,72 +216,37 @@ impl Renderer {
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_vertex_buffer(0, self.vbuf.slice(..));
             pass.set_index_buffer(self.ibuf.slice(..), wgpu::IndexFormat::Uint32);
-            pass.draw_indexed(0..self.n_indices, 0, 0..1);
+            pass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
         }
         rs.queue.submit([encoder.finish()]);
     }
 }
 
-fn build_pipeline(device: &wgpu::Device) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("toile"),
-        source: wgpu::ShaderSource::Wgsl(SHADER.into()),
+/// Creates the vertex and index buffers for a plan and uploads what only
+/// changes with the topology: the avatar's vertices and the index list.
+fn alloc_buffers(
+    rs: &RenderState,
+    plan: &BufferPlan,
+    sphere_verts: &[f32],
+) -> (wgpu::Buffer, wgpu::Buffer) {
+    let vbuf = rs.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("toile-vbuf"),
+        size: plan.vbuf_bytes,
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     });
-    let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        label: None,
-        entries: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-            ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Uniform,
-                has_dynamic_offset: false,
-                min_binding_size: None,
-            },
-            count: None,
-        }],
+    rs.queue.write_buffer(
+        &vbuf,
+        plan.sphere_offset,
+        bytemuck::cast_slice(sphere_verts),
+    );
+    let ibuf = rs.device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("toile-ibuf"),
+        size: (plan.indices.len() * 4) as u64,
+        usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
     });
-    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        label: None,
-        bind_group_layouts: &[Some(&bgl)],
-        immediate_size: 0,
-    });
-    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        label: Some("toile-mesh"),
-        layout: Some(&layout),
-        vertex: wgpu::VertexState {
-            module: &shader,
-            entry_point: Some("vs_main"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            buffers: &[Some(wgpu::VertexBufferLayout {
-                array_stride: VERTEX_STRIDE,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x3],
-            })],
-        },
-        fragment: Some(wgpu::FragmentState {
-            module: &shader,
-            entry_point: Some("fs_main"),
-            compilation_options: wgpu::PipelineCompilationOptions::default(),
-            targets: &[Some(wgpu::ColorTargetState {
-                format: COLOR_FORMAT,
-                blend: None,
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-        }),
-        primitive: wgpu::PrimitiveState {
-            cull_mode: None, // cloth is two-sided
-            ..wgpu::PrimitiveState::default()
-        },
-        depth_stencil: Some(wgpu::DepthStencilState {
-            format: DEPTH_FORMAT,
-            depth_write_enabled: Some(true),
-            depth_compare: Some(wgpu::CompareFunction::Less),
-            stencil: wgpu::StencilState::default(),
-            bias: wgpu::DepthBiasState::default(),
-        }),
-        multisample: wgpu::MultisampleState::default(),
-        multiview_mask: None,
-        cache: None,
-    });
-    (pipeline, bgl)
+    rs.queue
+        .write_buffer(&ibuf, 0, bytemuck::cast_slice(&plan.indices));
+    (vbuf, ibuf)
 }

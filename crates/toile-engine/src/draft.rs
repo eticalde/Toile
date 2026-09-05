@@ -23,6 +23,7 @@ pub use toile_doc::{
     Piece, PieceKey, Point, PointKey, SAMPLES, SeamKey, Segment, SegmentEdit, Variable,
     VariableKey, Winding,
 };
+pub use toile_geom::curve;
 pub use toile_geom::validate::ContourFault;
 
 /// What stops the document from being drafted.
@@ -36,13 +37,12 @@ pub enum DraftError {
     Env(#[from] EnvError),
 }
 
-/// One piece as the draft holds it: its last good geometry, whatever is wrong
-/// with it now, and how many times its topology has moved.
+/// One piece as the draft holds it: its last good geometry and whatever is
+/// wrong with it now.
 #[derive(Debug, Clone, Default, PartialEq)]
 struct Compiled {
     good: Resolved,
     defects: Vec<Defect>,
-    topology: u64,
 }
 
 /// A document and the geometry it currently resolves to.
@@ -59,6 +59,12 @@ pub struct Draft {
     history: History,
     points: BTreeMap<PointKey, [f64; 2]>,
     pieces: BTreeMap<PieceKey, Compiled>,
+    /// Each piece's topology count, kept apart from its geometry because it
+    /// obeys a different law: a mesh is told apart from a stale rebuild by
+    /// this number alone, so a count may never be reissued. The geometry of a
+    /// removed piece is dropped; its count stays, and keeps climbing when
+    /// undo restores the same key.
+    topologies: BTreeMap<PieceKey, u64>,
 }
 
 impl Draft {
@@ -75,6 +81,7 @@ impl Draft {
             history: History::new(),
             points: BTreeMap::new(),
             pieces: BTreeMap::new(),
+            topologies: BTreeMap::new(),
         };
         draft.resolve_all()?;
         Ok(draft)
@@ -172,9 +179,12 @@ impl Draft {
     /// How many times a piece's topology has changed under this draft.
     ///
     /// Derivation state: it is not saved, not undone, and not part of the
-    /// document. A mesh built at one count cannot be warm-started at another.
+    /// document. A mesh built at one count cannot be warm-started at another,
+    /// and the count outlives even the piece's removal — undoing a delete
+    /// restores the key, so a rewound counter would let a rebuild from before
+    /// the delete pass for current.
     pub fn topology(&self, piece: PieceKey) -> u64 {
-        self.pieces.get(&piece).map_or(0, |held| held.topology)
+        self.topologies.get(&piece).copied().unwrap_or_default()
     }
 
     /// Applies a command, records it, and says what has to be recompiled.
@@ -209,7 +219,7 @@ impl Draft {
         self.resolve_all()?;
         if let Recompile::Topology(pieces) = &what {
             for &piece in pieces {
-                self.pieces.entry(piece).or_default().topology += 1;
+                *self.topologies.entry(piece).or_default() += 1;
             }
         }
         Ok(what)

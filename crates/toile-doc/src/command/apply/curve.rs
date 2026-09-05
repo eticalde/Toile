@@ -1,6 +1,6 @@
 use crate::{
     Applied, ChangeClass, Command, ContourNode, Doc, DocError, Handle, Handles, Identity, PieceKey,
-    PointKey, SAMPLES, Segment, SegmentEdit,
+    Point, PointKey, SAMPLES, Segment, SegmentEdit,
 };
 
 /// Changes what runs from a node to the next one, handles and all.
@@ -99,7 +99,7 @@ fn sampled(node: ContourNode, to: &SegmentEdit) -> Result<(), DocError> {
 }
 
 /// The edit that puts `was` back, its handles and their bindings included.
-fn puts_back(doc: &Doc, was: Segment) -> Result<SegmentEdit, DocError> {
+pub(super) fn puts_back(doc: &Doc, was: Segment) -> Result<SegmentEdit, DocError> {
     let Some((out, into)) = was.handles() else {
         return Ok(SegmentEdit::Line);
     };
@@ -156,28 +156,51 @@ fn checked(doc: &Doc, was: Segment, to: &SegmentEdit) -> Result<(), DocError> {
 
 /// Takes the handles of `was` out of the document and puts those of `to` in.
 fn swap(doc: &mut Doc, was: Segment, to: SegmentEdit) -> Result<Segment, DocError> {
+    uninstall(doc, was)?;
+    install(doc, to)
+}
+
+/// Takes the handles a tract hangs on out of the document.
+///
+/// # Errors
+/// `DocError::StaleKey` for a handle the document has already lost, which a
+/// live tract cannot have.
+pub(super) fn uninstall(doc: &mut Doc, was: Segment) -> Result<(), DocError> {
     if let Some((out, into)) = was.handles() {
         doc.points.remove(out)?;
         doc.points.remove(into)?;
     }
+    Ok(())
+}
+
+/// Puts the handles an edit brings into the document and hands back the tract.
+///
+/// # Errors
+/// `DocError::Occupied` for a key another point still holds, and
+/// `DocError::StaleKey` for a key no slot answers to.
+pub(super) fn install(doc: &mut Doc, to: SegmentEdit) -> Result<Segment, DocError> {
     match to {
         SegmentEdit::Line => Ok(Segment::Line),
         SegmentEdit::Cubic(handles) => {
             let Handles { out, into } = *handles;
             Ok(Segment::Cubic {
-                out: place(doc, out)?,
-                into: place(doc, into)?,
+                out: place(doc, out.identity, out.value)?,
+                into: place(doc, into.identity, into.value)?,
             })
         }
     }
 }
 
-/// Puts one handle into the document under the key it asked for.
-fn place(doc: &mut Doc, handle: Handle) -> Result<PointKey, DocError> {
-    match handle.identity {
-        Identity::New => Ok(doc.points.insert(handle.value)),
+/// Puts one point into the document under the key it asked for.
+pub(super) fn place(
+    doc: &mut Doc,
+    identity: Identity<Point>,
+    value: Point,
+) -> Result<PointKey, DocError> {
+    match identity {
+        Identity::New => Ok(doc.points.insert(value)),
         Identity::Restored(key) => {
-            doc.points.restore(key, handle.value)?;
+            doc.points.restore(key, value)?;
             Ok(key)
         }
     }

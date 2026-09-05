@@ -21,9 +21,6 @@ pub enum SessionError {
     /// An edit sent to a session that drapes the demo scene.
     #[error("this session drapes a demo scene, so it has no document to edit")]
     NoDocument,
-    /// A topology edit, which needs a mesh the session cannot build yet.
-    #[error("a change of topology needs the re-mesher, which is not built yet")]
-    NoRemesher,
     /// The document refused the edit.
     #[error(transparent)]
     Draft(#[from] DraftError),

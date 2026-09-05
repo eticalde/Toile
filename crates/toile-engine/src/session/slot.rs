@@ -28,6 +28,16 @@ impl PieceSlot {
         self.topology
     }
 
+    /// Puts a freshly built mesh in the slot, at the count it was built from.
+    ///
+    /// The count moves with the mesh and never on its own: that is what makes
+    /// a mismatch mean a real disagreement rather than a missed bookkeeping
+    /// step somewhere else.
+    pub fn swap_in(&mut self, pipeline: ShapePipeline, topology: u64) {
+        self.pipeline = pipeline;
+        self.topology = topology;
+    }
+
     /// Recompiles an edited contour into rest lengths.
     ///
     /// # Errors

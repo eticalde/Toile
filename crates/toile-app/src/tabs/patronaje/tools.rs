@@ -11,11 +11,11 @@ use crate::widgets::{CORNER, PAD, section};
 /// nothing, because a button that lies is worse than a gap.
 const TOOLS: [(&str, &str, bool); 9] = [
     ("Seleccionar", "3 2 13 8 8.8 9 7 13 3 2", true),
-    ("Punto", "o 8 8 2.5", false),
+    ("Punto", "o 8 8 2.5", true),
     (
         "Recta",
         "3.5 12.5 12.5 3.5; o 3.5 12 1.4; o 12 3.5 1.4",
-        false,
+        true,
     ),
     (
         "Curva",
@@ -38,6 +38,8 @@ const MEASURE: &str = "Medir";
 fn tool_of(name: &str) -> Option<Tool> {
     match name {
         "Seleccionar" => Some(Tool::Select),
+        "Punto" => Some(Tool::Point),
+        "Recta" => Some(Tool::Line),
         "Curva" => Some(Tool::Curve),
         _ => None,
     }

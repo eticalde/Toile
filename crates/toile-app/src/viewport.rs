@@ -1,5 +1,6 @@
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
+use toile_engine::session::Session;
 use toile_engine::sync::Snapshot;
 
 use crate::camera::{Camera, norm3};
@@ -42,10 +43,11 @@ impl Viewport {
         size: egui::Vec2,
         rs: &RenderState,
         theme: &Theme,
-        snap: &Snapshot,
+        session: &Session,
     ) {
-        if !snap.positions.is_empty() {
-            self.upload(snap);
+        let snap = session.snapshot();
+        if self.accept(rs, session, &snap) {
+            self.upload(&snap);
             let ppp = ui.ctx().pixels_per_point();
             let uniforms = self.uniforms(size.x / size.y.max(1.0));
             self.renderer.paint(
@@ -77,6 +79,32 @@ impl Viewport {
             resp.rect,
             "3D — arrastra para orbitar · rueda para zoom",
         );
+    }
+
+    /// Whether this frame can be painted, resizing the buffers when it is the
+    /// first frame of a topology the table has already moved to.
+    ///
+    /// While a mesh swap is in flight the solver still publishes frames of
+    /// the topology the buffers hold, and they keep painting into them. A
+    /// frame that fits neither the buffers nor the piece on the table belongs
+    /// to a mesh both sides have left behind: it is skipped, and the texture
+    /// keeps the last painted frame — which is why a swap never flickers.
+    fn accept(&mut self, rs: &RenderState, session: &Session, snap: &Snapshot) -> bool {
+        let n = snap.positions.len() / 3;
+        if n == 0 || snap.normals.len() != snap.positions.len() {
+            return false;
+        }
+        // Counts cannot tell the frames apart on their own: two topologies
+        // can share a vertex count without sharing a triangulation, and a
+        // frame published before the swap would then be painted with the new
+        // mesh's indices. The generation says which mesh a frame belongs to.
+        if snap.generation < session.mesh_generation() {
+            return false;
+        }
+        if n == session.n_vertices() && !self.renderer.fits(n, session.triangles()) {
+            self.renderer.resize(rs, n, session.triangles());
+        }
+        n == self.renderer.n_cloth_verts()
     }
 
     /// Interleaves the snapshot into the renderer's vertex layout.

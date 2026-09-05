@@ -1,7 +1,7 @@
 use crate::{
-    Axis, Binding, ContourNode, Dart, DartKey, DartWedge, EdgeAnchor, Grain, Identity,
-    MannequinKey, Notch, NotchKey, Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey,
-    SegmentEdit, Symmetry, SymmetryKey, VariableKey,
+    Axis, Binding, Dart, DartKey, DartWedge, EdgeAnchor, Grain, Identity, MannequinKey, Notch,
+    NotchKey, Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey, SegmentEdit, Symmetry,
+    SymmetryKey, VariableKey,
 };
 
 /// A reversible edit to the document.
@@ -34,12 +34,17 @@ pub enum Command {
     /// Chooses the body the pattern resolves against.
     ResolveWith { mannequin: MannequinKey },
     /// Adds a node to a contour, after another node or at its head.
+    ///
+    /// The tract travels as an edit rather than as a `Segment`, for the reason
+    /// `SetSegment` does: a curve's handles are points of the document, and an
+    /// insertion that cuts a bending tract in two brings two of them with it.
     InsertNode {
         piece: PieceKey,
         after: Option<PointKey>,
         identity: Identity<Point>,
-        node: ContourNode,
         value: Point,
+        segment: SegmentEdit,
+        samples: u16,
     },
     /// Takes a node out of a contour, and its point out of the document.
     RemoveNode { piece: PieceKey, node: PointKey },

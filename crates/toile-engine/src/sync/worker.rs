@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
+use thiserror::Error;
 use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, SdfGrid, Seams, State};
+
+use crate::couture::{MeshSwap, onto};
 
 /// Sleep threshold on mean kinetic energy per vertex, about 2 mm/s RMS: one
 /// loose vertex fluttering must not keep the whole garment awake.
@@ -10,6 +13,31 @@ const SLEEP_ENERGY_PER_VERT: f32 = 2.0e-6;
 /// kinetic-damping zero leaves velocities at zero without the cloth actually
 /// being at equilibrium.
 const QUIET_TICKS_TO_SLEEP: u32 = 3;
+
+/// Why the sim thread would not take a message.
+///
+/// A refusal is loud rather than silent for one reason: every case here is a
+/// message compiled against a mesh the solver has already replaced, and taking
+/// it would warm-start the drape over a topology that no longer exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum StaleMessage {
+    /// A message from before the one the solver is already running.
+    #[error("a message at generation {got} arrived after generation {applied}")]
+    Generation {
+        /// The generation the solver is at.
+        applied: u64,
+        /// The generation the message names.
+        got: u64,
+    },
+    /// Rest lengths for another mesh's constraints.
+    #[error("{got} rest lengths for a mesh of {expected} constraints")]
+    RestCount {
+        /// Constraints the solver holds.
+        expected: usize,
+        /// Rest lengths the message carries.
+        got: usize,
+    },
+}
 
 /// What the sim thread publishes after every tick.
 #[derive(Debug, Clone, Default)]
@@ -24,6 +52,8 @@ pub struct Snapshot {
     pub positions: Vec<f32>,
     /// Interleaved xyz vertex normals.
     pub normals: Vec<f32>,
+    /// The last message the sim refused, if it ever refused one.
+    pub refused: Option<StaleMessage>,
 }
 
 /// The simulation, owned exclusively by its thread.
@@ -40,6 +70,7 @@ pub(super) struct Sim {
     substeps: u64,
     quiet_ticks: u32,
     converged: bool,
+    refused: Option<StaleMessage>,
 }
 
 impl Sim {
@@ -64,6 +95,7 @@ impl Sim {
             substeps: 0,
             quiet_ticks: 0,
             converged: false,
+            refused: None,
         }
     }
 
@@ -73,10 +105,67 @@ impl Sim {
 
     /// Hot-swaps the rest state and wakes the sim.
     ///
-    /// # Panics
-    /// If `rests` does not have one entry per constraint.
-    pub(super) fn apply_rests(&mut self, generation: u64, rests: &[f32]) {
+    /// # Errors
+    /// `StaleMessage` when the rest lengths were compiled against a mesh the
+    /// solver has already left behind.
+    pub(super) fn apply_rests(
+        &mut self,
+        generation: u64,
+        rests: &[f32],
+    ) -> Result<(), StaleMessage> {
+        self.fresh(generation)?;
+        if rests.len() != self.cons.rest.len() {
+            return Err(StaleMessage::RestCount {
+                expected: self.cons.rest.len(),
+                got: rests.len(),
+            });
+        }
         self.cons.rest.copy_from_slice(rests);
+        self.wake(generation);
+        Ok(())
+    }
+
+    /// Puts the piece on a new mesh, carrying the drape onto it.
+    ///
+    /// The mailbox is drained between ticks, never inside one, so the state
+    /// this replaces is always a whole substep's worth: the transfer never
+    /// reads positions halfway through their integration.
+    ///
+    /// # Errors
+    /// `StaleMessage::Generation` when a later message has already been
+    /// applied, which means this rebuild was superseded before it landed.
+    pub(super) fn apply_swap(
+        &mut self,
+        generation: u64,
+        swap: Box<MeshSwap>,
+    ) -> Result<(), StaleMessage> {
+        self.fresh(generation)?;
+        self.state = onto(&swap, &self.state);
+        let MeshSwap { tris, cons, .. } = *swap;
+        self.cons = cons;
+        self.tris = tris;
+        self.wake(generation);
+        Ok(())
+    }
+
+    /// Records a refusal, so a client polling the snapshot can see it.
+    pub(super) fn refuse(&mut self, why: StaleMessage) {
+        self.refused = Some(why);
+    }
+
+    /// Whether a message names a generation the sim has not passed.
+    fn fresh(&self, generation: u64) -> Result<(), StaleMessage> {
+        if generation <= self.generation {
+            return Err(StaleMessage::Generation {
+                applied: self.generation,
+                got: generation,
+            });
+        }
+        Ok(())
+    }
+
+    /// Takes a message in and puts the cloth back in motion.
+    fn wake(&mut self, generation: u64) {
         self.generation = generation;
         self.converged = false;
         self.quiet_ticks = 0;
@@ -116,6 +205,10 @@ impl Sim {
             converged: self.converged,
             positions,
             normals,
+            refused: self.refused,
         })
     }
 }
+
+#[cfg(test)]
+mod tests;
