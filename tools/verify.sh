@@ -10,3 +10,13 @@ cargo +nightly fmt --all --check >/dev/null 2>&1 && echo "✓ fmt" || { echo "�
 echo "✓ estilo"
 cargo clippy --workspace --all-targets -q -- -D warnings >/dev/null 2>&1 && echo "✓ clippy" || { echo "✗ clippy"; exit 1; }
 cargo test -q --workspace >/dev/null 2>&1 && echo "✓ tests" || { echo "✗ tests"; exit 1; }
+if command -v cargo-deny >/dev/null 2>&1; then
+  cargo deny check licenses bans sources >/dev/null 2>&1 && echo "✓ deny" || { echo "✗ deny"; cargo deny check licenses bans sources; exit 1; }
+  cargo deny check advisories >/dev/null 2>&1 && echo "✓ advisories" || echo "· advisories: hay avisos (no bloquea)"
+else echo "· deny: no instalado (brew install cargo-deny)"; fi
+if command -v typos >/dev/null 2>&1; then
+  typos >/dev/null 2>&1 && echo "✓ typos" || { echo "✗ typos"; typos; exit 1; }
+else echo "· typos: no instalado (brew install typos-cli)"; fi
+if cargo machete --version >/dev/null 2>&1; then
+  cargo machete >/dev/null 2>&1 && echo "✓ machete" || { echo "✗ machete"; cargo machete; exit 1; }
+else echo "· machete: no instalado (cargo install cargo-machete --locked)"; fi

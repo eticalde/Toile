@@ -1,0 +1,66 @@
+# typos-cli configuration.
+#
+# Run it with `typos`. The point of this file is that the spell-checker reads
+# the English half of the repo — code, identifiers, doc comments — without
+# tripping over the Spanish half. The project writes prose and UI copy in
+# Spanish and code in English (STD-001), so most of what typos would otherwise
+# report is correct Spanish, not a mistake.
+#
+# Two rules of thumb when this file needs a new entry:
+#   - Spanish *prose* surfaces are excluded by path. Cheaper than listing every
+#     word in the language, and it keeps the exclusion visible.
+#   - Spanish *vocabulary that appears inside code* is listed word by word
+#     below, with the file that motivated it. That list should stay short; if
+#     it starts growing, the surface probably wants a path exclusion instead.
+
+[files]
+extend-exclude = [
+    # Wholly Spanish prose. architecture.html and style.html alone account for
+    # ~100 false positives ("hace", "comando", "dependencias", ...), and the
+    # design docs also carry CSS font-variation tags like `wdth` that are
+    # spelled that way by the OpenType spec.
+    "docs/",
+    "README.md",
+    # Generated, and its contents are upstream crate names rather than prose.
+    "Cargo.lock",
+]
+
+[default]
+# Locale stays at the default "en". en-gb was tried and is worse: it demands
+# `Serialise` for serde's `Serialize` derive, which is a real API name.
+# `uncatalogued` is handled as a single word below instead.
+
+[default.extend-identifiers]
+# Paired loop bounds in the spatial hash of the triangle-transfer step: `tlo`
+# and `thi` are the low and high corners of one triangle's bounding box.
+# crates/toile-mesh/src/transfer.rs
+thi = "thi"
+# The four corners of a swatch column: `ta`/`ba` are top-a and bottom-a, next
+# to `tb`/`bb`. crates/toile-app/src/tabs/telas.rs
+ba = "ba"
+
+[default.extend-words]
+# British spelling, used consistently and deliberately: `uncatalogued` is a
+# public method name sitting next to the noun "catalogue" in its own doc
+# comment. crates/toile-doc/src/measure.rs, crates/toile-doc/src/block.rs
+uncatalogued = "uncatalogued"
+
+# Spanish domain and UI vocabulary that lives inside code — tab labels,
+# inspector headings, bench phase names. Each is a real Spanish word that
+# happens to sit close to an English one in the dictionary.
+# "weft", the crosswise yarn, next to "urdimbre" (warp).
+trama = "trama"
+# "product", as in the resolved product of a draft.
+producto = "producto"
+# "defects".
+defectos = "defectos"
+# "history", the undo panel's heading.
+historial = "historial"
+# "initial", a bench phase name.
+inicial = "inicial"
+# "simulate", the probador's action button.
+simular = "simular"
+# "normals", the mesh quantity, in a bench label.
+normales = "normales"
+# "sequential", the other bench phase name.
+secuencial = "secuencial"

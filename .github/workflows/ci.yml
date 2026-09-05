@@ -46,3 +46,22 @@ jobs:
       - run: cargo test --workspace
       # Determinism goldens, in release: the same constant on ARM and x86.
       - run: cargo test --workspace --release -- --ignored
+
+  # Dependency hygiene: licences (the ADR's "cero GPL"), typos, unused deps.
+  deps:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Licences, bans and sources are the gate. A copyleft crate, a wildcard
+      # version or a non-crates.io source fails the build here.
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses bans sources
+      # Advisories inform but do not block: a RustSec entry published today
+      # must not fail a PR that had nothing to do with it.
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        continue-on-error: true
+        with:
+          command: check advisories
+      - uses: crate-ci/typos@master
+      - uses: bnjbvr/cargo-machete@main

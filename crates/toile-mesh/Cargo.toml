@@ -4,12 +4,11 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+publish = false
 
 [dependencies]
 spade = "2"
 thiserror = "2"
-toile-doc = { path = "../toile-doc" }
-toile-geom = { path = "../toile-geom" }
 
 [lints]
 workspace = true

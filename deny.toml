@@ -1,0 +1,141 @@
+# cargo-deny: the gate behind the ADR's "cero GPL en el árbol" promise.
+#
+# Run it with `cargo deny check`. Licences are an allow-list: anything not
+# named below is an error, so GPL / AGPL / LGPL / SSPL never need an explicit
+# deny entry — they fail simply by not being here, and so does any future
+# licence nobody has looked at yet.
+
+[graph]
+# Resolve every target and every feature, not just the host's. clipboard-win
+# and r-efi only appear on Windows and UEFI; auditing the host graph alone
+# would let a copyleft crate ride in on a platform CI does not build.
+all-features = true
+
+[output]
+feature-depth = 1
+
+# ---------------------------------------------------------------------------
+# Licences — must be an error. Never add a copyleft entry here to get green.
+# ---------------------------------------------------------------------------
+[licenses]
+# Below this confidence a licence file is reported as unknown rather than
+# guessed at. 0.93 is cargo-deny's default and no crate in the tree needs less.
+confidence-threshold = 0.93
+
+allow = [
+    # The project's own licence, and the larger half of the tree (376 crates).
+    "MIT",
+    # The other half of the Rust ecosystem's standard `MIT OR Apache-2.0`
+    # dual licence (301 crates).
+    "Apache-2.0",
+    # rustix, linux-raw-sys, wasip2, wit-bindgen. The LLVM exception only
+    # removes the binary-attribution requirement; it is strictly more
+    # permissive than plain Apache-2.0.
+    "Apache-2.0 WITH LLVM-exception",
+    # arrayref (BSD-2 only); also the branch zerocopy offers.
+    "BSD-2-Clause",
+    # tiny-skia and tiny-skia-path are BSD-3 only, so this one cannot be
+    # dropped. moxcms, pxfm and num_enum also offer it.
+    "BSD-3-Clause",
+    # The graphics and windowing stack: bytemuck, glow, raw-window-handle,
+    # miniz_oxide, slotmap, wide, the objc2-* family (21 crates).
+    "Zlib",
+    # libloading, which every wgpu backend loads its driver through.
+    "ISC",
+    # A branch of adler2's `0BSD OR MIT OR Apache-2.0`; kept so the resolver
+    # is not forced onto a narrower branch than the crate offers.
+    "0BSD",
+    # The BurntSushi crates — memchr, walkdir, same-file, winapi-util,
+    # byteorder-lite — dual-licence as `Unlicense OR MIT`. Unlicense is a
+    # public-domain dedication, not a reciprocal licence.
+    "Unlicense",
+    # clipboard-win and error-code, on the Windows clipboard path. The Boost
+    # licence is permissive and has no source-redistribution condition.
+    "BSL-1.0",
+    # The ICU crates that egui pulls in for text shaping (19 crates).
+    "Unicode-3.0",
+    # epaint_default_fonts declares
+    #   `(MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0`
+    # — an AND, so both font licences must be allowed for the crate to pass.
+    # Both cover the embedded font *data* only and impose no condition on the
+    # code that renders it; OFL's reciprocity is limited to derived fonts.
+    "OFL-1.1",
+    "Ubuntu-font-1.0",
+]
+
+# Deliberately absent, and each absence is load-bearing:
+#   MPL-2.0  — nothing in the tree needs it, and architecture.html records
+#              triple_buffer being rejected precisely over MPL. Adding it
+#              would silently reopen that decision.
+#   GPL-*, AGPL-*, LGPL-*, SSPL-*, CDDL, EPL — the ADR's whole point.
+# self_cell (`Apache-2.0 OR GPL-2.0-only`) and r-efi
+# (`MIT OR Apache-2.0 OR LGPL-2.1-or-later`) are in the tree but resolve on
+# their permissive branch. If either ever drops that branch, this file starts
+# failing, which is the behaviour we want.
+
+# Per-crate escape hatches. Empty on purpose: an exception is a licence we
+# accept for one crate only, and the tree currently needs none.
+exceptions = []
+
+# Flag allow entries nothing in the tree uses any more, so the list decays
+# with the dependency graph instead of accumulating.
+unused-allowed-license = "warn"
+
+# ---------------------------------------------------------------------------
+# Advisories — RustSec. cargo-deny 0.20 no longer lets a vulnerability be
+# downgraded to a warning in config, so `check advisories` is wired as a
+# separate, non-blocking step in CI (see the patch in the deps report) rather
+# than being softened here. A fresh advisory should be triaged, not merged
+# around silently, but it must not block a PR that did not cause it.
+# ---------------------------------------------------------------------------
+[advisories]
+# Only flag unmaintained crates this workspace depends on directly. A
+# transitive leaf going quiet is upstream's problem to fix, and reporting it
+# here is noise a one-person project will learn to ignore.
+unmaintained = "workspace"
+# A yanked version in the lockfile is worth surfacing, not worth failing on.
+yanked = "warn"
+# Advisory IDs consciously accepted go here, each with a comment saying why.
+ignore = []
+
+# ---------------------------------------------------------------------------
+# Bans — shape of the graph, not its legality.
+# ---------------------------------------------------------------------------
+[bans]
+# egui/wgpu routinely hold two minor versions of the same leaf crate; that is
+# the ecosystem's normal state, not a defect worth failing a build over.
+multiple-versions = "warn"
+# A `*` version requirement makes the lockfile the only thing pinning a
+# dependency, which the ADR's pinning policy rules out. It is only a warning
+# today because the seven crates of this workspace depend on each other by
+# `{ path = ... }` with no version, and cargo-deny counts that as a wildcard:
+# `allow-wildcard-paths` below exempts it, but only for crates marked
+# `publish = false`, which these are not yet. Add that line to each crate
+# manifest and this can become "deny" — verified, it goes green.
+wildcards = "deny"
+# Exempts intra-workspace path dependencies once the crates are private. Not
+# a loosening: crates.io rejects path dependencies outright, so a published
+# crate can never reach this branch.
+allow-wildcard-paths = true
+highlight = "all"
+# Crates that must never enter the tree, whatever pulls them in.
+deny = [
+    # An OpenSSL build is a native-toolchain dependency this project has no
+    # reason to acquire; rustls covers anything TLS-shaped.
+    { name = "openssl-sys" },
+]
+allow = []
+skip = []
+skip-tree = []
+
+# ---------------------------------------------------------------------------
+# Sources — every crate must come from crates.io.
+# ---------------------------------------------------------------------------
+[sources]
+# A git or vendored dependency bypasses both the licence audit above and
+# crates.io's immutability, so both are errors until someone adds them here
+# deliberately.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

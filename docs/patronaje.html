@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toile — PLAN-001 Patronaje</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fafaf7;
+  --surface:#ffffff;
+  --ink:#23282e;
+  --muted:#6a7480;
+  --chalk:#2f5fd0;        /* tiza de sastre */
+  --thread:#c2403a;       /* papel carbón / hilo rojo */
+  --line:#dcdcd4;
+  --grid:rgba(35,40,46,.10);
+  --chip-bg:rgba(47,95,208,.08);
+  --thread-bg:rgba(194,64,58,.07);
+  --display:"Archivo",-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --body:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#18271f;      /* mat de corte */
+    --surface:#1e2f26;
+    --ink:#e7eae2;        /* tiza */
+    --muted:#96a69a;
+    --chalk:#a5bdfa;
+    --thread:#f0907f;
+    --line:#31453a;
+    --grid:rgba(231,234,226,.07);
+    --chip-bg:rgba(165,189,250,.12);
+    --thread-bg:rgba(240,144,127,.10);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:var(--body);
+  font-size:16.5px;
+  line-height:1.65;
+  color:var(--ink);
+  background-color:var(--paper);
+  background-image:radial-gradient(var(--grid) 1px, transparent 1px);
+  background-size:26px 26px;
+}
+@media (prefers-color-scheme: dark){
+  body{
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size:39px 39px;
+  }
+}
+a{color:var(--chalk)}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--chalk);outline-offset:2px;border-radius:2px}
+code,.crate{font-family:var(--mono);font-size:.86em;background:var(--chip-bg);padding:.08em .38em;border-radius:3px;white-space:nowrap}
+
+/* ---------- hero ---------- */
+.hero{
+  border-bottom:2px solid var(--ink);
+  padding:3.2rem 1.5rem 2.4rem;
+}
+.hero-inner{
+  max-width:1080px;margin:0 auto;
+  display:flex;gap:3rem;align-items:center;justify-content:space-between;flex-wrap:wrap;
+}
+.eyebrow{
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 .9rem;
+}
+.eyebrow a{color:inherit;text-decoration:none}
+.eyebrow a:hover{color:var(--chalk)}
+h1{
+  font-family:var(--display);
+  font-variation-settings:"wdth" 118;
+  font-weight:880;
+  font-size:clamp(2.5rem,6vw,4.2rem);
+  line-height:.98;letter-spacing:-.015em;text-transform:uppercase;
+  margin:0 0 .8rem;
+}
+.hero-sub{max-width:34rem;color:var(--muted);margin:0 0 1.6rem}
+.titleblock{
+  display:inline-grid;grid-template-columns:auto auto auto auto;
+  border:1.5px solid var(--ink);
+  font-family:var(--mono);font-size:.78rem;
+  background:var(--surface);
+}
+.titleblock div{padding:.5rem .9rem;border-left:1.5px solid var(--ink)}
+.titleblock div:first-child{border-left:none}
+.titleblock b{display:block;font-weight:500;color:var(--muted);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase}
+@media (max-width:600px){
+  .titleblock{grid-template-columns:auto auto}
+  .titleblock div:nth-child(3){border-left:none}
+  .titleblock div:nth-child(n+3){border-top:1.5px solid var(--ink)}
+}
+.hero-figure{flex:0 1 112px;min-width:96px;color:var(--ink)}
+.hero-figure svg{width:100%;height:auto;display:block}
+.hero-figure .draw{stroke-dasharray:1200;stroke-dashoffset:0}
+@media (prefers-reduced-motion: no-preference){
+  .hero-figure .draw{animation:trace 1.4s ease-out}
+  @keyframes trace{from{stroke-dashoffset:1200}to{stroke-dashoffset:0}}
+}
+
+/* ---------- layout ---------- */
+.wrap{
+  max-width:1080px;margin:0 auto;padding:2.5rem 1.5rem 4rem;
+  display:grid;grid-template-columns:215px minmax(0,1fr);gap:3rem;
+}
+nav.toc{position:sticky;top:1.5rem;align-self:start;font-size:.85rem}
+nav.toc p{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:0 0 .7rem}
+nav.toc ol{list-style:none;margin:0;padding:0}
+nav.toc li{margin:.32rem 0}
+nav.toc li.sub{margin-left:.95rem;font-size:.8rem}
+nav.toc a{text-decoration:none;color:var(--ink);border-left:2px solid transparent;padding-left:.55rem;display:inline-block}
+nav.toc li.sub a{color:var(--muted)}
+nav.toc a:hover{border-left-color:var(--chalk);color:var(--chalk)}
+@media (max-width:880px){
+  .wrap{grid-template-columns:1fr;gap:1.5rem}
+  nav.toc{position:static}
+  nav.toc ol{display:flex;flex-wrap:wrap;gap:.25rem .9rem}
+  nav.toc li.sub{display:none}
+}
+main{max-width:72ch}
+
+/* ---------- section headers ---------- */
+section{margin:0 0 3.6rem}
+h2{
+  font-family:var(--display);font-variation-settings:"wdth" 112;font-weight:820;
+  font-size:1.7rem;line-height:1.15;text-transform:uppercase;letter-spacing:.005em;
+  margin:0 0 1.2rem;padding-top:2.2rem;
+  border-top:2px solid var(--ink);
+}
+h2 .num{font-family:var(--mono);font-weight:400;font-size:.8rem;color:var(--muted);display:block;letter-spacing:.2em;margin-bottom:.35rem}
+/* etiqueta de pieza: cabecera de cada eje con su flecha de hilo */
+.axis{margin:2.6rem 0 1rem}
+.axis h3{
+  font-family:var(--display);font-variation-settings:"wdth" 108;font-weight:750;
+  font-size:1.13rem;text-transform:uppercase;letter-spacing:.02em;margin:0 0 .2rem;
+}
+.axis .tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:.15rem}
+.axis svg{display:block;color:var(--muted);margin-top:.35rem}
+
+/* ---------- bloques decisión / descartado ---------- */
+.decision,.discarded{margin:1rem 0;padding:.15rem 0 .15rem 1.1rem}
+.decision{border-left:3px solid var(--chalk)}
+.discarded{border-left:3px dashed var(--thread)}
+.decision > b:first-child,.discarded > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;
+  display:block;margin-bottom:.3rem;
+}
+.decision > b:first-child{color:var(--chalk)}
+.discarded > b:first-child{color:var(--thread)}
+.decision p,.discarded p{margin:.5rem 0}
+
+/* ---------- swatches ---------- */
+.swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.8rem;margin:1.3rem 0}
+.swatch{border:1.5px solid var(--line);background:var(--surface);padding:.85rem 1rem;border-radius:3px}
+.swatch b{font-family:var(--display);font-variation-settings:"wdth" 108;font-weight:720;font-size:.95rem;display:block;line-height:1.25}
+.swatch i{display:block;font-style:normal;color:var(--muted);font-size:.8rem;margin:.2rem 0 .6rem}
+.swatch p{margin:.5rem 0 0;font-size:.86rem}
+.chip{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.18em .6em;border-radius:2px;background:var(--chip-bg);color:var(--chalk);
+}
+.chip.no{background:var(--thread-bg);color:var(--thread);text-decoration:line-through;text-decoration-thickness:1px}
+
+/* ---------- listas con piquetes ---------- */
+ol,ul{padding-left:1.4rem}
+li{margin:.45rem 0}
+ul.notch{list-style:none;padding-left:1.15rem}
+ul.notch li{position:relative}
+ul.notch li::before{
+  content:"";position:absolute;left:-1.15rem;top:.62em;
+  border-left:.42em solid var(--chalk);border-top:.3em solid transparent;border-bottom:.3em solid transparent;
+}
+ol.plan{counter-reset:paso;list-style:none;padding-left:2.1rem}
+ol.plan li{counter-increment:paso;position:relative;margin:.9rem 0}
+ol.plan li::before{
+  content:counter(paso);position:absolute;left:-2.1rem;top:.1em;
+  font-family:var(--mono);font-size:.8rem;width:1.5em;height:1.5em;line-height:1.45em;text-align:center;
+  border:1.5px solid var(--ink);border-radius:50%;background:var(--surface);
+}
+
+/* ---------- tablas ---------- */
+.tscroll{overflow-x:auto;margin:1.2rem 0;border:1.5px solid var(--line);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);text-align:left;
+}
+th,td{padding:.6rem .85rem;border-bottom:1px dashed var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td:first-child{white-space:nowrap}
+td.wrap{white-space:normal}
+
+/* ---------- misc ---------- */
+.lead{font-size:1.06rem}
+.lead::first-letter{
+  font-family:var(--display);font-weight:880;font-size:3.1em;float:left;
+  line-height:.8;padding:.06em .12em 0 0;color:var(--chalk);
+}
+hr{border:none;border-top:1.5px dashed var(--line);margin:2rem 0}
+.refs{font-size:.9rem}
+.refs li{margin:.55rem 0}
+.refs span{color:var(--muted)}
+footer{border-top:2px solid var(--ink);margin-top:1rem;padding:1.4rem 1.5rem 3rem;font-size:.8rem;color:var(--muted)}
+footer .fin{max-width:1080px;margin:0 auto;font-family:var(--mono)}
+
+/* ---------- bloques de código ---------- */
+pre{
+  font-family:var(--mono);font-size:.78rem;line-height:1.55;
+  background:var(--surface);border:1.5px solid var(--line);border-left-width:3px;
+  border-radius:3px;padding:.8rem 1rem;overflow-x:auto;margin:.7rem 0;
+}
+pre code{background:none;padding:0;white-space:pre;font-size:inherit;color:inherit}
+pre.no{border-left-color:var(--thread)}
+pre.si{border-left-color:var(--chalk)}
+
+/* ---------- regla numerada ---------- */
+.rule{border-left:3px solid var(--ink);padding:.1rem 0 .1rem 1.1rem;margin:1.5rem 0}
+.rule > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:.35rem;
+}
+.rule p:first-of-type{font-weight:600;margin-top:0}
+.tag-ok,.tag-no{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;padding:.16em .55em;border-radius:2px;white-space:nowrap}
+.tag-ok{background:var(--chip-bg);color:var(--chalk)}
+.tag-no{background:var(--thread-bg);color:var(--thread)}
+
+/* ---------- la frase de la fase ---------- */
+blockquote.frase{
+  margin:1.4rem 0;padding:1.1rem 1.3rem;
+  border:1.5px solid var(--ink);border-left-width:5px;border-left-color:var(--chalk);
+  background:var(--surface);border-radius:3px;
+  font-size:1.04rem;line-height:1.6;
+}
+blockquote.frase p{margin:0}
+blockquote.frase b{
+  display:block;font-family:var(--mono);font-weight:500;font-size:.66rem;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--chalk);margin-bottom:.5rem;
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="eyebrow"><a href="./architecture.html">Toile</a> · Documentación</p>
+      <h1>Patronaje<br>el plan</h1>
+      <p class="hero-sub">La pestaña que traza. El modelo anclado-híbrido, la gramática de fórmulas congelada, las cinco decisiones del dueño y las nueve fases que van del delantero resuelto al MVP completo — con el golden del drapeado intacto en todas.</p>
+      <div class="titleblock" role="group" aria-label="Datos del documento">
+        <div><b>Documento</b>PLAN-001</div>
+        <div><b>Estado</b>En ejecución</div>
+        <div><b>Avance</b>F0–F4 hechas</div>
+        <div><b>Fecha</b>2026-09-04</div>
+      </div>
+    </div>
+    <div class="hero-figure" aria-hidden="true">
+      <!-- el delantero del bloque base, trazado con las coordenadas que resuelven contra Etienne -->
+      <svg viewBox="0 0 95 300" fill="none" stroke="currentColor" stroke-width="1.4">
+        <path class="draw" d="M23.3 14 L78.3 14 C83.5 28 87.1 44 87.1 64 L77.6 177.8 L75.1 274 L20.1 274 L17.6 177.8 L8 81.5 C10.5 78.5 15.5 72.5 23.3 66.2 Z"/>
+        <g stroke-width="1" fill="var(--paper)">
+          <circle cx="23.3" cy="14" r="1.9"/><circle cx="78.3" cy="14" r="1.9"/>
+          <circle cx="87.1" cy="64" r="1.9"/><circle cx="77.6" cy="177.8" r="1.9"/>
+          <circle cx="75.1" cy="274" r="1.9"/><circle cx="20.1" cy="274" r="1.9"/>
+          <circle cx="17.6" cy="177.8" r="1.9"/><circle cx="8" cy="81.5" r="1.9"/>
+          <circle cx="23.3" cy="66.2" r="1.9"/>
+        </g>
+        <g stroke-width="1.2">
+          <line x1="47.5" y1="96" x2="47.5" y2="186"/>
+          <path d="M43.5 104 l4 -8 l4 8"/><path d="M43.5 178 l4 8 l4 -8"/>
+        </g>
+        <g stroke="none" fill="currentColor" font-family="IBM Plex Mono,monospace" font-size="6" opacity=".75">
+          <text x="47.5" y="212" text-anchor="middle">DELANTERO</text>
+          <text x="47.5" y="222" text-anchor="middle">9 NODOS</text>
+          <text x="47.5" y="232" text-anchor="middle">104.5 CM</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contenido">
+  <p>Contenido</p>
+  <ol>
+    <li><a href="#frase">1 · La fase 1 en una frase</a></li>
+    <li><a href="#modelo">2 · El modelo anclado-híbrido</a></li>
+    <li class="sub"><a href="#hibrido">2.1 Híbrido</a></li>
+    <li class="sub"><a href="#anclado">2.2 Anclado</a></li>
+    <li><a href="#datos">3 · El modelo de datos</a></li>
+    <li class="sub"><a href="#keys">3.1 Keys y arena</a></li>
+    <li class="sub"><a href="#gramatica">3.2 La gramática congelada</a></li>
+    <li class="sub"><a href="#comandos">3.3 Comandos y clase</a></li>
+    <li class="sub"><a href="#invariante">3.4 La invariante</a></li>
+    <li class="sub"><a href="#bloque">3.5 El bloque base</a></li>
+    <li><a href="#dueno">4 · Las cinco decisiones</a></li>
+    <li><a href="#fases">5 · Las fases</a></li>
+    <li><a href="#contradicciones">6 · Contradicciones resueltas</a></li>
+    <li><a href="#golden">7 · El golden que no se mueve</a></li>
+    <li><a href="#alcance">8 · Fuera de alcance</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="frase">
+  <h2><span class="num">§ 1</span>La fase 1 en una frase</h2>
+
+  <p class="lead">El plan de Patronaje se escribió alrededor de una sola frase, y la frase es la fase entera. No es un resumen de la fase: es su criterio de aceptación, redactado antes de la primera línea de código y verificable a mano con la aplicación abierta.</p>
+
+  <blockquote class="frase">
+    <b>La fase 1</b>
+    <p>Abro Toile, voy a Patronaje, veo el delantero de un pantalón trazado con fórmulas sobre las medidas de Etienne, hago zoom hasta escala real y leo el costado (104.5&nbsp;cm), cambio «resolver con» de Etienne a Talla 42, y la pieza se re-traza y se re-drapea en el Probador sin resetear la simulación.</p>
+  </blockquote>
+
+  <p>Eso es la fase 1 entera, y es entregable por sí sola. <strong>No hay dibujo libre, no hay curvas, no hay costuras, no hay archivo.</strong> Cada una de esas cuatro cosas es una fase posterior con su propia frase.</p>
+
+  <p>El corte es vertical —la rebanada más delgada que atraviesa todo el producto se entrega primero— y se eligió por tres razones, las tres verificadas contra el árbol de código de ese día:</p>
+
+  <ol class="plan">
+    <li><strong>Re-resolver es un cambio de forma.</strong> Cambiar de maniquí produce un contorno nuevo con el mismo número de puntos y el mismo orden: es exactamente lo que <code>ShapePipeline::derive(&amp;contour)</code> consume — ruta rápida, sin remallar, con warm start. La promesa «mismo patrón, cualquier talla» sale gratis del camino incremental que <a href="./architecture.html#incremental">el ADR</a> ya había construido y medido.</li>
+    <li><strong>El Probador ya funciona.</strong> <code>Session</code> drapea un contorno en su propio hilo y el visor pinta el snapshot. Sustituir la fuente de ese contorno —de <code>demo::bodice_contour()</code> a «el documento resuelto»— es un constructor hermano en <code>Session</code>. La rebanada vertical existía casi entera; faltaba el lado 2D.</li>
+    <li><strong>Todo lo demás depende de las fundaciones de esta fase</strong> (keys, enlaces, evaluador, comandos). Escribirlas contra un caso vivo evita el modelo de escritorio que después no encaja: la fase 1 es a la vez la demo del producto y el fixture que los tests necesitan de todos modos.</li>
+  </ol>
+</section>
+
+<section id="modelo">
+  <h2><span class="num">§ 2</span>El modelo anclado-híbrido</h2>
+
+  <p>El modelo tiene dos mitades y cada una responde a un fracaso concreto del software que ya existe. <strong>Híbrido</strong>: toda coordenada es una fórmula, y el número suelto es el caso degenerado de la fórmula —no un modo aparte—, de modo que tocar un punto con el ratón nunca expulsa la pieza del mundo paramétrico. <strong>Anclado</strong>: toda referencia a un sitio del contorno se dice como nodo más fracción dentro de su tramo, nunca como índice ni como fracción del perímetro, de modo que editar la pieza no desliza lo que estaba pegado a ella.</p>
+
+  <p>Ninguna de las dos purezas sirve. Un Toile «Seamly puro» —todo por nombre, todo por fórmula, ninguna manipulación directa— y un Toile «CLO puro» —todo con el ratón, la parametría abandonada en cuanto se toca— están los dos descartados, y por defectos que se pueden nombrar uno a uno.</p>
+
+  <div class="axis" id="hibrido">
+    <span class="tag">Mitad 2.1</span>
+    <h3>Híbrido: el literal es una fórmula</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+  <div class="decision">
+    <b>Decisión</b>
+<pre class="si"><code>pub enum Binding { Literal(f64), Formula(Formula) }
+impl Binding { pub fn source(&amp;self) -&gt; Cow&lt;'_, str&gt;; }   // lo que se muestra en la caja mono</code></pre>
+    <p><strong>El literal es el caso degenerado de la fórmula, no un modo aparte</strong>: esa frase es la que evita la asimetría fatal de CLO («paramétrico hasta que lo tocas»). Se conserva como variante propia por una razón mecánica y no de modelo — para que arrastrar un punto literal no asigne un <code>String</code> por frame.</p>
+  </div>
+
+  <div class="discarded">
+    <b>Descartado — de CLO</b>
+    <p>La doble representación de curvas, la tabla de deltas por talla, el POM desconectado, el Pattern Drafter sellado y el <code>Unfold</code> destructivo. Y sobre todo la asimetría que da nombre al problema: un patrón que es paramétrico hasta el primer arrastre y a partir de ahí es una polilínea muda.</p>
+  </div>
+
+  <div class="axis" id="anclado">
+    <span class="tag">Mitad 2.2</span>
+    <h3>Anclado: la identidad es la key, la posición es el nodo</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+  <div class="decision">
+    <b>Decisión</b>
+<pre class="si"><code>pub struct EdgeAnchor { pub piece: PieceKey, pub from: PointKey, pub t: f64 }  // t ∈ [0, 1]
+pub struct EdgeRange  { pub head: EdgeAnchor, pub tail: EdgeAnchor }</code></pre>
+    <p>Es un tipo, no una convención de llamada. <strong>La fracción global del perímetro deja de persistirse</strong>: se recalcula en cada <code>derive()</code> desde el nodo, que es una key y no se mueve. Costuras, piquetes y pinzas direccionan por aquí, las tres.</p>
+    <p>La deriva que esto corrige está medida, no supuesta: en el banco de costuras de hoy, ensanchar 6&nbsp;cm el bajo de un rectángulo aleja más de 30&nbsp;mm el vértice que resuelve la fracción global. El test <code>global_fraction_anchoring_drifts_36_mm</code> la deja verde en CI desde la fase 2 — cuatro fases antes de que existan costuras de verdad— para que el número lo imprima la máquina y no un documento.</p>
+    <p>Consecuencia dura y comprobable en la firma de las funciones: <strong>ninguna firma de <code>tabs/patronaje/</code> ve nunca un <code>usize</code> de identidad.</strong></p>
+  </div>
+
+  <div class="discarded">
+    <b>Descartado — de Seamly</b>
+    <p>El 0 silencioso cuando un nombre no existe; la regla «una variable sólo puede referirse a las de arriba» y su reversión silenciosa; el <code>;</code> como separador de argumentos y la capa de traducción de nombres de función por idioma; el nombre como identidad (renombrar rompe fórmulas); el re-parseo global del documento por cada pulsación de tecla; el espacio de nombres plano por cadena; el orden del documento como grafo de dependencias; la gradación por incrementos lineales; <code>Unite 2 Pieces</code>.</p>
+  </div>
+
+  <div class="discarded">
+    <b>Descartado — del propio árbol de Toile</b>
+    <p>La fracción global del perímetro como ancla persistente, y el direccionamiento por índice. Los dos estaban en el código y los dos salen.</p>
+  </div>
+</section>
+
+<section id="datos">
+  <h2><span class="num">§ 3</span>El modelo de datos, lo esencial</h2>
+
+  <p>Todas las entidades se declaran en la fase 1, incluso las que ninguna herramienta produce hasta la fase 6 o 7. La razón no es simetría: el JSON canónico de la fase 3 tiene que cubrir el modelo entero, porque <strong>agregar una entidad después es una migración de formato, mientras que agregar un campo con <code>#[serde(default)]</code> no lo es</strong>. Un comando llega con su herramienta; una entidad llega antes que el formato.</p>
+
+  <p>La puerta con la aplicación es la regla dura que <a href="./architecture.html#ui">el ADR</a> impone: <code>toile-app</code> depende de <code>toile-engine</code> y de nada más de Toile. El motor abre <em>una</em> puerta, y es una lista de reexportación escrita a mano en <code>toile-engine/src/draft.rs</code>. Reexportar el crate entero cumpliría la letra y traicionaría el motivo: la API headless dejaría de ser una puerta y pasaría a ser un pasillo.</p>
+
+  <div class="axis" id="keys">
+    <span class="tag">Eje 3.1</span>
+    <h3>Keys generacionales y una arena que no recicla</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<pre class="si"><code>pub struct Key&lt;T&gt; { index: u32, generation: u32, tag: PhantomData&lt;fn() -&gt; T&gt; }
+
+pub struct Arena&lt;T&gt; { slots: Vec&lt;Slot&lt;T&gt;&gt;, issued: u32 }
+struct Slot&lt;T&gt; { generation: u32, value: Option&lt;T&gt; }
+
+impl&lt;T&gt; Arena&lt;T&gt; {
+    pub fn insert(&amp;mut self, value: T) -&gt; Key&lt;T&gt;;                          // siempre empuja
+    pub fn restore(&amp;mut self, key: Key&lt;T&gt;, value: T) -&gt; Result&lt;(), DocError&gt;;
+    pub fn remove(&amp;mut self, key: Key&lt;T&gt;) -&gt; Result&lt;T, DocError&gt;;
+    pub fn iter(&amp;self) -&gt; impl Iterator&lt;Item = (Key&lt;T&gt;, &amp;T)&gt;;              // orden de índice
+}</code></pre>
+
+  <ul class="notch">
+    <li><strong>El índice no se recicla nunca.</strong> <code>insert</code> empuja un slot nuevo, <code>remove</code> lo deja vacío conservando su generación, <code>restore</code> vuelve a poner el valor en el mismo slot bajo <em>la misma</em> key. Es el requisito literal del ADR: borrar un punto y deshacer devuelve la misma <code>PointKey</code>, y la costura que la citaba sigue viva.</li>
+    <li><strong>La generación no sirve para reciclar</strong> (no se recicla): sirve para que una key de otro documento o de una rama de redo abandonada dé <code>DocError::StaleKey</code> en vez de leer basura.</li>
+    <li><strong><code>restore</code> devuelve <code>Result</code>, no <code>assert!</code></strong>. <code>toile-doc</code> es una librería y la key puede venir de la UI (<a href="./style.html#p5">STD-001</a>). El <code>assert!</code> aquí sería alcanzable: deshacer después de abandonar una rama de redo.</li>
+    <li><strong><code>iter()</code> recorre slots en orden de índice</strong>, saltando vacantes: orden canónico, total, sin <code>HashMap</code>. <code>Key&lt;T&gt;</code> implementa <code>Ord</code> a mano, que es lo que permite que toda colección del documento sea <code>BTreeMap</code>/<code>BTreeSet</code>.</li>
+    <li><code>PhantomData&lt;fn() -&gt; T&gt;</code> y no <code>PhantomData&lt;T&gt;</code>, para que <code>Key&lt;T&gt;</code> sea <code>Send</code> y <code>Sync</code> sin condiciones sobre <code>T</code>.</li>
+  </ul>
+
+  <div class="axis" id="gramatica">
+    <span class="tag">Eje 3.2</span>
+    <h3>La gramática de fórmulas, congelada</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<pre class="si"><code>pub struct Formula { src: String, expr: Expr }
+impl Formula {
+    pub fn parse(src: &amp;str) -&gt; Result&lt;Formula, SyntaxError&gt;;
+    pub fn source(&amp;self) -&gt; &amp;str;
+    pub fn eval(&amp;self, env: &amp;dyn Lookup) -&gt; Result&lt;f64, EvalError&gt;;
+    pub fn names(&amp;self) -&gt; BTreeSet&lt;&amp;str&gt;;                 // para el toposort
+    pub fn nudge(&amp;self, delta: f64) -&gt; Formula;
+}
+
+pub enum Expr { Num(f64), Name(String), Neg(Box&lt;Expr&gt;),
+                Bin(Op, Box&lt;Expr&gt;, Box&lt;Expr&gt;), Call(Func, Vec&lt;Expr&gt;),
+                Cond { lhs: Box&lt;Expr&gt;, cmp: Cmp, rhs: Box&lt;Expr&gt;, yes: Box&lt;Expr&gt;, no: Box&lt;Expr&gt; } }
+pub enum Op { Add, Sub, Mul, Div, Pow }
+pub enum Func { Min, Max, Abs, Sqrt }</code></pre>
+
+  <p>Decisiones que fijan el lenguaje y no se vuelven a tocar:</p>
+
+  <ul class="notch">
+    <li><strong>Gramática mínima y congelada:</strong> <code>+ − * / ^</code>, menos unario, paréntesis, <code>min max abs sqrt</code>, comparadores <code>&lt; &lt;= &gt; &gt;= == !=</code>, ternaria <code>(a &lt; b ? c : d)</code>, identificadores <code>[a-z_][a-z0-9_]*</code>, decimales con punto. Separador de argumentos: <strong>la coma</strong>. <code>Func</code> es un enum cerrado: agregar una función es un renglón y una decisión consciente, no una deriva hacia las ~35 de muParser.</li>
+    <li><strong>Unidad: centímetros.</strong> Las medidas se guardan en cm, los literales se escriben en cm, el evaluador opera en cm. La conversión a metros ocurre <strong>una sola vez</strong>, en <code>draft::resolve</code>.</li>
+    <li><strong>Eje Y hacia abajo en espacio de documento.</strong> El oficio traza hacia abajo desde la cintura. La única negación de Y está en <code>draft::resolve</code>, en la misma línea donde se divide por 100. Beneficio colateral: el lienzo pinta documento→pantalla sin volteo.</li>
+    <li><strong>Ángulos:</strong> 0° = Este, antihorario, en grados dentro de las fórmulas y en la UI; radianes en el documento.</li>
+    <li><strong><code>^</code> sólo con exponente entero</strong>, evaluado con <code>powi</code>; un exponente fraccionario es <code>EvalError::FractionalPower</code>. Borra una clase entera de riesgo de determinismo y deja <code>toile-doc</code> sin dependencias numéricas.</li>
+    <li><strong>Un nombre desconocido es un error</strong>, no un cero, y nunca «el último valor resuelto»: <code>EvalError::UnknownName(String)</code>, pintado en <code>theme.alert</code> sobre el campo culpable.</li>
+    <li><strong>Sin reasociación.</strong> El orden lo fija el AST. Ninguna optimización algebraica entra en <code>eval.rs</code>: el resultado alimenta el rest state y por tanto el drapeado.</li>
+    <li><strong>Condicionales permitidas en coordenadas, imposibles en topología.</strong> Una ternaria decide un número; no existe ningún sitio donde una fórmula decida cuántos nodos hay.</li>
+  </ul>
+
+  <p>El entorno de evaluación se arma en el motor en dos pasos, detrás de un solo <code>trait Lookup</code>: primero las medidas del <code>MeasureSet</code> apuntado por <code>doc.resolve_with</code>, después las variables del patrón en <strong>orden topológico</strong> (Kahn sobre el grafo de nombres, con la cola en orden de key para que sea determinista). Un ciclo es <code>EvalError::Cycle</code> con los nombres del ciclo en el mensaje; una variable que sombrea el nombre de una medida es <code>EnvError::Shadowed</code>, no una sustitución silenciosa.</p>
+
+  <div class="axis" id="comandos">
+    <span class="tag">Eje 3.3</span>
+    <h3>Comandos, clase de cambio y presupuesto</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<pre class="si"><code>pub enum Identity&lt;T&gt; { New, Restored(Key&lt;T&gt;) }
+pub enum ChangeClass { Shape, Topology, Metadata, Sim }
+
+pub struct Applied { pub inverse: Command, pub touched: Vec&lt;PieceKey&gt;, pub class: ChangeClass }
+impl Command {
+    pub fn class(&amp;self) -&gt; ChangeClass;                              // la tabla del ADR, en el tipo
+    pub fn apply(self, doc: &amp;mut Doc) -&gt; Result&lt;Applied, DocError&gt;;
+    pub fn coalesce_onto(&amp;self, previous: &amp;Command) -&gt; Coalesced;    // explícito, nunca heurístico
+}</code></pre>
+
+  <p>Cuatro propiedades, cada una con su razón:</p>
+
+  <ol class="plan">
+    <li><strong>Ningún comando direcciona por índice.</strong> <code>after: Option&lt;PointKey&gt;</code>, <code>node: PointKey</code>, <code>variable: VariableKey</code>. Es el anclaje aplicado también a la pila de deshacer.</li>
+    <li><strong><code>apply</code> devuelve <code>Result</code>.</strong> Un <code>MovePoint</code> sobre una key muerta es entrada mala, no un bug del propio código — y sin esto sería un <code>panic</code> por índice fuera de rango.</li>
+    <li><strong><code>Applied.touched</code> nombra las piezas sucias</strong>, así que la capa de derivación recompila lo que hay que recompilar sin ningún diff estructural.</li>
+    <li><strong>La inversa de un borrado lleva la carga completa, incluida la key</strong>: <code>RemoveNode { piece, node }</code> ⟶ <code>InsertNode { identity: Restored(node), node, value, after }</code>. Es lo que hace que delete+undo restaure la misma key y que la costura sobreviva. <code>Identity::New</code> sólo aparece en la creación original.</li>
+  </ol>
+
+  <p><code>class()</code> es un <code>match</code> exhaustivo sin comodín: <strong>un comando nuevo no compila hasta declarar su fila</strong>, que es justo la disciplina que reparte los presupuestos del ADR. La entrada de historial guarda <em>las dos direcciones</em> —rehacer re-aplica los comandos directos en vez de invertir la inversa— y el coalescing dentro de un gesto abierto reemplaza el directo <strong>conservando el primer inverso</strong>: deshacer devuelve a la posición previa al gesto, no al penúltimo frame.</p>
+
+  <div class="tscroll"><table>
+    <thead><tr><th>Comando</th><th><code>ChangeClass</code></th><th>Qué hace el motor</th><th>Presupuesto</th></tr></thead>
+    <tbody>
+      <tr><td><code>MovePoint</code>, <code>SetBinding</code></td><td>Shape</td><td class="wrap"><code>pipeline.derive(&amp;outline)?</code> + <code>send_rests</code> para <code>touched</code></td><td>&lt;5 ms</td></tr>
+      <tr><td><code>SetMeasure</code>, <code>SetVariable</code>, <code>ResolveWith</code></td><td>Shape</td><td class="wrap">ídem, para <strong>cada</strong> pieza</td><td>&lt;5 ms/pieza</td></tr>
+      <tr><td><code>InsertNode</code>, <code>RemoveNode</code>, <code>SetSegment</code>, <code>SetSamples</code>, <code>Add*</code>/<code>Remove*</code></td><td>Topology</td><td class="wrap"><code>build</code> en el worker + transferencia baricéntrica + swap</td><td>&lt;500 ms</td></tr>
+      <tr><td><code>RenamePiece</code>, <code>SetGrain</code>, <code>LabelPoint</code></td><td>Metadata</td><td class="wrap">nada</td><td>—</td></tr>
+      <tr><td><code>SetPin</code>, <code>ClearPin</code></td><td>Sim</td><td class="wrap">mensaje al solver</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>La fila que hace vertical a todo el plan es la segunda: <strong>cambiar de maniquí es un cambio de forma</strong>. Sale el mismo número de nodos, el mismo aplanado, las mismas fracciones de arco: <code>derive</code> sirve tal cual y la simulación continúa desde donde estaba.</p>
+
+  <div class="axis" id="invariante">
+    <span class="tag">Eje 3.4</span>
+    <h3>La invariante que sostiene el híbrido</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+  <div class="rule">
+    <b>Invariante</b>
+    <p>El valor resuelto no se escribe jamás de vuelta en el enlace.</p>
+    <p>Sólo un gesto del usuario escribe un <code>Binding</code>. Toda otra escritura es la deriva que convierte un documento paramétrico en una polilínea, y ocurre en silencio.</p>
+  </div>
+
+  <p>Hay dos verdades por coordenada —el enlace (documento, undo, JSON) y el valor resuelto (picking, snap, arrastre, malla)— y ése es el impuesto principal del híbrido. Se paga con dos disciplinas: <strong>una sola función produce la segunda verdad</strong> (<code>draft::resolve</code>), y la invariante cierra la puerta a la deriva.</p>
+
+  <p>Su detector es un property test de la fase 3, <code>a_random_command_sequence_fully_undone_yields_the_same_bytes</code>: una secuencia de comandos aleatoria, deshecha entera, tiene que devolver exactamente los mismos bytes. Es el único mecanismo que atrapa la violación, y conviene mirarlo en cada PR que toque <code>draft/</code>.</p>
+
+  <div class="axis" id="bloque">
+    <span class="tag">Eje 3.5</span>
+    <h3>El bloque base, verbatim</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+  <p><code>block::trouser_front()</code> construye el documento entero: dos maniquíes (<code>Etienne</code>, <code>Talla 42</code>), cinco variables y una pieza «Delantero» de <strong>nueve nodos</strong>. Las variables:</p>
+
+<pre class="si"><code>holgura_cadera = 1
+ancho_rodilla  = 24
+ancho_bajo     = 22
+extension_tiro = cadera / 16
+raya           = (cadera / 4 + holgura_cadera - extension_tiro) / 2</code></pre>
+
+  <div class="tscroll"><table>
+    <thead><tr><th>#</th><th>nodo</th><th>X</th><th>Y</th><th>Etienne (cm)</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>cintura_cf</code></td><td><code>0</code></td><td><code>0</code></td><td>(0, 0)</td></tr>
+      <tr><td>2</td><td><code>cintura_lat</code></td><td><code>cintura / 4 + 1</code></td><td><code>0</code></td><td>(22.0, 0)</td></tr>
+      <tr><td>3</td><td><code>cadera_lat</code></td><td><code>cadera / 4 + holgura_cadera</code></td><td><code>altura_cadera</code></td><td>(25.5, 20.0)</td></tr>
+      <tr><td>4</td><td><code>rodilla_lat</code></td><td><code>raya + ancho_rodilla / 2</code></td><td><code>(tiro + largo_lateral) / 2</code></td><td>(21.69, 65.5)</td></tr>
+      <tr><td>5</td><td><code>bajo_lat</code></td><td><code>raya + ancho_bajo / 2</code></td><td><code>largo_lateral</code></td><td>(20.69, 104.0)</td></tr>
+      <tr><td>6</td><td><code>bajo_int</code></td><td><code>raya - ancho_bajo / 2</code></td><td><code>largo_lateral</code></td><td>(−1.31, 104.0)</td></tr>
+      <tr><td>7</td><td><code>rodilla_int</code></td><td><code>raya - ancho_rodilla / 2</code></td><td><code>(tiro + largo_lateral) / 2</code></td><td>(−2.31, 65.5)</td></tr>
+      <tr><td>8</td><td><code>tiro_int</code></td><td><code>-extension_tiro</code></td><td><code>tiro</code></td><td>(−6.13, 27.0)</td></tr>
+      <tr><td>9</td><td><code>tiro_cf</code></td><td><code>0</code></td><td><code>tiro - extension_tiro</code></td><td>(0, 20.88)</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Etienne son las medidas que la pestaña Maniquíes ya muestra: cintura 84, cadera 98, tiro 27, altura_cadera 20, largo_lateral 104, entrepierna 78. Con ellas el costado 2→3→4→5 mide <strong>104.48&nbsp;cm</strong> y la entrepierna 8→7→6 <strong>77.20&nbsp;cm</strong>, y el perímetro es <strong>2.552&nbsp;m</strong>. La celda «lateral 104.0&nbsp;cm» de la barra de estado dejó de ser texto fijo y pasó a ser una medición: <code>104.5 cm</code>.</p>
+
+  <p>Es un <em>fixture</em> en el sentido de <a href="./style.html#p4d">STD-001</a>: se define una vez y lo importan los tests de <code>toile-doc</code>, los del motor, el CLI y la aplicación. Desde la fase 3 el mismo documento está congelado además como <code>assets/pantalon-base.toile</code>; la función se queda para los tests.</p>
+</section>
+
+<section id="dueno">
+  <h2><span class="num">§ 4</span>Las cinco decisiones del dueño</h2>
+
+  <p>El plan dejó doce preguntas abiertas del inventario; siete las contesta él mismo. Las otras cinco son de producto y no tienen respuesta técnica. Se contestaron el 2026-09-04, y <strong>tienen prioridad sobre cualquier texto del plan que las contradiga</strong>.</p>
+
+  <div class="decision">
+    <b>Decisión 1 · Arrastrar un punto con fórmula → modal al soltar</b>
+    <p>Al <strong>soltar</strong> —no al agarrar: la vista previa 2D/3D tiene que verse antes de decidir— un punto cuya coordenada tiene fórmula, aparece un modal «Estás modificando una fórmula» con exactamente dos salidas:</p>
+    <ul class="notch">
+      <li><strong>Adaptar la fórmula</strong> — el delta se absorbe en el término aditivo, en cm (<code>cintura / 4 + 1</code> → <code>cintura / 4 + 1.6</code>). Si la fórmula no tiene término aditivo, se crea. Nunca proporcional. El delta se redondea al snap activo, o a 0,1&nbsp;cm sin snap.</li>
+      <li><strong>Respetar la fórmula</strong> — el punto vuelve a su posición.</li>
+    </ul>
+    <p>No hay opción de romper el vínculo ni de convertir a literal desde el gesto. El inspector muestra la fórmula reescribiéndose en vivo durante el arrastre. El gesto entero —arrastre más decisión— es una sola entrada de undo.</p>
+    <p><em>Por qué es del dueño:</em> define el tacto del producto entero. Las otras dos posiciones eran «absorber en silencio» y «bloquear el arrastre y obligar a editar la fórmula». Cambiarla cuesta veinte líneas en <code>formula/nudge.rs</code> y ningún tipo se mueve — pero cuanto antes se decida, antes se valida con las manos.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 2 · La pinza entra completa en el MVP</b>
+    <p>Cuña + par interno + aplomado (truing sobre base curva), en F7.</p>
+    <p><em>Razón del dueño:</em> el hola-mundo —círculo con cuña → cono— <strong>es</strong> una pinza; la pinza es la primitiva que sostiene el cono, el trasero del pantalón y el corpiño. Se paga una vez.</p>
+    <p>La consecuencia es que se retira la válvula de escape que el plan había declarado para el ítem más caro del MVP: un trasero sin pinza con un drapeado deliberadamente aproximado ya no está sobre la mesa.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 3 · Tipo de costura, no sólo tolerancia</b>
+<pre class="si"><code>Seam {
+    kind: SeamKind,          // Plain | Eased { expected_cm } | Gathered { ratio }
+    tolerance: Option&lt;f64&gt;,  // None → variable del documento
+}</code></pre>
+    <ul class="notch">
+      <li><strong>Plain</strong>: avisa si <code>|Δ| &gt; tolerancia</code>.</li>
+      <li><strong>Eased</strong>: avisa si <code>|Δ − expected| &gt; tolerancia</code>. <code>expected</code> en cm.</li>
+      <li><strong>Gathered</strong>: se declara como <strong>ratio</strong> (2:1); avisa si el ratio real se aleja más de la tolerancia de ratio.</li>
+      <li>Valores por defecto como <strong>variables del documento</strong>: <code>tolerancia_costura = 0.5</code> cm y <code>tolerancia_ratio = 0.05</code>; override por costura.</li>
+      <li>El Δ se muestra en <strong>cm con signo</strong> y con qué lado sobra; el % es dato secundario del inspector.</li>
+    </ul>
+    <p>La <strong>física del fruncido</strong> —que se vea como fruncido— queda fuera de v1; entra sólo el tipo, el aviso y el formato, para no migrar después.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 4 · Nombres de punto: opcionales, editables, con capa de etiquetas</b>
+    <ul class="notch">
+      <li><code>label: Option&lt;String&gt;</code> por punto; automático <code>P&lt;n&gt;</code> <strong>por orden de creación</strong> dentro de la pieza (estable: las keys no se reciclan).</li>
+      <li>Unicidad <strong>por pieza</strong>; colisión → error accionable, nunca auto-sufijo.</li>
+      <li><code>label_visible: bool</code> <strong>por nodo, en el documento</strong>: es una decisión de autoría, no de vista.</li>
+      <li>Un botón de <strong>capa de etiquetas</strong> mostrar/ocultar, como estado de vista. Los automáticos sólo se muestran al pasar el ratón.</li>
+      <li>Renombrar es un comando que reescribe cada fórmula que cita el nombre, en una sola entrada de undo. Las fórmulas se guardan como texto fuente.</li>
+    </ul>
+    <p><strong>Driver de formato que sale de esta decisión:</strong> el archivo <code>.toile</code> lo va a leer un modelo de lenguaje —el dueño trabaja el patrón con Claude—. El JSON canónico, los nombres en los nodos clave y las fórmulas como texto son requisitos de legibilidad para una IA, no sólo para el diff. <code>toile-cli -- doc</code> es la puerta headless para eso.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 5 · Patronaje abre vacío</b>
+    <p>Mesa vacía con «+ Pieza». El bloque de ejemplo (<code>block::trouser_front()</code>) es accesible por una acción explícita en el panel Producto —«Ejemplo · pantalón base»— hasta que F3 traiga Abrir y lo reemplace por Nuevo · Abrir · Ejemplos.</p>
+    <p><em>Por qué:</em> es lo que hace visible F1 sin que la aplicación decida por el usuario. Abrir sobre un bloque ya trazado enseña el producto en tres segundos y arriesga que se lea como «Toile trae patrones»; la mesa vacía es más honesta y más fría, y el ejemplo sigue estando a un clic.</p>
+  </div>
+</section>
+
+<section id="fases">
+  <h2><span class="num">§ 5</span>Las fases</h2>
+
+  <p>Cada fase termina en algo que se puede entregar. La puerta de todas es la misma: <code>./tools/verify.sh</code> en verde con <code>0x534dd0e5200e8e4a</code> <strong>intacto</strong>.</p>
+
+  <div class="tscroll"><table>
+    <thead><tr><th>Fase</th><th>Título</th><th>Lo que el usuario gana</th><th>Estado</th></tr></thead>
+    <tbody>
+      <tr><td>F0</td><td>Cortar por concepto</td><td class="wrap">Nada visible. Prerrequisito mecánico, revisable en diez minutos</td><td><span class="tag-ok">hecha</span></td></tr>
+      <tr><td>F1</td><td><strong>El delantero se resuelve</strong></td><td class="wrap">Ve un pantalón trazado por fórmulas, a escala real; cambia de maniquí y re-drapea</td><td><span class="tag-ok">hecha</span></td></tr>
+      <tr><td>F2</td><td>Se puede editar</td><td class="wrap">Arrastra con snap, escribe fórmulas, teclea medidas exactas, deshace</td><td><span class="tag-ok">hecha</span></td></tr>
+      <tr><td>F3</td><td>El patrón sale de la app</td><td class="wrap">Guarda <code>.toile</code>, lo reabre, exporta SVG 1:1</td><td><span class="tag-ok">hecha</span></td></tr>
+      <tr><td>F4</td><td>Curvas</td><td class="wrap">Tiro y cadera dejan de ser chaflanes</td><td><span class="tag-ok">hecha</span></td></tr>
+      <tr><td>F5</td><td>Topología</td><td class="wrap">Agrega y borra puntos, y dibuja piezas nuevas, sin resetear el drapeado</td><td><span class="tag-no">pendiente</span></td></tr>
+      <tr><td>F6</td><td>Dos piezas y una costura</td><td class="wrap">El trasero, cosido al delantero, drapea como prenda</td><td><span class="tag-no">pendiente</span></td></tr>
+      <tr><td>F7</td><td>Piquetes, pinza, hilo</td><td class="wrap">Cierra el MVP del inventario</td><td><span class="tag-no">pendiente</span></td></tr>
+      <tr><td>F8</td><td>Simetría y líneas internas</td><td class="wrap">Media pieza con doblez, y trayectos internos con tipo de línea</td><td><span class="tag-no">pendiente</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <p><strong>F4 acaba de aterrizar</strong>, y con ella las curvas: <code>Segment::Cubic</code> vivo, las manijas como puntos del documento con su propio enlace, <code>samples</code> por nodo, la herramienta Curva, y <strong>el tiro y la cadera del delantero convertidos en curvas de verdad</strong>. <code>kurbo</code> entra clavado a <code>=0.13.1</code> —versión exacta, no caret— y sólo dentro de <code>toile-geom/src/curve.rs</code>: ningún tipo de kurbo cruza el límite del crate. El aplanado <strong>nunca</strong> se hace por tolerancia; el número de muestras lo dicta <code>ContourNode.samples</code> en valores fijos de <code>t</code>, que es lo que impide que ajustar una tangente —cambio de forma— se convierta en un remallado. Lo vigila un golden propio, <code>flatten_golden.rs</code>, corriendo en ARM y en x86: un nivel por debajo del golden de drapeado, que es donde la deriva de una librería o de una plataforma se ve primero.</p>
+
+  <p>Lo que dejaron las fases ya cerradas:</p>
+
+  <ul class="notch">
+    <li><strong>F0</strong> — ningún archivo pasa de 300 líneas y la pestaña quedó idéntica píxel a píxel. Puro movimiento: la fase que hace posibles las demás.</li>
+    <li><strong>F1</strong> — el modelo entero declarado, sólo los comandos de la fase implementados (el resto devuelve <code>DocError::NotYetImplemented</code> desde <code>apply</code>, un error nombrado y no un <code>todo!()</code>), y los tres errores silenciosos del árbol convertidos en <code>Result</code>: <code>derive</code> con conteo de puntos, <code>cdt::triangulate</code> sin <code>expect</code>, y la generación topológica comparada en cada derivación.</li>
+    <li><strong>F2</strong> — historial con coalescing por gesto, el reductor puro de gestos, snap con prioridad fija (nodo &gt; manija &gt; intersección &gt; arista &gt; eje &gt; grilla) y radio en puntos de pantalla, y la caja de precisión que acepta <code>22</code> igual que <code>cintura/4+1</code> porque es el mismo parser. <strong>Aquí terminó el MVP de la rebanada vertical.</strong></li>
+    <li><strong>F3</strong> — JSON canónico sobre el modelo entero, guardar y abrir, export SVG a escala real, y <code>assets/pantalon-base.toile</code> congelado.</li>
+  </ul>
+
+  <p>Y lo que queda: F5 trae el remallado <strong>en sombra</strong> —el worker nace con la primera fase que crea topología, y la ruta síncrona jamás se envía a producción—; F6 monta el trasero y la primera costura, y quita el <code>#[ignore]</code> al test que la espera desde F2; F7 cierra el MVP del inventario con piquetes, pinza e hilo; F8 añade simetría y líneas internas.</p>
+</section>
+
+<section id="contradicciones">
+  <h2><span class="num">§ 6</span>Contradicciones resueltas</h2>
+
+  <p>El plan salió de tres planes independientes que discrepaban en once puntos. Cada uno se decidió en la mesa, con su razón y su coste, y no por omisión. Éstas son las nueve cuyas consecuencias duran más allá de su fase — se omiten dos que eran de calendario y ya se leen en la tabla anterior: dónde nace el remallado en sombra (fase 5) y cuál es el alcance del 3D en el MVP (prenda cosida, fase 6).</p>
+
+  <div class="tscroll"><table>
+    <thead><tr><th>#</th><th>Discrepancia</th><th>Decisión</th><th>Por qué</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>1</td>
+        <td class="wrap">Manijas de Bézier: ¿<code>PointKey</code> o desplazamiento literal?</td>
+        <td class="wrap"><strong><code>PointKey</code></strong></td>
+        <td class="wrap">«Cualquier coordenada puede ser una fórmula» tiene que incluir las tangentes. Las manijas heredan keys, enlaces, <code>MovePoint</code>, <code>nudge</code>, undo y JSON sin una línea nueva. <strong>Coste asumido:</strong> mover el ancla ya no arrastra la tangente por construcción; lo hace el gesto, que emite <code>MovePoint</code> para el nodo y sus dos manijas dentro de una sola entrada de historial.</td>
+      </tr>
+      <tr>
+        <td>2</td>
+        <td class="wrap">Puerta <code>toile-app</code> → documento: ¿reexportar el crate entero o una lista?</td>
+        <td class="wrap"><strong>Lista explícita en <code>toile-engine/src/draft.rs</code></strong></td>
+        <td class="wrap">Misma garantía de Cargo, superficie revisable. Reexportar el crate entero cumple la letra y traiciona el motivo: la API headless deja de ser una puerta y pasa a ser un pasillo. Agregar un tipo a esa lista es un renglón de diff con nombre propio.</td>
+      </tr>
+      <tr>
+        <td>3</td>
+        <td class="wrap">Mapa de muestreo: ¿colección aparte en <code>Doc</code> o campo del nodo?</td>
+        <td class="wrap"><strong><code>ContourNode.samples: u16</code></strong></td>
+        <td class="wrap">Cumple la exigencia del ADR idénticamente —vive dentro de la revisión, el undo lo restaura por construcción— y elimina la única colección del modelo que puede desalinearse del contorno que describe.</td>
+      </tr>
+      <tr>
+        <td>4</td>
+        <td class="wrap">Contador de generación topológica: ¿documento o capa de derivación?</td>
+        <td class="wrap"><strong>En <code>PieceSlot</code>, dentro del motor</strong></td>
+        <td class="wrap">Es estado de derivación: no se serializa, no entra al undo, no viaja en un diff. Ponerlo en <code>Piece</code> lo mete en el formato y en la pila de deshacer, donde no significa nada.</td>
+      </tr>
+      <tr>
+        <td>5</td>
+        <td class="wrap">Variables del patrón: ¿<code>Vec</code> + índice, <code>BTreeMap</code> por nombre, o arena?</td>
+        <td class="wrap"><strong><code>Arena&lt;Variable&gt;</code> con <code>VariableKey</code></strong></td>
+        <td class="wrap">La identidad es la key. El índice se corre al borrar; el nombre rompe fórmulas al renombrar — el wart de Seamly que el inventario rechaza.</td>
+      </tr>
+      <tr>
+        <td>6</td>
+        <td class="wrap">Coordenadas del punto: ¿arena del documento o dentro de <code>ContourNode</code>?</td>
+        <td class="wrap"><strong><code>Doc.points: Arena&lt;Point&gt;</code></strong></td>
+        <td class="wrap">Mantiene abierta la extracción de varias piezas sobre un mismo trazado, donde delantero y trasero comparten cintura, cadera, tiro, rodilla y bajo.</td>
+      </tr>
+      <tr>
+        <td>7</td>
+        <td class="wrap"><code>^</code>: ¿sólo entero con <code>powi</code> o <code>libm::pow</code>?</td>
+        <td class="wrap"><strong>Sólo entero, con <code>powi</code></strong></td>
+        <td class="wrap">Borra una clase entera de riesgo de determinismo y deja <code>toile-doc</code> sin dependencias numéricas. <code>sqrt</code> es exacto por IEEE y cubre lo que el oficio usa. Si aparece un método real que necesite exponente fraccionario, <code>libm</code> entra ese día —ya está en la lista de dependencias del ADR— y el golden de aplanado lo vigila desde F4.</td>
+      </tr>
+      <tr>
+        <td>8</td>
+        <td class="wrap">Nombre desconocido en una fórmula: ¿error o conservar el último valor resuelto?</td>
+        <td class="wrap"><strong>Error</strong></td>
+        <td class="wrap">Conservar el último valor resuelto es exactamente la desincronización de las dos verdades que el propio plan declara como su riesgo principal, y el 0 silencioso de Seamly con otro disfraz.</td>
+      </tr>
+      <tr>
+        <td>9</td>
+        <td class="wrap">Ids opacos que envuelven un índice y luego una key</td>
+        <td class="wrap"><strong>No hay etapa intermedia</strong></td>
+        <td class="wrap">Las keys generacionales existen desde la fase 1: envolver un índice para sustituirlo dos fases después sería andamio sin usuario. Lo que sí se adopta es su consecuencia: <strong>ninguna firma de <code>tabs/patronaje/</code> ve nunca un <code>usize</code> de identidad</strong>.</td>
+      </tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="golden">
+  <h2><span class="num">§ 7</span>El golden que no se mueve</h2>
+
+  <div class="rule">
+    <b>Invariante de todas las fases</b>
+    <p><code>0x534dd0e5200e8e4a</code></p>
+    <p>El escenario de drapeado de <code>tests/golden.rs</code> sigue siendo el corpiño de <code>demo::bodice_contour()</code>. Ninguna fase de este plan lo cambia, y cada una lo verifica con <code>./tools/verify.sh</code>. El pantalón entra <strong>añadido</strong>, con goldens propios.</p>
+  </div>
+
+  <p>El plan roza la física en exactamente dos puntos, y los dos llevaron su test de bits en la fase 1: <code>sample_closed</code>, que pasó a usar <code>length::cumulative</code> en vez de calcular su propia tabla —la suma tiene que quedar en el mismo orden y con las mismas operaciones—, y <code>demo::drop_state</code>, que delega en <code>couture/seed.rs</code> conservando su <code>DROP_HEIGHT</code>. <code>demo.rs</code> conserva además sus constantes literales de densidad de malla: son parte del escenario del golden y cambiarlas lo movería.</p>
+
+  <p><strong>Si <code>verify.sh</code> reporta otro valor, es un bug del cambio, no una actualización pendiente.</strong> La regla general de <a href="./style.html#p7">STD-001</a> —un cambio de física cambia el golden, se regenera y se justifica en el mismo commit— no aplica aquí: en Patronaje no hay ningún cambio de física legítimo.</p>
+
+  <p>Los goldens que sí se añaden: <code>flatten_golden.rs</code> en F4 (el hash de la polilínea aplanada del pantalón, en las dos arquitecturas de CI) y <code>drape_pants_hash</code> en F6 (release-only, con <code>#[ignore]</code>, como el existente).</p>
+
+  <p>Los otros no-objetivos declarados, para cerrar el borde:</p>
+
+  <ul class="notch">
+    <li><strong>No cambia el avatar.</strong> Sigue siendo la esfera de <code>AVATAR_RADIUS = 0.15</code>. Un delantero de pantalón drapeado sobre una esfera de 15&nbsp;cm se ve como un paño grande sobre una bola pequeña: es lo que ya pasa con el corpiño, con el doble de tela. El avatar real es otro plan, y tocarlo movería el golden.</li>
+    <li><strong>No es el plan del Probador.</strong> Su mitad 2D pasa a leer y editar el mismo documento, y nada más.</li>
+    <li><strong>No toca <code>maniquies.rs</code> ni <code>telas.rs</code></strong>, salvo por heredar el pintor de iconos en F0 sin cambiar un píxel.</li>
+  </ul>
+</section>
+
+<section id="alcance">
+  <h2><span class="num">§ 8</span>Fuera de alcance, y lo que sigue abierto</h2>
+
+  <p>Nombrado para cerrar el borde: lo que este plan no hace, no es lo que se olvidó.</p>
+
+  <div class="axis">
+    <span class="tag">8.1</span>
+    <h3>Fuera de este plan, previsto para después</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+  <ul class="notch">
+    <li><strong>Etapa B del evaluador</strong> (<code>Line_A_B</code>, <code>AngleLine_A_B</code>, <code>Spl_…</code>, toposort sobre puntos e invalidación aguas abajo). El AST y la resolución de nombres de F1 están escritos para admitirla: es un <code>impl Lookup</code> nuevo detrás del <em>mismo</em> trait, no una re-arquitectura.</li>
+    <li><strong>Construcciones relativas</strong>: escuadrar, punto sobre recta, punto medio, intersección, compás, bisectriz, y la composición del contorno pinchando nodos del trazado. No son geometría pura —son herramientas que emiten puntos con fórmula— y su sitio es un módulo del motor cuando llegue su fase.</li>
+    <li><strong>Los avisos y las comodidades</strong>: aviso de embebido fuera de tolerancia (el dato ya está en el modelo), aviso de piquete huérfano, feedback visual de pares de costura y selección sincronizada, duplicar/rotar/mover piezas en la mesa, unidades mm y pulgadas, caminar la costura, anotación de pieza, PDF en mosaico, historial legible en la UI, anisotropía derivada del hilo, costuras 1:n.</li>
+    <li><strong>El consumo 3D del <code>Pin</code>.</strong> El dato entra en la fase 1 —porque agregarlo después sería una migración de formato—; el gesto no.</li>
+    <li><strong>La física del fruncido</strong>, por la decisión 3: entra el tipo, el aviso y el formato; que se vea como fruncido es v1.</li>
+  </ul>
+
+  <div class="axis">
+    <span class="tag">8.2</span>
+    <h3>Rechazado de plano, sin re-discusión</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+  <div class="discarded">
+    <b>No entra, y no se vuelve a discutir</b>
+    <p>El orden del documento como grafo de dependencias; el puntero de inserción del historial; el re-parseo global por tecla; el espacio de nombres plano por cadena; los bloques de trazado múltiples; la gradación por incrementos lineales; el <code>notchAngle</code>/<code>notchSubtype</code> atados al margen; <code>Unite 2 Pieces</code>. De CLO: la doble representación de curvas, la tabla de deltas por talla, el POM desconectado, el Pattern Drafter sellado, el <code>Unfold</code> destructivo. Del propio árbol: la fracción global del perímetro como ancla persistente y el direccionamiento por índice.</p>
+  </div>
+
+  <p><strong>Y fuera por el README</strong>, que es una frontera de producto y no de plan: tallaje y gradación, márgenes de costura automáticos, tizada, frunces y pliegues, texturas, avíos, bolsillos como capas múltiples, mapa de tensión.</p>
+
+  <hr>
+
+  <p class="refs">Este documento es la destilación permanente del plan de trabajo de la pestaña. La arquitectura que lo sostiene está en <a href="./architecture.html">ADR-001</a>; las reglas con que se escribe su código, en <a href="./style.html">STD-001</a>.</p>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <div class="fin">TOILE · PLAN-001 · <a href="https://github.com/eticalde/Toile">github.com/eticalde/Toile</a> · <a href="./architecture.html">ADR-001</a> · <a href="./style.html">STD-001</a></div>
+</footer>
+
+</body>
+</html>
