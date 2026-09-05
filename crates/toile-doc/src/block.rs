@@ -1,4 +1,7 @@
-use crate::{Binding, Doc, MeasureSet, Piece, Point, PointKey, Variable, Winding};
+use crate::{
+    Binding, Command, Doc, MeasureSet, Piece, PieceKey, Point, PointKey, SegmentEdit, Variable,
+    Winding,
+};
 
 /// The measurements of the person Toile was written for, in centimetres.
 const ETIENNE: [(&str, f64); 10] = [
@@ -58,6 +61,55 @@ const NODES: [(&str, &str, &str); 9] = [
     ("tiro_cf", "0", "tiro - extension_tiro"),
 ];
 
+/// One tract the front bends: the node it leaves, the two handles that bend
+/// it, and how finely it is flattened.
+struct Bend {
+    /// The name of the node the tract leaves.
+    from: &'static str,
+    /// The handle leaving that node: its name, then its x and its y.
+    out: (&'static str, &'static str, &'static str),
+    /// The handle entering the next node, written the same way.
+    into: (&'static str, &'static str, &'static str),
+    /// How many points the tract contributes to the flattened contour.
+    samples: u16,
+}
+
+/// The two tracts a trouser front cannot be drawn straight.
+///
+/// The hip runs from the waist to the hip point on two handles half the hip
+/// depth long, both of them vertical: the seam leaves the waistline square, as
+/// a seam must, and reaches the hip on the vertical, so the widest place on
+/// the piece is the hip itself and never a bulge above it.
+///
+/// The crotch scoops the other way, into the piece. Its node and the one it
+/// runs to sit on the corners of a square of side `extension_tiro`, so the
+/// tract is that square's arc: a handle along the crotch level, a longer one
+/// up the centre front, and the curve hugs the centre front before it hooks.
+///
+/// The sample counts are chosen so that the polyline strays under a tenth of a
+/// millimetre from the cubic it stands for — the same tenth of a millimetre a
+/// drag and the precision box round to, and a tenth of what a pencil draws. At
+/// twenty-four the hip is out by 0.05 mm; the crotch is half as long and turns
+/// through a right angle, and sixteen puts it at 0.10 mm.
+const CURVES: [Bend; 2] = [
+    Bend {
+        from: "cintura_lat",
+        out: ("manija_cadera_1", "cintura / 4 + 1", "altura_cadera / 2"),
+        into: (
+            "manija_cadera_2",
+            "cadera / 4 + holgura_cadera",
+            "altura_cadera / 2",
+        ),
+        samples: 24,
+    },
+    Bend {
+        from: "tiro_int",
+        out: ("manija_tiro_1", "-extension_tiro * 0.55", "tiro"),
+        into: ("manija_tiro_2", "0", "tiro - extension_tiro * 0.45"),
+        samples: 16,
+    },
+];
+
 /// The name the front carries in the product tree.
 pub const FRONT: &str = "Delantero";
 
@@ -79,9 +131,45 @@ pub fn trouser_front() -> Doc {
                 .insert(Point::at(binding(x), binding(y)).named(label))
         })
         .collect();
-    doc.pieces
+    let piece = doc
+        .pieces
         .insert(Piece::polygon(FRONT, points, Winding::Cw));
+    for curve in &CURVES {
+        bend(&mut doc, piece, curve);
+    }
     doc
+}
+
+/// Bends one tract of the front, the way the curve tool bends one.
+///
+/// The two commands are the ones a gesture emits, in the order it emits them:
+/// the count first, because a tract may not take handles until it is sampled
+/// finely enough to show them. The handles land in the document under the
+/// same rules a person's curve lands under, so the block cannot describe a
+/// shape the editor could not have drawn.
+fn bend(doc: &mut Doc, piece: PieceKey, curve: &Bend) {
+    let node = doc
+        .shows_label(piece, curve.from)
+        .expect("the block bends a node it has just named itself");
+    Command::SetSamples {
+        piece,
+        node,
+        to: curve.samples,
+    }
+    .apply(doc)
+    .expect("the contour runs through the node the bend names");
+    Command::SetSegment {
+        piece,
+        node,
+        to: SegmentEdit::cubic(handle(curve.out), handle(curve.into)),
+    }
+    .apply(doc)
+    .expect("the tract is sampled for a curve a count ago");
+}
+
+/// One handle of a curve as a point of the document, name and all.
+fn handle((label, x, y): (&str, &str, &str)) -> Point {
+    Point::at(binding(x), binding(y)).named(label)
 }
 
 /// The binding one of this file's own sources spells.
@@ -92,16 +180,23 @@ fn binding(source: &str) -> Binding {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Grain, Segment};
+    use crate::{Grain, Piece};
+
+    fn front(doc: &Doc) -> &Piece {
+        doc.piece_named(FRONT)
+            .and_then(|key| doc.pieces.get(key))
+            .expect("the block draws one piece")
+    }
 
     #[test]
-    fn trouser_front_has_nine_nodes() {
+    fn trouser_front_has_nine_nodes_and_four_handles() {
         let doc = trouser_front();
-        let piece = doc.piece_named(FRONT).and_then(|key| doc.pieces.get(key));
-        let piece = piece.expect("the block draws one piece");
+        let piece = front(&doc);
         assert_eq!(piece.contour.len(), 9);
-        assert_eq!(doc.points.len(), 9);
-        assert!(piece.contour.iter().all(|n| n.segment == Segment::Line));
+        // A handle is a point of the document like any other, so bending two
+        // tracts costs four points that no node stands on.
+        assert_eq!(doc.points.len(), 13);
+        assert_eq!(piece.anchors().count(), 9);
     }
 
     #[test]

@@ -1,6 +1,24 @@
 use super::FormatError;
 use crate::{Arena, Doc, DocError, EdgeAnchor, EdgeRange, Key};
 
+/// Checks that no tract asks to be flattened at a count no tract can carry.
+///
+/// The count is a number a file chooses and the flattening is what every
+/// resolve walks, twice over and pairwise, so a file left to name its own
+/// count names how long opening it takes. It is refused here, by the piece
+/// and the node, rather than clamped somewhere downstream where the document
+/// would quietly stop being the one that was written.
+pub(super) fn samplings(doc: &Doc) -> Result<(), FormatError> {
+    for (_, piece) in doc.pieces.iter() {
+        for node in &piece.contour {
+            if !node.takes_samples(node.samples) {
+                return Err(FormatError::Sampling(DocError::sampling(node.samples)));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Checks that every key the pattern cites names an entry the file carries.
 ///
 /// A file can be edited by hand, and a key that leads nowhere would otherwise
@@ -82,6 +100,16 @@ mod tests {
             "the pattern points at something the file does not carry: \
              `MeasureSet` has no entry 9.0"
         );
+    }
+
+    #[test]
+    fn a_sampling_the_flattening_could_not_afford_is_named() {
+        let mut doc = block::trouser_front();
+        let front = doc.piece_named(block::FRONT).expect("the block draws one");
+        doc.pieces.get_mut(front).expect("the key is live").contour[0].samples = u16::MAX;
+        let error = samplings(&doc).expect_err("the count is past the ceiling");
+        assert!(error.to_string().contains("asks for 65535"), "{error}");
+        assert_eq!(samplings(&block::trouser_front()), Ok(()));
     }
 
     #[test]

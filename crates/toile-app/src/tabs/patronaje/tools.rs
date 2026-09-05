@@ -1,6 +1,6 @@
 use eframe::egui::{self, Align2, FontId, Rect, Response, Sense, Stroke, StrokeKind, Vec2, vec2};
 
-use super::state::State;
+use super::state::{State, Tool};
 use super::wire::Verb;
 use crate::glyph;
 use crate::theme::Theme;
@@ -20,7 +20,7 @@ const TOOLS: [(&str, &str, bool); 9] = [
     (
         "Curva",
         "2 13 5 12 8 9 11 4 14 3; 2 13 5 9; o 5 9 1.3",
-        false,
+        true,
     ),
     ("Pinza", "3 3 8 13 13 3", false),
     ("Piquete", "2 9 14 9; 8 9 8 5", false),
@@ -34,6 +34,15 @@ const TOOLS: [(&str, &str, bool); 9] = [
 /// the pointer.
 const MEASURE: &str = "Medir";
 
+/// The tool a tile puts in hand, for the tiles whose phase has arrived.
+fn tool_of(name: &str) -> Option<Tool> {
+    match name {
+        "Seleccionar" => Some(Tool::Select),
+        "Curva" => Some(Tool::Curve),
+        _ => None,
+    }
+}
+
 /// The two steps through the undo stack, and the arrows that stand for them.
 const HISTORY: [(&str, &str); 2] = [
     ("Deshacer", "3 7 12 7 12 12; 3 7 6 4; 3 7 6 10"),
@@ -44,20 +53,25 @@ const HISTORY: [(&str, &str); 2] = [
 pub fn grid(ui: &mut egui::Ui, theme: &Theme, state: &mut State) {
     section(ui, theme, "Herramientas");
     let width = tile_width(ui);
-    for (row, tools) in TOOLS.chunks(3).enumerate() {
+    for tools in TOOLS.chunks(3) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             ui.add_space(PAD);
-            for (column, &(name, icon, ready)) in tools.iter().enumerate() {
-                let index = row * 3 + column;
+            for &(name, icon, ready) in tools {
+                let held = tool_of(name);
                 let lit = if name == MEASURE {
                     state.dimensions
                 } else {
-                    index == 0
+                    held == Some(state.tool)
                 };
                 let resp = tile(ui, theme, name, icon, Weight::of(lit, ready), width);
-                if name == MEASURE && resp.clicked() {
+                if !resp.clicked() {
+                    continue;
+                }
+                if name == MEASURE {
                     state.dimensions = !state.dimensions;
+                } else if let Some(chosen) = held {
+                    state.tool = chosen;
                 }
             }
         });

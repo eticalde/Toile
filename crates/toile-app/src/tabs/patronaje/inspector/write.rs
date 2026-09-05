@@ -1,6 +1,7 @@
 use eframe::egui::{self, Id};
 use toile_engine::draft::{Axis, Binding, Command, Draft, PieceKey, PointKey, SyntaxError};
 
+use super::super::curve;
 use super::super::state::{Field, FieldEdit, State};
 use crate::theme::Theme;
 use crate::widgets::{Editable, Edited, PAD, formula_row, section_with, select};
@@ -9,6 +10,7 @@ use crate::widgets::{Editable, Edited, PAD, formula_row, section_with, select};
 pub type Asked = (&'static str, Command);
 
 const BIND: &str = "escribir fórmula";
+const SAMPLES: &str = "afinar el aplanado";
 const MEASURE: &str = "editar medida";
 const VARIABLE: &str = "editar variable";
 const BODY: &str = "cambiar de cuerpo";
@@ -56,6 +58,51 @@ pub fn coordinates(
         }
     }
     asked
+}
+
+/// How finely the chosen tract is flattened, when it is one that bends.
+///
+/// A straight tract has no row: its sample count is a number the flattening
+/// never reads, and a field that changes nothing is a field that lies.
+pub fn samples(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    draft: &Draft,
+    at: (PieceKey, PointKey),
+    state: &mut State,
+) -> Option<Asked> {
+    let (piece, node) = at;
+    let held = curve::samples_of(draft.doc(), piece, node)?;
+    let source = held.to_string();
+    let (low, high) = curve::SAMPLE_RANGE;
+    let written = row(
+        ui,
+        theme,
+        state,
+        Field::Samples(node),
+        &Editable {
+            label: "muestras",
+            source: &source,
+            note: &format!("puntos del aplanado · {low} a {high}"),
+            fault: false,
+            held: None,
+        },
+    );
+    let to = counted(written.as_deref()?)?;
+    Some((SAMPLES, Command::SetSamples { piece, node, to }))
+}
+
+/// The sample count a piece of text asks for, when it asks for a usable one.
+///
+/// Out of range is refused here and not clamped downstream: a tract flattened
+/// to more points than a whole piece is meshed with is a typo, and building it
+/// before saying so would spend the memory to prove the point.
+fn counted(text: &str) -> Option<u16> {
+    let (low, high) = curve::SAMPLE_RANGE;
+    text.trim().parse::<u16>().ok().filter(|&to| {
+        let range = low..=high;
+        range.contains(&to)
+    })
 }
 
 /// The measurements the pattern resolves against, and the body it uses.
@@ -221,6 +268,10 @@ fn unparsed(of: &Field, text: &str) -> Option<String> {
             Ok(value) if value.is_finite() => None,
             _ => Some("no es un número".to_owned()),
         },
+        Field::Samples(_) => {
+            let (low, high) = curve::SAMPLE_RANGE;
+            counted(text).map_or_else(|| Some(format!("un entero entre {low} y {high}")), |_| None)
+        }
         Field::Coordinate(..) | Field::Variable(_) => {
             let fault: SyntaxError = Binding::parse(text).err()?;
             Some(format!("no parsea en {}: {}", fault.at, fault.kind))

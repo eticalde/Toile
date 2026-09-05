@@ -4,6 +4,7 @@ use eframe::egui;
 use toile_engine::draft::{Axis, Defect, Doc, Draft, EvalError, MannequinKey, PieceKey, PointKey};
 use write::Asked;
 
+use super::curve::{self, Side};
 use super::state::State;
 use crate::file::Action;
 use crate::theme::Theme;
@@ -63,8 +64,7 @@ fn chosen(
     state: &mut State,
 ) -> Option<Asked> {
     if let Some(from) = state.selection.edge() {
-        tract(ui, theme, draft, piece, from);
-        return None;
+        return tract(ui, theme, draft, (piece, from), state);
     }
     match state.selection.count() {
         0 => {
@@ -79,7 +79,11 @@ fn chosen(
     }
 }
 
-/// The one chosen node, under the name the drawing gives it.
+/// The one chosen point, under the name the drawing gives it.
+///
+/// A handle is a point of the document like any other, so it gets the same two
+/// rows; only the heading says which of the two it is, because "Punto" over a
+/// tangent would leave the person guessing what they had hold of.
 fn node(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -88,9 +92,26 @@ fn node(
     state: &mut State,
 ) -> Option<Asked> {
     let point = state.selection.only()?;
-    let name = draft.doc().label_of(piece, point).unwrap_or_default();
-    section(ui, theme, &format!("Punto {name}"));
+    section(ui, theme, &heading(draft, piece, point));
     write::coordinates(ui, theme, draft, (piece, point), state)
+}
+
+/// What the panel calls the chosen point: a node by its name, a handle by the
+/// node it pulls and the side it lies on.
+fn heading(draft: &Draft, piece: PieceKey, point: PointKey) -> String {
+    let doc = draft.doc();
+    if let Some(name) = doc.label_of(piece, point) {
+        return format!("Punto {name}");
+    }
+    let Some(hangs) = curve::hangs(doc, piece, point) else {
+        return "Punto".to_owned();
+    };
+    let node = doc.label_of(piece, hangs.node).unwrap_or_default();
+    let side = match hangs.side {
+        Side::Out => "salida",
+        Side::Into => "entrada",
+    };
+    format!("Manija de {side} · {node}")
 }
 
 /// Several nodes at once: what they have in common, and nothing they do not.
@@ -112,13 +133,19 @@ fn group(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, state: &State, many: u
     }
 }
 
-/// The chosen tract: the two nodes it runs between, and how long it is.
-fn tract(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, piece: PieceKey, from: PointKey) {
+/// The chosen tract: the two nodes it runs between, how long it is, and — when
+/// it bends — how finely it is flattened.
+fn tract(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    draft: &Draft,
+    at: (PieceKey, PointKey),
+    state: &mut State,
+) -> Option<Asked> {
+    let (piece, from) = at;
     let nodes = draft.points_cm(piece);
-    let Some(at) = nodes.iter().position(|&(key, _)| key == from) else {
-        return;
-    };
-    let to = nodes[(at + 1) % nodes.len()].0;
+    let index = nodes.iter().position(|&(key, _)| key == from)?;
+    let to = nodes[(index + 1) % nodes.len()].0;
     let doc = draft.doc();
     let ends = (
         doc.label_of(piece, from).unwrap_or_default(),
@@ -127,6 +154,7 @@ fn tract(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, piece: PieceKey, from:
     section(ui, theme, &format!("Borde {} → {}", ends.0, ends.1));
     let length = format!("{:.1}", draft.run_length_cm(piece, from, to));
     field_row(ui, theme, "largo", &length, "cm");
+    write::samples(ui, theme, draft, (piece, from), state)
 }
 
 /// What the piece is, when nothing on it is chosen.

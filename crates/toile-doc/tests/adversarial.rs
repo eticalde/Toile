@@ -185,6 +185,28 @@ fn probe_malformed_files() {
 }
 
 #[test]
+fn probe_implausible_sample_counts() {
+    // A tract's sample count decides how long the flattened contour is, and
+    // the contour check every resolve runs scans that flattening pairwise,
+    // twice over. A file naming its own count therefore names how long
+    // opening it takes, so it is refused at the door — before the polyline
+    // the count asks for is ever built.
+    let block = block::trouser_front().to_canonical_json();
+    for count in ["97", "4096", "65535"] {
+        let text = block.replace("\"samples\": 24", &format!("\"samples\": {count}"));
+        let started = Instant::now();
+        let read = Doc::from_json(&text);
+        let took = started.elapsed();
+        println!(
+            "samples {count} => {read:?} in {took:?}",
+            read = read.as_ref().err()
+        );
+        assert!(read.is_err(), "{count} samples were taken for a tract");
+        assert!(took < Duration::from_secs(1), "{count} took {took:?}");
+    }
+}
+
+#[test]
 fn probe_implausible_slot_counts() {
     // A store's slot count decides how much the reader allocates, so a file
     // naming more slots than a pattern can hold has to be refused before the

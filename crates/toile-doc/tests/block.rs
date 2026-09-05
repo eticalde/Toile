@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use toile_doc::formula::{Dependency, evaluation_order};
-use toile_doc::{Binding, Command, Doc, PieceKey, Winding, block};
+use toile_doc::{Binding, Command, Doc, PieceKey, PointKey, Segment, Winding, block};
 
 /// The measurements of the chosen body, then the pattern variables in the
 /// order each one's own reading demands.
@@ -45,6 +45,9 @@ fn outline(doc: &Doc, piece: PieceKey) -> Vec<[f64; 2]> {
         .collect()
 }
 
+/// The straight run from node to node, which is all a document without a
+/// flattening can measure. The hip and the crotch are curves, so the seam
+/// itself is longer than its chords, and the engine is where that shows.
 fn run_length(outline: &[[f64; 2]], from: usize, to: usize) -> f64 {
     outline[from..=to]
         .windows(2)
@@ -87,7 +90,7 @@ fn etienne_resolves_the_nine_nodes_where_the_draft_says() {
 }
 
 #[test]
-fn etienne_resolves_the_side_seam_to_104_5_cm() {
+fn the_chords_of_the_side_seam_run_104_5_cm() {
     let doc = block::trouser_front();
     let side = run_length(&outline(&doc, front(&doc)), 1, 4);
     assert!((side - 104.476).abs() < 0.001, "the side seam reads {side}");
@@ -102,7 +105,7 @@ fn etienne_resolves_the_inseam_to_77_2_cm() {
 }
 
 #[test]
-fn the_front_measures_two_and_a_half_metres_around() {
+fn the_chords_of_the_front_run_two_and_a_half_metres_around() {
     let doc = block::trouser_front();
     let mut outline = outline(&doc, front(&doc));
     outline.push(outline[0]);
@@ -173,4 +176,44 @@ fn a_variable_that_reads_a_measure_the_body_lacks_stops_the_resolution() {
         .clone();
     let binding = &doc.variables.get(key).expect("the key is live").value;
     assert!(binding.eval(&env).is_err());
+}
+
+#[test]
+fn the_hip_and_the_crotch_are_the_two_tracts_the_block_bends() {
+    let doc = block::trouser_front();
+    let held = doc.pieces.get(front(&doc)).expect("the key is live");
+    let bent: Vec<(usize, u16)> = held
+        .contour
+        .iter()
+        .enumerate()
+        .filter(|(_, node)| node.segment != Segment::Line)
+        .map(|(rank, node)| (rank, node.samples))
+        .collect();
+    assert_eq!(bent, [(1, 24), (7, 16)]);
+    // A straight tract is one point of the flattening and nothing more, so a
+    // sample count above one only ever belongs to a curve.
+    for (rank, node) in held.contour.iter().enumerate() {
+        let straight = node.segment == Segment::Line;
+        assert_eq!(straight, node.samples == 1, "node {rank}");
+    }
+}
+
+#[test]
+fn a_handle_is_a_named_point_that_stands_on_no_node() {
+    let doc = block::trouser_front();
+    let piece = front(&doc);
+    let held = doc.pieces.get(piece).expect("the key is live");
+    let handles: Vec<PointKey> = held
+        .contour
+        .iter()
+        .filter_map(|node| node.segment.handles())
+        .flat_map(|(out, into)| [out, into])
+        .collect();
+    assert_eq!(handles.len(), 4);
+    assert_eq!(doc.points.len(), 9 + handles.len());
+    for handle in handles {
+        let point = doc.points.get(handle).expect("the key is live");
+        assert!(point.label.is_some(), "a handle carries a name of its own");
+        assert_eq!(doc.label_of(piece, handle), None, "but no node shows it");
+    }
 }

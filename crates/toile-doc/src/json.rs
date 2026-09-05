@@ -65,7 +65,8 @@ impl Doc {
     /// # Errors
     /// `FormatError`, naming what is wrong with the file: text that is not
     /// JSON, JSON that stops early, a missing or unknown version, a shape that
-    /// is not a pattern's, or a key that leads nowhere.
+    /// is not a pattern's, a key that leads nowhere, or a tract asking to be
+    /// flattened at a count no tract can carry.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = version(text)?;
         if found != u64::from(VERSION) {
@@ -77,6 +78,7 @@ impl Doc {
         let loaded: Loaded =
             serde_json::from_str(text).map_err(|error| FormatError::while_reading(&error))?;
         check::references(&loaded.doc)?;
+        check::samplings(&loaded.doc)?;
         Ok(loaded.doc)
     }
 }

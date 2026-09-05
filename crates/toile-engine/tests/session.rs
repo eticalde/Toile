@@ -14,8 +14,9 @@ fn front() -> Session {
 #[test]
 fn a_document_session_meshes_the_piece_the_draft_resolved() {
     let session = front();
-    assert_eq!(session.contour().len(), 9);
-    assert!(session.n_vertices() > 9);
+    // The contour the mesher takes is the flattening, not the nine nodes.
+    assert_eq!(session.contour().len(), 47);
+    assert!(session.n_vertices() > 47);
     assert!(session.triangles().len().is_multiple_of(3));
     assert!(session.draft().is_some());
 }

@@ -1,6 +1,7 @@
 use toile_engine::draft::PointKey;
 
 use super::pick::{self, EDGE_PT, NODE_PT};
+use super::tract::{self, Tract};
 
 /// How near a grid line has to fall to catch a position, in screen points.
 const GRID_PT: f64 = 6.0;
@@ -23,13 +24,15 @@ const AXES: [[f64; 2]; 4] = [[1.0, 0.0], [0.0, 1.0], [DIAG, DIAG], [DIAG, -DIAG]
 
 /// What caught a position.
 ///
-/// The ladder is fixed and it is short: node, then tract, then the axis of the
-/// gesture, then the drawn grid. Handles and crossings join it on the day the
-/// tools that draw them do.
+/// The ladder is fixed and it is short: node, then handle, then tract, then
+/// the axis of the gesture, then the drawn grid. Crossings join it on the day
+/// the tool that draws them does.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SnapKind {
     /// An existing node of the piece.
     Node(PointKey),
+    /// A handle of one of its tracts, out of the ones on show.
+    Handle(PointKey),
     /// A place along the tract leaving a node, at a fraction of its length.
     Edge { from: PointKey, t: f64 },
     /// The horizontal, vertical or diagonal through the anchor.
@@ -83,8 +86,18 @@ impl SnapConfig {
 pub struct SnapContext<'a> {
     /// The piece's nodes, resolved, in contour order, in centimetres.
     pub nodes: &'a [(PointKey, [f64; 2])],
-    /// The node in hand, which catches neither itself nor its own tracts.
-    pub held: Option<PointKey>,
+    /// The handles on show, resolved, in contour order.
+    pub handles: &'a [(PointKey, [f64; 2])],
+    /// Its tracts as the drawing paints them, curves flattened.
+    pub tracts: &'a [Tract],
+    /// The points in hand, which catch neither themselves nor their own
+    /// tracts.
+    ///
+    /// Every one of them, not only the one the pointer took hold of: a
+    /// gesture carries the whole selection and the handles hanging off it,
+    /// and those sit where the last frame left them. Catching one would make
+    /// the placement answer to the frame before instead of to the pointer.
+    pub held: &'a [PointKey],
     /// Where the gesture started, in centimetres: the axes run through it.
     pub anchor: [f64; 2],
     /// Screen points per centimetre.
@@ -109,13 +122,19 @@ pub fn resolve(raw: [f64; 2], ctx: &SnapContext<'_>, cfg: SnapConfig) -> Snapped
             kind: Some(SnapKind::Node(key)),
         };
     }
-    if let Some(found) = pick::nearest_edge(at, ctx.nodes, ctx.held)
+    if let Some((key, place)) = pick::nearest_node(at, ctx.handles, ctx.held, reach(NODE_PT)) {
+        return Snapped {
+            at: place,
+            kind: Some(SnapKind::Handle(key)),
+        };
+    }
+    if let Some(found) = tract::nearest(at, ctx.tracts, ctx.held)
         && found.away < reach(EDGE_PT)
     {
         return Snapped {
             at: found.at,
             kind: Some(SnapKind::Edge {
-                from: ctx.nodes[found.from].0,
+                from: ctx.tracts[found.from].node,
                 t: found.t,
             }),
         };
@@ -160,138 +179,4 @@ fn constrain(raw: [f64; 2], anchor: [f64; 2]) -> [f64; 2] {
 }
 
 #[cfg(test)]
-mod tests {
-    #![allow(
-        clippy::float_cmp,
-        reason = "a position that snapped is the candidate's own, to the bit"
-    )]
-
-    use super::*;
-
-    /// A square, in contour order, at a scale where a screen point is a tenth
-    /// of a centimetre.
-    const SCALE: f64 = 10.0;
-
-    fn square() -> Vec<(PointKey, [f64; 2])> {
-        [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
-            .into_iter()
-            .enumerate()
-            .map(|(i, at)| (PointKey::new(i as u32, 0), at))
-            .collect()
-    }
-
-    fn context(nodes: &[(PointKey, [f64; 2])], scale: f64) -> SnapContext<'_> {
-        SnapContext {
-            nodes,
-            held: None,
-            anchor: [0.0, 0.0],
-            scale,
-        }
-    }
-
-    #[test]
-    fn a_node_wins_over_the_grid_within_the_budget() {
-        let nodes = square();
-        let caught = resolve([10.3, 0.2], &context(&nodes, SCALE), SnapConfig::default());
-        assert_eq!(caught.at, [10.0, 0.0]);
-        assert_eq!(caught.kind, Some(SnapKind::Node(nodes[1].0)));
-    }
-
-    #[test]
-    fn the_grid_catches_what_the_piece_does_not() {
-        let nodes = square();
-        let caught = resolve([4.05, 5.02], &context(&nodes, SCALE), SnapConfig::default());
-        assert_eq!(caught.at, [4.0, 5.0]);
-        assert_eq!(caught.kind, Some(SnapKind::Grid));
-        let free = resolve([4.5, 5.5], &context(&nodes, 30.0), SnapConfig::default());
-        assert_eq!(free.at, [4.5, 5.5], "half a centimetre is out of reach");
-        assert_eq!(free.kind, None);
-    }
-
-    #[test]
-    fn a_tract_catches_between_two_nodes() {
-        let nodes = square();
-        let cfg = SnapConfig {
-            grid_cm: 0.0,
-            ..SnapConfig::default()
-        };
-        let caught = resolve([4.5, 0.2], &context(&nodes, SCALE), cfg);
-        assert_eq!(caught.at, [4.5, 0.0]);
-        assert_eq!(
-            caught.kind,
-            Some(SnapKind::Edge {
-                from: nodes[0].0,
-                t: 0.45
-            })
-        );
-    }
-
-    #[test]
-    fn the_snap_radius_is_in_screen_points_not_centimetres() {
-        let nodes = square();
-        let cfg = SnapConfig {
-            grid_cm: 0.0,
-            ..SnapConfig::default()
-        };
-        let near = resolve([10.5, 0.0], &context(&nodes, SCALE), cfg);
-        assert_eq!(near.kind, Some(SnapKind::Node(nodes[1].0)));
-        let zoomed = resolve([10.5, 0.0], &context(&nodes, 100.0), cfg);
-        assert_eq!(
-            zoomed.at,
-            [10.5, 0.0],
-            "ten times in, half a centimetre is far"
-        );
-        assert_eq!(zoomed.kind, None);
-    }
-
-    #[test]
-    fn ctrl_suppresses_every_candidate() {
-        let nodes = square();
-        let cfg = SnapConfig {
-            on: false,
-            ..SnapConfig::default()
-        };
-        let free = resolve([10.05, 0.05], &context(&nodes, SCALE), cfg);
-        assert_eq!(free.at, [10.05, 0.05]);
-        assert_eq!(free.kind, None);
-    }
-
-    #[test]
-    fn shift_constrains_to_the_axis_of_the_anchor() {
-        let nodes = square();
-        let cfg = SnapConfig {
-            axis: true,
-            on: false,
-            ..SnapConfig::default()
-        };
-        let ctx = SnapContext {
-            anchor: [4.0, 4.0],
-            ..context(&nodes, SCALE)
-        };
-        let flat = resolve([9.0, 4.6], &ctx, cfg);
-        assert_eq!(flat.at, [9.0, 4.0]);
-        assert_eq!(flat.kind, Some(SnapKind::Axis));
-        let upright = resolve([4.4, 9.0], &ctx, cfg);
-        assert_eq!(upright.at, [4.0, 9.0]);
-        let slanted = resolve([9.0, 9.2], &ctx, cfg);
-        assert!(
-            (slanted.at[0] - slanted.at[1]).abs() < 1.0e-9,
-            "{slanted:?}"
-        );
-    }
-
-    #[test]
-    fn an_axis_still_gives_way_to_a_node() {
-        let nodes = square();
-        let cfg = SnapConfig {
-            axis: true,
-            ..SnapConfig::default()
-        };
-        let ctx = SnapContext {
-            anchor: [0.0, 0.0],
-            ..context(&nodes, SCALE)
-        };
-        let caught = resolve([10.2, 0.0], &ctx, cfg);
-        assert_eq!(caught.kind, Some(SnapKind::Node(nodes[1].0)));
-    }
-}
+mod tests;

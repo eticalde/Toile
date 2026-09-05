@@ -37,6 +37,8 @@ mod pin;
 mod point;
 /// Two stretches of contour sewn to each other.
 mod seam;
+/// What runs from one contour node to the next.
+mod segment;
 /// An axis a piece is folded or mirrored on.
 mod symmetry;
 /// A quantity the pattern names once and reads everywhere.
@@ -56,9 +58,10 @@ pub use key::{
 };
 pub use measure::MeasureSet;
 pub use notch::{Notch, NotchCount};
-pub use piece::{ContourNode, Grain, Piece, Segment, Winding};
+pub use piece::{ContourNode, Grain, Piece, SAMPLES, Winding};
 pub use pin::Pin;
 pub use point::{Axis, Point};
 pub use seam::{Seam, SeamKind, SeamOrientation};
+pub use segment::{Handle, Handles, Segment, SegmentEdit};
 pub use symmetry::{Symmetry, SymmetryKind};
 pub use variable::Variable;

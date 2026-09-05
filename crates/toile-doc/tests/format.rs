@@ -253,6 +253,26 @@ fn a_count_too_big_for_the_field_that_holds_it_is_refused() {
     ));
 }
 
+/// The count sizes the flattening every resolve walks, pairwise and twice
+/// over, so a file left to name its own is a file naming how long opening it
+/// takes. The refusal is at the door and it costs nothing: the polyline the
+/// count asks for is never built.
+#[test]
+fn a_flattening_no_tract_can_carry_is_refused_at_the_door() {
+    let block = written(&block::trouser_front());
+    for count in ["0", "1", "97", "65535"] {
+        let file = block.replace("\"samples\": 24", &format!("\"samples\": {count}"));
+        let error = Doc::from_json(&file).expect_err("the count is out of range");
+        assert!(
+            matches!(error, FormatError::Sampling(_)),
+            "{count}: {error}"
+        );
+        assert!(error.to_string().contains(count), "{error}");
+    }
+    // A straight tract gives its own node and stops, so one describes it.
+    assert!(Doc::from_json(&block).is_ok());
+}
+
 #[test]
 fn a_value_json_cannot_spell_is_refused_on_the_way_back_in() {
     let mut doc = Doc::new(MeasureSet::new("Etienne", [("cintura", f64::NAN)]));

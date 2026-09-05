@@ -33,7 +33,8 @@ fn shift_click_adds_to_the_selection() {
     both.sort_by_key(|key| (key.index(), key.generation()));
     assert_eq!(chosen(&feedback), both, "shift adds instead of replacing");
     assert!(
-        matches!(&gesture, Gesture::Drag(drag) if drag.nodes.len() == 2),
+        // Both nodes, and the tangent the waist carries into the hip curve.
+        matches!(&gesture, Gesture::Drag(drag) if drag.nodes.len() == 3),
         "both nodes are in hand: {gesture:?}"
     );
 
@@ -58,7 +59,8 @@ fn dragging_a_group_moves_every_node_by_the_same_delta() {
         Input::Move(at + vec2(glass(2.0), 0.0), Mods::default()),
         &ctx,
     );
-    assert_eq!(commands.len(), 2, "one move per node in hand");
+    // Two nodes, and the handle the second of them hangs the hip curve on.
+    assert_eq!(commands.len(), 3, "one move per point in hand");
     for (command, start) in commands.iter().zip([table.nodes[0].1, table.nodes[1].1]) {
         let x = bound_x(command, &table.draft);
         assert!(

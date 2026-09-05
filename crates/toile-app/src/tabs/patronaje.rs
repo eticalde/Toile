@@ -1,4 +1,5 @@
 mod canvas;
+mod curve;
 mod dimension;
 mod empty;
 mod gesture;
@@ -13,6 +14,7 @@ mod ruler;
 mod snap;
 mod state;
 mod tools;
+mod tract;
 mod tree;
 mod view;
 mod wire;
@@ -60,36 +62,60 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         verbs.push(Verb::End);
     }
     verbs.extend(canvas::show(ui, theme, draft, piece, state));
-    apply(w.session, verbs);
-}
-
-/// Plays what the panels asked for, in the order they asked for it.
-///
-/// A refused edit leaves the document exactly as it was, and the panels go on
-/// drawing it: the table never shows a state it cannot resolve.
-fn apply(session: &mut Session, verbs: Vec<Verb>) {
-    for verb in verbs {
-        match verb {
-            Verb::Begin(label) => session.begin_gesture(label),
-            Verb::Edit(command) => {
-                let _ = session.edit(*command);
-            }
-            Verb::End => session.end_gesture(),
-            Verb::Undo => {
-                let _ = session.undo();
-            }
-            Verb::Cancel => {
-                let _ = session.cancel_gesture();
-            }
-            Verb::Redo => {
-                let _ = session.redo();
-            }
-        }
+    if apply(w.session, verbs, &mut w.patronaje.refused) {
+        // The bars are drawn before the tabs, so what this run has to say
+        // reaches the status bar on the frame after it. Nothing else asks for
+        // that frame: a refusal sends nothing to the sim, so the viewer is
+        // asleep and would sit on a stale bar until the pointer moved again.
+        ui.ctx().request_repaint();
     }
 }
 
+/// Plays what the panels asked for, in the order they asked for it, and
+/// leaves in `said` whatever the session refused.
+///
+/// A refused edit leaves the document exactly as it was, and the panels go on
+/// drawing it: the table never shows a state it cannot resolve. What must not
+/// be swallowed is the refusal itself. A change of topology has no re-mesher
+/// yet, so it comes back refused and the piece on the stand stops following
+/// the table — visibly, or it is the drawing quietly parting from the cloth.
+///
+/// Answers whether what there is to say changed, which is what asks for the
+/// frame that says it.
+fn apply(session: &mut Session, verbs: Vec<Verb>, said: &mut Option<String>) -> bool {
+    let mut refused = None;
+    let mut played = false;
+    for verb in verbs {
+        let answer = match verb {
+            Verb::Begin(label) => {
+                session.begin_gesture(label);
+                continue;
+            }
+            Verb::End => {
+                session.end_gesture();
+                continue;
+            }
+            Verb::Edit(command) => session.edit(*command),
+            Verb::Undo => session.undo(),
+            Verb::Cancel => session.cancel_gesture(),
+            Verb::Redo => session.redo(),
+        };
+        played = true;
+        if let Err(why) = answer
+            && refused.is_none()
+        {
+            refused = Some(why.to_string());
+        }
+    }
+    if !played || *said == refused {
+        return false;
+    }
+    *said = refused;
+    true
+}
+
 /// The cells of the status bar, measured off the document on the table.
-pub fn status(session: &Session) -> Vec<String> {
+pub fn status(session: &Session, state: &State) -> Vec<String> {
     let (Some(draft), Some(piece)) = (session.draft(), session.piece()) else {
         return vec!["mesa vacía".to_owned(), "cm".to_owned()];
     };
@@ -105,6 +131,9 @@ pub fn status(session: &Session) -> Vec<String> {
     ];
     if !draft.defects(piece).is_empty() {
         cells.push("contorno con defectos".to_owned());
+    }
+    if let Some(why) = state.refused.as_deref() {
+        cells.push(format!("drapeado sin actualizar: {why}"));
     }
     if let Some(label) = session.undo_label().filter(|label| !label.is_empty()) {
         cells.push(format!("deshacer {label}"));
@@ -130,9 +159,52 @@ fn side_cell(draft: &Draft, piece: PieceKey) -> String {
 
 #[cfg(test)]
 mod tests {
-    use toile_engine::draft::{Doc, MeasureSet, Piece, Point, Winding, block};
+    use toile_engine::draft::{
+        Axis, Binding, Command, Doc, MeasureSet, Piece, Point, Winding, block,
+    };
 
     use super::*;
+
+    /// The first change of topology has no re-mesher to answer it, so the
+    /// session refuses it and the piece on the stand stops following the
+    /// table. The drawing goes on being edited either way, which is exactly
+    /// why the refusal has to be said out loud instead of dropped.
+    #[test]
+    fn an_edit_the_session_refuses_is_said_in_the_status_bar() {
+        let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
+        let piece = session.piece().expect("the session has a document");
+        let node = session
+            .draft()
+            .expect("the session has a document")
+            .points_cm(piece)[0]
+            .0;
+        let mut state = State::default();
+
+        let moved = Verb::Edit(Box::new(Command::SetBinding {
+            point: node,
+            axis: Axis::X,
+            to: Binding::literal(3.0),
+        }));
+        assert!(!apply(&mut session, vec![moved], &mut state.refused));
+        assert_eq!(
+            state.refused, None,
+            "a shape edit re-drapes and says nothing"
+        );
+
+        let sampled = Verb::Edit(Box::new(Command::SetSamples {
+            piece,
+            node,
+            to: 24,
+        }));
+        assert!(apply(&mut session, vec![sampled], &mut state.refused));
+        let cells = status(&session, &state);
+        assert!(
+            cells
+                .iter()
+                .any(|cell| cell.starts_with("drapeado sin actualizar")),
+            "{cells:?}"
+        );
+    }
 
     #[test]
     fn the_side_seam_cell_is_measured_not_quoted() {
@@ -141,7 +213,9 @@ mod tests {
             .doc()
             .piece_named(block::FRONT)
             .expect("the block draws one piece");
-        assert_eq!(side_cell(&draft, piece), "lateral 104.5 cm");
+        // Measured along the flattening: the hip is a curve, so the seam is a
+        // millimetre longer than the chords through its nodes.
+        assert_eq!(side_cell(&draft, piece), "lateral 104.6 cm");
     }
 
     #[test]

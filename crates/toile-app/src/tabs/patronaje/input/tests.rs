@@ -2,14 +2,18 @@ use eframe::egui::{Pos2, vec2};
 use toile_engine::draft::{Binding, Draft, PieceKey, PointKey, block};
 
 use super::*;
+use crate::tabs::patronaje::curve::{self, Bend};
 use crate::tabs::patronaje::snap::{SnapConfig, SnapKind};
+use crate::tabs::patronaje::tract::{self, Tract};
 use crate::tabs::patronaje::view::View;
 
-/// The block on the table, with its nodes already resolved.
+/// The block on the table, with its contour already resolved.
 pub(super) struct Table {
     pub(super) draft: Draft,
     piece: PieceKey,
     pub(super) nodes: Vec<(PointKey, [f64; 2])>,
+    tracts: Vec<Tract>,
+    bends: Vec<Bend>,
 }
 
 pub(super) fn table() -> Table {
@@ -18,11 +22,12 @@ pub(super) fn table() -> Table {
         .doc()
         .piece_named(block::FRONT)
         .expect("the block draws one piece");
-    let nodes = draft.points_cm(piece).to_vec();
     Table {
+        nodes: draft.points_cm(piece).to_vec(),
+        tracts: tract::of(&draft, piece),
+        bends: curve::bends(&draft, piece),
         draft,
         piece,
-        nodes,
     }
 }
 
@@ -39,7 +44,10 @@ impl Table {
             doc: self.draft.doc(),
             piece: self.piece,
             nodes: &self.nodes,
+            tracts: &self.tracts,
+            bends: &self.bends,
             selection: chosen,
+            tool: Tool::Select,
             view: View::default(),
             snap,
         }
@@ -166,11 +174,17 @@ fn dragging_a_coordinate_written_as_a_formula_rewrites_the_formula() {
         feedback.stack, None,
         "the modal closes the entry, not the up"
     );
+    // The waist opens the hip curve, so its tangent came along, and the
+    // question covers the formula on the handle as well as the one on the
+    // node. The y of the handle is a formula too and asks nothing: the drag
+    // was level, and a delta of nothing rewrites nothing.
     let ask = feedback.ask.expect("a formula was rewritten");
-    assert_eq!(ask.rows.len(), 1);
-    assert_eq!(ask.rows[0].axis, "X");
+    assert_eq!(ask.rows.len(), 2, "{ask:?}");
+    assert_eq!(ask.rows[0].axis, "cintura_lat · X");
     assert_eq!(ask.rows[0].before, "cintura / 4 + 1");
     assert_eq!(ask.rows[0].after, "cintura / 4 + 3");
+    assert_eq!(ask.rows[1].axis, "manija_cadera_1 · X");
+    assert_eq!(ask.rows[1].after, "cintura / 4 + 3");
 }
 
 #[test]

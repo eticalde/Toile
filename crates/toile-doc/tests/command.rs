@@ -4,7 +4,7 @@ use toile_doc::formula::Formula;
 use toile_doc::{
     Applied, Axis, Binding, ChangeClass, Command, ContourNode, Dart, DartKey, DartWedge, Doc,
     DocError, EdgeAnchor, EdgeRange, FoldDirection, Grain, Identity, MeasureSet, Notch, NotchKey,
-    Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey, SeamOrientation, Segment,
+    Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey, SeamOrientation, SegmentEdit,
     Symmetry, SymmetryKey, SymmetryKind, WedgeNode, Winding, block,
 };
 
@@ -124,7 +124,7 @@ fn topology(doc: &Doc) -> Vec<Command> {
         Command::SetSegment {
             piece,
             node: point,
-            to: Segment::Line,
+            to: SegmentEdit::Line,
         },
         Command::SetSamples {
             piece,
@@ -242,11 +242,6 @@ fn an_edit_whose_tool_has_not_arrived_is_an_error_not_a_panic() {
     for command in [
         Command::RemoveNode { piece, node: point },
         Command::RemovePiece { piece },
-        Command::SetSamples {
-            piece,
-            node: point,
-            to: 8,
-        },
     ] {
         assert_eq!(
             command.clone().apply(&mut doc),

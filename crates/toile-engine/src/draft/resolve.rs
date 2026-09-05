@@ -1,51 +1,32 @@
 use std::collections::BTreeMap;
 
-use thiserror::Error;
 use toile_doc::formula::EvalError;
 use toile_doc::{Axis, Doc, Piece, Point, PointKey};
 use toile_geom::{length, validate};
 
+use super::contour;
+use super::defect::Defect;
 use super::env::Env;
 
 /// Centimetres in a metre. The document counts in the first, the solver in the
 /// second, and this is the only place the two meet.
 const CM_PER_M: f64 = 100.0;
 
-/// What is wrong with a piece, in terms the drawing can point at.
-#[derive(Debug, Clone, PartialEq, Eq, Error)]
-pub enum Defect {
-    /// A coordinate that does not resolve to a number.
-    #[error("the {axis:?} of point {} does not resolve: {error}", point.index())]
-    Binding {
-        /// The point that carries it.
-        point: PointKey,
-        /// Which of its two coordinates.
-        axis: Axis,
-        /// Why it did not resolve.
-        error: EvalError,
-    },
-    /// A contour running through a point the document does not carry.
-    #[error("the contour runs through point {}, which the document has lost", point.index())]
-    NoSuchPoint {
-        /// The point the contour still names.
-        point: PointKey,
-    },
-    /// A contour that is not a simple closed polygon. Its indices are node
-    /// positions in the piece's contour.
-    #[error(transparent)]
-    Contour(validate::ContourFault),
-}
-
-/// A piece as the rest of the program sees it: the same contour twice over,
-/// once for the drawing and once for the solver.
+/// A piece as the rest of the program sees it: its nodes, the line they draw
+/// once the curves are flattened, and that same line in the solver's units.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Resolved {
     /// The contour nodes in centimetres, y downward, in contour order.
     pub points: Vec<(PointKey, [f64; 2])>,
-    /// The same contour in metres, y upward: what the mesher takes.
+    /// The whole contour flattened, in centimetres with y downward: the line
+    /// the table draws, curves and all.
+    pub flat: Vec<[f64; 2]>,
+    /// The same flattened contour in metres, y upward: what the mesher takes.
     pub outline: Vec<[f64; 2]>,
-    /// Arc length in centimetres up to each node, and round to the first, so
-    /// the last entry is the perimeter.
+    /// Where each node opens in the flattening, in contour order.
+    pub starts: Vec<usize>,
+    /// Flattened arc length in centimetres up to each node, and round to the
+    /// first, so the last entry is the perimeter.
     pub cum: Vec<f64>,
 }
 
@@ -89,43 +70,37 @@ pub fn points(doc: &Doc, env: &Env) -> Resolutions {
     (good, broken)
 }
 
-/// One piece as a closed contour in both units.
+/// One piece as a closed contour, flattened, in both units.
+///
+/// The arc lengths are measured along the flattened line rather than between
+/// nodes, so a curved tract is as long as the cloth it will need.
 ///
 /// # Errors
 /// Every defect the piece carries: one per coordinate that does not resolve,
-/// or, when they all do, the fault that stops the contour from being a simple
-/// closed polygon.
+/// handles included, or, when they all do, the fault that stops the flattened
+/// contour from being a simple closed polygon.
 pub fn piece(
     held: &Piece,
     good: &BTreeMap<PointKey, [f64; 2]>,
     broken: &BTreeMap<PointKey, (Axis, EvalError)>,
 ) -> Result<Resolved, Vec<Defect>> {
-    let mut points = Vec::with_capacity(held.contour.len());
-    let mut cm = Vec::with_capacity(held.contour.len());
-    let mut defects = Vec::new();
-    for node in held.anchors() {
-        match (good.get(&node), broken.get(&node)) {
-            (_, Some((axis, error))) => defects.push(Defect::Binding {
-                point: node,
-                axis: *axis,
-                error: error.clone(),
-            }),
-            (Some(&at), None) => {
-                points.push((node, at));
-                cm.push(at);
-            }
-            (None, None) => defects.push(Defect::NoSuchPoint { point: node }),
-        }
-    }
-    if !defects.is_empty() {
-        return Err(defects);
-    }
-    let outline: Vec<[f64; 2]> = cm.iter().map(|&p| to_metres(p)).collect();
+    let tracts = contour::tracts(held, good, broken)?;
+    let points = tracts.iter().map(|one| (one.node, one.start)).collect();
+    let (flat, starts) = contour::flatten(&tracts);
+    let outline: Vec<[f64; 2]> = flat.iter().map(|&p| to_metres(p)).collect();
     validate::check_closed(&outline).map_err(|fault| vec![Defect::Contour(fault)])?;
+    let along = length::cumulative(&flat);
+    let cum = starts
+        .iter()
+        .map(|&start| along[start])
+        .chain(along.last().copied())
+        .collect();
     Ok(Resolved {
         points,
+        flat,
         outline,
-        cum: length::cumulative(&cm),
+        starts,
+        cum,
     })
 }
 
@@ -166,7 +141,23 @@ mod tests {
     fn resolve_converts_centimetres_once() {
         let front = resolved(&block::trouser_front());
         assert_eq!(front.points[2].1, [25.5, 20.0]);
-        assert_eq!(front.outline[2], [0.255, -0.2]);
+        // The waist opens the hip curve, so it is a node and the first sample
+        // of its own tract at once.
+        assert_eq!(front.flat[1], [22.0, 0.0]);
+        assert_eq!(front.outline[1], [0.22, -0.0]);
+    }
+
+    #[test]
+    fn the_two_bent_tracts_are_the_whole_difference_in_the_flattening() {
+        let front = resolved(&block::trouser_front());
+        // Seven straight tracts give a point each; the hip gives twenty-four
+        // and the crotch sixteen.
+        assert_eq!(front.points.len(), 9);
+        assert_eq!(front.flat.len(), 7 + 24 + 16);
+        assert_eq!(front.cum.len(), front.points.len() + 1);
+        // Each node opens its own tract, and the two bent ones are the only
+        // places the flattening runs on past a single point.
+        assert_eq!(front.starts, [0, 1, 25, 26, 27, 28, 29, 30, 46]);
     }
 
     #[test]
@@ -177,9 +168,9 @@ mod tests {
     }
 
     #[test]
-    fn etienne_resolves_the_side_seam_to_104_5_cm() {
+    fn etienne_resolves_the_side_seam_to_104_6_cm() {
         let front = resolved(&block::trouser_front());
-        assert!((run(&front, 1, 4) - 104.48).abs() < 0.01);
+        assert!((run(&front, 1, 4) - 104.60).abs() < 0.01);
     }
 
     #[test]
@@ -192,7 +183,7 @@ mod tests {
     fn etienne_resolves_the_perimeter_to_two_and_a_half_metres() {
         let front = resolved(&block::trouser_front());
         let perimeter = front.cum[front.points.len()];
-        assert!((perimeter - 255.21).abs() < 0.01, "{perimeter} cm");
+        assert!((perimeter - 256.16).abs() < 0.01, "{perimeter} cm");
     }
 
     #[test]
@@ -211,8 +202,8 @@ mod tests {
         let keys = |of: &Resolved| of.points.iter().map(|&(key, _)| key).collect::<Vec<_>>();
         assert_eq!(keys(&after), keys(&before));
         assert_ne!(after.outline, before.outline);
-        assert!((run(&before, 1, 4) - 104.48).abs() < 0.01);
-        assert!((run(&after, 1, 4) - 106.63).abs() < 0.01);
+        assert!((run(&before, 1, 4) - 104.60).abs() < 0.01);
+        assert!((run(&after, 1, 4) - 106.79).abs() < 0.01);
     }
 
     #[test]

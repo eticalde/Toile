@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+# Pinned, not caret: the flattened contour is a golden, so the version that
+# produced it is part of the contract. A duplicate build is cheaper than a
+# silent bit shift under the drape.
+kurbo = "=0.13.1"
 thiserror = "2"
 
 [lints]

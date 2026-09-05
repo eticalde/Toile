@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::Key;
+use crate::{Key, SAMPLES};
 
 /// What can go wrong while reading or writing the document.
 ///
@@ -47,6 +47,16 @@ pub enum DocError {
     /// A point the piece's contour does not run through.
     #[error("the piece has no node at that point")]
     NoSuchNode,
+    /// A flattening no tract can be asked for.
+    #[error("a curve is flattened at {floor} to {ceiling} samples, and this asks for {got}")]
+    Sampling {
+        /// The count asked for.
+        got: u16,
+        /// The fewest samples a curve is flattened at.
+        floor: u16,
+        /// The most.
+        ceiling: u16,
+    },
     /// An edit whose tool has not been built yet.
     #[error("that edit is not implemented yet")]
     NotYetImplemented,
@@ -67,6 +77,15 @@ impl DocError {
         DocError::Occupied {
             entity: entity_of::<T>(),
             index: key.index(),
+        }
+    }
+
+    /// The error a flattening no tract can carry produces.
+    pub fn sampling(got: u16) -> DocError {
+        DocError::Sampling {
+            got,
+            floor: SAMPLES.0,
+            ceiling: SAMPLES.1,
         }
     }
 

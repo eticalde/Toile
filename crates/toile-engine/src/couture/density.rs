@@ -17,6 +17,10 @@ const MOST: usize = 512;
 
 /// How finely a contour is sampled and meshed: samples, then triangle cap.
 ///
+/// The contour it is handed is the flattened one, curves and all, so a bowed
+/// tract is meshed for the cloth its arc needs and not for the cloth its chord
+/// would have needed.
+///
 /// A trouser front is a metre longer than a bodice, and a boundary count tuned
 /// for one starves the other. The spacing is what stays fixed; the count
 /// follows the perimeter, bounded at both ends so a mistyped coordinate cannot
@@ -38,6 +42,8 @@ mod tests {
         reason = "the triangle cap is handed back exactly as it is declared"
     )]
 
+    use toile_geom::curve;
+
     use super::*;
     use crate::demo;
 
@@ -55,6 +61,21 @@ mod tests {
         let large = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
         assert!(for_contour(&small).0 < for_contour(&large).0);
         assert_eq!(for_contour(&large).0, 444);
+    }
+
+    #[test]
+    fn a_bowed_tract_is_counted_along_its_arc_and_not_its_chord() {
+        let square = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+        let mut bowed = vec![square[0]];
+        bowed.extend(curve::flatten(
+            square[1],
+            [1.3, 0.33],
+            [1.3, 0.67],
+            square[2],
+            24,
+        ));
+        bowed.extend([square[2], square[3]]);
+        assert!(for_contour(&bowed).0 > for_contour(&square).0);
     }
 
     #[test]

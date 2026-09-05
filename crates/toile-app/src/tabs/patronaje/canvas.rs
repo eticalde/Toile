@@ -1,11 +1,13 @@
 use eframe::egui::{self, Painter, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
 use toile_engine::draft::{Draft, PieceKey, PointKey};
 
+use super::curve::Bend;
 use super::gesture::{self, Gesture};
 use super::state::State;
+use super::tract::Tract;
 use super::view::{self, View};
 use super::wire::{self, Verb};
-use super::{dimension, empty, marks, paper, pick, precision, ruler, snap};
+use super::{curve, dimension, empty, marks, paper, pick, precision, ruler, snap, tract};
 use crate::glyph;
 use crate::theme::Theme;
 use crate::widgets::{PAD, button_icon, button_secondary, canvas_label, fill, grid};
@@ -33,23 +35,39 @@ pub fn show(
                 (Some(draft), Some(piece)) => draft.points_cm(piece),
                 _ => &[],
             };
+            let drawing = draft.zip(piece);
+            let (tracts, bends) = drawn(drawing);
             frame_once(state, nodes, rect);
             let mut verbs = Vec::new();
             if state.ask.is_none() {
                 wire::view_keys(ui, &resp, state);
-                if let (Some(draft), Some(piece)) = (draft, piece) {
-                    wire::reduce(ui, &resp, draft.doc(), piece, nodes, state, &mut verbs);
+                if let Some((draft, piece)) = drawing {
+                    let table = wire::Table {
+                        doc: draft.doc(),
+                        piece,
+                        nodes,
+                        tracts: &tracts,
+                        bends: &bends,
+                    };
+                    wire::reduce(ui, &resp, &table, state, &mut verbs);
                 }
             }
+            let shown = curve::handles(&bends, &state.selection);
             let over = resp.hover_pos().map_or(pick::Hover::None, |at| {
-                pick::under(state.view.to_document(at), nodes, state.view.scale())
+                pick::under(
+                    state.view.to_document(at),
+                    nodes,
+                    &shown,
+                    &tracts,
+                    state.view.scale(),
+                )
             });
             fill(&painter, theme, rect);
             mat_grid(&painter, theme, rect, state.view);
-            let drawing = draft.zip(piece);
             if let Some((draft, piece)) = drawing {
                 paper_and_outline(&painter, theme, draft, piece, state.view);
                 dimension::show(&painter, theme, draft, piece, state, over);
+                marks::bends(&painter, theme, &bends, state, over);
                 marks::nodes(&painter, theme, draft, piece, state, over);
             }
             match &state.gesture {
@@ -75,6 +93,14 @@ pub fn show(
             verbs
         })
         .inner
+}
+
+/// The piece's tracts and its bends, both empty when the table is.
+fn drawn(drawing: Option<(&Draft, PieceKey)>) -> (Vec<Tract>, Vec<Bend>) {
+    match drawing {
+        Some((draft, piece)) => (tract::of(draft, piece), curve::bends(draft, piece)),
+        None => (Vec::new(), Vec::new()),
+    }
 }
 
 /// Frames the piece on the first frame that has one to frame.
@@ -118,8 +144,13 @@ fn mat_grid(p: &Painter, theme: &Theme, rect: Rect, view: View) {
 
 /// The piece itself: paper under an outline that turns to alert ink when the
 /// contour has stopped being one.
+///
+/// Both are drawn from the flattening and not from the nodes, so a bent tract
+/// is painted as the line it will be cut along rather than as the chord under
+/// it. Drawing the true cubic instead would look smoother and lie: the
+/// polyline is what the mesher and the export take.
 fn paper_and_outline(p: &Painter, theme: &Theme, draft: &Draft, piece: PieceKey, view: View) {
-    let cm: Vec<[f64; 2]> = draft.points_cm(piece).iter().map(|&(_, at)| at).collect();
+    let cm: Vec<[f64; 2]> = draft.flat_cm(piece).to_vec();
     if cm.len() < 3 {
         return;
     }

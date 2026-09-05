@@ -33,6 +33,9 @@ pub enum FormatError {
     /// A reference to an entity the file does not carry.
     #[error("the pattern points at something the file does not carry: {0}")]
     Dangling(#[source] DocError),
+    /// A tract asking to be flattened at a count no tract can carry.
+    #[error("the pattern asks for a flattening no tract can carry: {0}")]
+    Sampling(#[source] DocError),
 }
 
 impl FormatError {

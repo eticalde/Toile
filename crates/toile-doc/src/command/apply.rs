@@ -1,5 +1,7 @@
+mod curve;
 mod name;
 
+use curve::{set_samples, set_segment};
 pub(crate) use name::Naming;
 use name::{label_point, rename_piece, show_label};
 
@@ -14,8 +16,10 @@ impl Command {
     /// # Errors
     /// `DocError::StaleKey` for a key that names nothing, `DuplicateLabel` or
     /// `DuplicatePieceName` for a name already taken, `UnknownMeasure` for a
-    /// measurement the body does not carry, and `NotYetImplemented` for an
-    /// edit whose tool has not been built yet.
+    /// measurement the body does not carry, `NoSuchNode` for a contour that
+    /// does not run through the node named, `Occupied` for a key another point
+    /// still holds, and `NotYetImplemented` for an edit whose tool has not
+    /// been built yet.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
         self.apply_as(doc, Naming::Checked)
     }
@@ -39,10 +43,10 @@ impl Command {
             Command::SetGrain { piece, to } => set_grain(doc, piece, to),
             Command::LabelPoint { point, to } => label_point(doc, point, to, naming),
             Command::ShowLabel { point, to } => show_label(doc, point, to),
+            Command::SetSegment { piece, node, to } => set_segment(doc, piece, node, to),
+            Command::SetSamples { piece, node, to } => set_samples(doc, piece, node, to),
             Command::InsertNode { .. }
             | Command::RemoveNode { .. }
-            | Command::SetSegment { .. }
-            | Command::SetSamples { .. }
             | Command::AddPiece { .. }
             | Command::RemovePiece { .. }
             | Command::AddSeam { .. }

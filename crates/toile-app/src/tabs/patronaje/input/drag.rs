@@ -1,6 +1,7 @@
 use eframe::egui::{Key, Pos2};
 use toile_engine::draft::{Axis, Binding, Command};
 
+use super::super::curve;
 use super::super::gesture::{self, Ask, Drag, EditContext, Feedback, Gesture, Mods, Stack, Typed};
 use super::super::snap::{self, SnapConfig, SnapContext};
 
@@ -20,6 +21,9 @@ pub(super) fn moved(
         // The keyboard has the gesture: a jog of the mouse does not fight it.
         return (gesture::holding(drag), Vec::new(), Feedback::default());
     }
+    // The break latches: a tangent that healed itself the moment the key came
+    // back up would undo the asymmetry the key was held down to make.
+    drag.free |= mods.alt;
     let cfg = SnapConfig {
         on: ctx.snap.on && !mods.ctrl,
         axis: mods.shift,
@@ -31,11 +35,15 @@ pub(super) fn moved(
         anchor[0] + f64::from(at.x - drag.grab.x) / scale,
         anchor[1] + f64::from(at.y - drag.grab.y) / scale,
     ];
+    let shown = curve::handles(ctx.bends, &ctx.selection);
+    let hand = drag.keys();
     let snapped = snap::resolve(
         raw,
         &SnapContext {
             nodes: ctx.nodes,
-            held: Some(drag.anchor().point),
+            handles: &shown,
+            tracts: ctx.tracts,
+            held: &hand,
             anchor,
             scale,
         },

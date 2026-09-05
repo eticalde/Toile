@@ -228,7 +228,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let revision = self.session.revision();
         let asked = bars::top(ui, &self.theme, &mut self.tab, &self.file, revision);
-        bars::status(ui, &self.theme, self.tab, &self.session);
+        bars::status(ui, &self.theme, self.tab, &self.session, &self.patronaje);
         let mut workspace = tabs::Workspace {
             theme: &self.theme,
             session: &mut self.session,

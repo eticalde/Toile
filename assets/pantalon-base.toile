@@ -18,9 +18,11 @@
             {
               "point": "1.0",
               "segment": {
-                "kind": "line"
+                "kind": "cubic",
+                "out": "9.0",
+                "into": "10.0"
               },
-              "samples": 1
+              "samples": 24
             },
             {
               "point": "2.0",
@@ -60,9 +62,11 @@
             {
               "point": "7.0",
               "segment": {
-                "kind": "line"
+                "kind": "cubic",
+                "out": "11.0",
+                "into": "12.0"
               },
-              "samples": 1
+              "samples": 16
             },
             {
               "point": "8.0",
@@ -81,7 +85,7 @@
       ]
     },
     "points": {
-      "issued": 9,
+      "issued": 13,
       "entries": [
         {
           "id": "0.0",
@@ -144,6 +148,34 @@
           "x": 0,
           "y": "tiro - extension_tiro",
           "label": "tiro_cf",
+          "label_visible": false
+        },
+        {
+          "id": "9.0",
+          "x": "cintura / 4 + 1",
+          "y": "altura_cadera / 2",
+          "label": "manija_cadera_1",
+          "label_visible": false
+        },
+        {
+          "id": "10.0",
+          "x": "cadera / 4 + holgura_cadera",
+          "y": "altura_cadera / 2",
+          "label": "manija_cadera_2",
+          "label_visible": false
+        },
+        {
+          "id": "11.0",
+          "x": "-extension_tiro * 0.55",
+          "y": "tiro",
+          "label": "manija_tiro_1",
+          "label_visible": false
+        },
+        {
+          "id": "12.0",
+          "x": 0,
+          "y": "tiro - extension_tiro * 0.45",
+          "label": "manija_tiro_2",
           "label_visible": false
         }
       ]

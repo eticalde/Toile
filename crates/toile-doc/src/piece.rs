@@ -2,7 +2,7 @@ use std::f64::consts::FRAC_PI_2;
 
 use serde::{Deserialize, Serialize};
 
-use crate::PointKey;
+use crate::{PointKey, Segment};
 
 /// A pattern piece: its ordered contour and the grain it is cut on.
 ///
@@ -20,6 +20,21 @@ pub struct Piece {
     pub grain: Grain,
 }
 
+/// The narrowest and the widest a bending tract may be flattened to.
+///
+/// The floor is two, because a curve flattened at one sample is its own
+/// chord: a straight tract wearing handles, drawn and meshed and measured as
+/// the line it says it is not.
+///
+/// The ceiling is low on purpose, and it is a refusal rather than a clamp. A
+/// whole piece is meshed at a few hundred boundary samples, so one tract past
+/// this asks for a resolution no cloth carries. And the count comes off a
+/// file: the flattening it sizes is scanned pairwise, twice over, by the
+/// contour check every resolve runs, so an unbounded count is a file choosing
+/// how long opening it takes. It is the same reasoning `Arena::MAX_ISSUED`
+/// is written from.
+pub const SAMPLES: (u16, u16) = (2, 96);
+
 /// One node of a contour: a point, and the tract that leaves it.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ContourNode {
@@ -31,22 +46,9 @@ pub struct ContourNode {
     ///
     /// Persisting the count rather than a tolerance is what keeps adjusting a
     /// curve a change of shape: the number of points cannot move under it.
+    /// What it may hold is `SAMPLES`, and `takes_samples` is where that is
+    /// asked.
     pub samples: u16,
-}
-
-/// What runs between one node and the next.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "lowercase")]
-pub enum Segment {
-    /// A straight line.
-    Line,
-    /// A cubic whose two handles are points of the document like any other.
-    Cubic {
-        /// The handle leaving this node.
-        out: PointKey,
-        /// The handle entering the next node.
-        into: PointKey,
-    },
 }
 
 /// The direction a contour runs in, as it is drawn on the table.
@@ -112,23 +114,16 @@ impl ContourNode {
             samples: 1,
         }
     }
-}
 
-impl Segment {
-    /// Whether the tract's handles name `point`.
-    pub fn cites(self, point: PointKey) -> bool {
-        match self {
-            Segment::Line => false,
-            Segment::Cubic { out, into } => out == point || into == point,
-        }
-    }
-
-    /// The two handles, when the tract has them.
-    pub fn handles(self) -> Option<(PointKey, PointKey)> {
-        match self {
-            Segment::Line => None,
-            Segment::Cubic { out, into } => Some((out, into)),
-        }
+    /// Whether the tract leaving this node may be flattened at `count`.
+    ///
+    /// A straight tract gives its own node and stops whatever its count says,
+    /// so one describes it as well as any other number under the ceiling. A
+    /// bending one is flattened at exactly the count it names, so it answers
+    /// to the whole of `SAMPLES`.
+    pub fn takes_samples(&self, count: u16) -> bool {
+        let floor = if self.segment.bends() { SAMPLES.0 } else { 1 };
+        (floor..=SAMPLES.1).contains(&count)
     }
 }
 
@@ -208,6 +203,25 @@ mod tests {
         assert!(piece.cites(handle));
         assert!(!piece.cites(PointKey::new(8, 0)));
         assert_eq!(piece.node_index(handle), None);
+    }
+
+    #[test]
+    fn only_a_bending_tract_needs_more_than_one_sample() {
+        let mut node = ContourNode::line(PointKey::new(0, 0));
+        assert!(node.takes_samples(1));
+        assert!(node.takes_samples(SAMPLES.1));
+        assert!(!node.takes_samples(0));
+        assert!(!node.takes_samples(SAMPLES.1 + 1));
+
+        node.segment = Segment::Cubic {
+            out: PointKey::new(4, 0),
+            into: PointKey::new(5, 0),
+        };
+        // One sample of a curve is its chord: a straight tract wearing
+        // handles, drawn and meshed as the line it says it is not.
+        assert!(!node.takes_samples(1));
+        assert!(node.takes_samples(SAMPLES.0));
+        assert!(!node.takes_samples(u16::MAX));
     }
 
     #[test]

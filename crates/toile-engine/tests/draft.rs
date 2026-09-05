@@ -22,7 +22,9 @@ fn front() -> (Draft, PieceKey) {
 fn the_block_resolves_to_nine_nodes_in_both_units() {
     let (draft, piece) = front();
     assert_eq!(draft.points_cm(piece).len(), 9);
-    assert_eq!(draft.outline(piece).len(), 9);
+    // Nine nodes, but forty-seven points on the line they draw: the hip is
+    // flattened into twenty-four and the crotch into sixteen.
+    assert_eq!(draft.outline(piece).len(), 47);
     assert!(draft.defects(piece).is_empty());
     assert_eq!(draft.topology(piece), 0);
 }
@@ -32,8 +34,8 @@ fn the_side_seam_measures_what_the_status_bar_says() {
     let (draft, piece) = front();
     let nodes = draft.points_cm(piece);
     let (waist, hem) = (nodes[1].0, nodes[4].0);
-    assert!((draft.run_length_cm(piece, waist, hem) - 104.48).abs() < 0.01);
-    assert!((draft.perimeter_cm(piece) - 255.21).abs() < 0.01);
+    assert!((draft.run_length_cm(piece, waist, hem) - 104.60).abs() < 0.01);
+    assert!((draft.perimeter_cm(piece) - 256.16).abs() < 0.01);
 }
 
 #[test]

@@ -21,7 +21,6 @@ enum Field<'a> {
     Variable(VariableKey),
     Measure(MannequinKey, &'a str),
     Body,
-    Run(PieceKey, PointKey),
     Samples(PieceKey, PointKey),
     NotchPlace(NotchKey),
     PieceName(PieceKey),
@@ -57,14 +56,17 @@ impl Command {
                 mannequin, name, ..
             } => Some(Field::Measure(*mannequin, name)),
             Command::ResolveWith { .. } => Some(Field::Body),
-            Command::SetSegment { piece, node, .. } => Some(Field::Run(*piece, *node)),
             Command::SetSamples { piece, node, .. } => Some(Field::Samples(*piece, *node)),
             Command::MoveNotch { notch, .. } => Some(Field::NotchPlace(*notch)),
             Command::RenamePiece { piece, .. } => Some(Field::PieceName(*piece)),
             Command::SetGrain { piece, .. } => Some(Field::Grain(*piece)),
             Command::LabelPoint { point, .. } => Some(Field::Label(*point)),
             Command::ShowLabel { point, .. } => Some(Field::LabelShown(*point)),
-            Command::InsertNode { .. }
+            // Converting a tract creates or destroys the two handle points, so
+            // it belongs with the edits that never fold: a second conversion
+            // would strand the keys the first one issued.
+            Command::SetSegment { .. }
+            | Command::InsertNode { .. }
             | Command::RemoveNode { .. }
             | Command::AddPiece { .. }
             | Command::RemovePiece { .. }
@@ -85,7 +87,7 @@ impl Command {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Binding, Grain, Identity, Pin, PinKey};
+    use crate::{Binding, Grain, Identity, Pin, PinKey, Point, SegmentEdit};
 
     fn move_to(point: PointKey, x: f64) -> Command {
         Command::MovePoint {
@@ -165,6 +167,24 @@ mod tests {
             to: Grain::Angle(0.0),
         };
         assert_eq!(grain.coalesce_onto(&rename("Delante")), Coalesced::Separate);
+    }
+
+    #[test]
+    fn a_sampling_folds_but_the_tract_under_it_does_not() {
+        let piece = PieceKey::new(0, 0);
+        let node = PointKey::new(3, 0);
+        let tract = |to| Command::SetSegment { piece, node, to };
+        let curve = SegmentEdit::cubic(Point::at(0.0, 0.0), Point::at(1.0, 1.0));
+        assert_eq!(
+            tract(SegmentEdit::Line).coalesce_onto(&tract(curve)),
+            Coalesced::Separate
+        );
+        let samples = |to| Command::SetSamples { piece, node, to };
+        assert_eq!(samples(8).coalesce_onto(&samples(4)), Coalesced::Replaces);
+        assert_eq!(
+            samples(8).coalesce_onto(&tract(SegmentEdit::Line)),
+            Coalesced::Separate
+        );
     }
 
     #[test]

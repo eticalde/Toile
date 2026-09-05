@@ -66,11 +66,26 @@ impl Selection {
     }
 }
 
+/// The tool in hand, out of the nine the panel offers.
+///
+/// Only the two whose phases have arrived are here: a variant nothing can
+/// choose would be a promise the tiles do not keep.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Tool {
+    /// Choose and move what is already drawn.
+    #[default]
+    Select,
+    /// Bend a straight tract, and pull the handles of a bent one.
+    Curve,
+}
+
 /// A field of the inspector somebody is writing in.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Field {
     /// One coordinate of one node.
     Coordinate(PointKey, Axis),
+    /// How finely the tract leaving one node is flattened.
+    Samples(PointKey),
     /// One measurement of the body the pattern resolves against.
     Measure(String),
     /// One of the pattern's own quantities.
@@ -101,6 +116,8 @@ pub struct State {
     pub view: View,
     /// What the inspector is pointed at.
     pub selection: Selection,
+    /// The tool the pointer is holding.
+    pub tool: Tool,
     /// Whether the drawing writes the names of the nodes.
     pub labels: bool,
     /// Whether every tract carries its length, and not only the one the
@@ -120,6 +137,13 @@ pub struct State {
     pub ask: Option<Ask>,
     /// The field of the inspector being written in, while one is.
     pub editing: Option<FieldEdit>,
+    /// What the session last refused to do, while it stands.
+    ///
+    /// A refused edit leaves the drawing where it was, but not always the
+    /// drape: a change of topology has no re-mesher yet, so the piece on the
+    /// stand stops following the table until one arrives. That is the sort of
+    /// thing a person has to be told, and the status bar is where.
+    pub refused: Option<String>,
 }
 
 impl State {
@@ -133,6 +157,7 @@ impl State {
         self.caught = None;
         self.ask = None;
         self.editing = None;
+        self.refused = None;
         self.frame = true;
     }
 }
@@ -144,6 +169,7 @@ impl Default for State {
         State {
             view: View::default(),
             selection: Selection::None,
+            tool: Tool::Select,
             labels: true,
             dimensions: false,
             frame: true,
@@ -153,6 +179,7 @@ impl Default for State {
             caught: None,
             ask: None,
             editing: None,
+            refused: None,
         }
     }
 }

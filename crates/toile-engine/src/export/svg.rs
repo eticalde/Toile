@@ -26,7 +26,7 @@ pub enum ExportError {
 ///
 /// One user unit is one millimetre and the sheet declares itself in
 /// millimetres, so the drawing measures on a ruler what the pattern says it
-/// measures: the side seam of the base block is 104.5 cm in any program that
+/// measures: the side seam of the base block is 104.6 cm in any program that
 /// reads SVG. Each piece is one group — its cut line, its grain line and the
 /// names it carries — so a piece can be moved or hidden on its own.
 ///
@@ -91,12 +91,12 @@ fn group(out: &mut String, draft: &Draft, piece: PieceKey) {
     let Some(held) = draft.doc().pieces.get(piece) else {
         return;
     };
-    let outline = millimetres(draft, piece);
+    let cut = millimetres(draft, piece);
     let _ = writeln!(out, "  <g>");
     let _ = writeln!(out, "    <title>{}</title>", escape(&held.name));
-    contour(out, &outline);
-    mark::grain(out, &outline, held.grain.radians());
-    mark::names(out, draft, piece, &outline, &held.name);
+    contour(out, &cut);
+    mark::grain(out, &cut, held.grain.radians());
+    mark::names(out, draft, piece, &nodes(draft, piece), &held.name);
     let _ = writeln!(out, "  </g>");
 }
 
@@ -115,8 +115,20 @@ fn contour(out: &mut String, outline: &[[f64; 2]]) {
     );
 }
 
-/// A piece's contour in millimetres, in contour order.
+/// A piece's cut line in millimetres: the contour with its curves flattened.
 fn millimetres(draft: &Draft, piece: PieceKey) -> Vec<[f64; 2]> {
+    draft
+        .flat_cm(piece)
+        .iter()
+        .map(|&[x, y]| [x * MM_PER_CM, y * MM_PER_CM])
+        .collect()
+}
+
+/// A piece's nodes in millimetres, in contour order.
+///
+/// The names go beside the nodes and not beside the flattening, so a curved
+/// tract does not scatter a label over every sample it was cut into.
+fn nodes(draft: &Draft, piece: PieceKey) -> Vec<[f64; 2]> {
     draft
         .points_cm(piece)
         .iter()
@@ -206,15 +218,29 @@ mod tests {
     #[test]
     fn the_side_seam_measures_what_the_pattern_says_it_measures() {
         let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
+        let piece = draft
+            .doc()
+            .piece_named(block::FRONT)
+            .expect("the block draws one piece");
         let drawn = points_of(&to_svg(&draft).expect("the block draws"));
-        let side: f64 = drawn[1..=4]
+        // The waist opens the hip curve, the only bend before the hem, so the
+        // hem sits past its samples plus the hip and the knee.
+        let hip = draft
+            .doc()
+            .pieces
+            .get(piece)
+            .expect("the key is live")
+            .contour[1]
+            .samples;
+        let hem = 1 + usize::from(hip) + 2;
+        let side: f64 = drawn[1..=hem]
             .windows(2)
             .map(|step| {
                 let (from, to) = (step[0], step[1]);
                 (to[0] - from[0]).hypot(to[1] - from[1])
             })
             .sum();
-        assert!((side - 1044.8).abs() < 0.5, "{side} mm");
+        assert!((side - 1046.0).abs() < 0.5, "{side} mm");
     }
 
     /// The vertices of the first path of a drawing, in the order it draws

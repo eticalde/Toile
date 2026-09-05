@@ -54,14 +54,23 @@ impl History {
     /// nothing and is not recorded.
     pub fn edit(&mut self, doc: &mut Doc, command: Command) -> Result<Applied, DocError> {
         let applied = command.clone().apply(doc)?;
+        self.record(command, applied.inverse.clone());
+        Ok(applied)
+    }
+
+    /// Records an edit the caller has already applied, in the open gesture.
+    ///
+    /// The document is not touched here. A caller that has to see what an
+    /// edit resolves to before it keeps it applies the command itself and
+    /// hands the inverse over; applying it a second time would issue a second
+    /// set of keys for every entity the edit creates, and the first set would
+    /// stay burned because an arena never hands an index out twice.
+    pub fn record(&mut self, command: Command, inverse: Command) {
         self.undone.clear();
         match &mut self.open {
-            Some(entry) => entry.fold(command, applied.inverse.clone()),
-            None => self
-                .done
-                .push(Entry::once(command, applied.inverse.clone())),
+            Some(entry) => entry.fold(command, inverse),
+            None => self.done.push(Entry::once(command, inverse)),
         }
-        Ok(applied)
     }
 
     /// Closes the open gesture. A gesture that changed nothing leaves no entry.

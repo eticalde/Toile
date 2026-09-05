@@ -2,7 +2,7 @@ use eframe::egui;
 use toile_engine::session::Session;
 
 use crate::file::{self, Action, File};
-use crate::tabs::Tab;
+use crate::tabs::{self, Tab};
 use crate::theme::Theme;
 
 /// Height of the tab bar, in points.
@@ -71,7 +71,13 @@ fn tab_item(ui: &mut egui::Ui, theme: &Theme, label: &str, active: bool) -> egui
     resp
 }
 
-pub fn status(ui: &mut egui::Ui, theme: &Theme, tab: Tab, session: &Session) {
+pub fn status(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    tab: Tab,
+    session: &Session,
+    patronaje: &tabs::patronaje::State,
+) {
     egui::Panel::bottom("status")
         .exact_size(STATUS_H)
         .show_separator_line(false)
@@ -79,7 +85,7 @@ pub fn status(ui: &mut egui::Ui, theme: &Theme, tab: Tab, session: &Session) {
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                for (i, cell) in tab.status(session).iter().enumerate() {
+                for (i, cell) in tab.status(session, patronaje).iter().enumerate() {
                     if i > 0 {
                         ui.label(cell_text(" · ", theme.line));
                     }

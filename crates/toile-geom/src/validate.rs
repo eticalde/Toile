@@ -40,7 +40,12 @@ pub enum ContourFault {
 ///
 /// Run on every resolution, before anything reaches the mesher: degenerate
 /// geometry is caught where the person made it, not deep in a triangulation.
-/// The quadratic scans are right for a contour of tens of nodes.
+///
+/// The input is the flattening and not the nodes, so its length is the sum of
+/// the tracts' sample counts rather than the count of nodes: hundreds of
+/// points for a piece, not tens. The quadratic scans are right at that size
+/// and no larger, which is why the document bounds what a tract may be
+/// flattened at instead of letting a file name the number.
 ///
 /// # Errors
 /// The first fault found, in the order a person would want to hear them: a

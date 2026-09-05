@@ -1,13 +1,17 @@
+mod contour;
+mod defect;
 mod edit;
 mod env;
+mod history;
 mod order;
 mod resolve;
 
 use std::collections::BTreeMap;
 
+pub use defect::Defect;
 pub use edit::Recompile;
 pub use env::{Env, EnvError};
-pub use resolve::{Defect, Resolved, to_document, to_metres};
+pub use resolve::{Resolved, to_document, to_metres};
 // The one door between the document and the interface. The desktop app
 // depends on this crate and on nothing else of Toile's, so a type reaches it
 // only by being written on this list, one reviewable line at a time.
@@ -15,8 +19,9 @@ pub use toile_doc::block;
 pub use toile_doc::formula::{EvalError, Formula, Lookup, SyntaxError};
 pub use toile_doc::{
     Applied, Axis, Binding, ChangeClass, Command, ContourNode, Doc, DocError, EdgeAnchor,
-    EdgeRange, Grain, History, Identity, MannequinKey, MeasureSet, NotchCount, Piece, PieceKey,
-    Point, PointKey, SeamKey, Segment, Variable, VariableKey, Winding,
+    EdgeRange, Grain, Handle, Handles, History, Identity, MannequinKey, MeasureSet, NotchCount,
+    Piece, PieceKey, Point, PointKey, SAMPLES, SeamKey, Segment, SegmentEdit, Variable,
+    VariableKey, Winding,
 };
 pub use toile_geom::validate::ContourFault;
 
@@ -85,7 +90,8 @@ impl Draft {
         &self.env
     }
 
-    /// A piece's contour in metres with y upward: what the engine meshes.
+    /// A piece's flattened contour in metres with y upward: what the engine
+    /// meshes.
     ///
     /// Empty for a piece that has never resolved.
     pub fn outline(&self, piece: PieceKey) -> &[[f64; 2]] {
@@ -94,11 +100,32 @@ impl Draft {
             .map_or(&[], |held| held.good.outline.as_slice())
     }
 
-    /// A piece's nodes in centimetres with y downward: what the table draws.
+    /// The same flattened contour in centimetres with y downward: the line the
+    /// table draws, curves and all.
+    pub fn flat_cm(&self, piece: PieceKey) -> &[[f64; 2]] {
+        self.pieces
+            .get(&piece)
+            .map_or(&[], |held| held.good.flat.as_slice())
+    }
+
+    /// A piece's nodes in centimetres with y downward: what the table selects.
     pub fn points_cm(&self, piece: PieceKey) -> &[(PointKey, [f64; 2])] {
         self.pieces
             .get(&piece)
             .map_or(&[], |held| held.good.points.as_slice())
+    }
+
+    /// Where each node opens in the flattened contour, in contour order.
+    ///
+    /// The tract leaving node `i` is `flat_cm[starts[i]..starts[i + 1]]`, and
+    /// the last one closes on the first node again. The interface walks the
+    /// drawn line tract by tract with this instead of flattening the document
+    /// a second time, which is how the line it paints and the line it catches
+    /// stay the same line.
+    pub fn flat_starts(&self, piece: PieceKey) -> &[usize] {
+        self.pieces
+            .get(&piece)
+            .map_or(&[], |held| held.good.starts.as_slice())
     }
 
     /// Where a point resolved to, in centimetres.
@@ -106,7 +133,7 @@ impl Draft {
         self.points.get(&point).copied()
     }
 
-    /// A piece's perimeter in centimetres.
+    /// A piece's perimeter in centimetres, measured along the flattening.
     pub fn perimeter_cm(&self, piece: PieceKey) -> f64 {
         self.pieces
             .get(&piece)
@@ -159,22 +186,25 @@ impl Draft {
     /// stack ever holds a state that cannot be drawn.
     ///
     /// # Panics
-    /// If taking the rehearsal back out fails, which would mean a command's
+    /// If taking a refused edit back out fails, which would mean a command's
     /// own inverse was refused by the document it had just been applied to.
     pub fn edit(&mut self, command: Command) -> Result<Recompile, DraftError> {
-        // Rehearsed before it is recorded. An edit that leaves the formulas
-        // unresolvable has to vanish whole, and an entry already folded into
-        // an open gesture cannot be taken back on its own.
-        let rehearsal = command.clone().apply(&mut self.doc)?;
-        let refused = env::build(&self.doc).err();
-        rehearsal
-            .inverse
-            .apply(&mut self.doc)
-            .expect("the inverse of an edit that just applied");
-        if let Some(broken) = refused {
+        // Applied once and recorded from what that produced. An edit that
+        // leaves the formulas unresolvable has to vanish whole — an entry
+        // already folded into an open gesture cannot be taken back on its own
+        // — but applying it twice to find that out would issue two sets of
+        // keys for an edit that creates entities, and the first set would
+        // stay burned.
+        let applied = command.clone().apply(&mut self.doc)?;
+        if let Some(broken) = env::build(&self.doc).err() {
+            applied
+                .inverse
+                .clone()
+                .apply(&mut self.doc)
+                .expect("the inverse of an edit that just applied");
             return Err(broken.into());
         }
-        let applied = self.history.edit(&mut self.doc, command)?;
+        self.history.record(command, applied.inverse.clone());
         let what = edit::recompile(&applied);
         self.resolve_all()?;
         if let Recompile::Topology(pieces) = &what {
@@ -183,91 +213,6 @@ impl Draft {
             }
         }
         Ok(what)
-    }
-
-    /// Opens a gesture: everything edited until `end_gesture` is one entry.
-    pub fn begin_gesture(&mut self, label: &'static str) {
-        self.history.begin(label);
-    }
-
-    /// Closes the open gesture. One that edited nothing leaves no entry.
-    pub fn end_gesture(&mut self) {
-        self.history.end();
-    }
-
-    /// Takes back the last entry and says what has to be recompiled.
-    ///
-    /// # Errors
-    /// `DraftError` when the document refuses an inverse, or when the state it
-    /// goes back to no longer resolves.
-    pub fn undo(&mut self) -> Result<Recompile, DraftError> {
-        let touched = self.history.undo(&mut self.doc)?;
-        self.recover(touched)
-    }
-
-    /// Drops the open gesture and says what has to be recompiled.
-    ///
-    /// This is how a gesture is refused rather than stepped back through: what
-    /// the user declined leaves nothing for redo to bring back.
-    ///
-    /// # Errors
-    /// The same as `undo`.
-    pub fn cancel_gesture(&mut self) -> Result<Recompile, DraftError> {
-        let touched = self.history.cancel(&mut self.doc)?;
-        self.recover(touched)
-    }
-
-    /// Puts the last entry undone back, and says what has to be recompiled.
-    ///
-    /// # Errors
-    /// The same as `undo`.
-    pub fn redo(&mut self) -> Result<Recompile, DraftError> {
-        let touched = self.history.redo(&mut self.doc)?;
-        self.recover(touched)
-    }
-
-    /// What undo would take back, for the status bar.
-    pub fn undo_label(&self) -> Option<&str> {
-        self.history.undo_label()
-    }
-
-    /// What redo would put back.
-    pub fn redo_label(&self) -> Option<&str> {
-        self.history.redo_label()
-    }
-
-    /// How many entries undo can take back, an open gesture included.
-    pub fn undo_depth(&self) -> usize {
-        self.history.depth()
-    }
-
-    /// How many entries redo can put back.
-    pub fn redo_depth(&self) -> usize {
-        self.history.redo_depth()
-    }
-
-    /// Re-resolves after the history moved, and prices what the move cost.
-    ///
-    /// The class is read off the geometry rather than remembered: a step that
-    /// changed how long a contour is has to be meshed again, whatever the
-    /// commands inside the entry were.
-    fn recover(&mut self, touched: Vec<PieceKey>) -> Result<Recompile, DraftError> {
-        let before: Vec<usize> = touched
-            .iter()
-            .map(|&piece| self.outline(piece).len())
-            .collect();
-        self.resolve_all()?;
-        let remeshed = touched
-            .iter()
-            .zip(&before)
-            .any(|(&piece, &was)| self.outline(piece).len() != was);
-        if !remeshed {
-            return Ok(Recompile::Shape(touched));
-        }
-        for &piece in &touched {
-            self.pieces.entry(piece).or_default().topology += 1;
-        }
-        Ok(Recompile::Topology(touched))
     }
 
     /// Rebuilds the environment and every piece's geometry.

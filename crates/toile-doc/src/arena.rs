@@ -60,6 +60,18 @@ impl<T> Arena<T> {
         Ok(())
     }
 
+    /// Whether the arena would take a value back under `key`.
+    ///
+    /// An edit that creates several entries at once has to know its whole plan
+    /// fits before it changes anything: half an edit leaves a document no
+    /// inverse describes.
+    pub(crate) fn is_vacant(&self, key: Key<T>) -> bool {
+        match self.slots.get(key.index() as usize) {
+            Some(slot) => slot.generation == key.generation() && slot.value.is_none(),
+            None => false,
+        }
+    }
+
     /// The arena a stored count of slots and a set of entries describe.
     ///
     /// A slot no entry claims is left empty at the generation a slot opens
@@ -250,6 +262,16 @@ mod tests {
             arena.restore(keys[0], "z".to_owned()),
             Err(DocError::occupied(keys[0]))
         );
+    }
+
+    #[test]
+    fn a_vacant_slot_is_the_only_one_a_restore_can_land_on() {
+        let (mut arena, keys) = letters();
+        assert!(!arena.is_vacant(keys[0]));
+        arena.remove(keys[0]).expect("the key is live");
+        assert!(arena.is_vacant(keys[0]));
+        assert!(!arena.is_vacant(Key::new(9, 0)));
+        assert!(!arena.is_vacant(Key::new(keys[0].index(), 7)));
     }
 
     #[test]

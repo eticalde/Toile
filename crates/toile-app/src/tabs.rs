@@ -40,10 +40,15 @@ impl Tab {
     }
 
     /// The cells of the status bar, left to right.
-    pub fn status(self, session: &Session) -> Vec<String> {
+    ///
+    /// The drafting tab's own state comes along because some of what the bar
+    /// has to report is not in the document: an edit the session refused
+    /// leaves the drawing untouched and the drape behind, and the bar is the
+    /// only place that says so.
+    pub fn status(self, session: &Session, patronaje: &patronaje::State) -> Vec<String> {
         let fixed: &[&str] = match self {
             Self::Maniquies => &["maniquí Etienne", "12 medidas", "cm"],
-            Self::Patronaje => return patronaje::status(session),
+            Self::Patronaje => return patronaje::status(session, patronaje),
             Self::Telas => &["Algodón popelina", "120 g/m²", "4 telas"],
             Self::Probador => {
                 let snap = session.snapshot();

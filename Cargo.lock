@@ -3209,6 +3209,7 @@ dependencies = [
 name = "toile-geom"
 version = "0.1.0"
 dependencies = [
+ "kurbo",
  "thiserror 2.0.20",
 ]
 

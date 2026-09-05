@@ -15,6 +15,12 @@ pub struct EdgeAnchor {
     /// The node the tract leaves from.
     pub from: PointKey,
     /// How far along that tract, from 0 at `from` to 1 at the next node.
+    ///
+    /// Arc length along the flattened tract, which is the line the drawing
+    /// paints and the line the pointer catches. On a bent tract that is not
+    /// the cubic's own parameter — the two part company by millimetres — so a
+    /// fraction that came from a Bezier solver is converted before it lands
+    /// here.
     pub t: f64,
 }
 

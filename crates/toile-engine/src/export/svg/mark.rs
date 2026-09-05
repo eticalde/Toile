@@ -44,9 +44,9 @@ pub fn grain(out: &mut String, outline: &[[f64; 2]], radians: f64) {
 
 /// The names the piece carries: its own, over its top corner, and the node
 /// names the drafter gave it, beside the nodes that hold them.
-pub fn names(out: &mut String, draft: &Draft, piece: PieceKey, outline: &[[f64; 2]], name: &str) {
-    text(out, corner_of(outline), TITLE, &escape(name));
-    for (&at, key) in outline.iter().zip(keys(draft, piece)) {
+pub fn names(out: &mut String, draft: &Draft, piece: PieceKey, nodes: &[[f64; 2]], name: &str) {
+    text(out, corner_of(nodes), TITLE, &escape(name));
+    for (&at, key) in nodes.iter().zip(keys(draft, piece)) {
         let Some(label) = draft.doc().label_of(piece, key) else {
             continue;
         };

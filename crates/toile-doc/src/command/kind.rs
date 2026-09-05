@@ -1,7 +1,7 @@
 use crate::{
     Axis, Binding, ContourNode, Dart, DartKey, DartWedge, EdgeAnchor, Grain, Identity,
     MannequinKey, Notch, NotchKey, Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey,
-    Segment, Symmetry, SymmetryKey, VariableKey,
+    SegmentEdit, Symmetry, SymmetryKey, VariableKey,
 };
 
 /// A reversible edit to the document.
@@ -43,13 +43,18 @@ pub enum Command {
     },
     /// Takes a node out of a contour, and its point out of the document.
     RemoveNode { piece: PieceKey, node: PointKey },
-    /// Changes what runs between a node and the next.
+    /// Changes what runs between a node and the next, handles and all.
+    ///
+    /// It leaves `samples` where it found it: how finely a tract is flattened
+    /// is `SetSamples`, and the tool that draws a curve emits both inside one
+    /// gesture — the count first, because bending a tract sampled at one
+    /// point would give it handles and go on drawing its chord.
     SetSegment {
         piece: PieceKey,
         node: PointKey,
-        to: Segment,
+        to: SegmentEdit,
     },
-    /// Changes how finely a tract is flattened.
+    /// Changes how finely a tract is flattened, within `SAMPLES`.
     SetSamples {
         piece: PieceKey,
         node: PointKey,
