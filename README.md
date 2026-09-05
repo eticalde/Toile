@@ -8,7 +8,7 @@ Una alternativa abierta a herramientas como CLO3D, con formato de archivo abiert
 
 ## Arquitectura
 
-La arquitectura de la v1 está decidida y documentada en el **[ADR-001](https://eticalde.github.io/Toile/architecture.html)** (fuente en [`docs/architecture.html`](docs/architecture.html)): workspace Rust de 7 crates, solver XPBD residente con warm start, derivación incremental por tipo de comando, dos hilos comunicados por mensajes, UI con egui + wgpu. El documento incluye qué se descartó y por qué, los riesgos y el plan de spikes. El plan de la pestaña Patronaje y sus decisiones viven en **[Patronaje](https://eticalde.github.io/Toile/patronaje.html)** (fuente en [`docs/patronaje.html`](docs/patronaje.html)).
+La arquitectura de la v1 está decidida y documentada en el **[ADR-001](https://eticalde.github.io/Toile/architecture.html)** (fuente en [`docs/architecture.html`](docs/architecture.html)): workspace Rust de 7 crates, solver XPBD residente con warm start, derivación incremental por tipo de comando, dos hilos comunicados por mensajes, UI con egui + wgpu. El documento incluye qué se descartó y por qué, los riesgos y el plan de spikes. El plan de la pestaña Patronaje y sus decisiones viven en **[Patronaje](https://eticalde.github.io/Toile/patronaje.html)** (fuente en [`docs/patronaje.html`](docs/patronaje.html)). El de Maniquíes — personas, medidas y el cuerpo — en **[Maniquíes](https://eticalde.github.io/Toile/maniqui.html)** (fuente en [`docs/maniqui.html`](docs/maniqui.html)).
 
 ## Desarrollo
 

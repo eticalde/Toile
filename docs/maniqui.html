@@ -1,0 +1,731 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toile — PLAN-002 Maniquíes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fafaf7;
+  --surface:#ffffff;
+  --ink:#23282e;
+  --muted:#6a7480;
+  --chalk:#2f5fd0;        /* tiza de sastre */
+  --thread:#c2403a;       /* papel carbón / hilo rojo */
+  --line:#dcdcd4;
+  --grid:rgba(35,40,46,.10);
+  --chip-bg:rgba(47,95,208,.08);
+  --thread-bg:rgba(194,64,58,.07);
+  --display:"Archivo",-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --body:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#18271f;      /* mat de corte */
+    --surface:#1e2f26;
+    --ink:#e7eae2;        /* tiza */
+    --muted:#96a69a;
+    --chalk:#a5bdfa;
+    --thread:#f0907f;
+    --line:#31453a;
+    --grid:rgba(231,234,226,.07);
+    --chip-bg:rgba(165,189,250,.12);
+    --thread-bg:rgba(240,144,127,.10);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:var(--body);
+  font-size:16.5px;
+  line-height:1.65;
+  color:var(--ink);
+  background-color:var(--paper);
+  background-image:radial-gradient(var(--grid) 1px, transparent 1px);
+  background-size:26px 26px;
+}
+@media (prefers-color-scheme: dark){
+  body{
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size:39px 39px;
+  }
+}
+a{color:var(--chalk)}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--chalk);outline-offset:2px;border-radius:2px}
+code,.crate{font-family:var(--mono);font-size:.86em;background:var(--chip-bg);padding:.08em .38em;border-radius:3px;white-space:nowrap}
+
+/* ---------- hero ---------- */
+.hero{
+  border-bottom:2px solid var(--ink);
+  padding:3.2rem 1.5rem 2.4rem;
+}
+.hero-inner{
+  max-width:1080px;margin:0 auto;
+  display:flex;gap:3rem;align-items:center;justify-content:space-between;flex-wrap:wrap;
+}
+.eyebrow{
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 .9rem;
+}
+.eyebrow a{color:inherit;text-decoration:none}
+.eyebrow a:hover{color:var(--chalk)}
+h1{
+  font-family:var(--display);
+  font-variation-settings:"wdth" 118;
+  font-weight:880;
+  font-size:clamp(2.5rem,6vw,4.2rem);
+  line-height:.98;letter-spacing:-.015em;text-transform:uppercase;
+  margin:0 0 .8rem;
+}
+.hero-sub{max-width:34rem;color:var(--muted);margin:0 0 1.6rem}
+.titleblock{
+  display:inline-grid;grid-template-columns:auto auto auto auto;
+  border:1.5px solid var(--ink);
+  font-family:var(--mono);font-size:.78rem;
+  background:var(--surface);
+}
+.titleblock div{padding:.5rem .9rem;border-left:1.5px solid var(--ink)}
+.titleblock div:first-child{border-left:none}
+.titleblock b{display:block;font-weight:500;color:var(--muted);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase}
+@media (max-width:600px){
+  .titleblock{grid-template-columns:auto auto}
+  .titleblock div:nth-child(3){border-left:none}
+  .titleblock div:nth-child(n+3){border-top:1.5px solid var(--ink)}
+}
+.hero-figure{flex:0 1 208px;min-width:176px;color:var(--ink)}
+.hero-figure svg{width:100%;height:auto;display:block}
+.hero-figure .draw{stroke-dasharray:1600;stroke-dashoffset:0}
+@media (prefers-reduced-motion: no-preference){
+  .hero-figure .draw{animation:trace 1.4s ease-out}
+  @keyframes trace{from{stroke-dashoffset:1600}to{stroke-dashoffset:0}}
+}
+
+/* ---------- layout ---------- */
+.wrap{
+  max-width:1080px;margin:0 auto;padding:2.5rem 1.5rem 4rem;
+  display:grid;grid-template-columns:215px minmax(0,1fr);gap:3rem;
+}
+nav.toc{position:sticky;top:1.5rem;align-self:start;font-size:.85rem}
+nav.toc p{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:0 0 .7rem}
+nav.toc ol{list-style:none;margin:0;padding:0}
+nav.toc li{margin:.32rem 0}
+nav.toc li.sub{margin-left:.95rem;font-size:.8rem}
+nav.toc a{text-decoration:none;color:var(--ink);border-left:2px solid transparent;padding-left:.55rem;display:inline-block}
+nav.toc li.sub a{color:var(--muted)}
+nav.toc a:hover{border-left-color:var(--chalk);color:var(--chalk)}
+@media (max-width:880px){
+  .wrap{grid-template-columns:1fr;gap:1.5rem}
+  nav.toc{position:static}
+  nav.toc ol{display:flex;flex-wrap:wrap;gap:.25rem .9rem}
+  nav.toc li.sub{display:none}
+}
+main{max-width:72ch}
+
+/* ---------- section headers ---------- */
+section{margin:0 0 3.6rem}
+h2{
+  font-family:var(--display);font-variation-settings:"wdth" 112;font-weight:820;
+  font-size:1.7rem;line-height:1.15;text-transform:uppercase;letter-spacing:.005em;
+  margin:0 0 1.2rem;padding-top:2.2rem;
+  border-top:2px solid var(--ink);
+}
+h2 .num{font-family:var(--mono);font-weight:400;font-size:.8rem;color:var(--muted);display:block;letter-spacing:.2em;margin-bottom:.35rem}
+/* etiqueta de pieza: cabecera de cada eje con su flecha de hilo */
+.axis{margin:2.6rem 0 1rem}
+.axis h3{
+  font-family:var(--display);font-variation-settings:"wdth" 108;font-weight:750;
+  font-size:1.13rem;text-transform:uppercase;letter-spacing:.02em;margin:0 0 .2rem;
+}
+.axis .tag{font-family:var(--mono);font-size:.66rem;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;display:block;margin-bottom:.15rem}
+.axis svg{display:block;color:var(--muted);margin-top:.35rem}
+
+/* ---------- bloques decisión / descartado ---------- */
+.decision,.discarded{margin:1rem 0;padding:.15rem 0 .15rem 1.1rem}
+.decision{border-left:3px solid var(--chalk)}
+.discarded{border-left:3px dashed var(--thread)}
+.decision > b:first-child,.discarded > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;
+  display:block;margin-bottom:.3rem;
+}
+.decision > b:first-child{color:var(--chalk)}
+.discarded > b:first-child{color:var(--thread)}
+.decision p,.discarded p{margin:.5rem 0}
+
+/* ---------- listas con piquetes ---------- */
+ol,ul{padding-left:1.4rem}
+li{margin:.45rem 0}
+ul.notch{list-style:none;padding-left:1.15rem}
+ul.notch li{position:relative}
+ul.notch li::before{
+  content:"";position:absolute;left:-1.15rem;top:.62em;
+  border-left:.42em solid var(--chalk);border-top:.3em solid transparent;border-bottom:.3em solid transparent;
+}
+ol.plan{counter-reset:paso;list-style:none;padding-left:2.1rem}
+ol.plan li{counter-increment:paso;position:relative;margin:.9rem 0}
+ol.plan li::before{
+  content:counter(paso);position:absolute;left:-2.1rem;top:.1em;
+  font-family:var(--mono);font-size:.8rem;width:1.5em;height:1.5em;line-height:1.45em;text-align:center;
+  border:1.5px solid var(--ink);border-radius:50%;background:var(--surface);
+}
+
+/* ---------- tablas ---------- */
+.tscroll{overflow-x:auto;margin:1.2rem 0;border:1.5px solid var(--line);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);text-align:left;
+}
+th,td{padding:.6rem .85rem;border-bottom:1px dashed var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td:first-child{white-space:nowrap}
+td.wrap{white-space:normal}
+
+/* ---------- misc ---------- */
+.lead{font-size:1.06rem}
+.lead::first-letter{
+  font-family:var(--display);font-weight:880;font-size:3.1em;float:left;
+  line-height:.8;padding:.06em .12em 0 0;color:var(--chalk);
+}
+hr{border:none;border-top:1.5px dashed var(--line);margin:2rem 0}
+.refs{font-size:.9rem}
+.refs li{margin:.55rem 0}
+.refs span{color:var(--muted)}
+footer{border-top:2px solid var(--ink);margin-top:1rem;padding:1.4rem 1.5rem 3rem;font-size:.8rem;color:var(--muted)}
+footer .fin{max-width:1080px;margin:0 auto;font-family:var(--mono)}
+
+/* ---------- bloques de código ---------- */
+pre{
+  font-family:var(--mono);font-size:.78rem;line-height:1.55;
+  background:var(--surface);border:1.5px solid var(--line);border-left-width:3px;
+  border-radius:3px;padding:.8rem 1rem;overflow-x:auto;margin:.7rem 0;
+}
+pre code{background:none;padding:0;white-space:pre;font-size:inherit;color:inherit}
+pre.no{border-left-color:var(--thread)}
+pre.si{border-left-color:var(--chalk)}
+
+/* ---------- regla numerada ---------- */
+.rule{border-left:3px solid var(--ink);padding:.1rem 0 .1rem 1.1rem;margin:1.5rem 0}
+.rule > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:.35rem;
+}
+.rule p:first-of-type{font-weight:600;margin-top:0}
+.tag-ok,.tag-no{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;padding:.16em .55em;border-radius:2px;white-space:nowrap}
+.tag-ok{background:var(--chip-bg);color:var(--chalk)}
+.tag-no{background:var(--thread-bg);color:var(--thread)}
+.chip{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.18em .6em;border-radius:2px;background:var(--chip-bg);color:var(--chalk);
+}
+
+/* ---------- la frase de la entrega ---------- */
+blockquote.frase{
+  margin:1.4rem 0;padding:1.1rem 1.3rem;
+  border:1.5px solid var(--ink);border-left-width:5px;border-left-color:var(--chalk);
+  background:var(--surface);border-radius:3px;
+  font-size:1.04rem;line-height:1.6;
+}
+blockquote.frase p{margin:0}
+blockquote.frase b{
+  display:block;font-family:var(--mono);font-weight:500;font-size:.66rem;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--chalk);margin-bottom:.5rem;
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="eyebrow"><a href="./architecture.html">Toile</a> · Documentación</p>
+      <h1>Maniquíes</h1>
+      <p class="hero-sub">Personas, medidas y el cuerpo. El catálogo anclado a ISO 8559-1, la biblioteca de personas que vive fuera del documento, el maniquí de sastre procedimental que devuelve cada medida que realiza a ulps, y las once decisiones del dueño que sellaron el plan — con el golden de la esfera intacto en todas las fases.</p>
+      <div class="titleblock" role="group" aria-label="Datos del documento">
+        <div><b>Documento</b>PLAN-002</div>
+        <div><b>Estado</b>Acordado</div>
+        <div><b>Alcance</b>M0–M9</div>
+        <div><b>Fecha</b>2026-09-05</div>
+      </div>
+    </div>
+    <div class="hero-figure" aria-hidden="true">
+      <!-- el maniquí v1 de frente, con sus estaciones resueltas contra Etienne:
+           waist_z = entrepierna + tiro = 78 + 27 = 105 · hip_z = 105 − 20 = 85
+           crotch_z = 78 · knee_z = 78/2 = 39 · ankle_z = 105 − 104 = 1 -->
+      <svg viewBox="0 0 168 330" fill="none" stroke="currentColor" stroke-width="1.4">
+        <path class="draw" d="M27.2 65 C28 44 41 30 58 30 C75 30 88 44 88.8 65 C92 80 96 94 96.5 109 C96.8 122 96 132 94.2 145 C91.5 170 90.6 190 90.2 210.2 C89.8 235 87 265 85.7 293.8 C85.4 297.5 69 297.5 68.7 293.8 C67.8 265 65 235 64.2 210.2 C63.6 190 61.5 165 60.2 145 C59.3 137 58.4 130 58 124.4 C57.6 130 56.7 137 55.8 145 C54.5 165 52.4 190 51.8 210.2 C51 235 48.2 265 47.3 293.8 C47 297.5 30.6 297.5 30.3 293.8 C29 265 26.2 235 25.8 210.2 C25.4 190 22.4 170 21.8 145 C20 132 19.2 122 19.5 109 C20 94 24 80 27.2 65 Z"/>
+        <g stroke="var(--chalk)" stroke-width=".9" stroke-dasharray="3 3">
+          <line x1="14" y1="65" x2="104" y2="65"/>
+          <line x1="14" y1="109" x2="104" y2="109"/>
+          <line x1="14" y1="124.4" x2="104" y2="124.4"/>
+          <line x1="14" y1="210.2" x2="104" y2="210.2"/>
+          <line x1="14" y1="293.8" x2="104" y2="293.8"/>
+        </g>
+        <line x1="10" y1="296" x2="158" y2="296" stroke-width="1" opacity=".55"/>
+        <g stroke-width="1.2">
+          <line x1="58" y1="76" x2="58" y2="118"/>
+          <path d="M54 84 l4 -8 l4 8"/><path d="M54 110 l4 8 l4 -8"/>
+        </g>
+        <g stroke="none" fill="currentColor" font-family="IBM Plex Mono,monospace" font-size="6.2" opacity=".8">
+          <text x="108" y="67">CINTURA·Z105</text>
+          <text x="108" y="111">CADERA·Z85</text>
+          <text x="108" y="126.4">TIRO·Z78</text>
+          <text x="108" y="212.2">RODILLA·Z39</text>
+          <text x="108" y="291">TOBILLO·Z1</text>
+          <text x="108" y="305">SUELO·Z0</text>
+        </g>
+        <g stroke="none" fill="currentColor" font-family="IBM Plex Mono,monospace" font-size="6.2" opacity=".75">
+          <text x="58" y="314" text-anchor="middle">MANIQUÍ V1 · SIN BRAZOS</text>
+          <text x="58" y="324" text-anchor="middle">ETIENNE · Z EN CM</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contenido">
+  <p>Contenido</p>
+  <ol>
+    <li><a href="#frase">1 · La frase de la entrega</a></li>
+    <li><a href="#licencias">2 · El veredicto de licencias</a></li>
+    <li><a href="#maniqui">3 · El maniquí de sastre</a></li>
+    <li class="sub"><a href="#seccion">3.1 La sección exacta</a></li>
+    <li class="sub"><a href="#landmarks">3.2 Eje y landmarks</a></li>
+    <li class="sub"><a href="#loft">3.3 El loft y la garantía</a></li>
+    <li><a href="#catalogo">4 · El catálogo</a></li>
+    <li><a href="#personas">5 · Personas y biblioteca</a></li>
+    <li><a href="#formato">6 · El formato: toile 1 y 2</a></li>
+    <li><a href="#sdf">7 · El pipeline SDF</a></li>
+    <li><a href="#fases">8 · Las fases M0–M9</a></li>
+    <li><a href="#dueno">9 · Las once decisiones</a></li>
+    <li><a href="#golden">10 · El golden que no se mueve</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="frase">
+  <h2><span class="num">§ 1</span>La frase de la entrega</h2>
+
+  <p class="lead">Como el plan de Patronaje, éste se escribió alrededor de una sola frase. No es un resumen: es el criterio de aceptación de la sección entera, redactado antes de la primera línea de código y verificable a mano con la aplicación abierta.</p>
+
+  <blockquote class="frase">
+    <b>La entrega</b>
+    <p>Creo a «Ana» en Maniquíes, escribo <code>cintura: 72</code>, la uso en el Probador, y el pantalón de Patronaje drapea sobre un cuerpo con piernas cuya cintura —leída en el panel de medidas del Probador, re-medida sobre la malla— marca 72.0; seis meses después corrijo a Ana en la biblioteca, abro el <code>.toile</code> viejo y sigue idéntico bit a bit, con una banda amable que me ofrece actualizar. La esfera y su golden, intactos.</p>
+  </blockquote>
+
+  <p>Dos precisiones para que la frase no prometa de más. El «72.0» es un contrato <strong>a pocos ulps</strong>, no bit a bit: f64 redondea cada escala y cada <code>sqrt</code>, y la igualdad exacta sólo se daría en escalas potencia de&nbsp;2 — pero a cualquier precisión que la UI muestre, hasta décimas de micra, eso se imprime <code>72.0</code>. Y el «panel de medidas» existe de verdad: la cinta v1 es un <strong>readout por estación</strong> en el Probador, que llega en M9 — no una herramienta de arrastre libre, que queda como futura.</p>
+
+  <p>La frase se entrega completa al cerrar M9, pero <strong>cada fase intermedia shippea valor por sí sola</strong>: las personas sirven sin 3D desde M4, y el catálogo mejora la pestaña actual desde M1.</p>
+</section>
+
+<section id="licencias">
+  <h2><span class="num">§ 2</span>El veredicto de licencias</h2>
+
+  <p>Antes de toda geometría hubo una pregunta legal: <strong>¿qué cuerpo puede shippear un repo MIT?</strong> La respuesta, verificada en fuente primaria donde la tabla lo marca con †, es que ninguno de los cuerpos paramétricos «realistas»: toda la familia SMPL es research-only con redistribución prohibida y su parte paramétrica está <strong>patentada</strong>; el subset «SMPL-Body CC-BY» excluye justo los shape blendshapes — la parte paramétrica que se necesitaría — y CC-BY ni siquiera está en la lista de licencias de la casa; CAESAR es de pago. La única variante viable era MakeHuman, cuyo código es AGPL pero cuyos assets son CC0 confirmado. Este veredicto es lo que <strong>obligó al maniquí procedimental</strong>, y queda archivado aquí como la respuesta a citar cuando alguien proponga SMPL «porque es lo que usa todo el mundo».</p>
+
+  <div class="tscroll"><table>
+    <thead><tr><th>Cuerpo</th><th>Lo verificado</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://smpl.is.tue.mpg.de/modellicense.html">SMPL</a> †</td><td class="wrap">Research-only, redistribución prohibida; parametría patentada (US10395411B2, EP3314577A1, WO2016207311A1)</td><td><span class="tag-no">prohibido</span></td></tr>
+      <tr><td><a href="https://smpl.is.tue.mpg.de/license.html">SMPL-Body «CC BY»</a> †</td><td class="wrap">El subset CC-BY 4.0 excluye los shape blendshapes; CC-BY fuera de la lista de la casa</td><td><span class="tag-no">prohibido</span></td></tr>
+      <tr><td><a href="https://smpl-x.is.tue.mpg.de/modellicense.html">SMPL-X</a> †</td><td class="wrap">Non-commercial only</td><td><span class="tag-no">prohibido</span></td></tr>
+      <tr><td><a href="https://star.is.tue.mpg.de/license.html">STAR</a> / <a href="https://supr.is.tue.mpg.de/license.html">SUPR</a> †</td><td class="wrap">Non-commercial; STAR comercial sólo vía Meshcapade</td><td><span class="tag-no">prohibido</span></td></tr>
+      <tr><td><a href="https://github.com/makehumancommunity/makehuman/blob/master/LICENSE.md">MakeHuman</a> / <a href="https://static.makehumancommunity.org/about/license.html">MPFB</a> †</td><td class="wrap">Código AGPLv3+/GPL; base mesh, targets y modifiers <strong>CC0 1.0</strong> (~21 dimensiones que calzan casi 1:1 con el catálogo)</td><td><span class="tag-ok">viable · diferido</span></td></tr>
+      <tr><td><a href="https://download.blender.org/demo/asset-bundles/human-base-meshes/">Blender Base Meshes</a></td><td class="wrap">CC0 1.0, mallas estáticas sin morphs</td><td><span class="chip">sin parametría</span></td></tr>
+      <tr><td><a href="http://www.caesar-database.com/">CAESAR</a></td><td class="wrap">Copyright SAE; derivados de pago (USD 1.000–5.000)</td><td><span class="tag-no">de pago</span></td></tr>
+      <tr><td><a href="https://www.openlab.psu.edu/datasets/ansur2/">ANSUR II</a></td><td class="wrap">Sin texto de licencia explícito; presunción de obra de gobierno US; población militar sesgada</td><td><span class="chip">futuro · decisión 6</span></td></tr>
+    </tbody>
+  </table></div>
+  <p><span style="color:var(--muted);font-size:.85rem">† verificado en fuente primaria por el panel.</span></p>
+
+  <div class="decision">
+    <b>Decisión</b>
+    <p><strong>Maniquí de sastre procedimental</strong>: secciones superelípticas lofteadas, cero assets externos, cero sala limpia, determinismo trivial — y por tanto <strong>cero riesgo de licencia hoy</strong>. La ventaja decisiva sobre los morphs no es «exacto contra aproximado», es <strong>ulps contra milímetros</strong>: el ajuste por mínimos cuadrados sobre pesos de morphs deja residuos de mm a cm, y la re-medición del maniquí procedimental queda a pocos ulps del objetivo. Cuatro órdenes de magnitud bastan para decidir el corte.</p>
+  </div>
+
+  <div class="discarded">
+    <b>Descartado — base mesh + morphs (MakeHuman CC0)</b>
+    <p>Era la única alternativa legalmente shippeable, y se descarta para v1 por tres costos: la circunferencia queda aproximada cuando el criterio número uno es que el número medido sea el escrito; cada actualización del asset movería todos los goldens del maniquí; y obligaba a vendorizar MBs con <code>PROVENANCE.md</code>, check de assets y disciplina de sala limpia desde el día uno (reimplementar el motor de morphs sin abrir el Python AGPL). <strong>Coste asumido del descarte:</strong> menos realismo anatómico — sin vientre, glúteo prominente ni asimetrías — aceptable porque el patronista clásico drafta sobre maniquí de sastre, no sobre cliente. <strong>Y reversible barato:</strong> el pipeline de bake es idéntico aguas abajo, así que MakeHuman-CC0 o un glTF de escaneo pueden entrar después como <em>segundo productor de malla</em> sin tocar solver ni formato.</p>
+  </div>
+</section>
+
+<section id="maniqui">
+  <h2><span class="num">§ 3</span>El maniquí de sastre</h2>
+
+  <p class="lead">Cada landmark del eje lleva una sección de dos medias-superelipses —delantero y trasero con profundidades distintas, porque el cuerpo no es sagitalmente simétrico— con forma de Lamé <code>|x/a|^n + |y/b|^n = 1</code>, lofteadas en una malla cerrada con dos piernas. El generador entero se restringe a <code>+ − × ÷ sqrt mul_add</code>: operaciones con redondeo exacto garantizado por IEEE 754 según la doc de Rust, y por tanto mismos bits en ARM y x86 sin esfuerzo adicional.</p>
+
+  <div class="axis" id="seccion">
+    <span class="tag">Pieza 3.1 · M6</span>
+    <h3>La sección exacta</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+  <p>Dos trampas conocidas, y cómo se evitan. El perímetro de la superelipse no tiene forma cerrada, y su paramétrica usa <code>cos^(2/n)</code> — transcendentales de precisión <strong>no especificada</strong> en Rust, <code>powi</code> incluido. Por eso: <strong>exponentes diádicos</strong> <code>n = k/2^m</code>, donde <code>|u|^n</code> se reduce a multiplicaciones en orden fijo más <code>m</code> raíces cuadradas, y <strong>nada de trigonometría</strong> — los vértices del anillo salen de resolver la implícita por Newton de conteo fijo sobre abscisas racionales fijas.</p>
+
+<pre class="si"><code>// crates/toile-engine/src/avatar.rs
+pub mod section;   // superelliptic half-sections, dyadic powers, perimeter fit
+pub mod landmarks; // MeasureSet -&gt; axial stations, defaults for absent measures
+pub mod loft;      // stations -&gt; watertight triangle mesh (lower body v1)
+pub mod bake;      // mesh -&gt; SdfGrid, angle-weighted pseudo-normal sign
+pub mod cache;     // versioned on-disk cache keyed by content hash
+
+/// Exponent k / 2^m, so |u|^n needs only fixed-order multiplication and
+/// sqrt: both correctly rounded per IEEE 754, hence bit-identical on ARM
+/// and x86. powf and powi have unspecified precision and are banned here.
+pub struct Dyadic { pub num: u32, pub log2_den: u32 }
+
+/// One cross-section ring: two half-superellipses sharing the width axis.
+pub struct Section {
+    pub half_width: f64,
+    pub depth_front: f64,
+    pub depth_back: f64,
+    pub square_front: Dyadic, // ~2.0 at the waist, flatter behind the hip
+    pub square_back: Dyadic,
+}
+
+impl Section {
+    /// M vertices on fixed rational abscissas; Newton, fixed iteration count.
+    pub fn ring(&amp;self, m: usize) -&gt; Vec&lt;[f64; 2]&gt;;
+    /// Perimeter of the polygonal ring — the value the tape tool reads.
+    pub fn perimeter(&amp;self, m: usize) -&gt; f64;
+    /// One division: perimeter is linear in uniform scale.
+    pub fn fitted(self, target_cm: f64, m: usize) -&gt; Section;
+}</code></pre>
+
+  <p>La exactitud se define sobre el <strong>polígono discretizado</strong> — que es lo que el readout del Probador mide y lo que el solver colisiona. El perímetro poligonal escala linealmente con la escala uniforme <em>en aritmética real</em>: <code>s = objetivo / perimetro(seccion_unitaria)</code>. Una división, sin bucle de ajuste. El contrato en f64: la re-medición devuelve el objetivo <strong>a ≤ N ulps</strong>, con N fijado empíricamente en M6 y testeado — <code>a_fitted_waist_of_72_re_measures_within_the_declared_ulp_bound</code>, con su corolario de display <code>a_fitted_waist_of_72_prints_as_72_point_0_at_any_ui_precision</code>. Prometer «exacto» a secas sería falso, y el test lo diría.</p>
+
+  <div class="axis" id="landmarks">
+    <span class="tag">Pieza 3.2 · M7</span>
+    <h3>Eje y landmarks</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+  <p>Todo el eje se resuelve del catálogo actual, con z&nbsp;=&nbsp;0 en el suelo y metros = cm/100. Las dos semánticas que lo anclaban eran decisiones del dueño y están selladas (<a href="#dueno">decisión 3</a>):</p>
+
+<pre class="si"><code>crotch_z = entrepierna
+waist_z  = entrepierna + tiro
+hip_z    = waist_z - altura_cadera   // cintura -&gt; cadera (ISO 5.4.21, decision 3)
+knee_z   = entrepierna / 2           // classic approx; altura_rodilla refines it
+ankle_z  = waist_z - largo_lateral   // largo_lateral = cintura -&gt; tobillo (decision 3-bis)</code></pre>
+
+  <p>Los <em>defaults</em> para medidas ausentes salen de la <strong>tabla de forma versionada</strong> — constantes en código, parte de la clave de cache — nunca del catálogo vivo, que el resolver no lee (<a href="#formato">§&nbsp;6</a>). Y qué contorno es estación del loft se decide por una regla, no por entusiasmo: un contorno con valor se convierte en estación <strong>si y sólo si el maniquí v1 lo realiza y su altura axial está determinada</strong>. Las estaciones base son cintura, cadera, tiro, muslo, rodilla y tobillo; <code>muslo_medio</code> y <code>pantorrilla</code> entran como estaciones opcionales cuando traen valor — un anillo meramente interpolado no devuelve su medida, y prometerlo sería falso. Los contornos que el maniquí v1 no realiza (<code>cuello</code>, <code>pecho</code>, <code>pecho_alto</code>, <code>brazo_contorno</code>, <code>muneca</code>, <code>cabeza</code> — no hay torso, brazos ni cabeza) existen en el catálogo, se validan y se exportan, pero <strong>no son re-medibles</strong> y quedan fuera del test.</p>
+
+  <div class="axis" id="loft">
+    <span class="tag">Pieza 3.3 · M7</span>
+    <h3>El loft y la garantía</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+  <p>Anillos cintura→cadera→tiro interpolados con <strong>PCHIP monótono</strong> —aritmética racional pura, determinista, sin overshoot que infle una circunferencia intermedia por encima de la medida vecina—; dos tubos de pierna espejados (muslo→rodilla→tobillo) separados al semiancho de cadera; puente de tiro con receta fija de triángulos — la geometría más difícil del plan: combinaciones extremas como muslo grande con cadera chica pueden autointersecar, y una malla inválida envenena el SDF en silencio—; domo sobre la cintura y casquetes bajo los tobillos. El resultado tiene que ser una <strong>malla cerrada, orientable, 2-manifold</strong>: la condición que el método del signo exige, verificada por un validador en CI —cada arista compartida por exactamente 2 triángulos, sin autointersecciones, volumen positivo— sobre un barrido de presets extremos. La relación ancho/profundidad y la cuadratura por landmark salen de una <strong>tabla de forma de la casa</strong>: un solo grado de libertad por sección — la escala — se resuelve contra la medida; la forma queda anatómica y la circunferencia, exacta.</p>
+
+  <div class="rule">
+    <b>La garantía de re-medición</b>
+    <p>Cada contorno que el maniquí realiza, re-medido sobre la malla, devuelve su valor a ulps.</p>
+    <p>Es el test <code>every_girth_the_mannequin_realises_re_measures_within_the_ulp_bound</code> — las estaciones base y las opcionales cuando traen valor; nunca los contornos que el maniquí no realiza. La cota de ulps es la declarada y testeada en M6.</p>
+  </div>
+
+  <p>Idealización dicha en voz alta: el maniquí superelíptico es una idealización de sastrería. El patrón quedará bien sobre el maniquí y aproximado sobre el cliente real; la doc no vende «fit garantizado», y la ruta de import de mallas queda abierta para el día que entren escaneos.</p>
+</section>
+
+<section id="catalogo">
+  <h2><span class="num">§ 4</span>El catálogo</h2>
+
+  <div class="rule">
+    <b>El principio rector</b>
+    <p>Los nombres de medidas son datos del usuario, no identificadores. El catálogo guía; nunca gobierna.</p>
+    <p>Autocompleta, valida, mapea y deriva — siempre <em>antes</em> del resolve. Un documento con nombres fuera del catálogo carga y resuelve igual que hoy, y por eso ningún cambio de catálogo puede romper un <code>.toile</code> viejo.</p>
+  </div>
+
+  <p>El catálogo v1 trae <strong>~30 nombres con pedigrí ISO 8559-1</strong> (<a href="#dueno">decisión 2</a>): los 10 actuales intactos como subconjunto, más <code>altura_rodilla</code>, <code>pantorrilla</code>, <code>muslo_medio</code>, <code>tobillo_alto</code>, <code>tiro_total</code>/<code>tiro_delantero</code>/<code>tiro_trasero</code>, <code>cuello</code>, <code>pecho</code>, <code>pecho_alto</code>, <code>brazo</code>, <code>brazo_contorno</code>, <code>muneca</code>, <code>cabeza</code>, <code>altura_cuello_trasero</code> y ~5 de torso confirmados uno a uno en M1. Los canónicos son ASCII snake_case — <code>muneca</code>, no <code>muñeca</code>; la tilde va en el <code>label</code>. El catálogo es código, no datos del documento:</p>
+
+<pre class="si"><code>// toile-doc/src/measure/catalogue.rs
+/// One measurement the catalogue can autocomplete, check, map and derive.
+/// The canonical name is Spanish because measure names are user-facing data;
+/// the ISO clause and the Seamly code are provenance and interop, not identity.
+pub struct Entry {
+    /// Canonical Toile name, e.g. "cintura". Never renamed, never removed.
+    pub name: &amp;'static str,
+    pub category: Category,   // Vertical | Girth | Width | Surface | Extremity | Calculated
+    /// UI label (may carry accents), e.g. "Contorno de cintura".
+    pub label: &amp;'static str,
+    /// How to take the measurement, one sentence, written by us.
+    pub hint: &amp;'static str,
+    /// ISO 8559-1:2017 clause this aligns with, e.g. "5.3.10", if any.
+    pub iso: Option&lt;&amp;'static str&gt;,
+    /// Seamly2D known-measurement code, if any — materialised from the
+    /// separate mapping data file (owner decision 4), never a code literal.
+    pub seamly: Option&lt;&amp;'static str&gt;,
+    /// Extra accepted spellings; retired canonical names live here forever.
+    pub aliases: &amp;'static [&amp;'static str],
+    /// Formula over other canonical names, offered at EDIT time only.
+    pub fallback: Option&lt;&amp;'static str&gt;,
+    /// Plausible (min, max) in cm; breaching it warns (amber), never errors.
+    pub plausible: (f64, f64),
+}
+
+pub const VERSION: u32 = 2; // v1 was the bare 10-name list
+pub fn canonical(name: &amp;str) -&gt; Option&lt;&amp;'static Entry&gt;;</code></pre>
+
+  <p>La columna <code>seamly</code> se puebla desde un <strong>archivo de datos de mapeo separado y documentado</strong>, no de literales en el árbol de código: es la <a href="#dueno">decisión 4</a>, riesgo GPL cero. Y las reglas de versionado, en orden de fuerza:</p>
+
+  <ul class="notch">
+    <li><strong>Ningún cambio de catálogo rompe carga ni resolución</strong> de un <code>.toile</code> viejo — test de contrato, cumplible precisamente porque el resolver nunca consulta el catálogo.</li>
+    <li><strong>Un canónico nunca se elimina ni renombra</strong>: renombrar = canónico nuevo + alias eterno.</li>
+    <li><strong>Ajustar un <code>fallback</code> cambia sólo lo que se ofrece al editar</strong> en el futuro — jamás la resolución de un doc existente — y se anota en el CHANGELOG del formato.</li>
+    <li><strong>Los goldens del solver no ven nada de esto</strong>: el catálogo actúa sólo antes del resolve, y lo materializado produce los mismos f64 que un valor escrito a mano.</li>
+  </ul>
+
+  <p>Los rangos <code>plausible</code> son la única fuente de la validación suave: <code>advisories(&amp;MeasureSet)</code> — <strong>duda, jamás veredicto</strong> — los consume junto a cross-checks (<code>cadera &lt; cintura</code>, <code>estatura</code> fuera de 50–230…), pinta ámbar en el inspector y alimenta <code>toile doc lint</code> gratis. Y una regla de honestidad que gobierna toda etiqueta: el catálogo se anuncia <strong>«alineado con ISO 8559-1», nunca «conforme a»</strong> — las cláusulas citadas salen del índice oficial con títulos verificados, pero las definiciones completas están tras el paywall, y los hints los escribimos nosotros.</p>
+</section>
+
+<section id="personas">
+  <h2><span class="num">§ 5</span>Personas y biblioteca</h2>
+
+  <p>La persona vive en <code>toile-doc</code> — la CLI debe poder leerla y lintarla sin arrancar la app — y la biblioteca en disco vive en la app. El archivo de biblioteca es la persona en reposo:</p>
+
+<pre class="si"><code>// toile-doc/src/persona.rs
+/// A person in the user's library: a named body, measured over time.
+/// The library file is the person at rest. A document never points at the
+/// library; it carries a copy. That keeps a .toile self-contained.
+pub struct Persona {
+    /// The name the library shows. User data, like measure names.
+    pub name: String,
+    /// Free text that never leaves the library file — not into a .toile,
+    /// not into an export.
+    pub notes: String,
+    /// The measuring sessions, oldest first. Never empty.
+    pub taken: Vec&lt;Snapshot&gt;,
+}
+
+/// One session with the tape.
+pub struct Snapshot {
+    /// The day, as `YYYY-MM-DD`. A string, so no clock enters the format.
+    pub date: String,
+    /// The measurements, by name, in centimetres.
+    pub values: BTreeMap&lt;String, f64&gt;,
+}</code></pre>
+
+  <ul class="notch">
+    <li><strong>Formato en disco:</strong> <code>*.toile-persona</code>, JSON canónico con el writer <code>Canonical</code> de <code>json.rs</code> y versión propia (<code>{"toile_persona":1,…}</code>). Un archivo = una persona = un diff legible = un borrado completo. El historial <code>Vec&lt;Snapshot&gt;</code> fechado está en el formato desde v1 (<a href="#dueno">decisión 7</a>), aunque la UI v1 muestre sólo el actual: la historia crece, no se sobreescribe.</li>
+    <li><strong>Ubicación:</strong> <code>directories::ProjectDirs</code> con qualifier <code>io.github.eticalde</code> y nombre <code>Toile</code> (<a href="#dueno">decisión 10</a>) — macOS en Application Support, XDG en Linux. Save atómico (temp + rename); slug del stem NFC, minúsculas, <code>[a-z0-9_-]</code>, colisión → sufijo <code>-2</code>. El <em>stem</em> es la identidad del vínculo; <code>name</code> es libre.</li>
+    <li><strong>Usar en un documento = copiar</strong> (<code>Persona::to_mannequin</code>): snapshot del <code>MeasureSet</code> a <code>Doc.mannequins</code>, sellado con <code>origin</code>. El doc jamás referencia la biblioteca en tiempo de resolución — la lección negativa de Seamly, cuyo patrón enlaza medidas por ruta relativa y se rompe al compartir (verificado en su muestra <code>jacket1_52-176.sm2d</code>).</li>
+    <li><strong>Sincronía nunca automática:</strong> al abrir, por cada maniquí con <code>origin</code>, si la persona existe y la huella difiere, banda no modal «Las medidas de <em>Ana</em> difieren de tu biblioteca — <strong>Actualizar</strong> · <strong>Mantener</strong>». <em>Actualizar</em> es un comando normal — transacción, undo, dirty flag; <strong>abrir jamás muta bits</strong>. El inverso es «Guardar en biblioteca», que crea un <code>Snapshot</code> nuevo fechado.</li>
+  </ul>
+
+<pre class="si"><code>/// Enough to offer a refresh; nothing beyond the name the user already typed.
+pub struct Origin {
+    pub persona: String, // the library file's stem, e.g. "ana"
+    pub taken: String,   // the snapshot's date, YYYY-MM-DD
+    pub fnv: String,     // FNV-1a 64 of the canonical bytes of the copied values, hex
+}</code></pre>
+
+  <div class="rule">
+    <b>Privacidad por diseño</b>
+    <p>Sin red en runtime, sin telemetría, y nada de PII de contacto en ningún formato de la casa.</p>
+    <p>Medidas corporales = datos personales (GDPR 4(1)): todo local, y borrar a Ana es borrar un archivo. <code>notes</code> nunca sale de la biblioteca. El bloque <code>&lt;personal&gt;</code> de un <code>.vit</code> importado —fecha de nacimiento, género, email: el anti-patrón de Seamly— se descarta siempre, sin opt-in (<a href="#dueno">decisión 8</a>). Y «Archivo → Exportar copia anónima…» escribe un <code>.toile</code> con personas renombradas «Persona A/B…» y <code>origin</code> eliminado entero — la huella FNV de 10 medidas es fuerza-bruteable por quien conozca el cuerpo, así que fuera. Es seudonimización en el sentido del Art. 4(5) del GDPR: el vínculo queda sólo en la biblioteca local del autor.</p>
+  </div>
+</section>
+
+<section id="formato">
+  <h2><span class="num">§ 6</span>El formato: <code>toile: 1</code> y <code>toile: 2</code></h2>
+
+  <p>El formato no se migra: se <strong>extiende condicionalmente</strong>. No se toca <code>values: BTreeMap&lt;String, f64&gt;</code> — romper serde rompería todo <code>.toile</code> existente. Se añaden dos campos opcionales y aditivos, de modo que un doc que no los usa serializa <strong>byte-idéntico</strong> a hoy:</p>
+
+<pre class="si"><code>pub struct MeasureSet {
+    pub name: String,
+    /// Measured centimetres, by name. Always wins.
+    pub values: BTreeMap&lt;String, f64&gt;,
+    /// User formulas over other names, used when the name is unmeasured.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub formulas: BTreeMap&lt;String, String&gt;,
+    /// Where these values were snapshotted from, if a library persona.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option&lt;Origin&gt;,
+}</code></pre>
+
+  <div class="decision">
+    <b>El nudo de versión, resuelto</b>
+    <p>Era una contradicción real: «no subir la versión» deja que un Toile viejo cargue un doc nuevo, descarte <code>formulas</code>/<code>origin</code> en silencio —serde ignora campos desconocidos— y resuelva distinto: mismo archivo, bits distintos entre builds. «Subirla a secas» rompe la byte-identidad de los docs viejos. La salida es la <strong>versión condicional al contenido</strong>: <code>json.rs</code> conserva <code>VERSION = 1</code> y aprende <code>VERSION_EXTENDED = 2</code>; el writer canónico estampa <code>toile: 1</code> cuando el doc no usa campo nuevo alguno y <code>toile: 2</code> en cuanto <code>formulas</code> u <code>origin</code> aparecen. La versión es <strong>función pura del contenido</strong>, así que «un documento tiene exactamente un texto» sigue siendo verdad. El reader nuevo acepta {1, 2}; un Toile viejo que reciba un <code>toile: 2</code> lo <strong>rechaza en voz alta</strong> con su error de versión ya existente — fail-closed, que es lo que la regla sagrada exige. No hay paso de migración.</p>
+  </div>
+
+  <p>El orden de resolución de una medida es determinista y de tres pasos: (1) valor medido en <code>values</code> — siempre gana; (2) fórmula propia en <code>formulas</code>, con el mismo parser que ya usa el patronaje (<code>formula::Lookup</code> existe), iterando sobre <code>BTreeMap</code> con detección de ciclos idéntica a la de variables del documento; (3) ausente → el mismo error que hoy da una fórmula sin variable.</p>
+
+  <div class="rule">
+    <b>La regla que lo hace cumplible</b>
+    <p>El resolver jamás lee el catálogo.</p>
+    <p>El <code>fallback</code> de un <code>Entry</code> actúa sólo al editar o importar: la UI ofrece «derivar <code>tiro</code> = <code>largo_lateral − entrepierna</code>» y, si se acepta, <strong>materializa esa fórmula dentro del doc</strong>. La resolución depende únicamente de los bytes del archivo: sin esto, retocar un fallback en un catálogo futuro haría que el mismo archivo diera f64 distintos entre versiones de la app — la regla sagrada violada sin tocar el archivo.</p>
+  </div>
+
+  <p>La parte más delicada del plan es la serialización, y su seguro son tests de bytes escritos <strong>antes</strong> que los campos, sobre fixtures del corpus actual: <code>a_v1_document_without_formulas_serialises_byte_identical_to_before</code>, <code>the_version_stamp_is_2_exactly_when_new_fields_are_present_and_1_otherwise</code>, <code>a_version_2_document_round_trips_and_version_3_is_rejected_loudly</code>. Es lo primero que un revisor debe mirar en M2 y M3.</p>
+</section>
+
+<section id="sdf">
+  <h2><span class="num">§ 7</span>El pipeline SDF</h2>
+
+  <p>El maniquí procedimental <em>produce una malla</em>, y esa malla entra al mismo bake malla→SDF→cache que un glTF importado usará mañana: un solo camino de bake, dos productores de malla. Lo que cambia respecto del <a href="./architecture.html#solver">ADR</a> es quién hornea, y es una <strong>enmienda aprobada</strong> (<a href="#dueno">decisión 1</a>).</p>
+
+  <div class="decision">
+    <b>Enmienda al ADR — aprobada</b>
+    <p><strong>Bake propio</strong> por el método de Bærentzen–Aanæs — el mismo paper que el ADR citaba vía parry3d, escrito en casa en ~2 archivos — y <strong>cache en f32 con dims anisotrópicas</strong> en vez del «256³/narrow-band en f16 ≈ 32 MB» que el ADR prometía. Con celda de 5 mm y banda ±2.5 cm, un maniquí talla 38 da ~112×92×352 ≈ 3.6 M voxels ≈ <strong>14.5 MB en f32</strong>: sin conversión f16, sample directo, cero riesgo de redondeo extra — y aun así por debajo de los 32 MB, con más resolución donde importa. Cifras de escritorio, no benchmarks; el cache amortiza el bake, que se paga una vez.</p>
+  </div>
+
+  <ol class="plan">
+    <li><strong>Pseudo-normales ponderadas por ángulo</strong> en vértices y aristas — signo demostradamente correcto para mallas cerradas orientables; de ahí el validador de manifold en CI.</li>
+    <li><strong>Banda estrecha:</strong> por triángulo, bbox extendida ±banda; por voxel, análisis de casos punto-triángulo (aritmética + sqrt); se conserva la mínima |d|, con empates por índice de triángulo fijo. Signo = <code>dot(pseudo_normal, p − x)</code>.</li>
+    <li><strong>Fuera de banda:</strong> flood fill de signo en orden de barrido fijo, magnitud saturada a ±banda — al solver sólo le importa el campo cerca del contacto.</li>
+  </ol>
+
+  <p>Los ángulos de ponderación necesitan <code>acos</code>: entra <code>libm</code> (port puro-Rust de MUSL, MIT) <strong>pineada exacta</strong> al estilo <code>kurbo = "=0.13.1"</code>. Su determinismo viene de ser el mismo código en todas las plataformas, no de correctly-rounding — así que bump de libm ⇒ bump de <code>bake_version</code> ⇒ goldens de SDF regenerados en el mismo PR, jamás corrimiento silencioso. El pin no es gratis: <code>libm 0.2.16</code> ya está en el árbol vía <code>naga</code>→<code>wgpu</code>, y el pin acopla updates de wgpu a la política de goldens. Asumido con procedimiento escrito: es el precio del determinismo por mismo-código.</p>
+
+  <div class="discarded">
+    <b>Descartado — parry3d como horno</b>
+    <p>Apache-2.0, compatible, y la ruta existe (<code>TriMesh::project_local_point</code> + <code>TriMeshFlags::ORIENTED</code>, feature <code>enhanced-determinism</code>). Pero nadie verificó que toda su ruta de proyección sea bit-estable entre arquitecturas, y cada bump suyo podría mover los goldens de SDF. Las pseudo-normales había que escribirlas igual para el criterio de exactitud del signo. Queda como <strong>plan B documentado</strong> — pineado, con <code>enhanced-determinism</code>, validado por los goldens de dos arquitecturas — si el bake propio se atasca.</p>
+  </div>
+
+  <p><code>SdfGrid</code> se generaliza de <code>dim: usize</code> cúbico a <code>dims: [usize; 3]</code> — el cuerpo es ~1:3; el constructor <code>sphere</code> cúbico delega y los tests actuales siguen compilando. El cache en disco:</p>
+
+<pre class="si"><code>header: magic b"TSDF" | format_version u32 | mesher_version u32
+      | bake_version u32 | key u64 | dims [u32;3] | cell f32 | origin [f32;3]
+data:   f32 LE, orden (k*ny + j)*nx + i</code></pre>
+
+  <p>La clave hashea la serialización canónica de las medidas <strong>resueltas</strong> —el <code>BTreeMap</code> ya ordena— más la versión de la tabla de forma: dos personas con medidas idénticas comparten entrada. Cambiar <code>mesher_version</code> o <code>bake_version</code> invalida todo el cache, jamás un golden viejo. Y el cache vive en el directorio local de la app: las medidas son datos personales y no salen de la máquina.</p>
+</section>
+
+<section id="fases">
+  <h2><span class="num">§ 8</span>Las fases M0–M9</h2>
+
+  <p>Cada fase termina en algo que se puede entregar, y la puerta de todas es la misma: <code>./tools/verify.sh</code> en verde con el golden del solver intacto.</p>
+
+  <div class="tscroll"><table>
+    <thead><tr><th>Fase</th><th>Título</th><th>Lo que el usuario gana</th></tr></thead>
+    <tbody>
+      <tr><td>M0</td><td>Cortar <code>maniquies.rs</code></td><td class="wrap">Nada visible. Prerrequisito mecánico (290/300 líneas), revisable en diez minutos</td></tr>
+      <tr><td>M1</td><td>El catálogo anclado</td><td class="wrap">Autocompletar ~30 nombres con pedigrí ISO, rangos plausibles en ámbar</td></tr>
+      <tr><td>M2</td><td>Derivadas</td><td class="wrap"><code>tiro</code> se calcula de <code>largo_lateral − entrepierna</code> cuando no se midió</td></tr>
+      <tr><td>M3</td><td>Personas en disco</td><td class="wrap">«Ana» existe como archivo; crear, editar, borrar, con historial fechado</td></tr>
+      <tr><td>M4</td><td>Snapshot y sincronía</td><td class="wrap">Usar a Ana en un doc; el doc avisa cuando Ana cambió, con undo</td></tr>
+      <tr><td>M5</td><td>Import y copia anónima</td><td class="wrap">CSV y <code>.smis</code>/<code>.vit</code> de Seamly entran; compartir sin nombres reales</td></tr>
+      <tr><td>M6</td><td>La sección exacta</td><td class="wrap">Invisible: el anillo superelíptico con golden de bits ARM/x86</td></tr>
+      <tr><td>M7</td><td>El maniquí con piernas</td><td class="wrap">La malla watertight; cada contorno que el maniquí realiza, re-medido, devuelve su valor (a ulps)</td></tr>
+      <tr><td>M8</td><td>Bake y cache</td><td class="wrap">El SDF del maniquí, cacheado, con golden propio en dos arquitecturas</td></tr>
+      <tr><td>M9</td><td>El Probador drapea</td><td class="wrap">El pantalón sobre el maniquí talla 38; golden nuevo de drapeado en CI</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>Las pistas corren en paralelo: <strong>M1–M5</strong> (documento y personas) y <strong>M6–M8</strong> (geometría), con dos junturas declaradas que acotan el paralelismo. La primera: <strong>M7 consume M1 y M2</strong> — <code>landmarks</code> lee los nombres del catálogo y sus derivadas, así que M7 no arranca hasta que M1 congela la lista de nombres v1. La segunda bloqueaba M7 en las dos semánticas del eje, y las respuestas del dueño la disolvieron (<a href="#dueno">decisión 3</a>). M6 sí es independiente de verdad —sólo geometría de sección— y puede arrancar el día uno; M9 necesita ambas pistas.</p>
+
+  <p>Documentadas y sin fecha, las futuras: export <code>.smis</code> (<a href="#dueno">decisión 11</a>); <code>GradedSet</code> nativo con pasos EN 13402 — el import multitalla de v1 <em>materializa</em> <code>MeasureSet</code>s concretos, sin maquinaria nueva en el resolve—; import glTF y los assets CC0 de MakeHuman como segundo productor de malla sobre el mismo bake; torso completo y A-pose cuando el catálogo de torso tenga un bloque que lo use; thumbnails de maniquí en la biblioteca.</p>
+</section>
+
+<section id="dueno">
+  <h2><span class="num">§ 9</span>Las once decisiones del dueño</h2>
+
+  <p>El plan resolvió sus contradicciones técnicas en la mesa, pero elevó once preguntas al dueño: de producto, de licencia y de identidad, más dos trade-offs técnicos — la enmienda al ADR y el costo de CI por preset — elevados por gobernanza y costo, no por falta de respuesta. Se contestaron el 2026-09-05 — «ok a todo, con tus votos» — y son <strong>vinculantes</strong>: tienen prioridad sobre cualquier texto que las contradiga. Esta página ya las presenta selladas.</p>
+
+  <div class="decision">
+    <b>Decisión 1 · La enmienda al ADR, aprobada completa</b>
+    <p>El bake SDF es propio —Bærentzen–Aanæs con <code>libm</code> pineada exacta— y parry3d queda como plan B pineado con <code>enhanced-determinism</code>; el cache es f32 con dims anisotrópicas (~14.5 MB talla 38), no el «256³ f16 ≈ 32 MB» del ADR.</p>
+    <p><em>Por qué:</em> la ruta de proyección de parry no está verificada bit-a-bit entre arquitecturas y cada bump suyo podría mover goldens; el método es el mismo paper y son ~2 archivos. f32 directo es más simple, sin redondeo extra, y aun así más chico.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 2 · Catálogo v1 de ~30 nombres</b>
+    <p>Pantalón + torso + maniquí; no el recorte de ~18 centrado en pizza-cone.</p>
+    <p><em>Por qué:</em> las entradas son baratas y el split en <code>measure/</code> ya está previsto — recortar o crecer no toca estructura. El torso se valida y exporta aunque el maniquí v1 no lo realice.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 3 · Las dos semánticas que fijaban el eje</b>
+    <p><code>altura_cadera</code> es distancia <strong>cintura→cadera</strong> (ISO 5.4.21): <code>hip_z = waist_z − altura_cadera</code>. Y <code>largo_lateral</code> es <strong>cintura→tobillo</strong>: <code>ankle_z = waist_z − largo_lateral</code> vale tal cual.</p>
+    <p><em>Por qué:</em> es lo que el draft F0/F1 ya asume, y evita el ajuste por <code>altura_tobillo</code> que exigiría la acepción cintura→suelo del largo de pantalón (con ella <code>ankle_z = 0</code> y los casquetes quedarían bajo el suelo). M7 bloqueaba en estas dos respuestas; ya no.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 4 · Códigos Seamly: riesgo GPL cero</b>
+    <p>Los códigos de medida de Seamly van a un <strong>archivo de datos de mapeo separado y documentado</strong>; ninguno de esos identificadores en el árbol de código.</p>
+    <p><em>Por qué:</em> la lectura estándar post <em>Oracle v. Google</em> ampara los identificadores funcionales de interop, pero la alternativa riesgo-cero costaba un renglón — y quien audite «cero GPL» (<code>deny.toml</code>, línea 1) no debe encontrar ni la duda. Los archivos GPL de Seamly se leyeron como fuentes de datos y hechos funcionales, jamás de expresión, y esa distinción queda escrita, no descubierta.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 5 · Pose v1 confirmada</b>
+    <p>De pie, piernas verticales separadas al semiancho de cadera, sin brazos, domo sobre la cintura.</p>
+    <p><em>Por qué:</em> es todo lo que el pantalón necesita y simplifica el loft y el puente de tiro. A-pose y torso llegan cuando el catálogo de torso tenga un bloque que los use; el corpiño sigue sobre la esfera.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 6 · Proporciones de libros clásicos</b>
+    <p>Para completar medidas ausentes más allá de los fallbacks del catálogo: tablas de proporción de libros clásicos de patronaje en dominio público. ANSUR II queda para el futuro.</p>
+    <p><em>Por qué:</em> la base legal de ANSUR es presunción —obra de gobierno US, sin cláusula leída— y su población militar sesga; las proporciones de sastre cubren el caso «me faltan medidas».</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 7 · Historial en el formato desde v1</b>
+    <p><code>Vec&lt;Snapshot&gt;</code> fechado en <code>.toile-persona</code> desde el primer día; la UI v1 muestra sólo el snapshot actual.</p>
+    <p><em>Por qué:</em> evita una migración de formato después. La UI de comparar y borrar snapshots queda explícitamente fuera.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 8 · La PII se descarta siempre</b>
+    <p>El bloque <code>&lt;personal&gt;</code> de un <code>.vit</code> —fecha de nacimiento, género, email— nunca entra. Sin opt-in.</p>
+    <p><em>Por qué:</em> privacidad por diseño; el anti-patrón de Seamly no se importa ni como opción.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 9 · Goldens CI v1: sólo <code>pantalon × talla38</code></b>
+    <p>Un preset, tres hashes — malla, SDF y drapeado — en ARM y x86.</p>
+    <p><em>Por qué:</em> cada preset extra suma minutos de CI en dos arquitecturas, y el talla 38 basta para vigilar el pipeline entero.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 10 · Identidad y tallas de fábrica</b>
+    <p><code>ProjectDirs</code> con qualifier <code>io.github.eticalde</code> y nombre <code>Toile</code> — la identidad personal, nunca la laboral; se decide una vez. Y sí hay tallas de fábrica: <strong>Talla 36–46 propias con pasos EN 13402</strong> sobre una base medida por nosotros.</p>
+    <p><em>Por qué:</em> la etiqueta dice «alineado con ISO 8559», nunca «conforme a» — el estándar es de pago y prometer conformidad sería falso.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 11 · Export <code>.smis</code>: fase futura cercana</b>
+    <p>Fuera de v1; el import sí entra (M5).</p>
+    <p><em>Por qué:</em> cierra el round-trip y da visibilidad en la comunidad Seamly, pero no bloquea la frase de la entrega.</p>
+  </div>
+</section>
+
+<section id="golden">
+  <h2><span class="num">§ 10</span>El golden que no se mueve</h2>
+
+  <div class="rule">
+    <b>Invariante de todas las fases</b>
+    <p><code>0x534dd0e5200e8e4a</code></p>
+    <p>El golden del solver —el corpiño sobre la esfera— no se mueve jamás, y la esfera analítica queda como fixture eterno. El maniquí crea goldens <strong>nuevos</strong>; cada fase M lo verifica con <code>./tools/verify.sh</code>, y M8 lo dice en un test con nombre: <code>the_existing_sphere_tests_compile_and_pass_unchanged</code>. En M9, <code>switching_back_to_the_sphere_reproduces_the_eternal_golden</code>.</p>
+  </div>
+
+  <p>Los goldens que sí se añaden, verificados en ARM y x86 como hoy: el <strong>golden de bits del anillo</strong> de referencia en M6 (<code>the_reference_ring_hashes_identically_on_arm_and_x86</code>), y los tres del preset <code>pantalon × talla38</code> — hash de malla (M7), hash de SDF (M8, <code>the_size_38_sdf_hashes_identically_on_arm_and_x86</code>) y hash de drapeado (M9, <code>the_resolved_trouser_front_drapes_on_the_size_38_mannequin</code>).</p>
+
+  <p>Y la policía del determinismo es doble. El golden de bits del anillo detecta en CI a quien cuele un <code>powf</code>, un <code>sin</code> o un <code>powi</code>; antes del hecho lo atrapa un grep de funciones vetadas en <code>tools/verify.sh</code> sobre <code>avatar/</code>, <strong>anclado a sintaxis de método</strong> para no morderse a sí mismo:</p>
+
+<pre class="no"><code>\.(powf|powi|sin|cos|tan|asin|acos|atan|atan2|exp|exp2|ln|log2|log10|sinh|cosh|tanh)\s*\(</code></pre>
+
+  <p>Un patrón ingenuo <code>sin|cos|ln</code> matchearía <code>using</code>, <code>acos</code> y media lengua inglesa. El <code>libm::acos</code> de M8 es llamada calificada, no método, y no dispara este grep; un segundo grep verifica que <code>libm::</code> aparece <strong>sólo</strong> en <code>avatar/bake.rs</code>.</p>
+
+  <hr>
+
+  <p class="refs">Este documento es la destilación permanente del plan de la sección Maniquíes. La arquitectura que enmienda está en <a href="./architecture.html">ADR-001</a>; la pestaña que consumirá el maniquí, en <a href="./patronaje.html">PLAN-001</a>; las reglas con que se escribe su código, en <a href="./style.html">STD-001</a>.</p>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <div class="fin">TOILE · PLAN-002 · <a href="https://github.com/eticalde/Toile">github.com/eticalde/Toile</a> · <a href="./architecture.html">ADR-001</a> · <a href="./patronaje.html">PLAN-001</a> · <a href="./style.html">STD-001</a></div>
+</footer>
+
+</body>
+</html>
