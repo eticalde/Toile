@@ -4,7 +4,7 @@
     reason = "a move to a round number of centimetres lands on it exactly"
 )]
 
-use toile_engine::draft::{Command, Doc, MannequinKey, MeasureSet, block};
+use toile_engine::draft::{Binding, Command, Doc, MannequinKey, MeasureSet, block};
 use toile_engine::session::{Session, SessionError};
 
 fn front() -> Session {
@@ -46,7 +46,12 @@ fn moving_a_node_writes_the_document_and_re_derives() {
         .expect("the session has a document")
         .points_cm(piece)[1]
         .0;
-    session.move_point(1, [0.30, 0.0]);
+    session
+        .edit(Command::MovePoint {
+            point: node,
+            to: [Binding::literal(30.0), Binding::literal(0.0)],
+        })
+        .expect("moving a node is a change of shape");
     let draft = session.draft().expect("the session has a document");
     assert_eq!(draft.resolved(node), Some([30.0, 0.0]));
     assert_eq!(session.contour()[1], [0.30, 0.0]);

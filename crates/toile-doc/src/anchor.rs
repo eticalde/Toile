@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{PieceKey, PointKey};
 
 /// A place on a contour, said as a node plus a fraction of the tract that
@@ -6,7 +8,7 @@ use crate::{PieceKey, PointKey};
 /// The fraction is local on purpose. A fraction of the whole perimeter drifts
 /// the moment any other tract changes length; a node is a key, and a key does
 /// not move.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct EdgeAnchor {
     /// The piece the contour belongs to.
     pub piece: PieceKey,
@@ -17,7 +19,7 @@ pub struct EdgeAnchor {
 }
 
 /// A stretch of contour, from one anchor to another along the contour order.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct EdgeRange {
     /// Where the stretch starts.
     pub head: EdgeAnchor,

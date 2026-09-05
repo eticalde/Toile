@@ -15,8 +15,8 @@ pub use toile_doc::block;
 pub use toile_doc::formula::{EvalError, Formula, Lookup, SyntaxError};
 pub use toile_doc::{
     Applied, Axis, Binding, ChangeClass, Command, ContourNode, Doc, DocError, EdgeAnchor,
-    EdgeRange, Grain, Identity, MannequinKey, MeasureSet, NotchCount, Piece, PieceKey, Point,
-    PointKey, SeamKey, Segment, Variable, VariableKey, Winding,
+    EdgeRange, Grain, History, Identity, MannequinKey, MeasureSet, NotchCount, Piece, PieceKey,
+    Point, PointKey, SeamKey, Segment, Variable, VariableKey, Winding,
 };
 pub use toile_geom::validate::ContourFault;
 
@@ -51,6 +51,7 @@ struct Compiled {
 pub struct Draft {
     doc: Doc,
     env: Env,
+    history: History,
     points: BTreeMap<PointKey, [f64; 2]>,
     pieces: BTreeMap<PieceKey, Compiled>,
 }
@@ -66,6 +67,7 @@ impl Draft {
         let mut draft = Draft {
             doc,
             env: Env::default(),
+            history: History::new(),
             points: BTreeMap::new(),
             pieces: BTreeMap::new(),
         };
@@ -148,39 +150,124 @@ impl Draft {
         self.pieces.get(&piece).map_or(0, |held| held.topology)
     }
 
-    /// Applies a command and says what has to be recompiled.
+    /// Applies a command, records it, and says what has to be recompiled.
     ///
     /// # Errors
     /// `DraftError::Doc` when the document refuses the command, and
     /// `DraftError::Env` when the edit would leave the formulas unresolvable —
-    /// in which case the edit is taken back out, so the document never sits in
-    /// a state it cannot be drawn from.
+    /// in which case nothing is kept, so neither the document nor the undo
+    /// stack ever holds a state that cannot be drawn.
     ///
     /// # Panics
-    /// If taking the edit back out fails, which would mean a command's own
-    /// inverse was refused by the document it had just been applied to.
+    /// If taking the rehearsal back out fails, which would mean a command's
+    /// own inverse was refused by the document it had just been applied to.
     pub fn edit(&mut self, command: Command) -> Result<Recompile, DraftError> {
-        let applied = command.apply(&mut self.doc)?;
+        // Rehearsed before it is recorded. An edit that leaves the formulas
+        // unresolvable has to vanish whole, and an entry already folded into
+        // an open gesture cannot be taken back on its own.
+        let rehearsal = command.clone().apply(&mut self.doc)?;
+        let refused = env::build(&self.doc).err();
+        rehearsal
+            .inverse
+            .apply(&mut self.doc)
+            .expect("the inverse of an edit that just applied");
+        if let Some(broken) = refused {
+            return Err(broken.into());
+        }
+        let applied = self.history.edit(&mut self.doc, command)?;
         let what = edit::recompile(&applied);
-        match self.resolve_all() {
-            Ok(()) => {
-                if let Recompile::Topology(pieces) = &what {
-                    for &piece in pieces {
-                        self.pieces.entry(piece).or_default().topology += 1;
-                    }
-                }
-                Ok(what)
-            }
-            Err(broken) => {
-                applied
-                    .inverse
-                    .apply(&mut self.doc)
-                    .expect("the inverse of an edit that just applied");
-                self.resolve_all()
-                    .expect("the document resolved before the edit");
-                Err(broken)
+        self.resolve_all()?;
+        if let Recompile::Topology(pieces) = &what {
+            for &piece in pieces {
+                self.pieces.entry(piece).or_default().topology += 1;
             }
         }
+        Ok(what)
+    }
+
+    /// Opens a gesture: everything edited until `end_gesture` is one entry.
+    pub fn begin_gesture(&mut self, label: &'static str) {
+        self.history.begin(label);
+    }
+
+    /// Closes the open gesture. One that edited nothing leaves no entry.
+    pub fn end_gesture(&mut self) {
+        self.history.end();
+    }
+
+    /// Takes back the last entry and says what has to be recompiled.
+    ///
+    /// # Errors
+    /// `DraftError` when the document refuses an inverse, or when the state it
+    /// goes back to no longer resolves.
+    pub fn undo(&mut self) -> Result<Recompile, DraftError> {
+        let touched = self.history.undo(&mut self.doc)?;
+        self.recover(touched)
+    }
+
+    /// Drops the open gesture and says what has to be recompiled.
+    ///
+    /// This is how a gesture is refused rather than stepped back through: what
+    /// the user declined leaves nothing for redo to bring back.
+    ///
+    /// # Errors
+    /// The same as `undo`.
+    pub fn cancel_gesture(&mut self) -> Result<Recompile, DraftError> {
+        let touched = self.history.cancel(&mut self.doc)?;
+        self.recover(touched)
+    }
+
+    /// Puts the last entry undone back, and says what has to be recompiled.
+    ///
+    /// # Errors
+    /// The same as `undo`.
+    pub fn redo(&mut self) -> Result<Recompile, DraftError> {
+        let touched = self.history.redo(&mut self.doc)?;
+        self.recover(touched)
+    }
+
+    /// What undo would take back, for the status bar.
+    pub fn undo_label(&self) -> Option<&str> {
+        self.history.undo_label()
+    }
+
+    /// What redo would put back.
+    pub fn redo_label(&self) -> Option<&str> {
+        self.history.redo_label()
+    }
+
+    /// How many entries undo can take back, an open gesture included.
+    pub fn undo_depth(&self) -> usize {
+        self.history.depth()
+    }
+
+    /// How many entries redo can put back.
+    pub fn redo_depth(&self) -> usize {
+        self.history.redo_depth()
+    }
+
+    /// Re-resolves after the history moved, and prices what the move cost.
+    ///
+    /// The class is read off the geometry rather than remembered: a step that
+    /// changed how long a contour is has to be meshed again, whatever the
+    /// commands inside the entry were.
+    fn recover(&mut self, touched: Vec<PieceKey>) -> Result<Recompile, DraftError> {
+        let before: Vec<usize> = touched
+            .iter()
+            .map(|&piece| self.outline(piece).len())
+            .collect();
+        self.resolve_all()?;
+        let remeshed = touched
+            .iter()
+            .zip(&before)
+            .any(|(&piece, &was)| self.outline(piece).len() != was);
+        if !remeshed {
+            return Ok(Recompile::Shape(touched));
+        }
+        for &piece in &touched {
+            self.pieces.entry(piece).or_default().topology += 1;
+        }
+        Ok(Recompile::Topology(touched))
     }
 
     /// Rebuilds the environment and every piece's geometry.

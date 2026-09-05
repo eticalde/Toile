@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{
     Arena, Dart, MannequinKey, MeasureSet, Notch, Piece, PieceKey, Pin, Point, PointKey, Seam,
     Symmetry, Variable, VariableKey,
@@ -8,7 +10,7 @@ use crate::{
 /// The document and its formulas are in centimetres, always. The ruler's unit
 /// is a matter of view, and the metres the solver wants are made once, on the
 /// way out.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Doc {
     /// The pieces on the table.
     pub pieces: Arena<Piece>,

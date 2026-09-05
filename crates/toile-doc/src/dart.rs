@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{ContourNode, Identity, PieceKey, Point, PointKey, SeamKey, Segment};
 
 /// A dart: the wedge taken out of a contour, and the seam that closes it.
@@ -5,7 +7,7 @@ use crate::{ContourNode, Identity, PieceKey, Point, PointKey, SeamKey, Segment};
 /// The apex and the two legs are ordinary contour nodes, so the wedge leaves a
 /// simple polygon the mesher already knows how to fill, and closing the dart
 /// is the seam between the two legs.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Dart {
     /// The point the wedge closes onto.
     pub apex: PointKey,
@@ -18,7 +20,8 @@ pub struct Dart {
 }
 
 /// Which way a sewn dart is pressed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FoldDirection {
     /// Toward the start of the contour.
     TowardStart,

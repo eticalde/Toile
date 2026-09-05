@@ -1,14 +1,13 @@
+mod write;
+
 use eframe::egui;
-use toile_engine::draft::{
-    Axis, Command, Defect, Doc, Draft, EvalError, MannequinKey, PieceKey, PointKey,
-};
+use toile_engine::draft::{Axis, Defect, Doc, Draft, EvalError, MannequinKey, PieceKey, PointKey};
+use write::Asked;
 
 use super::state::State;
+use crate::file::Action;
 use crate::theme::Theme;
-use crate::widgets::{
-    PAD, button_secondary, field_row, footer_note, formula_row, formula_row_fault, section,
-    section_with, select,
-};
+use crate::widgets::{button_ghost, button_secondary, field_row, footer_note, section};
 
 const NOTE: &str =
     "Las fórmulas se evalúan contra el maniquí elegido: mismo patrón, cualquier talla.";
@@ -20,61 +19,117 @@ const FOOT_H: f32 = 74.0;
 /// The right panel: the bindings of whatever is chosen, the measurements they
 /// resolve against, and the ways out of the app.
 ///
-/// It writes nothing itself; the command it returns is applied by the tab, so
-/// the document is borrowed for reading only while the panel draws.
+/// It writes nothing itself; the edit it asks for is applied by the tab, so
+/// the document is borrowed for reading only while the panel draws. One field
+/// confirmed is one named entry of the history, never a fold into whatever
+/// gesture happened to be open.
 pub fn show(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: Option<&Draft>,
     piece: Option<PieceKey>,
-    state: &State,
-) -> Option<Command> {
+    state: &mut State,
+) -> Option<Asked> {
     let body = (ui.available_height() - FOOT_H).max(0.0);
-    let command = egui::ScrollArea::vertical()
+    let asked = egui::ScrollArea::vertical()
         .max_height(body)
         .auto_shrink([false, false])
         .show(ui, |ui| {
-            let mut command = None;
+            let mut asked = None;
             if let (Some(draft), Some(piece)) = (draft, piece) {
-                chosen(ui, theme, draft, piece, state);
-                command = measures(ui, theme, draft);
-                variables(ui, theme, draft);
+                asked = chosen(ui, theme, draft, piece, state);
+                asked = write::measures(ui, theme, draft, state).or(asked);
+                asked = write::variables(ui, theme, draft, state).or(asked);
             } else {
                 section(ui, theme, "Sin pieza");
                 footer_note(ui, theme, EMPTY);
             }
-            exports(ui, theme);
-            command
+            exports(ui, theme, state);
+            asked
         })
         .inner;
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         footer_note(ui, theme, NOTE);
     });
-    command
+    asked
 }
 
-/// The chosen node and its two bindings, or the piece when nothing is chosen.
-fn chosen(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, piece: PieceKey, state: &State) {
-    let doc = draft.doc();
-    let Some(point) = state.selection else {
-        return summary(ui, theme, draft, piece);
-    };
-    let name = doc.label_of(piece, point).unwrap_or_default();
-    section(ui, theme, &format!("Punto {name}"));
-    let Some(held) = doc.points.get(point) else {
-        return;
-    };
-    let at = draft.resolved(point);
-    for (axis, label, k) in [(Axis::X, "X", 0), (Axis::Y, "Y", 1)] {
-        let source = held.binding(axis).source();
-        match at {
-            Some(cm) => formula_row(ui, theme, label, &source, &format!("= {:.1} cm", cm[k])),
-            None => formula_row_fault(ui, theme, label, &source, &why(draft, piece, point, axis)),
+/// Whatever is chosen: a node, a group of them, a tract, or the piece.
+fn chosen(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    draft: &Draft,
+    piece: PieceKey,
+    state: &mut State,
+) -> Option<Asked> {
+    if let Some(from) = state.selection.edge() {
+        tract(ui, theme, draft, piece, from);
+        return None;
+    }
+    match state.selection.count() {
+        0 => {
+            summary(ui, theme, draft, piece);
+            None
+        }
+        1 => node(ui, theme, draft, piece, state),
+        many => {
+            group(ui, theme, draft, state, many);
+            None
         }
     }
 }
 
-/// What the piece is, when no node is chosen.
+/// The one chosen node, under the name the drawing gives it.
+fn node(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    draft: &Draft,
+    piece: PieceKey,
+    state: &mut State,
+) -> Option<Asked> {
+    let point = state.selection.only()?;
+    let name = draft.doc().label_of(piece, point).unwrap_or_default();
+    section(ui, theme, &format!("Punto {name}"));
+    write::coordinates(ui, theme, draft, (piece, point), state)
+}
+
+/// Several nodes at once: what they have in common, and nothing they do not.
+fn group(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, state: &State, many: usize) {
+    section(ui, theme, &format!("{many} puntos"));
+    let doc = draft.doc();
+    for (axis, label) in [(Axis::X, "X"), (Axis::Y, "Y")] {
+        let mut sources = state.selection.points().map(|key| {
+            doc.points
+                .get(key)
+                .map(|held| held.binding(axis).source().into_owned())
+        });
+        let first = sources.next().flatten();
+        let common = match first {
+            Some(source) if sources.all(|other| other.as_ref() == Some(&source)) => source,
+            _ => "—".to_owned(),
+        };
+        field_row(ui, theme, label, &common, "");
+    }
+}
+
+/// The chosen tract: the two nodes it runs between, and how long it is.
+fn tract(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, piece: PieceKey, from: PointKey) {
+    let nodes = draft.points_cm(piece);
+    let Some(at) = nodes.iter().position(|&(key, _)| key == from) else {
+        return;
+    };
+    let to = nodes[(at + 1) % nodes.len()].0;
+    let doc = draft.doc();
+    let ends = (
+        doc.label_of(piece, from).unwrap_or_default(),
+        doc.label_of(piece, to).unwrap_or_default(),
+    );
+    section(ui, theme, &format!("Borde {} → {}", ends.0, ends.1));
+    let length = format!("{:.1}", draft.run_length_cm(piece, from, to));
+    field_row(ui, theme, "largo", &length, "cm");
+}
+
+/// What the piece is, when nothing on it is chosen.
 fn summary(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, piece: PieceKey) {
     let doc = draft.doc();
     let Some(held) = doc.pieces.get(piece) else {
@@ -89,50 +144,18 @@ fn summary(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, piece: PieceKey) {
     field_row(ui, theme, "hilo", &grain, "°");
 }
 
-/// The measurements the pattern resolves against, and the body it uses.
-fn measures(ui: &mut egui::Ui, theme: &Theme, draft: &Draft) -> Option<Command> {
-    let doc = draft.doc();
-    let set = doc.measures()?;
-    section_with(
-        ui,
-        theme,
-        "Medidas del producto",
-        &set.values.len().to_string(),
-    );
-    let mut command = None;
-    ui.horizontal(|ui| {
-        ui.add_space(PAD);
-        if select(ui, theme, "resolver con", &set.name, 170.0).clicked() {
-            command = next_body(doc).map(|mannequin| Command::ResolveWith { mannequin });
-        }
-    });
-    ui.add_space(6.0);
-    for (name, value) in &set.values {
-        field_row(ui, theme, name, &format!("{value:.1}"), "cm");
-    }
-    command
-}
-
-/// The pattern's own quantities, at what they currently come to.
-fn variables(ui: &mut egui::Ui, theme: &Theme, draft: &Draft) {
-    let doc = draft.doc();
-    section_with(ui, theme, "Variables", &doc.variables.len().to_string());
-    for (_, variable) in doc.variables.iter() {
-        let value = draft.env().value(&variable.name);
-        let shown = value.map_or_else(|| "—".to_owned(), |value| format!("{value:.2}"));
-        field_row(ui, theme, &variable.name, &shown, "");
-    }
-}
-
-/// The ways a pattern leaves the app, both waiting on the phase that writes
-/// files.
-fn exports(ui: &mut egui::Ui, theme: &Theme) {
+/// The ways a pattern leaves the app: the drawing at true scale, and the
+/// sheets of paper it is tiled onto, which wait on the phase that lays them
+/// out and is drawn dead until then.
+fn exports(ui: &mut egui::Ui, theme: &Theme, state: &mut State) {
     section(ui, theme, "Exportar");
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
-        ui.add_space(PAD);
-        button_secondary(ui, theme, "PDF A4 · 1:1");
-        button_secondary(ui, theme, "SVG");
+        ui.add_space(crate::widgets::PAD);
+        button_ghost(ui, theme, "PDF A4 · 1:1");
+        if button_secondary(ui, theme, "SVG").clicked() {
+            state.asked = Some(Action::Svg);
+        }
     });
 }
 

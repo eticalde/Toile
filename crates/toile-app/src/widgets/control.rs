@@ -64,6 +64,20 @@ pub fn button_secondary(ui: &mut Ui, theme: &Theme, label: &str) -> Response {
     button(ui, theme, label, false, 0.0).0
 }
 
+/// An action whose phase has not arrived: the same room, no border, muted ink,
+/// and no click to answer with, because a button that lies is worse than a
+/// gap.
+pub fn button_ghost(ui: &mut Ui, theme: &Theme, label: &str) {
+    let font = FontId::proportional(12.0);
+    let text = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font, theme.muted);
+    let size = vec2(text.size().x + 28.0, 26.0);
+    let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
+    let at = rect.center() - text.size() / 2.0;
+    ui.painter().galley(at, text, theme.muted);
+}
+
 /// Either weight with a 12 pt glyph before the label, painted by the caller
 /// into the slot it is handed, in the ink the label already uses.
 pub fn button_icon(

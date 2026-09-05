@@ -36,9 +36,9 @@ impl Binding {
     /// `SyntaxError`, carrying the byte offset where the source stops parsing.
     pub fn parse(src: &str) -> Result<Binding, SyntaxError> {
         let formula = Formula::parse(src)?;
-        match formula.expr() {
-            Expr::Num(value) => Ok(Binding::Literal(*value)),
-            _ => Ok(Binding::Formula(formula)),
+        match plain_number(formula.expr()) {
+            Some(value) => Ok(Binding::Literal(value)),
+            None => Ok(Binding::Formula(formula)),
         }
     }
 
@@ -76,6 +76,23 @@ impl Binding {
     }
 }
 
+/// The number an expression spells, when it spells nothing else.
+///
+/// A negation of a literal counts: `-3` parses as one, and a coordinate typed
+/// as a plain number has to stay a plain number however it was signed. Left as
+/// a formula it would gain an adjustment term the next time it was dragged,
+/// and the release would ask about a formula nobody wrote.
+fn plain_number(expr: &Expr) -> Option<f64> {
+    match expr {
+        Expr::Num(value) => Some(*value),
+        Expr::Neg(inner) => match inner.as_ref() {
+            Expr::Num(value) => Some(-value),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 impl From<f64> for Binding {
     fn from(value: f64) -> Binding {
         Binding::Literal(value)
@@ -107,6 +124,20 @@ mod tests {
     fn a_number_parses_to_a_literal() {
         assert_eq!(Binding::parse("22"), Ok(Binding::Literal(22.0)));
         assert_eq!(Binding::parse(" 22.5 "), Ok(Binding::Literal(22.5)));
+    }
+
+    #[test]
+    fn a_negative_number_parses_to_a_literal_too() {
+        assert_eq!(Binding::parse("-3"), Ok(Binding::literal(-3.0)));
+        assert_eq!(Binding::parse(" -0.5 "), Ok(Binding::literal(-0.5)));
+        assert_eq!(Binding::literal(-3.0).source(), "-3");
+    }
+
+    #[test]
+    fn a_negation_of_anything_else_stays_a_formula() {
+        let binding = Binding::parse("-cintura").expect("the source parses");
+        assert!(!binding.is_literal());
+        assert_eq!(binding.source(), "-cintura");
     }
 
     #[test]

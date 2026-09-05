@@ -9,6 +9,8 @@ pub mod couture;
 pub mod demo;
 /// The document resolved into geometry, and the door the interface uses.
 pub mod draft;
+/// The pattern as a drawing another program can read.
+pub mod export;
 /// The determinism golden.
 pub mod golden;
 /// The client-facing editing session.

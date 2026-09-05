@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::PieceKey;
 
 /// A point of a piece held to a place in space.
@@ -5,7 +7,7 @@ use crate::PieceKey;
 /// The rest position is the one in the flat piece, which is what the transfer
 /// between two meshes knows how to locate: the 2D pattern stays the only
 /// source of geometric truth, and the drag in the viewer is stored against it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Pin {
     /// The piece the pinned material belongs to.
     pub piece: PieceKey,

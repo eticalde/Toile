@@ -1,0 +1,250 @@
+{
+  "toile": 1,
+  "doc": {
+    "pieces": {
+      "issued": 1,
+      "entries": [
+        {
+          "id": "0.0",
+          "name": "Delantero",
+          "contour": [
+            {
+              "point": "0.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "1.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "2.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "3.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "4.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "5.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "6.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "7.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "8.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            }
+          ],
+          "winding": "cw",
+          "grain": {
+            "kind": "angle",
+            "radians": 1.5707963267948966
+          }
+        }
+      ]
+    },
+    "points": {
+      "issued": 9,
+      "entries": [
+        {
+          "id": "0.0",
+          "x": 0,
+          "y": 0,
+          "label": "cintura_cf",
+          "label_visible": false
+        },
+        {
+          "id": "1.0",
+          "x": "cintura / 4 + 1",
+          "y": 0,
+          "label": "cintura_lat",
+          "label_visible": false
+        },
+        {
+          "id": "2.0",
+          "x": "cadera / 4 + holgura_cadera",
+          "y": "altura_cadera",
+          "label": "cadera_lat",
+          "label_visible": false
+        },
+        {
+          "id": "3.0",
+          "x": "raya + ancho_rodilla / 2",
+          "y": "(tiro + largo_lateral) / 2",
+          "label": "rodilla_lat",
+          "label_visible": false
+        },
+        {
+          "id": "4.0",
+          "x": "raya + ancho_bajo / 2",
+          "y": "largo_lateral",
+          "label": "bajo_lat",
+          "label_visible": false
+        },
+        {
+          "id": "5.0",
+          "x": "raya - ancho_bajo / 2",
+          "y": "largo_lateral",
+          "label": "bajo_int",
+          "label_visible": false
+        },
+        {
+          "id": "6.0",
+          "x": "raya - ancho_rodilla / 2",
+          "y": "(tiro + largo_lateral) / 2",
+          "label": "rodilla_int",
+          "label_visible": false
+        },
+        {
+          "id": "7.0",
+          "x": "-extension_tiro",
+          "y": "tiro",
+          "label": "tiro_int",
+          "label_visible": false
+        },
+        {
+          "id": "8.0",
+          "x": 0,
+          "y": "tiro - extension_tiro",
+          "label": "tiro_cf",
+          "label_visible": false
+        }
+      ]
+    },
+    "seams": {
+      "issued": 0,
+      "entries": []
+    },
+    "notches": {
+      "issued": 0,
+      "entries": []
+    },
+    "darts": {
+      "issued": 0,
+      "entries": []
+    },
+    "symmetries": {
+      "issued": 0,
+      "entries": []
+    },
+    "pins": {
+      "issued": 0,
+      "entries": []
+    },
+    "variables": {
+      "issued": 7,
+      "entries": [
+        {
+          "id": "0.0",
+          "name": "tolerancia_costura",
+          "value": 0.5
+        },
+        {
+          "id": "1.0",
+          "name": "tolerancia_ratio",
+          "value": 0.05
+        },
+        {
+          "id": "2.0",
+          "name": "holgura_cadera",
+          "value": 1
+        },
+        {
+          "id": "3.0",
+          "name": "ancho_rodilla",
+          "value": 24
+        },
+        {
+          "id": "4.0",
+          "name": "ancho_bajo",
+          "value": 22
+        },
+        {
+          "id": "5.0",
+          "name": "extension_tiro",
+          "value": "cadera / 16"
+        },
+        {
+          "id": "6.0",
+          "name": "raya",
+          "value": "(cadera / 4 + holgura_cadera - extension_tiro) / 2"
+        }
+      ]
+    },
+    "mannequins": {
+      "issued": 2,
+      "entries": [
+        {
+          "id": "0.0",
+          "name": "Etienne",
+          "values": {
+            "altura_cadera": 20,
+            "cadera": 98,
+            "cintura": 84,
+            "entrepierna": 78,
+            "estatura": 178,
+            "largo_lateral": 104,
+            "muslo": 58,
+            "rodilla": 40,
+            "tiro": 27,
+            "tobillo": 24
+          }
+        },
+        {
+          "id": "1.0",
+          "name": "Talla 42",
+          "values": {
+            "altura_cadera": 21,
+            "cadera": 104,
+            "cintura": 88,
+            "entrepierna": 79,
+            "estatura": 176,
+            "largo_lateral": 106,
+            "muslo": 62,
+            "rodilla": 42,
+            "tiro": 28,
+            "tobillo": 25
+          }
+        }
+      ]
+    },
+    "resolve_with": "0.0"
+  }
+}

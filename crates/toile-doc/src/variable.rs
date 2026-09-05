@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::Binding;
 
 /// A quantity the pattern names once and reads wherever it needs it.
@@ -5,7 +7,7 @@ use crate::Binding;
 /// Its identity is its key, not its name and not its position: renaming a
 /// variable rewrites the formulas that read it, and removing one does not
 /// renumber the rest.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Variable {
     /// The name formulas read it by.
     pub name: String,

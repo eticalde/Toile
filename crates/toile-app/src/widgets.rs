@@ -9,9 +9,9 @@ mod field;
 mod panel;
 
 pub use canvas::{canvas_label, fill, grid, mat_canvas};
-pub use control::{button_icon, button_primary, button_secondary, select};
+pub use control::{button_ghost, button_icon, button_primary, button_secondary, select};
 use eframe::egui::CornerRadius;
-pub use field::{field_row, formula_row, formula_row_fault};
+pub use field::{Editable, Edited, field_row, formula_row};
 pub use panel::{footer_note, list_row_icon, rule, section, section_with, tree_row};
 
 /// Horizontal breathing room inside a side panel, in points.

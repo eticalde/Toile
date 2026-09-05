@@ -1,18 +1,28 @@
 mod canvas;
+mod dimension;
+mod empty;
+mod gesture;
 mod input;
 mod inspector;
+mod marks;
+mod modal;
 mod paper;
+mod pick;
+mod precision;
 mod ruler;
+mod snap;
 mod state;
 mod tools;
 mod tree;
 mod view;
+mod wire;
 
 use eframe::egui;
 pub use state::State;
 use toile_engine::draft::{Draft, PieceKey};
 use toile_engine::session::Session;
 
+use self::wire::Verb;
 use crate::tabs::{Workspace, left_panel, right_panel};
 
 /// The two nodes a base block names for the side seam, so the bar can measure
@@ -22,20 +32,59 @@ const SIDE: [&str; 2] = ["cintura_lat", "bajo_lat"];
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
     let piece = w.session.piece();
+    // A question waiting on the mat owns the open entry until it is answered.
+    // The tiles that would move the stack under it go dead, and so does every
+    // edit a panel offers: an entry belongs to the gesture that opened it.
+    let asking = w.patronaje.ask.is_some();
+    let ready = if asking {
+        [false, false]
+    } else {
+        [w.session.can_undo(), w.session.can_redo()]
+    };
     let draft = w.session.draft();
     let state = &mut *w.patronaje;
-    left_panel(ui, theme, |ui| {
-        tree::product(ui, theme, draft, piece, state);
-        tools::grid(ui, theme);
-    });
-    let command = right_panel(ui, theme, |ui| {
+    let mut verbs = Vec::new();
+    verbs.extend(left_panel(ui, theme, |ui| {
+        tree::product(ui, theme, draft, piece);
+        tools::grid(ui, theme, state);
+        tools::history(ui, theme, ready)
+    }));
+    let asked = right_panel(ui, theme, |ui| {
         inspector::show(ui, theme, draft, piece, state)
     });
-    canvas::show(ui, theme, draft, piece, state);
-    if let Some(command) = command {
-        // A refused edit leaves the document exactly as it was, and the panels
-        // go on drawing it: the table never shows a state it cannot resolve.
-        let _ = w.session.edit(command);
+    // One field confirmed is one entry of its own, under its own name: an edit
+    // from a panel never folds into whatever gesture the mat left open.
+    if let Some((label, command)) = asked.filter(|_| !asking) {
+        verbs.push(Verb::Begin(label));
+        verbs.push(Verb::Edit(Box::new(command)));
+        verbs.push(Verb::End);
+    }
+    verbs.extend(canvas::show(ui, theme, draft, piece, state));
+    apply(w.session, verbs);
+}
+
+/// Plays what the panels asked for, in the order they asked for it.
+///
+/// A refused edit leaves the document exactly as it was, and the panels go on
+/// drawing it: the table never shows a state it cannot resolve.
+fn apply(session: &mut Session, verbs: Vec<Verb>) {
+    for verb in verbs {
+        match verb {
+            Verb::Begin(label) => session.begin_gesture(label),
+            Verb::Edit(command) => {
+                let _ = session.edit(*command);
+            }
+            Verb::End => session.end_gesture(),
+            Verb::Undo => {
+                let _ = session.undo();
+            }
+            Verb::Cancel => {
+                let _ = session.cancel_gesture();
+            }
+            Verb::Redo => {
+                let _ = session.redo();
+            }
+        }
     }
 }
 
@@ -56,6 +105,9 @@ pub fn status(session: &Session) -> Vec<String> {
     ];
     if !draft.defects(piece).is_empty() {
         cells.push("contorno con defectos".to_owned());
+    }
+    if let Some(label) = session.undo_label().filter(|label| !label.is_empty()) {
+        cells.push(format!("deshacer {label}"));
     }
     cells.push("cm".to_owned());
     cells

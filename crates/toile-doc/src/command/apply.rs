@@ -1,3 +1,8 @@
+mod name;
+
+pub(crate) use name::Naming;
+use name::{label_point, rename_piece, show_label};
+
 use crate::{
     Applied, Axis, Binding, ChangeClass, Command, Doc, DocError, Grain, MannequinKey, PieceKey,
     PointKey, VariableKey,
@@ -12,6 +17,14 @@ impl Command {
     /// measurement the body does not carry, and `NotYetImplemented` for an
     /// edit whose tool has not been built yet.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
+        self.apply_as(doc, Naming::Checked)
+    }
+
+    /// The same edit, told how strictly to check the names it writes.
+    ///
+    /// # Errors
+    /// The same as `apply`.
+    pub(crate) fn apply_as(self, doc: &mut Doc, naming: Naming) -> Result<Applied, DocError> {
         match self {
             Command::MovePoint { point, to } => move_point(doc, point, to),
             Command::SetBinding { point, axis, to } => set_binding(doc, point, axis, to),
@@ -22,9 +35,9 @@ impl Command {
                 to,
             } => set_measure(doc, mannequin, name, to),
             Command::ResolveWith { mannequin } => resolve_with(doc, mannequin),
-            Command::RenamePiece { piece, to } => rename_piece(doc, piece, to),
+            Command::RenamePiece { piece, to } => rename_piece(doc, piece, to, naming),
             Command::SetGrain { piece, to } => set_grain(doc, piece, to),
-            Command::LabelPoint { point, to } => label_point(doc, point, to),
+            Command::LabelPoint { point, to } => label_point(doc, point, to, naming),
             Command::ShowLabel { point, to } => show_label(doc, point, to),
             Command::InsertNode { .. }
             | Command::RemoveNode { .. }
@@ -149,24 +162,6 @@ fn resolve_with(doc: &mut Doc, mannequin: MannequinKey) -> Result<Applied, DocEr
     })
 }
 
-fn rename_piece(doc: &mut Doc, piece: PieceKey, to: String) -> Result<Applied, DocError> {
-    if let Some(other) = doc.piece_named(&to)
-        && other != piece
-    {
-        return Err(DocError::DuplicatePieceName(to));
-    }
-    let held = doc
-        .pieces
-        .get_mut(piece)
-        .ok_or_else(|| DocError::stale(piece))?;
-    let from = std::mem::replace(&mut held.name, to);
-    Ok(Applied {
-        inverse: Command::RenamePiece { piece, to: from },
-        touched: vec![piece],
-        class: ChangeClass::Metadata,
-    })
-}
-
 fn set_grain(doc: &mut Doc, piece: PieceKey, to: Grain) -> Result<Applied, DocError> {
     let held = doc
         .pieces
@@ -178,105 +173,4 @@ fn set_grain(doc: &mut Doc, piece: PieceKey, to: Grain) -> Result<Applied, DocEr
         touched: vec![piece],
         class: ChangeClass::Metadata,
     })
-}
-
-/// Names a point, refusing a name another point of the same piece shows.
-///
-/// A collision is an error the user can act on, never a name with a number
-/// stuck on the end of it. Clearing a name collides too: the point falls back
-/// to its automatic one, which another point may hold explicitly.
-fn label_point(doc: &mut Doc, point: PointKey, to: Option<String>) -> Result<Applied, DocError> {
-    let touched = doc.pieces_citing(point);
-    if doc.points.get(point).is_none() {
-        return Err(DocError::stale(point));
-    }
-    for &piece in &touched {
-        let Some(shown) = to.clone().or_else(|| doc.automatic_label(piece, point)) else {
-            continue;
-        };
-        if doc
-            .shows_label(piece, &shown)
-            .is_some_and(|other| other != point)
-        {
-            return Err(DocError::DuplicateLabel(shown));
-        }
-    }
-    let held = doc
-        .points
-        .get_mut(point)
-        .ok_or_else(|| DocError::stale(point))?;
-    let from = std::mem::replace(&mut held.label, to);
-    Ok(Applied {
-        inverse: Command::LabelPoint { point, to: from },
-        touched,
-        class: ChangeClass::Metadata,
-    })
-}
-
-fn show_label(doc: &mut Doc, point: PointKey, to: bool) -> Result<Applied, DocError> {
-    let touched = doc.pieces_citing(point);
-    let held = doc
-        .points
-        .get_mut(point)
-        .ok_or_else(|| DocError::stale(point))?;
-    let from = std::mem::replace(&mut held.label_visible, to);
-    Ok(Applied {
-        inverse: Command::ShowLabel { point, to: from },
-        touched,
-        class: ChangeClass::Metadata,
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::block;
-
-    /// The block's front, one of its nodes, and the automatic name that node
-    /// would fall back to if its written one were cleared.
-    fn front() -> (Doc, PieceKey, PointKey, PointKey, String) {
-        let doc = block::trouser_front();
-        let piece = doc.piece_named(block::FRONT).expect("the block draws one");
-        let waist = doc
-            .shows_label(piece, "cintura_lat")
-            .expect("the block names it");
-        let hip = doc
-            .shows_label(piece, "cadera_lat")
-            .expect("the block names it");
-        let automatic = doc
-            .automatic_label(piece, waist)
-            .expect("the piece runs through it");
-        (doc, piece, waist, hip, automatic)
-    }
-
-    #[test]
-    fn clearing_a_name_is_refused_when_the_automatic_one_is_taken() {
-        let (mut doc, _, waist, hip, automatic) = front();
-        Command::LabelPoint {
-            point: hip,
-            to: Some(automatic.clone()),
-        }
-        .apply(&mut doc)
-        .expect("the automatic name is free while the waist writes its own");
-
-        let fault = Command::LabelPoint {
-            point: waist,
-            to: None,
-        }
-        .apply(&mut doc)
-        .unwrap_err();
-        assert_eq!(fault, DocError::DuplicateLabel(automatic));
-    }
-
-    #[test]
-    fn clearing_a_name_falls_back_to_the_automatic_one() {
-        let (mut doc, piece, waist, _, automatic) = front();
-        Command::LabelPoint {
-            point: waist,
-            to: None,
-        }
-        .apply(&mut doc)
-        .expect("nothing else shows that name");
-        assert_eq!(doc.label_of(piece, waist), Some(automatic));
-    }
 }

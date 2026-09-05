@@ -1,6 +1,9 @@
 #![allow(missing_docs, reason = "a binary publishes no API surface")]
 
+mod bars;
+mod bind;
 mod camera;
+mod file;
 mod glyph;
 mod pattern;
 mod render;
@@ -9,20 +12,17 @@ mod theme;
 mod viewport;
 mod widgets;
 
+use std::path::Path;
+
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
 use toile_engine::draft::Doc;
-use toile_engine::session::Session;
+use toile_engine::export;
+use toile_engine::session::{Session, SessionError};
 
+use crate::file::{Action, File};
 use crate::tabs::Tab;
 use crate::theme::Theme;
-
-/// Height of the tab bar, in points.
-const TOPBAR_H: f32 = 40.0;
-/// Height of the status bar, in points.
-const STATUS_H: f32 = 26.0;
-/// Inset of the first item in either bar, in points.
-const BAR_INSET: i8 = 16;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -38,6 +38,7 @@ struct App {
     tab: Tab,
     session: Session,
     rs: RenderState,
+    file: File,
     patronaje: tabs::patronaje::State,
     probador: tabs::probador::State,
 }
@@ -57,6 +58,7 @@ impl App {
             tab: Tab::Patronaje,
             session,
             rs,
+            file: File::default(),
             patronaje: tabs::patronaje::State::default(),
             probador,
         }
@@ -64,24 +66,169 @@ impl App {
 
     /// Puts a document on the table.
     ///
-    /// A document is a new session and therefore a new mesh, which the viewer
-    /// was not sized for, so its GPU side is rebuilt around the one that came
-    /// out. A document that does not drape leaves the table as it was.
-    fn open(&mut self, doc: Doc) {
-        let Ok(session) = Session::from_doc(doc) else {
-            return;
-        };
+    /// # Errors
+    /// `SessionError` when the document does not drape, in which case the
+    /// table is left exactly as it was.
+    fn open(&mut self, doc: Doc) -> Result<(), SessionError> {
+        let session = Session::from_doc(doc)?;
+        self.install(session);
+        Ok(())
+    }
+
+    /// Puts a session on the table.
+    ///
+    /// A session is a new mesh, which the viewer was not sized for, so its GPU
+    /// side is rebuilt around the one that came out; and it is a new set of
+    /// keys, so everything the drafting tab was pointing at is forgotten.
+    fn install(&mut self, session: Session) {
         self.session = session;
         self.probador = tabs::probador::State::new(self.rs.clone(), &self.theme, &self.session);
-        self.patronaje.selection = None;
-        self.patronaje.frame = true;
+        self.patronaje.reset();
     }
+
+    /// Does what the interface asked of the file the pattern lives in.
+    fn act(&mut self, action: Action) {
+        match action {
+            Action::New => self.start(None),
+            Action::Example => self.start(Some(File::example())),
+            Action::Open => self.open_file(),
+            Action::Save => {
+                let unplaced = self.file.path().is_none();
+                self.save(unplaced);
+            }
+            Action::SaveAs => self.save(true),
+            Action::Svg => self.export(),
+        }
+    }
+
+    /// Clears the table, and puts a document on it when there is one.
+    fn start(&mut self, doc: Option<Doc>) {
+        if !self.discardable() {
+            return;
+        }
+        let revision = self.session.revision();
+        match doc {
+            Some(doc) => {
+                if let Err(why) = self.open(doc) {
+                    self.file.warn(format!("no se pudo abrir: {why}"), revision);
+                    return;
+                }
+            }
+            None => self.install(Session::demo_bodice()),
+        }
+        let now = self.session.revision();
+        self.file.settle(None, now);
+    }
+
+    /// Puts a pattern from disk on the table.
+    fn open_file(&mut self) {
+        if !self.discardable() {
+            return;
+        }
+        let Some(picked) = file::open() else {
+            return;
+        };
+        let revision = self.session.revision();
+        match picked.and_then(|(path, doc)| {
+            self.open(doc)
+                .map(|()| path)
+                .map_err(|why| format!("el patrón no se pudo poner sobre la mesa: {why}"))
+        }) {
+            Ok(path) => {
+                let now = self.session.revision();
+                self.file.settle(Some(path), now);
+            }
+            Err(why) => self.file.warn(why, revision),
+        }
+    }
+
+    /// Writes the pattern back where it came from, or wherever is asked for.
+    fn save(&mut self, ask: bool) {
+        let revision = self.session.revision();
+        let written = self
+            .session
+            .draft()
+            .map(|held| held.doc().to_canonical_json());
+        let Some(text) = written else {
+            self.file.warn("no hay ningún patrón que guardar", revision);
+            return;
+        };
+        let path = if ask {
+            file::save_as(self.file.stem())
+        } else {
+            self.file.path().map(Path::to_path_buf)
+        };
+        let Some(path) = path else {
+            return;
+        };
+        match file::write(&path, &text) {
+            Ok(()) => {
+                self.file.settle(Some(path), revision);
+                let name = self.file.name().to_owned();
+                self.file.say(format!("guardado · {name}"), revision);
+            }
+            Err(why) => self.file.warn(why, revision),
+        }
+    }
+
+    /// Draws the pattern into an SVG at true scale.
+    fn export(&mut self) {
+        let revision = self.session.revision();
+        let drawn = self.session.draft().map(export::to_svg);
+        let text = match drawn {
+            Some(Ok(text)) => text,
+            Some(Err(why)) => {
+                self.file
+                    .warn(format!("no se pudo dibujar: {why}"), revision);
+                return;
+            }
+            None => {
+                self.file
+                    .warn("no hay ningún patrón que exportar", revision);
+                return;
+            }
+        };
+        let Some(path) = file::svg_target(self.file.stem()) else {
+            return;
+        };
+        match file::write(&path, &text) {
+            Ok(()) => self.file.say("SVG exportado a escala real", revision),
+            Err(why) => self.file.warn(why, revision),
+        }
+    }
+
+    /// Whether work nobody has written down may be thrown away, which is only
+    /// ever the person's own answer.
+    fn discardable(&self) -> bool {
+        !self.file.dirty(self.session.revision()) || file::confirm_discard(self.file.name())
+    }
+}
+
+/// The file keys, which belong to the program and not to any one tab.
+fn shortcut(ui: &egui::Ui) -> Option<Action> {
+    ui.input(|i| {
+        if !i.modifiers.command {
+            return None;
+        }
+        if i.key_pressed(egui::Key::O) {
+            return Some(Action::Open);
+        }
+        if i.key_pressed(egui::Key::S) {
+            return Some(if i.modifiers.shift {
+                Action::SaveAs
+            } else {
+                Action::Save
+            });
+        }
+        None
+    })
 }
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        top_bar(ui, &self.theme, &mut self.tab);
-        status_bar(ui, &self.theme, self.tab, &self.session);
+        let revision = self.session.revision();
+        let asked = bars::top(ui, &self.theme, &mut self.tab, &self.file, revision);
+        bars::status(ui, &self.theme, self.tab, &self.session);
         let mut workspace = tabs::Workspace {
             theme: &self.theme,
             session: &mut self.session,
@@ -89,8 +236,14 @@ impl eframe::App for App {
             probador: &mut self.probador,
         };
         self.tab.show(ui, &mut workspace);
-        if let Some(doc) = self.patronaje.pending.take() {
-            self.open(doc);
+        if let Some(action) = self
+            .patronaje
+            .asked
+            .take()
+            .or(asked)
+            .or_else(|| shortcut(ui))
+        {
+            self.act(action);
         }
         // The sim advances on its own clock, so a frame is only final once it
         // has both caught up with the last edit and gone back to sleep.
@@ -98,81 +251,4 @@ impl eframe::App for App {
             ui.ctx().request_repaint();
         }
     }
-}
-
-// ── bars ──────────────────────────────────────────────────────────────────
-
-/// Both bars fill themselves, so egui's own separator line is off: it would
-/// reserve a point of the bar's height and then paint over the tab underline
-/// that lands in it.
-fn bar_frame(theme: &Theme) -> egui::Frame {
-    egui::Frame::new()
-        .fill(theme.panel)
-        .inner_margin(egui::Margin::symmetric(BAR_INSET, 0))
-}
-
-fn top_bar(ui: &mut egui::Ui, theme: &Theme, tab: &mut Tab) {
-    egui::Panel::top("topbar")
-        .exact_size(TOPBAR_H)
-        .show_separator_line(false)
-        .frame(bar_frame(theme))
-        .show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                for stage in Tab::ALL {
-                    if tab_item(ui, theme, stage.label(), *tab == stage).clicked() {
-                        *tab = stage;
-                    }
-                }
-            });
-        });
-}
-
-/// One stage of the pipeline; the open one is underlined in the accent.
-fn tab_item(ui: &mut egui::Ui, theme: &Theme, label: &str, active: bool) -> egui::Response {
-    let ink = if active { theme.ink } else { theme.muted };
-    let text = ui
-        .painter()
-        .layout_no_wrap(label.to_owned(), egui::FontId::proportional(13.0), ink);
-    let size = egui::vec2(text.size().x + 28.0, ui.available_height());
-    let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-    if resp.hovered() && !active {
-        ui.painter()
-            .rect_filled(rect, 0.0, theme.accent.gamma_multiply(0.07));
-    }
-    let at = rect.center() - text.size() / 2.0;
-    ui.painter().galley(at, text, ink);
-    if active {
-        let underline = egui::Rect::from_min_max(
-            egui::pos2(rect.left(), rect.bottom() - 2.0),
-            rect.right_bottom(),
-        );
-        ui.painter().rect_filled(underline, 0.0, theme.accent);
-    }
-    resp
-}
-
-fn status_bar(ui: &mut egui::Ui, theme: &Theme, tab: Tab, session: &Session) {
-    egui::Panel::bottom("status")
-        .exact_size(STATUS_H)
-        .show_separator_line(false)
-        .frame(bar_frame(theme))
-        .show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                ui.spacing_mut().item_spacing.x = 0.0;
-                for (i, cell) in tab.status(session).iter().enumerate() {
-                    if i > 0 {
-                        ui.label(cell_text(" · ", theme.line));
-                    }
-                    ui.label(cell_text(cell, theme.muted));
-                }
-            });
-        });
-}
-
-fn cell_text(text: &str, color: egui::Color32) -> egui::RichText {
-    egui::RichText::new(text)
-        .monospace()
-        .size(11.0)
-        .color(color)
 }

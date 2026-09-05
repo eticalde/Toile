@@ -1,11 +1,13 @@
 use std::f64::consts::FRAC_PI_2;
 
+use serde::{Deserialize, Serialize};
+
 use crate::PointKey;
 
 /// A pattern piece: its ordered contour and the grain it is cut on.
 ///
 /// The closure is implicit: the last node's tract runs back to the first.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Piece {
     /// The name the product tree shows; unique in the document.
     pub name: String,
@@ -14,11 +16,12 @@ pub struct Piece {
     /// The direction the contour runs in, declared rather than deduced.
     pub winding: Winding,
     /// The grain line the piece is cut on.
+    #[serde(default)]
     pub grain: Grain,
 }
 
 /// One node of a contour: a point, and the tract that leaves it.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct ContourNode {
     /// The point the contour passes through here.
     pub point: PointKey,
@@ -32,7 +35,8 @@ pub struct ContourNode {
 }
 
 /// What runs between one node and the next.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
 pub enum Segment {
     /// A straight line.
     Line,
@@ -49,7 +53,8 @@ pub enum Segment {
 ///
 /// The document's y grows downward, so a contour drawn clockwise on the page
 /// has a positive signed area in document coordinates.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Winding {
     /// Counterclockwise on the page.
     Ccw,
@@ -58,7 +63,8 @@ pub enum Winding {
 }
 
 /// The grain line of a piece: the direction of the warp on the cut cloth.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "radians", rename_all = "lowercase")]
 pub enum Grain {
     /// Radians from the x axis toward the y axis, which is down the page.
     Angle(f64),

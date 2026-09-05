@@ -6,6 +6,10 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
+# `float_roundtrip`: without it the reader can land one bit away from the
+# number the writer wrote, and a saved pattern would not be the one reopened.
+serde_json = { version = "1", features = ["float_roundtrip"] }
 thiserror = "2"
 
 [lints]

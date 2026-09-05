@@ -1,12 +1,15 @@
 use toile_engine::draft::{Command, Doc, Draft, PieceKey, PointKey, block};
 
-/// Runs `toile doc`: the base block, resolved and written out.
+/// Runs `toile doc`: a pattern, resolved and written out.
 ///
 /// This is the headless door onto a pattern — the one a person reads over a
 /// terminal and a language model reads over a pipe — so every number it prints
-/// comes from the same resolution the viewer drapes.
+/// comes from the same resolution the viewer drapes. Without a path it reads
+/// the base block the program carries, which is the file it ships.
 pub fn run(args: &[String]) {
-    let mut doc = block::trouser_front();
+    let Some(mut doc) = asked_for(args) else {
+        return;
+    };
     if let Some(name) = flag(args, "--resolve-with") {
         let Some(key) = doc.mannequin_named(name) else {
             eprintln!("no hay ningún cuerpo llamado «{name}»");
@@ -21,6 +24,30 @@ pub fn run(args: &[String]) {
     match Draft::from_doc(doc) {
         Ok(draft) => print(&draft),
         Err(broken) => eprintln!("el documento no resuelve: {broken}"),
+    }
+}
+
+/// The pattern the arguments name: a file, or the block carried in.
+///
+/// `None` once the reason it could not be read has been said, which is the
+/// end of the run rather than a pattern to go on with.
+fn asked_for(args: &[String]) -> Option<Doc> {
+    let Some(path) = args.first().filter(|arg| !arg.starts_with("--")) else {
+        return Some(block::trouser_front());
+    };
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(why) => {
+            eprintln!("no se pudo leer «{path}»: {why}");
+            return None;
+        }
+    };
+    match Doc::from_json(&text) {
+        Ok(doc) => Some(doc),
+        Err(why) => {
+            eprintln!("«{path}» no es un patrón: {why}");
+            None
+        }
     }
 }
 
@@ -125,5 +152,37 @@ fn tract(draft: &Draft, piece: PieceKey, rank: usize) -> &'static str {
     match segment {
         Some(toile_engine::draft::Segment::Cubic { .. }) => "curva",
         _ => "recta",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn without_a_path_the_block_the_program_carries_is_read() {
+        assert_eq!(asked_for(&[]), Some(block::trouser_front()));
+    }
+
+    #[test]
+    fn a_flag_is_not_a_path() {
+        let args = ["--resolve-with".to_owned(), "Talla 42".to_owned()];
+        assert_eq!(asked_for(&args), Some(block::trouser_front()));
+    }
+
+    #[test]
+    fn the_pattern_that_ships_is_read_from_its_file() {
+        let shipped = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/pantalon-base.toile"
+        );
+        let args = [shipped.to_owned()];
+        assert_eq!(asked_for(&args), Some(block::trouser_front()));
+    }
+
+    #[test]
+    fn a_file_that_is_not_a_pattern_is_no_pattern_at_all() {
+        let args = ["Cargo.toml".to_owned()];
+        assert_eq!(asked_for(&args), None);
     }
 }

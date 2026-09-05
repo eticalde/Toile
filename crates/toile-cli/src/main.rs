@@ -1,11 +1,13 @@
 #![allow(missing_docs, reason = "a binary publishes no API surface")]
 
+mod asset;
 mod bench;
 mod doc;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
+        Some("asset") => asset::run(&args[2..]),
         Some("bench") => bench::run(&args[2..]),
         Some("doc") => doc::run(&args[2..]),
         Some("drape") => {
@@ -17,7 +19,7 @@ fn main() {
         _ => {
             println!("toile {}", env!("CARGO_PKG_VERSION"));
             println!(
-                "subcomandos: bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · doc [--resolve-with NOMBRE]"
+                "subcomandos: asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · doc [RUTA] [--resolve-with NOMBRE]"
             );
         }
     }

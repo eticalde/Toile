@@ -1,5 +1,7 @@
-use eframe::egui::{self, Align2, FontId, Rect, Sense, Stroke, StrokeKind, Vec2, vec2};
+use eframe::egui::{self, Align2, FontId, Rect, Response, Sense, Stroke, StrokeKind, Vec2, vec2};
 
+use super::state::State;
+use super::wire::Verb;
 use crate::glyph;
 use crate::theme::Theme;
 use crate::widgets::{CORNER, PAD, section};
@@ -23,28 +25,68 @@ const TOOLS: [(&str, &str, bool); 9] = [
     ("Pinza", "3 3 8 13 13 3", false),
     ("Piquete", "2 9 14 9; 8 9 8 5", false),
     ("Espejo", "8 2 8 14; 5 5 2 8 5 11; 11 5 14 8 11 11", false),
-    (
-        "Medir",
-        "2 6 14 6 14 10 2 10 2 6; 5 6 5 8; 11 6 11 8",
-        false,
-    ),
+    ("Medir", "2 6 14 6 14 10 2 10 2 6; 5 6 5 8; 11 6 11 8", true),
     ("Coser", "2 11 5 6 8 11 11 6 14 11", false),
 ];
 
+/// The tile that is a switch and not a tool: measuring is never modal, so it
+/// only decides whether every tract carries its length or just the one under
+/// the pointer.
+const MEASURE: &str = "Medir";
+
+/// The two steps through the undo stack, and the arrows that stand for them.
+const HISTORY: [(&str, &str); 2] = [
+    ("Deshacer", "3 7 12 7 12 12; 3 7 6 4; 3 7 6 10"),
+    ("Rehacer", "13 7 4 7 4 12; 13 7 10 4; 13 7 10 10"),
+];
+
 /// The tool grid, three tiles to a row, with the one in hand lit.
-pub fn grid(ui: &mut egui::Ui, theme: &Theme) {
+pub fn grid(ui: &mut egui::Ui, theme: &Theme, state: &mut State) {
     section(ui, theme, "Herramientas");
-    let width = (ui.available_width() - 2.0 * PAD - 8.0) / 3.0;
-    for (i, row) in TOOLS.chunks(3).enumerate() {
+    let width = tile_width(ui);
+    for (row, tools) in TOOLS.chunks(3).enumerate() {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             ui.add_space(PAD);
-            for (j, &(name, icon, ready)) in row.iter().enumerate() {
-                tile(ui, theme, name, icon, Weight::of(i + j == 0, ready), width);
+            for (column, &(name, icon, ready)) in tools.iter().enumerate() {
+                let index = row * 3 + column;
+                let lit = if name == MEASURE {
+                    state.dimensions
+                } else {
+                    index == 0
+                };
+                let resp = tile(ui, theme, name, icon, Weight::of(lit, ready), width);
+                if name == MEASURE && resp.clicked() {
+                    state.dimensions = !state.dimensions;
+                }
             }
         });
         ui.add_space(4.0);
     }
+}
+
+/// The two steps through the undo stack, each dead while it leads nowhere.
+pub fn history(ui: &mut egui::Ui, theme: &Theme, ready: [bool; 2]) -> Option<Verb> {
+    section(ui, theme, "Historial");
+    let width = tile_width(ui);
+    let mut asked = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 4.0;
+        ui.add_space(PAD);
+        for (index, &(name, icon)) in HISTORY.iter().enumerate() {
+            let weight = Weight::of(false, ready[index]);
+            if tile(ui, theme, name, icon, weight, width).clicked() && ready[index] {
+                asked = Some(if index == 0 { Verb::Undo } else { Verb::Redo });
+            }
+        }
+    });
+    ui.add_space(4.0);
+    asked
+}
+
+/// The width three tiles take across the panel.
+fn tile_width(ui: &egui::Ui) -> f32 {
+    (ui.available_width() - 2.0 * PAD - 8.0) / 3.0
 }
 
 /// How a tile is drawn: the one in hand, one waiting to be picked up, or one
@@ -66,8 +108,20 @@ impl Weight {
     }
 }
 
-fn tile(ui: &mut egui::Ui, theme: &Theme, name: &str, icon: &str, weight: Weight, width: f32) {
-    let (rect, _) = ui.allocate_exact_size(vec2(width, 48.0), Sense::hover());
+fn tile(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    name: &str,
+    icon: &str,
+    weight: Weight,
+    width: f32,
+) -> Response {
+    let sense = if weight == Weight::Absent {
+        Sense::hover()
+    } else {
+        Sense::click()
+    };
+    let (rect, resp) = ui.allocate_exact_size(vec2(width, 48.0), sense);
     let p = ui.painter();
     let ink = match weight {
         Weight::Held => theme.ink,
@@ -76,6 +130,8 @@ fn tile(ui: &mut egui::Ui, theme: &Theme, name: &str, icon: &str, weight: Weight
     };
     if weight == Weight::Held {
         p.rect_filled(rect, CORNER, theme.accent.gamma_multiply(0.16));
+    } else if resp.hovered() {
+        p.rect_filled(rect, CORNER, theme.accent.gamma_multiply(0.07));
     }
     if weight != Weight::Absent {
         let edge = if weight == Weight::Held {
@@ -90,4 +146,5 @@ fn tile(ui: &mut egui::Ui, theme: &Theme, name: &str, icon: &str, weight: Weight
     let at = rect.center_bottom() - vec2(0.0, 12.0);
     let font = FontId::proportional(10.0);
     p.text(at, Align2::CENTER_CENTER, name, font, ink);
+    resp
 }

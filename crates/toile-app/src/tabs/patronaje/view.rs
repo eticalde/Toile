@@ -1,4 +1,5 @@
 use eframe::egui::{Pos2, Rect, Vec2, pos2, vec2};
+use toile_engine::draft::PointKey;
 
 /// Screen points per centimetre at 1:1, on a nominal 96 dpi display.
 const POINTS_PER_CM: f64 = 96.0 / 2.54;
@@ -95,6 +96,24 @@ impl View {
     }
 }
 
+/// The box a piece's nodes occupy, in centimetres.
+///
+/// Nothing for a piece with no nodes, which is what a framing of nothing is
+/// worth.
+pub fn bounds(nodes: &[(PointKey, [f64; 2])]) -> Option<Rect> {
+    let (first, _) = nodes.split_first()?;
+    let mut bbox = Rect::from_min_max(place(first.1), place(first.1));
+    for &(_, cm) in nodes {
+        bbox.extend_with(place(cm));
+    }
+    Some(bbox)
+}
+
+/// One document point as the geometry helpers want it.
+fn place(cm: [f64; 2]) -> Pos2 {
+    pos2(cm[0] as f32, cm[1] as f32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -156,6 +175,19 @@ mod tests {
             );
             assert!(close(view.zoom_percent(ppp), 100.0), "{ppp}");
         }
+    }
+
+    #[test]
+    fn nothing_has_no_bounds() {
+        assert_eq!(bounds(&[]), None);
+        let nodes: Vec<(PointKey, [f64; 2])> = [[0.0, 0.0], [22.0, 0.0], [25.5, 20.0]]
+            .into_iter()
+            .enumerate()
+            .map(|(i, cm)| (PointKey::new(i as u32, 0), cm))
+            .collect();
+        let bbox = bounds(&nodes).expect("three nodes make a box");
+        assert!((bbox.width() - 25.5).abs() < 1.0e-4, "{bbox:?}");
+        assert!((bbox.height() - 20.0).abs() < 1.0e-4, "{bbox:?}");
     }
 
     #[test]

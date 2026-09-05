@@ -31,8 +31,8 @@ const NOTE: &str = "Editar un punto en 2D re-drapea sin resetear la simulación.
 pub struct State {
     rs: RenderState,
     viewport: Viewport,
-    /// Contour point being dragged, and where inside it the grab landed.
-    drag: Option<(usize, egui::Vec2)>,
+    /// The node being dragged on the 2D half, while one is.
+    drag: Option<pattern::Drag>,
 }
 
 impl State {

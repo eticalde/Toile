@@ -2,6 +2,7 @@ mod ast;
 mod cursor;
 mod eval;
 mod lex;
+mod nudge;
 mod order;
 mod parse;
 mod syntax;
@@ -53,6 +54,27 @@ impl Formula {
     /// or a result that is not finite.
     pub fn eval(&self, env: &dyn Lookup) -> Result<f64, EvalError> {
         eval::eval(&self.expr, env)
+    }
+
+    /// The source this formula takes when `delta` centimetres are absorbed
+    /// into its adjustment term, with the delta rounded to `step` first.
+    ///
+    /// This is what the inspector paints while a point with a formula on it
+    /// is being dragged, before anything is written to the document.
+    pub fn nudged_source(&self, delta: f64, step: f64) -> String {
+        nudge::rewrite(&self.src, delta, step)
+    }
+
+    /// The formula `delta` centimetres away, in centimetres.
+    ///
+    /// The adjustment term absorbs the delta and the rest of the expression
+    /// is untouched, so a dragged coordinate stays bound to its measurements.
+    ///
+    /// # Errors
+    /// `SyntaxError` if the rewritten source no longer parses, which a
+    /// formula already at the language's token limit can reach.
+    pub fn nudge(&self, delta: f64, step: f64) -> Result<Formula, SyntaxError> {
+        Formula::parse(&self.nudged_source(delta, step))
     }
 
     /// Every name the formula reads, measurements and variables alike.
@@ -139,6 +161,37 @@ mod tests {
         assert_eq!(
             env.value("raya"),
             Some((98.0 / 4.0 + 1.0 - 98.0 / 16.0) / 2.0)
+        );
+    }
+
+    #[test]
+    fn nudge_round_trips_through_the_parser() {
+        let env = etienne();
+        for src in [
+            "cintura / 4 + 1",
+            "cadera / 4",
+            "cintura - largo_lateral / 2",
+            "22",
+            "(cadera < 90 ? 20 : 22)",
+        ] {
+            let formula = Formula::parse(src).expect("the source parses");
+            let here = formula.eval(&env).expect("every name is a measurement");
+            let there = formula.nudge(0.6, 0.1).expect("the rewrite parses");
+            assert!((there.eval(&env).expect("it still resolves") - here - 0.6).abs() < 1e-9);
+            let back = there.nudge(-0.6, 0.1).expect("the rewrite parses");
+            assert!((back.eval(&env).expect("it still resolves") - here).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn a_formula_at_the_token_limit_refuses_to_grow() {
+        let long = std::iter::repeat_n("1/1", 256)
+            .collect::<Vec<_>>()
+            .join("+");
+        let formula = Formula::parse(&long).expect("1023 tokens still parse");
+        assert_eq!(
+            formula.nudge(0.6, 0.1).unwrap_err().kind,
+            SyntaxKind::TooLong
         );
     }
 

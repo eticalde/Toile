@@ -1,12 +1,14 @@
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 use crate::formula::Lookup;
 
 /// The measurements a pattern can be resolved against, in centimetres.
 ///
 /// The names are the user's data, not identifiers, which is why they are the
 /// Spanish ones the mannequin tab already writes.
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct MeasureSet {
     /// The name the chooser shows.
     pub name: String,

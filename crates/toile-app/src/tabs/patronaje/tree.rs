@@ -1,33 +1,21 @@
 use eframe::egui::{self, Align2, FontId, Rect, Sense, Vec2, vec2};
-use toile_engine::draft::{Draft, PieceKey, block};
+use toile_engine::draft::{Draft, PieceKey};
 
-use super::state::State;
 use crate::glyph;
 use crate::theme::Theme;
-use crate::widgets::{rule, section, tree_row};
+use crate::widgets::{section, tree_row};
 
 const PIECE_ICON: &str = "4 2 10 2 13 6 13 14 4 14 4 2";
-const SHEET_ICON: &str = "3 2 13 2 13 14 3 14 3 2; 6 6 10 6; 6 9 10 9";
 const PLUS: &str = "8 3 8 13; 3 8 13 8";
 
-/// The way in for the block Toile brings, until opening a file replaces it.
-const EXAMPLE: &str = "Ejemplo · pantalón base";
-
-/// The product tree: the pieces the document draws, and the ways to gain one.
+/// The product tree: the pieces the document draws.
 ///
-/// An empty document shows an empty table on purpose: the application does not
-/// decide what a person is drafting.
-pub fn product(
-    ui: &mut egui::Ui,
-    theme: &Theme,
-    draft: Option<&Draft>,
-    drawn: Option<PieceKey>,
-    state: &mut State,
-) {
+/// An empty document shows an empty tree on purpose; the ways onto the table
+/// are on the mat, where a person looking at nothing is already looking.
+pub fn product(ui: &mut egui::Ui, theme: &Theme, draft: Option<&Draft>, drawn: Option<PieceKey>) {
     section(ui, theme, "Producto");
     let pieces = draft.map(|draft| draft.doc().pieces.iter().collect::<Vec<_>>());
-    let pieces = pieces.unwrap_or_default();
-    for &(key, piece) in &pieces {
+    for &(key, piece) in &pieces.unwrap_or_default() {
         tree_row(
             ui,
             theme,
@@ -40,15 +28,6 @@ pub fn product(
         );
     }
     ghost_row(ui, theme, "Pieza");
-    if pieces.is_empty() {
-        rule(ui, theme);
-        let row = tree_row(ui, theme, EXAMPLE, false, 0.0, |p, r, c| {
-            glyph::paint(p, r, c, SHEET_ICON);
-        });
-        if row.clicked() {
-            state.pending = Some(block::trouser_front());
-        }
-    }
 }
 
 /// The "add a piece" affordance: a hint rather than an item, and inert until

@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 use crate::Binding;
 
 /// A control point of the pattern: two bindings and, if its author wanted one,
@@ -6,15 +8,17 @@ use crate::Binding;
 /// Points live in the document rather than inside a piece, so that a later
 /// tool can lift several pieces off one drafting skeleton without the shared
 /// corners losing their identity.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Point {
     /// The horizontal coordinate, in centimetres, growing to the right.
     pub x: Binding,
     /// The vertical coordinate, in centimetres, growing downward.
     pub y: Binding,
     /// The name its author gave it; unique among the points of a piece.
+    #[serde(default)]
     pub label: Option<String>,
     /// Whether the drawing shows that name without being asked.
+    #[serde(default)]
     pub label_visible: bool,
 }
 

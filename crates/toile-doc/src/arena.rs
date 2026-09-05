@@ -18,6 +18,14 @@ struct Slot<T> {
     value: Option<T>,
 }
 
+/// The most slots a stored arena is allowed to claim.
+///
+/// Rebuilding opens every slot the count names, so an unchecked count lets a
+/// file choose how much memory reading it takes. A pattern holds tens to
+/// hundreds of entries, orders of magnitude below this, so a file past the cap
+/// is corrupt or hostile rather than merely big.
+const MAX_ISSUED: u32 = 1_000_000;
+
 impl<T> Arena<T> {
     /// An arena with nothing in it.
     pub fn new() -> Arena<T> {
@@ -50,6 +58,43 @@ impl<T> Arena<T> {
         }
         slot.value = Some(value);
         Ok(())
+    }
+
+    /// The arena a stored count of slots and a set of entries describe.
+    ///
+    /// A slot no entry claims is left empty at the generation a slot opens
+    /// with, which is the only state an arena that never recycles can leave
+    /// one in.
+    ///
+    /// # Errors
+    /// `DocError::ImplausibleStore` for a count of slots past `MAX_ISSUED`,
+    /// `DocError::StaleKey` for a key past the slots the arena ever opened,
+    /// and `DocError::Occupied` for two entries claiming one key.
+    pub(crate) fn rebuild(
+        issued: u32,
+        entries: impl IntoIterator<Item = (Key<T>, T)>,
+    ) -> Result<Arena<T>, DocError> {
+        if issued > MAX_ISSUED {
+            return Err(DocError::implausible_store::<T>(issued));
+        }
+        let mut slots = Vec::with_capacity(issued as usize);
+        slots.resize_with(issued as usize, || Slot {
+            generation: 0,
+            value: None,
+        });
+        let mut arena = Arena { slots, issued };
+        for (key, value) in entries {
+            let slot = arena
+                .slots
+                .get_mut(key.index() as usize)
+                .ok_or_else(|| DocError::stale(key))?;
+            if slot.value.is_some() {
+                return Err(DocError::occupied(key));
+            }
+            slot.generation = key.generation();
+            slot.value = Some(value);
+        }
+        Ok(arena)
     }
 
     /// Takes the value out, leaving its slot empty and its key restorable.

@@ -1,5 +1,6 @@
 use eframe::egui::{
-    Align2, Color32, FontId, Painter, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2,
+    self, Align, Align2, FontId, Id, Painter, Rect, Sense, Stroke, StrokeKind, TextEdit, Ui, pos2,
+    vec2,
 };
 
 use super::{CORNER, PAD};
@@ -8,6 +9,9 @@ use crate::theme::Theme;
 const FIELD_H: f32 = 28.0;
 const VALUE_W: f32 = 72.0;
 const UNIT_W: f32 = 26.0;
+
+/// Height of a row that carries a box over a line of its own.
+const TALL_H: f32 = 50.0;
 
 /// Label on the left, mono value box on the right, unit after it when given.
 pub fn field_row(ui: &mut Ui, theme: &Theme, label: &str, value: &str, unit: &str) {
@@ -38,35 +42,93 @@ pub fn field_row(ui: &mut Ui, theme: &Theme, label: &str, value: &str, unit: &st
     }
 }
 
-/// One coordinate of a point: the formula, then what it resolves to.
-pub fn formula_row(ui: &mut Ui, theme: &Theme, label: &str, formula: &str, resolved: &str) {
-    coordinate(ui, theme, label, formula, resolved, theme.measure);
+/// One row of the inspector that can be written in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Editable<'a> {
+    /// The name on the left.
+    pub label: &'a str,
+    /// What the document holds, shown while nobody is writing in the row.
+    pub source: &'a str,
+    /// The line underneath: what it comes to, or why it does not.
+    pub note: &'a str,
+    /// Whether that line is a fault and not a measurement.
+    pub fault: bool,
+    /// The text the panel is keeping for this row, while this is the row it
+    /// has the focus on.
+    pub held: Option<&'a str>,
 }
 
-/// The same coordinate when its formula does not resolve: the line underneath
-/// carries the fault instead of a measurement, in the ink that says so.
-pub fn formula_row_fault(ui: &mut Ui, theme: &Theme, label: &str, formula: &str, fault: &str) {
-    coordinate(ui, theme, label, formula, fault, theme.alert);
+/// What a person did to an editable row this frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Edited {
+    /// Nothing: nobody is writing in it.
+    Idle,
+    /// It has the focus and holds this text, which need not parse yet.
+    Typing(String),
+    /// Confirmed with this text, by Enter or by the focus moving on.
+    Done(String),
 }
 
-fn coordinate(ui: &mut Ui, theme: &Theme, label: &str, formula: &str, note: &str, ink: Color32) {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 50.0), Sense::hover());
-    let p = ui.painter();
+/// One editable mono field over the line that says what it comes to.
+///
+/// The text lives with the caller and not in this widget, which is what lets
+/// the row paint the fault in a half written formula while the document goes
+/// on holding the last thing that parsed. Nothing is written until the row
+/// answers `Done`.
+pub fn formula_row(ui: &mut Ui, theme: &Theme, id: Id, row: &Editable<'_>) -> Edited {
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), TALL_H), Sense::hover());
     let boxed = Rect::from_min_max(
         rect.left_top() + vec2(34.0, 4.0),
         pos2(rect.right() - PAD, rect.top() + 28.0),
     );
-    let line = Stroke::new(1.0, theme.line);
-    p.rect(boxed, CORNER, theme.raised, line, StrokeKind::Inside);
-    let at = pos2(rect.left() + PAD, boxed.center().y);
-    let font = FontId::proportional(12.0);
-    p.text(at, Align2::LEFT_CENTER, label, font, theme.ink_soft);
-    let at = boxed.left_center() + vec2(8.0, 0.0);
-    let font = FontId::monospace(12.0);
-    p.text(at, Align2::LEFT_CENTER, formula, font, theme.ink);
-    let at = pos2(boxed.left() + 2.0, boxed.bottom() + 11.0);
-    let font = FontId::monospace(11.0);
-    p.text(at, Align2::LEFT_CENTER, note, font, ink);
+    let focused = ui.memory(|m| m.has_focus(id));
+    let edge = if focused { theme.accent } else { theme.line };
+    let p = ui.painter();
+    p.rect(
+        boxed,
+        CORNER,
+        theme.raised,
+        Stroke::new(1.0, edge),
+        StrokeKind::Inside,
+    );
+    p.text(
+        pos2(rect.left() + PAD, boxed.center().y),
+        Align2::LEFT_CENTER,
+        row.label,
+        FontId::proportional(12.0),
+        theme.ink_soft,
+    );
+    let ink = if row.fault {
+        theme.alert
+    } else {
+        theme.measure
+    };
+    p.text(
+        pos2(boxed.left() + 2.0, boxed.bottom() + 11.0),
+        Align2::LEFT_CENTER,
+        row.note,
+        FontId::monospace(11.0),
+        ink,
+    );
+    let mut text = row.held.unwrap_or(row.source).to_owned();
+    let resp = ui.put(
+        boxed.shrink(1.0),
+        TextEdit::singleline(&mut text)
+            .id(id)
+            .frame(egui::Frame::NONE)
+            .margin(vec2(7.0, 0.0))
+            .font(FontId::monospace(12.0))
+            .text_color(theme.ink)
+            .vertical_align(Align::Center)
+            .desired_width(f32::INFINITY),
+    );
+    if resp.lost_focus() && row.held.is_some() {
+        return Edited::Done(text);
+    }
+    if resp.has_focus() {
+        return Edited::Typing(text);
+    }
+    Edited::Idle
 }
 
 fn value_box(p: &Painter, theme: &Theme, rect: Rect, value: &str) {

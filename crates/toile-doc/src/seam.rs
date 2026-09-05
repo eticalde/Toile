@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::EdgeRange;
 
 /// Two stretches of contour sewn to each other.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Seam {
     /// One side of the seam.
     pub a: EdgeRange,
@@ -13,6 +15,7 @@ pub struct Seam {
     pub kind: SeamKind,
     /// How much difference it takes before the seam complains; `None` reads
     /// the document variable instead.
+    #[serde(default)]
     pub tolerance: Option<f64>,
 }
 
@@ -20,7 +23,8 @@ pub struct Seam {
 ///
 /// Carrying the direction on the seam is what removes the old convention of
 /// passing a range backwards to mean the same thing.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SeamOrientation {
     /// Both stretches run the same way.
     Aligned,
@@ -29,7 +33,8 @@ pub enum SeamOrientation {
 }
 
 /// What a seam expects of the two lengths it joins.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
 pub enum SeamKind {
     /// The two sides are meant to measure the same.
     Plain,

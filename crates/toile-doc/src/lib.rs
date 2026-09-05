@@ -21,6 +21,8 @@ mod doc;
 mod error;
 /// The formula language a coordinate can be written in.
 pub mod formula;
+/// The document as canonical JSON.
+mod json;
 /// The stable identity of a document entity.
 mod key;
 /// The measurements a pattern resolves against.
@@ -43,10 +45,11 @@ mod variable;
 pub use anchor::{EdgeAnchor, EdgeRange};
 pub use arena::Arena;
 pub use binding::Binding;
-pub use command::{Applied, ChangeClass, Command};
+pub use command::{Applied, ChangeClass, Coalesced, Command, History};
 pub use dart::{Dart, DartWedge, FoldDirection, WedgeNode};
 pub use doc::Doc;
 pub use error::DocError;
+pub use json::{FormatError, VERSION as FORMAT_VERSION};
 pub use key::{
     DartKey, Identity, Key, MannequinKey, NotchKey, PieceKey, PinKey, PointKey, SeamKey,
     SymmetryKey, VariableKey,

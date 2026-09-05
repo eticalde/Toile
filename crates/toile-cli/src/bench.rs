@@ -4,6 +4,7 @@ mod kernel;
 mod scene;
 mod seams;
 mod topology;
+mod trouser;
 
 /// Dispatches `toile bench`. With no flag, runs the kernel sweep.
 pub fn run(args: &[String]) {
@@ -21,7 +22,8 @@ pub fn run(args: &[String]) {
         return incremental::run_async();
     }
     if has("--incr") {
-        return incremental::run_sync();
+        incremental::run_sync();
+        return trouser::run();
     }
     kernel::run(args);
 }

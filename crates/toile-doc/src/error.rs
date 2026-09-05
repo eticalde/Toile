@@ -27,6 +27,14 @@ pub enum DocError {
         /// The index the key carries.
         index: u32,
     },
+    /// A stored slot count no pattern could have reached.
+    #[error("`{entity}` claims {issued} slots, far more than a pattern holds")]
+    ImplausibleStore {
+        /// The entity the store holds.
+        entity: &'static str,
+        /// The count of slots the file claims.
+        issued: u32,
+    },
     /// A measurement the chosen measure set does not carry.
     #[error("the measure set has no measurement named `{0}`")]
     UnknownMeasure(String),
@@ -59,6 +67,14 @@ impl DocError {
         DocError::Occupied {
             entity: entity_of::<T>(),
             index: key.index(),
+        }
+    }
+
+    /// The error a slot count past what a pattern can hold produces.
+    pub fn implausible_store<T>(issued: u32) -> DocError {
+        DocError::ImplausibleStore {
+            entity: entity_of::<T>(),
+            issued,
         }
     }
 }

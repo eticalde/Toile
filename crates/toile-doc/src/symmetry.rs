@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use crate::PointKey;
 
 /// An axis a piece is repeated across.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Symmetry {
     /// The two points the axis runs through.
     pub axis: (PointKey, PointKey),
@@ -10,7 +12,8 @@ pub struct Symmetry {
 }
 
 /// What a symmetry produces on the table.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SymmetryKind {
     /// One continuous piece, folded on the axis: no seam down the middle.
     Fold,

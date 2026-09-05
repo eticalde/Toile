@@ -1,15 +1,15 @@
+mod edit;
 mod error;
 mod slot;
 
 use std::sync::Arc;
-use std::time::Instant;
 
 pub use error::SessionError;
 pub use slot::PieceSlot;
 
 use crate::couture::{self, ShapePipeline};
 use crate::demo;
-use crate::draft::{self, Binding, Command, Doc, Draft, PieceKey, Recompile};
+use crate::draft::{Doc, Draft, PieceKey};
 use crate::sync::{self, SimHandle, Snapshot};
 
 /// Simulated seconds per substep.
@@ -37,6 +37,7 @@ pub struct Session {
     drafted: Option<Drafted>,
     handle: SimHandle,
     generation: u64,
+    revision: u64,
     /// How long the last recompile took, for the status bar.
     pub last_derive_ms: f64,
 }
@@ -88,20 +89,13 @@ impl Session {
         self.drafted.as_ref().map(|held| held.piece)
     }
 
-    /// Applies an edit and recompiles whatever it touched.
+    /// How many times the document on this table has changed.
     ///
-    /// # Errors
-    /// `SessionError` when the session has no document, when the document
-    /// refuses the command, or when the edit changes a topology the session
-    /// cannot mesh again yet.
-    pub fn edit(&mut self, command: Command) -> Result<(), SessionError> {
-        let drafted = self.drafted.as_mut().ok_or(SessionError::NoDocument)?;
-        let piece = drafted.piece;
-        match drafted.draft.edit(command)? {
-            Recompile::Shape(pieces) if pieces.contains(&piece) => self.rederive(),
-            Recompile::Nothing | Recompile::Shape(_) => Ok(()),
-            Recompile::Topology(_) => Err(SessionError::NoRemesher),
-        }
+    /// It counts every edit, undo, redo and refusal, and nothing else. A
+    /// client that wrote the document to a file remembers the number it wrote
+    /// at, and that is the whole of what an unsaved change is.
+    pub fn revision(&self) -> u64 {
+        self.revision
     }
 
     /// The piece's control contour, in metres of pattern space.
@@ -139,34 +133,6 @@ impl Session {
         snap.converged && snap.generation == self.generation
     }
 
-    /// Moves a control point and hot-swaps the resulting rest state.
-    ///
-    /// The index is a position in the contour, which is what the viewer's 2D
-    /// half still has to give; while every tract is a straight line that is
-    /// the same thing as the node at that position, so a document-backed
-    /// session writes the move as a command. Out-of-range indices and refused
-    /// edits leave the drape alone.
-    pub fn move_point(&mut self, index: usize, to: [f64; 2]) {
-        if let Some(drafted) = &self.drafted {
-            let Some(&(point, _)) = drafted.draft.points_cm(drafted.piece).get(index) else {
-                return;
-            };
-            let [x, y] = draft::to_document(to);
-            let moved = Command::MovePoint {
-                point,
-                to: [Binding::literal(x), Binding::literal(y)],
-            };
-            let _ = self.edit(moved);
-            return;
-        }
-        if index >= self.contour.len() {
-            return;
-        }
-        let mut contour = self.contour.clone();
-        contour[index] = to;
-        let _ = self.send(contour);
-    }
-
     /// Starts the sim thread on a freshly meshed piece.
     fn spawn(
         slot: PieceSlot,
@@ -189,50 +155,16 @@ impl Session {
             drafted,
             handle,
             generation: 0,
+            revision: 0,
             last_derive_ms: 0.0,
         }
-    }
-
-    /// Re-derives the drafted piece from its current geometry.
-    ///
-    /// A piece that has stopped resolving keeps the mesh it had: the viewer
-    /// goes on showing the last good drape while the formula is fixed.
-    fn rederive(&mut self) -> Result<(), SessionError> {
-        let Some(drafted) = self.drafted.as_ref() else {
-            return Ok(());
-        };
-        let piece = drafted.piece;
-        let topology = drafted.draft.topology(piece);
-        let outline = drafted.draft.outline(piece).to_vec();
-        if outline.is_empty() {
-            return Ok(());
-        }
-        if topology != self.slot.topology() {
-            return Err(SessionError::TopologyMismatch {
-                piece,
-                expected: self.slot.topology(),
-                got: topology,
-            });
-        }
-        self.send(outline)
-    }
-
-    /// Derives a contour into rest lengths and hands them to the sim thread.
-    fn send(&mut self, contour: Vec<[f64; 2]>) -> Result<(), SessionError> {
-        let t = Instant::now();
-        let rests = self.slot.derive(&contour)?.to_vec();
-        self.last_derive_ms = t.elapsed().as_secs_f64() * 1000.0;
-        self.contour = contour;
-        self.generation += 1;
-        self.handle.send_rests(self.generation, rests);
-        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::draft::{Axis, block};
+    use crate::draft::{Axis, Binding, Command, block};
 
     /// The mesh is built at a topology count, and a shape edit that arrives
     /// against another one has to say so rather than warm-start across it.
