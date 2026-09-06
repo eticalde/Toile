@@ -144,7 +144,7 @@ mod tests {
 
     #[test]
     fn the_example_is_the_block_toile_ships() {
-        assert_eq!(File::example(), block::trouser_front());
+        assert_eq!(File::example(), block::trousers());
     }
 
     /// The whole of what the file phase promised: a pattern goes out of the

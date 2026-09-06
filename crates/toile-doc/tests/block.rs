@@ -150,13 +150,47 @@ fn the_declared_winding_is_the_one_the_resolved_contour_runs_in() {
 
 #[test]
 fn every_name_the_block_reads_is_a_name_the_document_binds() {
-    let doc = block::trouser_front();
+    let doc = block::trousers();
     let env = environment(&doc);
     for (_, point) in doc.points.iter() {
         for name in point.x.names().into_iter().chain(point.y.names()) {
             assert!(env.contains_key(name), "{name} is bound by nothing");
         }
     }
+}
+
+#[test]
+fn etienne_resolves_the_corners_of_the_back_where_the_draft_says() {
+    let doc = block::trousers();
+    let back = doc.piece_named(block::BACK).expect("the block draws it");
+    let outline = outline(&doc, back);
+    let expected = [
+        (0, [45.0, -2.5]),
+        (2, [71.5, 20.0]),
+        (5, [39.125, 104.0]),
+        (7, [32.75, 27.0]),
+        (8, [45.0, 14.75]),
+    ];
+    for (rank, want) in expected {
+        let got = outline[rank];
+        assert!(
+            (got[0] - want[0]).abs() < 1.0e-9 && (got[1] - want[1]).abs() < 1.0e-9,
+            "node {rank}: {got:?} against {want:?}"
+        );
+    }
+}
+
+/// The two sides of each block seam have to measure alike, or the plain seams
+/// the block ships would be born outside their own tolerance.
+#[test]
+fn the_two_sides_of_each_block_seam_agree_within_the_tolerance() {
+    let doc = block::trousers();
+    let front = outline(&doc, doc.piece_named(block::FRONT).expect("it is drawn"));
+    let back = outline(&doc, doc.piece_named(block::BACK).expect("it is drawn"));
+    let side = run_length(&front, 1, 4) - run_length(&back, 1, 4);
+    let inseam = run_length(&front, 5, 7) - run_length(&back, 5, 7);
+    assert!(side.abs() < 0.5, "the side seams differ by {side} cm");
+    assert!(inseam.abs() < 0.5, "the inseams differ by {inseam} cm");
 }
 
 #[test]

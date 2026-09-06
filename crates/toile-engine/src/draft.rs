@@ -148,6 +148,18 @@ impl Draft {
             .unwrap_or_default()
     }
 
+    /// Flattened arc length in centimetres up to each node, and round to the
+    /// first again: the table an anchor is resolved against.
+    ///
+    /// Rebuilt with the geometry on every edit and read fresh on every
+    /// derive, which is what keeps a seam on its node instead of on a
+    /// fraction of a perimeter that has since changed length.
+    pub fn node_cum(&self, piece: PieceKey) -> &[f64] {
+        self.pieces
+            .get(&piece)
+            .map_or(&[], |held| held.good.cum.as_slice())
+    }
+
     /// The length in centimetres of the walk from one node to another, the way
     /// the contour runs.
     ///

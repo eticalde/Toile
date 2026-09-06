@@ -87,7 +87,7 @@ mod tests {
 
     #[test]
     fn a_pattern_that_cites_only_what_it_carries_passes() {
-        assert_eq!(references(&block::trouser_front()), Ok(()));
+        assert_eq!(references(&block::trousers()), Ok(()));
     }
 
     #[test]

@@ -9,7 +9,7 @@ const ASSET: &str = "assets/pantalon-base.toile";
 /// from the examples cannot drift from the block the tests draft.
 pub fn run(args: &[String]) {
     let path = args.first().map_or(ASSET, String::as_str);
-    let text = block::trouser_front().to_canonical_json();
+    let text = block::trousers().to_canonical_json();
     match std::fs::write(path, &text) {
         Ok(()) => println!("{path}: {} bytes", text.len()),
         Err(why) => eprintln!("no se pudo escribir «{path}»: {why}"),
@@ -25,6 +25,6 @@ mod tests {
     #[test]
     fn the_asset_is_the_block_it_was_written_from() {
         let shipped = include_str!("../../../assets/pantalon-base.toile");
-        assert_eq!(shipped, block::trouser_front().to_canonical_json());
+        assert_eq!(shipped, block::trousers().to_canonical_json());
     }
 }

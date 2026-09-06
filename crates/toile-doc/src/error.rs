@@ -47,6 +47,9 @@ pub enum DocError {
     /// A point the piece's contour does not run through.
     #[error("the piece has no node at that point")]
     NoSuchNode,
+    /// A seam side whose two ends sit on different pieces.
+    #[error("a seam side has to start and end on one piece")]
+    SplitSeamSide,
     /// A point another piece still draws itself with.
     #[error("the point still belongs to `{0}`")]
     Shared(String),

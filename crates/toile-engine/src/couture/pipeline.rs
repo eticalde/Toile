@@ -185,6 +185,12 @@ impl ShapePipeline {
         }
     }
 
+    /// Rest length per edge, in the order of `edges`: what the last build or
+    /// derive compiled.
+    pub fn rests(&self) -> &[f32] {
+        &self.rests
+    }
+
     /// Number of boundary vertices.
     pub fn n_boundary(&self) -> usize {
         self.boundary_verts.len()

@@ -2,7 +2,7 @@
   "toile": 1,
   "doc": {
     "pieces": {
-      "issued": 1,
+      "issued": 2,
       "entries": [
         {
           "id": "0.0",
@@ -81,11 +81,89 @@
             "kind": "angle",
             "radians": 1.5707963267948966
           }
+        },
+        {
+          "id": "1.0",
+          "name": "Trasero",
+          "contour": [
+            {
+              "point": "13.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "14.0",
+              "segment": {
+                "kind": "cubic",
+                "out": "22.0",
+                "into": "23.0"
+              },
+              "samples": 24
+            },
+            {
+              "point": "15.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "16.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "17.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "18.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "19.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            },
+            {
+              "point": "20.0",
+              "segment": {
+                "kind": "cubic",
+                "out": "24.0",
+                "into": "25.0"
+              },
+              "samples": 24
+            },
+            {
+              "point": "21.0",
+              "segment": {
+                "kind": "line"
+              },
+              "samples": 1
+            }
+          ],
+          "winding": "cw",
+          "grain": {
+            "kind": "angle",
+            "radians": 1.5707963267948966
+          }
         }
       ]
     },
     "points": {
-      "issued": 13,
+      "issued": 26,
       "entries": [
         {
           "id": "0.0",
@@ -177,12 +255,168 @@
           "y": "tiro - extension_tiro * 0.45",
           "label": "manija_tiro_2",
           "label_visible": false
+        },
+        {
+          "id": "13.0",
+          "x": "origen_tras",
+          "y": "-levante_tras",
+          "label": "cintura_cb",
+          "label_visible": false
+        },
+        {
+          "id": "14.0",
+          "x": "origen_tras + cintura / 4 + 2",
+          "y": 0,
+          "label": "cintura_lat_tras",
+          "label_visible": false
+        },
+        {
+          "id": "15.0",
+          "x": "origen_tras + cadera / 4 + holgura_cadera_tras",
+          "y": "altura_cadera",
+          "label": "cadera_lat_tras",
+          "label_visible": false
+        },
+        {
+          "id": "16.0",
+          "x": "origen_tras + raya_tras + ancho_rodilla_tras / 2",
+          "y": "(tiro + largo_lateral) / 2",
+          "label": "rodilla_lat_tras",
+          "label_visible": false
+        },
+        {
+          "id": "17.0",
+          "x": "origen_tras + raya_tras + ancho_bajo_tras / 2",
+          "y": "largo_lateral",
+          "label": "bajo_lat_tras",
+          "label_visible": false
+        },
+        {
+          "id": "18.0",
+          "x": "origen_tras + raya_tras - ancho_bajo_tras / 2",
+          "y": "largo_lateral",
+          "label": "bajo_int_tras",
+          "label_visible": false
+        },
+        {
+          "id": "19.0",
+          "x": "origen_tras + raya_tras - ancho_rodilla_tras / 2",
+          "y": "(tiro + largo_lateral) / 2",
+          "label": "rodilla_int_tras",
+          "label_visible": false
+        },
+        {
+          "id": "20.0",
+          "x": "origen_tras - extension_tiro_tras",
+          "y": "tiro",
+          "label": "tiro_int_tras",
+          "label_visible": false
+        },
+        {
+          "id": "21.0",
+          "x": "origen_tras",
+          "y": "tiro - extension_tiro_tras",
+          "label": "tiro_cb",
+          "label_visible": false
+        },
+        {
+          "id": "22.0",
+          "x": "origen_tras + cintura / 4 + 2",
+          "y": "altura_cadera / 2",
+          "label": "manija_cadera_tras_1",
+          "label_visible": false
+        },
+        {
+          "id": "23.0",
+          "x": "origen_tras + cadera / 4 + holgura_cadera_tras",
+          "y": "altura_cadera / 2",
+          "label": "manija_cadera_tras_2",
+          "label_visible": false
+        },
+        {
+          "id": "24.0",
+          "x": "origen_tras - extension_tiro_tras * 0.55",
+          "y": "tiro",
+          "label": "manija_tiro_tras_1",
+          "label_visible": false
+        },
+        {
+          "id": "25.0",
+          "x": "origen_tras",
+          "y": "tiro - extension_tiro_tras * 0.45",
+          "label": "manija_tiro_tras_2",
+          "label_visible": false
         }
       ]
     },
     "seams": {
-      "issued": 0,
-      "entries": []
+      "issued": 2,
+      "entries": [
+        {
+          "id": "0.0",
+          "a": {
+            "head": {
+              "piece": "0.0",
+              "from": "1.0",
+              "t": 0
+            },
+            "tail": {
+              "piece": "0.0",
+              "from": "4.0",
+              "t": 0
+            }
+          },
+          "b": {
+            "head": {
+              "piece": "1.0",
+              "from": "14.0",
+              "t": 0
+            },
+            "tail": {
+              "piece": "1.0",
+              "from": "17.0",
+              "t": 0
+            }
+          },
+          "orientation": "aligned",
+          "kind": {
+            "kind": "plain"
+          },
+          "tolerance": null
+        },
+        {
+          "id": "1.0",
+          "a": {
+            "head": {
+              "piece": "0.0",
+              "from": "5.0",
+              "t": 0
+            },
+            "tail": {
+              "piece": "0.0",
+              "from": "7.0",
+              "t": 0
+            }
+          },
+          "b": {
+            "head": {
+              "piece": "1.0",
+              "from": "18.0",
+              "t": 0
+            },
+            "tail": {
+              "piece": "1.0",
+              "from": "20.0",
+              "t": 0
+            }
+          },
+          "orientation": "aligned",
+          "kind": {
+            "kind": "plain"
+          },
+          "tolerance": null
+        }
+      ]
     },
     "notches": {
       "issued": 0,
@@ -201,7 +435,7 @@
       "entries": []
     },
     "variables": {
-      "issued": 7,
+      "issued": 14,
       "entries": [
         {
           "id": "0.0",
@@ -237,6 +471,41 @@
           "id": "6.0",
           "name": "raya",
           "value": "(cadera / 4 + holgura_cadera - extension_tiro) / 2"
+        },
+        {
+          "id": "7.0",
+          "name": "origen_tras",
+          "value": 45
+        },
+        {
+          "id": "8.0",
+          "name": "holgura_cadera_tras",
+          "value": 2
+        },
+        {
+          "id": "9.0",
+          "name": "levante_tras",
+          "value": 2.5
+        },
+        {
+          "id": "10.0",
+          "name": "extension_tiro_tras",
+          "value": "cadera / 8"
+        },
+        {
+          "id": "11.0",
+          "name": "ancho_rodilla_tras",
+          "value": "ancho_rodilla + 4"
+        },
+        {
+          "id": "12.0",
+          "name": "ancho_bajo_tras",
+          "value": "ancho_bajo + 4"
+        },
+        {
+          "id": "13.0",
+          "name": "raya_tras",
+          "value": "(cadera / 4 + holgura_cadera_tras - extension_tiro_tras) / 2"
         }
       ]
     },

@@ -33,7 +33,7 @@ pub fn run(args: &[String]) {
 /// end of the run rather than a pattern to go on with.
 fn asked_for(args: &[String]) -> Option<Doc> {
     let Some(path) = args.first().filter(|arg| !arg.starts_with("--")) else {
-        return Some(block::trouser_front());
+        return Some(block::trousers());
     };
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -161,13 +161,13 @@ mod tests {
 
     #[test]
     fn without_a_path_the_block_the_program_carries_is_read() {
-        assert_eq!(asked_for(&[]), Some(block::trouser_front()));
+        assert_eq!(asked_for(&[]), Some(block::trousers()));
     }
 
     #[test]
     fn a_flag_is_not_a_path() {
         let args = ["--resolve-with".to_owned(), "Talla 42".to_owned()];
-        assert_eq!(asked_for(&args), Some(block::trouser_front()));
+        assert_eq!(asked_for(&args), Some(block::trousers()));
     }
 
     #[test]
@@ -177,7 +177,7 @@ mod tests {
             "/../../assets/pantalon-base.toile"
         );
         let args = [shipped.to_owned()];
-        assert_eq!(asked_for(&args), Some(block::trouser_front()));
+        assert_eq!(asked_for(&args), Some(block::trousers()));
     }
 
     #[test]

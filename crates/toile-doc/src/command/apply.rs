@@ -1,8 +1,10 @@
 mod curve;
+mod join;
 mod name;
 mod topology;
 
 use curve::{set_samples, set_segment};
+use join::{add_seam, remove_seam};
 pub(crate) use name::Naming;
 use name::{label_point, rename_piece, show_label};
 use topology::{add_piece, insert_node, remove_node, remove_piece};
@@ -21,7 +23,8 @@ impl Command {
     /// measurement the body does not carry, `NoSuchNode` for a contour that
     /// does not run through the node named, `Occupied` for a key another point
     /// still holds, `Sampling` for a flattening no tract can be asked for,
-    /// `Shared` for a point another piece still draws itself with, and
+    /// `Shared` for a point another piece still draws itself with,
+    /// `SplitSeamSide` for a seam side whose ends disagree on their piece, and
     /// `NotYetImplemented` for an edit whose tool has not been built yet.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
         self.apply_as(doc, Naming::Checked)
@@ -59,9 +62,9 @@ impl Command {
             Command::RemoveNode { piece, node } => remove_node(doc, piece, node),
             Command::AddPiece { identity, piece } => add_piece(doc, identity, piece, naming),
             Command::RemovePiece { piece } => remove_piece(doc, piece),
-            Command::AddSeam { .. }
-            | Command::RemoveSeam { .. }
-            | Command::AddNotch { .. }
+            Command::AddSeam { identity, seam } => add_seam(doc, identity, seam),
+            Command::RemoveSeam { seam } => remove_seam(doc, seam),
+            Command::AddNotch { .. }
             | Command::MoveNotch { .. }
             | Command::RemoveNotch { .. }
             | Command::AddDart { .. }

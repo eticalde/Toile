@@ -239,8 +239,8 @@ fn pinning_costs_the_derivation_nothing() {
 fn an_edit_whose_tool_has_not_arrived_is_an_error_not_a_panic() {
     let mut doc = block::trouser_front();
     for command in [
-        Command::RemoveSeam {
-            seam: SeamKey::new(0, 0),
+        Command::RemoveDart {
+            dart: DartKey::new(0, 0),
         },
         Command::RemoveNotch {
             notch: NotchKey::new(0, 0),

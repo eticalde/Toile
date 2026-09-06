@@ -3,6 +3,8 @@
 //! Every function is total and side-effect free: same inputs, same bits, on
 //! every platform. The drape goldens rest on that.
 
+/// A node-local place on a contour, exchanged with a perimeter fraction.
+pub mod anchor;
 /// Deterministic evaluation and flattening of a cubic Bezier.
 pub mod curve;
 /// The arc length of a contour and of its runs.
