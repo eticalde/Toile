@@ -153,3 +153,96 @@ fn global_fraction_anchoring_drifts_36_mm() {
         "a drift of {mm:.1} mm has to exceed the mesh spacing to be the anchoring and not rounding"
     );
 }
+
+/// The gate of the sewing phase: the same scenario as the drift test, but
+/// paired through the document's node anchors. Widening the hem changes the
+/// perimeter, yet the seam head stays on the material point it was sewn at,
+/// because the fraction is re-read from the node table on every pairing.
+#[test]
+fn a_seam_pair_stays_on_the_same_material_point() {
+    use toile_engine::draft::{Binding, Command, Draft, block};
+    use toile_engine::session::pair_seam_anchored;
+
+    let mut draft = Draft::from_doc(block::trousers()).expect("the block resolves");
+    let front = draft.doc().piece_named(block::FRONT).expect("drawn");
+    let (_, seam) = draft.doc().seams.iter().next().expect("the block sews");
+    let seam = *seam;
+
+    let before: Vec<[f64; 2]> = draft.outline(front).to_vec();
+    let mut front_pipe = demo::pipeline(&before);
+    let back_pipe =
+        demo::pipeline(draft.outline(draft.doc().piece_named(block::BACK).expect("drawn")));
+    let offset = front_pipe.pos2d.len() as u32;
+
+    let (va, _) = pair_seam_anchored(&draft, &seam, &front_pipe, &back_pipe, offset)
+        .expect("the block's seams anchor on live nodes");
+    let head = va[0] as usize;
+    let sewn_at = locate(&before, front_pipe.pos2d[head]);
+
+    let hem = draft
+        .doc()
+        .variables
+        .iter()
+        .find(|(_, v)| v.name == "ancho_bajo")
+        .map(|(k, _)| k)
+        .expect("the block names its hem width");
+    draft
+        .edit(Command::SetVariable {
+            variable: hem,
+            to: Binding::Literal(28.0),
+        })
+        .expect("widening the hem is a shape edit");
+
+    let after: Vec<[f64; 2]> = draft.outline(front).to_vec();
+    front_pipe
+        .derive(&after)
+        .expect("same node count, new positions");
+
+    let (va, _) = pair_seam_anchored(&draft, &seam, &front_pipe, &back_pipe, offset)
+        .expect("the anchors still name live nodes");
+    let head = va[0] as usize;
+
+    let drift = distance(front_pipe.pos2d[head], resolve(&after, sewn_at));
+    let spacing = perimeter(&after) / front_pipe.n_boundary() as f64;
+    assert!(
+        drift <= spacing * 2.0,
+        "the anchored seam head drifted {:.1} mm over the cloth; \
+         the pairing may sit at most two boundary spacings ({:.1} mm) away",
+        drift * 1000.0,
+        spacing * 2000.0
+    );
+}
+
+/// Flipping a seam to `Opposed` walks side `b` the other way round: the pair
+/// at the head of `a` lands where the aligned pairing put its tail.
+#[test]
+fn an_opposed_seam_pairs_the_endpoints() {
+    use toile_engine::draft::{Draft, Seam, SeamKind, SeamOrientation, block};
+    use toile_engine::session::pair_seam_anchored;
+
+    let draft = Draft::from_doc(block::trousers()).expect("the block resolves");
+    let (_, seam) = draft.doc().seams.iter().next().expect("the block sews");
+    let seam = *seam;
+
+    let front_pipe =
+        demo::pipeline(draft.outline(draft.doc().piece_named(block::FRONT).expect("drawn")));
+    let back_pipe =
+        demo::pipeline(draft.outline(draft.doc().piece_named(block::BACK).expect("drawn")));
+
+    let aligned = Seam {
+        orientation: SeamOrientation::Aligned,
+        kind: SeamKind::Plain,
+        ..seam
+    };
+    let opposed = Seam {
+        orientation: SeamOrientation::Opposed,
+        ..aligned
+    };
+    let (_, vb_aligned) =
+        pair_seam_anchored(&draft, &aligned, &front_pipe, &back_pipe, 0).expect("anchors live");
+    let (_, vb_opposed) =
+        pair_seam_anchored(&draft, &opposed, &front_pipe, &back_pipe, 0).expect("anchors live");
+
+    assert_eq!(vb_opposed.first(), vb_aligned.last());
+    assert_eq!(vb_opposed.last(), vb_aligned.first());
+}

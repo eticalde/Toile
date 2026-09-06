@@ -20,8 +20,8 @@ pub use toile_doc::formula::{EvalError, Formula, Lookup, SyntaxError};
 pub use toile_doc::{
     Applied, Axis, Binding, ChangeClass, Command, ContourNode, Doc, DocError, EdgeAnchor,
     EdgeRange, Grain, Handle, Handles, History, Identity, MannequinKey, MeasureSet, NotchCount,
-    Piece, PieceKey, Point, PointKey, SAMPLES, SeamKey, Segment, SegmentEdit, Variable,
-    VariableKey, Winding,
+    Piece, PieceKey, Point, PointKey, SAMPLES, Seam, SeamKey, SeamKind, SeamOrientation, Segment,
+    SegmentEdit, Variable, VariableKey, Winding,
 };
 pub use toile_geom::curve;
 pub use toile_geom::validate::ContourFault;
@@ -158,6 +158,25 @@ impl Draft {
         self.pieces
             .get(&piece)
             .map_or(&[], |held| held.good.cum.as_slice())
+    }
+
+    /// Where an anchor sits right now, as a fraction of its piece's
+    /// flattened perimeter.
+    ///
+    /// A reading, never a residence: the address a seam stores is the node,
+    /// and this fraction is derived from the fresh node table on every call.
+    /// `None` when the piece is unknown or the node is not on its contour.
+    pub fn anchor_fraction(&self, at: &toile_doc::EdgeAnchor) -> Option<f64> {
+        let cum = self.node_cum(at.piece);
+        if cum.len() < 2 {
+            return None;
+        }
+        let k = self
+            .points_cm(at.piece)
+            .iter()
+            .position(|&(p, _)| p == at.from)?;
+        let total = cum[cum.len() - 1];
+        Some((cum[k] + (cum[k + 1] - cum[k]) * at.t) / total)
     }
 
     /// The length in centimetres of the walk from one node to another, the way

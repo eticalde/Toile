@@ -2,12 +2,14 @@ mod edit;
 mod error;
 mod pieces;
 mod remesh;
+mod seam;
 mod slot;
 
 use std::sync::Arc;
 
 pub use error::SessionError;
 use remesh::Remesher;
+pub use seam::{SeamFault, pair_seam_anchored};
 pub use slot::PieceSlot;
 
 use crate::couture::{self, COMPLIANCE, ShapePipeline};
