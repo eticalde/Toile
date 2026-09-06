@@ -35,12 +35,7 @@ pub fn section_with(ui: &mut Ui, theme: &Theme, title: &str, extra: &str) {
     }
 }
 
-/// One entry of a library or a piece tree.
-pub fn list_row(ui: &mut Ui, theme: &Theme, label: &str, selected: bool) -> Response {
-    row(ui, theme, label, selected, PAD)
-}
-
-/// The same entry with a 16 pt glyph before the label, painted by the caller
+/// One entry with a 16 pt glyph before the label, painted by the caller
 /// into the slot it is handed.
 pub fn list_row_icon(
     ui: &mut Ui,

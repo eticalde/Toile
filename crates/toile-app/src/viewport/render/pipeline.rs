@@ -1,7 +1,7 @@
 use eframe::wgpu;
 
+use super::layout::VERTEX_STRIDE;
 use super::{COLOR_FORMAT, DEPTH_FORMAT, SHADER};
-use crate::render::layout::VERTEX_STRIDE;
 
 pub fn build_pipeline(device: &wgpu::Device) -> (wgpu::RenderPipeline, wgpu::BindGroupLayout) {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {

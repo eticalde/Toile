@@ -3,8 +3,11 @@ use eframe::egui_wgpu::RenderState;
 use toile_engine::session::Session;
 use toile_engine::sync::Snapshot;
 
-use crate::camera::{Camera, norm3};
-use crate::render;
+mod camera;
+mod render;
+
+use camera::{Camera, norm3};
+
 use crate::theme::Theme;
 use crate::widgets::canvas_label;
 

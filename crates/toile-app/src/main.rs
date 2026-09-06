@@ -2,11 +2,9 @@
 
 mod bars;
 mod bind;
-mod camera;
 mod file;
 mod glyph;
 mod pattern;
-mod render;
 mod tabs;
 mod theme;
 mod viewport;
