@@ -246,3 +246,46 @@ fn an_opposed_seam_pairs_the_endpoints() {
     assert_eq!(vb_opposed.first(), vb_aligned.last());
     assert_eq!(vb_opposed.last(), vb_aligned.first());
 }
+
+/// The whole block sews: both of its seams pair into the one index space the
+/// combined solver uses, front vertices below the offset and back vertices
+/// above it, with no pair pointing past the end of either mesh.
+///
+/// The engine gate for a garment rather than a single seam — that the two
+/// document seams compose without one treading on the other's indices.
+#[test]
+fn the_block_seams_pair_into_one_combined_state() {
+    use toile_engine::draft::{Draft, block};
+    use toile_engine::session::pair_seam_anchored;
+
+    let draft = Draft::from_doc(block::trousers()).expect("the block resolves");
+    let front = draft.doc().piece_named(block::FRONT).expect("drawn");
+    let back = draft.doc().piece_named(block::BACK).expect("drawn");
+    let front_pipe = demo::pipeline(draft.outline(front));
+    let back_pipe = demo::pipeline(draft.outline(back));
+    let na = front_pipe.pos2d.len() as u32;
+    let nb = back_pipe.pos2d.len() as u32;
+
+    let mut sewn = 0;
+    for (_, seam) in draft.doc().seams.iter() {
+        assert_eq!(seam.a.piece(), Some(front), "side a is the front");
+        assert_eq!(seam.b.piece(), Some(back), "side b is the back");
+        let (va, vb) = pair_seam_anchored(&draft, seam, &front_pipe, &back_pipe, na)
+            .expect("the block's seams anchor on live nodes");
+        assert!(
+            va.len() >= 2 && vb.len() == va.len(),
+            "a seam pairs both ends"
+        );
+        for &v in &va {
+            assert!(v < na, "a front vertex stays below the offset");
+        }
+        for &v in &vb {
+            assert!(
+                (na..na + nb).contains(&v),
+                "a back vertex stays in the back's block"
+            );
+        }
+        sewn += 1;
+    }
+    assert_eq!(sewn, 2, "the block closes a leg with two seams");
+}
