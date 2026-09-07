@@ -64,6 +64,7 @@ pub fn show(
             });
             fill(&painter, theme, rect);
             mat_grid(&painter, theme, rect, state.view);
+            origin(&painter, theme, rect, state.view);
             if let Some((draft, piece)) = drawing {
                 paper_and_outline(&painter, theme, draft, piece, state.view);
                 dimension::show(&painter, theme, draft, piece, state, over);
@@ -149,6 +150,29 @@ fn mat_grid(p: &Painter, theme: &Theme, rect: Rect, view: View) {
         step,
         view.to_screen([0.0, 0.0]) - rect.left_top(),
     );
+}
+
+/// The origin cross: the pattern's (0, 0), drawn over the grid so the centre a
+/// draft is measured from is never in doubt. Each axis shows only while it
+/// falls on the mat; the label only while their crossing does.
+fn origin(p: &Painter, theme: &Theme, rect: Rect, view: View) {
+    let o = view.to_screen([0.0, 0.0]);
+    let stroke = Stroke::new(1.0, theme.accent.gamma_multiply(0.55));
+    if o.x >= rect.left() && o.x <= rect.right() {
+        p.vline(o.x, rect.y_range(), stroke);
+    }
+    if o.y >= rect.top() && o.y <= rect.bottom() {
+        p.hline(rect.x_range(), o.y, stroke);
+    }
+    if rect.contains(o) {
+        p.text(
+            o + vec2(4.0, 3.0),
+            egui::Align2::LEFT_TOP,
+            "0,0",
+            egui::FontId::monospace(10.0),
+            theme.muted,
+        );
+    }
 }
 
 /// The piece itself: paper under an outline that turns to alert ink when the

@@ -61,6 +61,9 @@ pub struct Notice {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct File {
     path: Option<PathBuf>,
+    /// What the product is called before it has been written anywhere: the
+    /// name given at creation, which the path takes over once there is one.
+    title: Option<String>,
     saved: u64,
     notice: Option<Notice>,
 }
@@ -80,12 +83,22 @@ impl File {
         self.path.as_deref()
     }
 
-    /// What the pattern is called, or that it has never been written.
+    /// An unwritten pattern under the name it was given at creation.
+    pub fn new_named(title: String) -> File {
+        File {
+            title: Some(title),
+            ..File::default()
+        }
+    }
+
+    /// What the pattern is called: its file name, else the name given at
+    /// creation, else that it has never been written.
     pub fn name(&self) -> &str {
         self.path
             .as_deref()
             .and_then(Path::file_name)
             .and_then(std::ffi::OsStr::to_str)
+            .or(self.title.as_deref())
             .unwrap_or(UNTITLED)
     }
 
@@ -95,6 +108,7 @@ impl File {
             .as_deref()
             .and_then(Path::file_stem)
             .and_then(std::ffi::OsStr::to_str)
+            .or(self.title.as_deref())
             .unwrap_or(UNTITLED)
     }
 
@@ -129,6 +143,9 @@ impl File {
 
     /// Records that the document and the file now hold the same pattern.
     pub fn settle(&mut self, path: Option<PathBuf>, revision: u64) {
+        if path.is_some() {
+            self.title = None;
+        }
         self.path = path;
         self.saved = revision;
         self.notice = None;
