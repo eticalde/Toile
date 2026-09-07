@@ -7,9 +7,6 @@ use crate::draft::{Defect, DraftError, PieceKey};
 /// What stops a session from starting, or from taking an edit.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SessionError {
-    /// A document with nothing on the table.
-    #[error("the document has no piece to drape")]
-    NoPiece,
     /// A piece that does not resolve into a contour.
     #[error("the piece cannot be drawn: {defect}")]
     Defective {

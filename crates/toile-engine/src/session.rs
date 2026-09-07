@@ -88,19 +88,21 @@ impl Session {
         Session::build(None, Vec::new(), Some(drafted), None)
     }
 
-    /// A document draping its first piece, on its own thread.
+    /// A document on the table, draping its first piece if it has one.
+    ///
+    /// A document with no pieces opens as a blank table wrapping it, ready to
+    /// draw into — the same state a fresh product starts in — so a saved but
+    /// empty product reopens rather than being refused.
     ///
     /// # Errors
-    /// `SessionError` when the document does not resolve, draws nothing, or
+    /// `SessionError` when the document does not resolve, or its first piece
     /// carries a contour the mesher refuses.
     pub fn from_doc(doc: Doc) -> Result<Session, SessionError> {
         let draft = Draft::from_doc(doc)?;
-        let piece = draft
-            .doc()
-            .piece_keys()
-            .first()
-            .copied()
-            .ok_or(SessionError::NoPiece)?;
+        let Some(piece) = draft.doc().piece_keys().first().copied() else {
+            let drafted = Drafted { draft, piece: None };
+            return Ok(Session::build(None, Vec::new(), Some(drafted), None));
+        };
         let (slot, contour, state) = drape_piece(&draft, piece)?;
         let handle = spawn_sim(&slot, state);
         let drafted = Drafted {

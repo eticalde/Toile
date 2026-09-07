@@ -93,6 +93,16 @@ fn path() -> Option<PathBuf> {
     Some(config_dir()?.join("Toile").join("prefs.json"))
 }
 
+/// The folder patterns are kept in by default, where the file dialogs open
+/// until the person has saved somewhere else.
+///
+/// A visible place under the user's documents, not the hidden config tree:
+/// patterns are the person's own files, to find and back up like any other.
+/// `None` where the environment does not name a home.
+pub fn patterns_dir() -> Option<PathBuf> {
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Documents").join("Toile"))
+}
+
 /// The OS config directory, resolved from the environment.
 ///
 /// A hand-rolled resolver rather than a crate: the whole need is one path on

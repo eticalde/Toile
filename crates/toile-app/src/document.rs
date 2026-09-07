@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use eframe::egui;
 use toile_engine::draft::Doc;
@@ -6,9 +6,21 @@ use toile_engine::export;
 use toile_engine::session::{Session, SessionError};
 
 use crate::file::{self, Action, File};
-use crate::tabs;
+use crate::{config, tabs};
 
 impl crate::App {
+    /// Where a file dialog should open: the last folder used, else the default
+    /// patterns folder, which is made if it is not there yet so it can be
+    /// shown.
+    fn start_dir(&self) -> Option<PathBuf> {
+        if let Some(dir) = &self.prefs.last_dir {
+            return Some(dir.clone());
+        }
+        let dir = config::patterns_dir()?;
+        let _ = std::fs::create_dir_all(&dir);
+        Some(dir)
+    }
+
     /// Puts a document on the table.
     ///
     /// # Errors
@@ -120,7 +132,7 @@ impl crate::App {
         if !self.discardable() {
             return;
         }
-        let Some(picked) = file::open(self.prefs.last_dir.as_deref()) else {
+        let Some(picked) = file::open(self.start_dir().as_deref()) else {
             return;
         };
         let revision = self.session.revision();
@@ -151,7 +163,7 @@ impl crate::App {
             return;
         };
         let path = if ask {
-            file::save_as(self.file.stem(), self.prefs.last_dir.as_deref())
+            file::save_as(self.file.stem(), self.start_dir().as_deref())
         } else {
             self.file.path().map(Path::to_path_buf)
         };

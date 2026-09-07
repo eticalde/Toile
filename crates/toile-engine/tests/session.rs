@@ -69,7 +69,10 @@ fn an_edit_on_a_demo_session_is_refused_rather_than_ignored() {
 }
 
 #[test]
-fn a_document_that_draws_nothing_has_nothing_to_drape() {
+fn a_document_that_draws_nothing_opens_as_a_blank_table() {
     let doc = Doc::new(MeasureSet::default());
-    assert_eq!(Session::from_doc(doc).err(), Some(SessionError::NoPiece));
+    let session = Session::from_doc(doc).expect("an empty document opens blank");
+    assert!(session.draft().is_some(), "it carries the document");
+    assert!(session.piece().is_none(), "with nothing draping yet");
+    assert_eq!(session.n_vertices(), 0);
 }
