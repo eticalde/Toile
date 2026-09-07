@@ -12,7 +12,48 @@ impl Session {
         let drafted = self.drafted.as_mut().ok_or(SessionError::NoDocument)?;
         let what = drafted.draft.edit(command)?;
         self.revision += 1;
+        self.settle(what)
+    }
+
+    /// Recompiles after an edit, adopting a first piece or dropping a removed
+    /// one before falling through to the ordinary shape or topology path.
+    ///
+    /// Drawing the first piece into a blank document, and undoing back to
+    /// blank, both change *which* piece drapes rather than its geometry, so
+    /// they are handled here rather than in [`Session::recompile`].
+    ///
+    /// # Errors
+    /// The same as [`Session::edit`].
+    fn settle(&mut self, what: Recompile) -> Result<(), SessionError> {
+        let before = self.piece();
+        self.reconcile();
+        // A piece was just adopted or dropped: its drape was seeded or torn
+        // down whole, so the ordinary recompile has nothing to add.
+        if self.piece() != before {
+            return Ok(());
+        }
         self.recompile(what)
+    }
+
+    /// Brings the draping piece in line with the document: drop one the
+    /// document no longer holds, then adopt the first it does when none drapes.
+    ///
+    /// Adopting is best-effort. A piece being drawn lands empty and gains its
+    /// vertices one command at a time, so it cannot mesh until it has enough of
+    /// them; a failure here simply leaves the table blank until the next
+    /// vertex, which is what keeps the whole draw one smooth gesture.
+    fn reconcile(&mut self) {
+        if let (Some(piece), Some(drafted)) = (self.piece(), self.drafted.as_ref())
+            && !drafted.draft.doc().piece_keys().contains(&piece)
+        {
+            self.unseed();
+        }
+        if self.piece().is_none()
+            && let Some(drafted) = self.drafted.as_ref()
+            && let Some(&piece) = drafted.draft.doc().piece_keys().first()
+        {
+            let _ = self.seed_piece(piece);
+        }
     }
 
     /// Opens a gesture: every edit until `end_gesture` is one undo entry.
@@ -42,7 +83,7 @@ impl Session {
         let drafted = self.drafted.as_mut().ok_or(SessionError::NoDocument)?;
         let what = drafted.draft.undo()?;
         self.revision += 1;
-        self.recompile(what)
+        self.settle(what)
     }
 
     /// Drops the open gesture and re-drapes whatever it had changed.
@@ -56,7 +97,7 @@ impl Session {
         let drafted = self.drafted.as_mut().ok_or(SessionError::NoDocument)?;
         let what = drafted.draft.cancel_gesture()?;
         self.revision += 1;
-        self.recompile(what)
+        self.settle(what)
     }
 
     /// Puts the last entry undone back, and re-drapes it.
@@ -67,7 +108,7 @@ impl Session {
         let drafted = self.drafted.as_mut().ok_or(SessionError::NoDocument)?;
         let what = drafted.draft.redo()?;
         self.revision += 1;
-        self.recompile(what)
+        self.settle(what)
     }
 
     /// What undo would take back, named for the status bar.

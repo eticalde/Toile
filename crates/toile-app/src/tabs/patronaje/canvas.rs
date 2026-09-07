@@ -93,7 +93,9 @@ pub fn show(
             let zoom = state.view.zoom_percent(ui.ctx().pixels_per_point());
             caption(&painter, theme, rect, &name_of(draft, piece), zoom);
             chips(ui, theme, rect, state);
-            if drawing.is_none() {
+            // The way onto the table shows only with no document at all. A
+            // blank document is an empty mat ready to draw, not the splash.
+            if draft.is_none() {
                 state.asked = empty::show(ui, theme, rect).or(state.asked);
             }
             wire::answer(ui, theme, rect, state, &mut verbs);

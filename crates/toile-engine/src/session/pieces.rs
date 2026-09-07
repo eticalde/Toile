@@ -59,16 +59,18 @@ impl Session {
         let Some(drafted) = self.drafted.as_ref() else {
             return Ok(());
         };
-        let piece = drafted.piece;
+        let (Some(piece), Some(slot)) = (drafted.piece, self.slot.as_ref()) else {
+            return Ok(());
+        };
         let topology = drafted.draft.topology(piece);
         let outline = drafted.draft.outline(piece).to_vec();
         if outline.is_empty() {
             return Ok(());
         }
-        if topology != self.slot.topology() {
+        if topology != slot.topology() {
             return Err(SessionError::TopologyMismatch {
                 piece,
-                expected: self.slot.topology(),
+                expected: slot.topology(),
                 got: topology,
             });
         }
@@ -84,7 +86,10 @@ impl Session {
         let Some(drafted) = self.drafted.as_ref() else {
             return;
         };
-        let piece = drafted.piece;
+        let (Some(piece), Some(slot)) = (drafted.piece, self.slot.as_ref()) else {
+            return;
+        };
+        let (old_pos2d, old_tris) = (slot.pipeline().pos2d.clone(), slot.pipeline().tris.clone());
         let contour = drafted.draft.outline(piece).to_vec();
         if contour.is_empty() {
             return;
@@ -103,8 +108,8 @@ impl Session {
             piece,
             topology: drafted.draft.topology(piece),
             contour,
-            old_pos2d: self.slot.pipeline().pos2d.clone(),
-            old_tris: self.slot.pipeline().tris.clone(),
+            old_pos2d,
+            old_tris,
         };
         self.remesher.get_or_insert_with(Remesher::spawn).send(job);
     }
@@ -117,7 +122,8 @@ impl Session {
         // A rebuild the document has already moved past. The edit that
         // superseded it queued a rebuild of its own, and that one is the
         // answer; taking this one would mesh the piece as it no longer is.
-        if done.piece != drafted.piece || done.topology != drafted.draft.topology(done.piece) {
+        if drafted.piece != Some(done.piece) || done.topology != drafted.draft.topology(done.piece)
+        {
             return Ok(false);
         }
         self.last_remesh_ms = done.ms;
@@ -131,11 +137,14 @@ impl Session {
                 return Err(why.into());
             }
         };
-        self.slot.swap_in(built.pipeline, done.topology);
+        let (Some(slot), Some(handle)) = (self.slot.as_mut(), self.handle.as_ref()) else {
+            return Ok(false);
+        };
+        slot.swap_in(built.pipeline, done.topology);
         self.contour = built.contour;
         self.generation += 1;
         self.mesh_generation = self.generation;
-        self.handle.send_swap(self.generation, built.swap);
+        handle.send_swap(self.generation, built.swap);
         // Whatever was dragged while the mesher worked was never derived. The
         // mesh it belongs to exists now, so it goes out as a shape edit.
         if std::mem::take(&mut self.moved_while_meshing) {
@@ -146,12 +155,15 @@ impl Session {
 
     /// Derives a contour into rest lengths and hands them to the sim thread.
     fn send(&mut self, contour: Vec<[f64; 2]>) -> Result<(), SessionError> {
+        let (Some(slot), Some(handle)) = (self.slot.as_mut(), self.handle.as_ref()) else {
+            return Ok(());
+        };
         let t = Instant::now();
-        let rests = self.slot.derive(&contour)?.to_vec();
+        let rests = slot.derive(&contour)?.to_vec();
         self.last_derive_ms = t.elapsed().as_secs_f64() * 1000.0;
         self.contour = contour;
         self.generation += 1;
-        self.handle.send_rests(self.generation, rests);
+        handle.send_rests(self.generation, rests);
         Ok(())
     }
 }

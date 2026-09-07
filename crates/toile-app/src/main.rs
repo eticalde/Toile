@@ -126,7 +126,7 @@ impl App {
                     return;
                 }
             }
-            None => self.install(Session::demo_bodice()),
+            None => self.install(Session::blank()),
         }
         let now = self.session.revision();
         self.file.settle(None, now);

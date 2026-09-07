@@ -4,6 +4,7 @@ mod pieces;
 mod remesh;
 mod seam;
 mod slot;
+mod spawn;
 
 use std::sync::Arc;
 
@@ -11,11 +12,12 @@ pub use error::SessionError;
 use remesh::Remesher;
 pub use seam::{SeamFault, pair_seam_anchored};
 pub use slot::PieceSlot;
+use spawn::{drape_piece, spawn_sim};
 
-use crate::couture::{self, COMPLIANCE, ShapePipeline};
+use crate::couture::COMPLIANCE;
 use crate::demo;
-use crate::draft::{Doc, Draft, PieceKey};
-use crate::sync::{self, SimHandle, Snapshot};
+use crate::draft::{Doc, Draft, MeasureSet, PieceKey};
+use crate::sync::{SimHandle, Snapshot};
 
 /// Simulated seconds per substep.
 const DT: f32 = 1.0 / 600.0;
@@ -23,10 +25,11 @@ const DT: f32 = 1.0 / 600.0;
 /// Substeps per published frame.
 const SUBSTEPS_PER_TICK: u32 = 10;
 
-/// The document a session edits, and the piece of it that drapes.
+/// The document a session edits, and the piece of it that drapes, once one
+/// does: a document opened blank has pieces to draw before any of them drapes.
 struct Drafted {
     draft: Draft,
-    piece: PieceKey,
+    piece: Option<PieceKey>,
 }
 
 /// A live editing session: one piece, draping, edited in place.
@@ -34,10 +37,13 @@ struct Drafted {
 /// This is the whole surface a client gets. No solver type crosses it, which
 /// is what lets the desktop app depend on the engine alone.
 pub struct Session {
-    slot: PieceSlot,
+    /// The meshed piece on the stand, absent while a document has no piece
+    /// draping yet.
+    slot: Option<PieceSlot>,
     contour: Vec<[f64; 2]>,
     drafted: Option<Drafted>,
-    handle: SimHandle,
+    /// The sim thread, spawned only once a piece drapes.
+    handle: Option<SimHandle>,
     /// The mesher, started the first time a topology edit needs it: a session
     /// that only ever moves points never pays for a thread.
     remesher: Option<Remesher>,
@@ -61,7 +67,25 @@ impl Session {
         let contour = demo::bodice_contour();
         let pipeline = demo::pipeline(&contour);
         let state = demo::drop_state(&pipeline);
-        Session::spawn(PieceSlot::new(pipeline, 0), contour, None, state)
+        let slot = PieceSlot::new(pipeline, 0);
+        let handle = spawn_sim(&slot, state);
+        Session::build(Some(slot), contour, None, Some(handle))
+    }
+
+    /// A blank document: a table with nothing drawn, ready for the first piece.
+    ///
+    /// The document still carries a mannequin, since every coordinate resolves
+    /// against one; it simply has no pieces yet. Nothing drapes until one is
+    /// drawn, so there is no mesh and no sim thread until then.
+    ///
+    /// # Panics
+    /// Never in practice: a document with no pieces has nothing to resolve, so
+    /// the draft cannot fail to build.
+    pub fn blank() -> Session {
+        let doc = Doc::new(MeasureSet::default());
+        let draft = Draft::from_doc(doc).expect("an empty document resolves");
+        let drafted = Drafted { draft, piece: None };
+        Session::build(None, Vec::new(), Some(drafted), None)
     }
 
     /// A document draping its first piece, on its own thread.
@@ -77,19 +101,18 @@ impl Session {
             .first()
             .copied()
             .ok_or(SessionError::NoPiece)?;
-        if let [defect, ..] = draft.defects(piece) {
-            return Err(SessionError::Defective {
-                piece,
-                defect: defect.clone(),
-            });
-        }
-        let contour = draft.outline(piece).to_vec();
-        let (samples, max_area) = couture::for_contour(&contour);
-        let pipeline = ShapePipeline::build(&contour, samples, max_area)?;
-        let state = couture::drop_state(&pipeline, couture::DROP_HEIGHT);
-        let slot = PieceSlot::new(pipeline, draft.topology(piece));
-        let drafted = Drafted { draft, piece };
-        Ok(Session::spawn(slot, contour, Some(drafted), state))
+        let (slot, contour, state) = drape_piece(&draft, piece)?;
+        let handle = spawn_sim(&slot, state);
+        let drafted = Drafted {
+            draft,
+            piece: Some(piece),
+        };
+        Ok(Session::build(
+            Some(slot),
+            contour,
+            Some(drafted),
+            Some(handle),
+        ))
     }
 
     /// The document this session edits, when it was opened from one.
@@ -97,9 +120,9 @@ impl Session {
         self.drafted.as_ref().map(|held| &held.draft)
     }
 
-    /// The piece this session drapes, when it was opened from a document.
+    /// The piece this session drapes, once one does.
     pub fn piece(&self) -> Option<PieceKey> {
-        self.drafted.as_ref().map(|held| held.piece)
+        self.drafted.as_ref().and_then(|held| held.piece)
     }
 
     /// How many times the document on this table has changed.
@@ -116,14 +139,17 @@ impl Session {
         &self.contour
     }
 
-    /// Mesh triangles, indexing the snapshot's positions.
+    /// Mesh triangles, indexing the snapshot's positions; empty while nothing
+    /// drapes.
     pub fn triangles(&self) -> &[u32] {
-        &self.slot.pipeline().tris
+        self.slot.as_ref().map_or(&[], |slot| &slot.pipeline().tris)
     }
 
-    /// Mesh vertex count, for sizing render buffers.
+    /// Mesh vertex count, for sizing render buffers; zero while nothing drapes.
     pub fn n_vertices(&self) -> usize {
-        self.slot.pipeline().pos2d.len()
+        self.slot
+            .as_ref()
+            .map_or(0, |slot| slot.pipeline().pos2d.len())
     }
 
     /// The generation the mesh on the table was installed at.
@@ -140,9 +166,12 @@ impl Session {
         demo::AVATAR_RADIUS
     }
 
-    /// The latest snapshot from the sim thread; empty until the first tick.
+    /// The latest snapshot from the sim thread; an empty one while nothing
+    /// drapes or before the first tick.
     pub fn snapshot(&self) -> Arc<Snapshot> {
-        self.handle.snapshot()
+        self.handle
+            .as_ref()
+            .map_or_else(|| Arc::new(Snapshot::default()), SimHandle::snapshot)
     }
 
     /// True when the sim has slept on the latest edit: nothing left to
@@ -151,26 +180,20 @@ impl Session {
     /// The published frame's own verdict is not enough: it may have been
     /// captured before the last edit reached the sim thread.
     pub fn settled(&self) -> bool {
-        let snap = self.handle.snapshot();
+        let Some(handle) = self.handle.as_ref() else {
+            return true;
+        };
+        let snap = handle.snapshot();
         snap.converged && snap.generation == self.generation
     }
 
-    /// Starts the sim thread on a freshly meshed piece.
-    fn spawn(
-        slot: PieceSlot,
+    /// Fills the session's fields; the caller decides whether a piece drapes.
+    fn build(
+        slot: Option<PieceSlot>,
         contour: Vec<[f64; 2]>,
         drafted: Option<Drafted>,
-        state: toile_sim::xpbd::State,
+        handle: Option<SimHandle>,
     ) -> Session {
-        let cons = slot.pipeline().constraints(COMPLIANCE);
-        let handle = sync::spawn(
-            state,
-            cons,
-            demo::avatar_sdf(),
-            slot.pipeline().tris.clone(),
-            DT,
-            SUBSTEPS_PER_TICK,
-        );
         Session {
             slot,
             contour,
@@ -185,37 +208,42 @@ impl Session {
             last_remesh_ms: 0.0,
         }
     }
+
+    /// Adopts a piece drawn into a blank document as the one that drapes,
+    /// meshing it and starting the sim thread around it.
+    ///
+    /// # Errors
+    /// `SessionError` when the piece carries a defect or a contour the mesher
+    /// refuses; the table then stays blank and the drawing can be corrected.
+    pub(super) fn seed_piece(&mut self, piece: PieceKey) -> Result<(), SessionError> {
+        let Some(drafted) = self.drafted.as_mut() else {
+            return Ok(());
+        };
+        let (slot, contour, state) = drape_piece(&drafted.draft, piece)?;
+        drafted.piece = Some(piece);
+        self.handle = Some(spawn_sim(&slot, state));
+        self.slot = Some(slot);
+        self.contour = contour;
+        self.generation = 0;
+        self.mesh_generation = 0;
+        Ok(())
+    }
+
+    /// Tears the drape down to a blank table, keeping the document.
+    ///
+    /// The sim thread stops when its handle drops. Used when the piece that was
+    /// draping leaves the document, as an undo of the first piece does.
+    pub(super) fn unseed(&mut self) {
+        self.handle = None;
+        self.slot = None;
+        self.contour = Vec::new();
+        self.remesher = None;
+        self.moved_while_meshing = false;
+        if let Some(drafted) = self.drafted.as_mut() {
+            drafted.piece = None;
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::draft::{Axis, Binding, Command, block};
-
-    /// The mesh is built at a topology count, and a shape edit that arrives
-    /// against another one has to say so rather than warm-start across it.
-    #[test]
-    fn a_stale_generation_is_an_error_not_a_warm_start() {
-        let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
-        let piece = session.piece().expect("the session has a document");
-        session.slot.set_topology(7);
-        let node = session
-            .draft()
-            .expect("the session has a document")
-            .points_cm(piece)[1]
-            .0;
-        let moved = session.edit(Command::SetBinding {
-            point: node,
-            axis: Axis::X,
-            to: Binding::literal(23.0),
-        });
-        assert_eq!(
-            moved,
-            Err(SessionError::TopologyMismatch {
-                piece,
-                expected: 7,
-                got: 0
-            })
-        );
-    }
-}
+mod tests;
