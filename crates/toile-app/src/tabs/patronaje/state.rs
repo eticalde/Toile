@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use toile_engine::draft::{Axis, PointKey, VariableKey};
+use toile_engine::draft::{Axis, PieceKey, PointKey, VariableKey};
 
 use super::gesture::{Ask, Gesture};
 use super::snap::{SnapConfig, Snapped};
@@ -118,6 +118,14 @@ pub struct FieldEdit {
 pub struct State {
     /// Where the document lies on the glass.
     pub view: View,
+    /// The piece the mat is drafting, out of the several a product may hold.
+    ///
+    /// It is the one the canvas draws and the panels edit, chosen in the
+    /// product tree and set to a piece the moment it is drawn. `None` only on a
+    /// product with no pieces yet, where the sole thing to do is draw the
+    /// first. A matter of view, never the document's: which piece is in
+    /// front of the person is not something the file remembers.
+    pub active: Option<PieceKey>,
     /// What the inspector is pointed at.
     pub selection: Selection,
     /// The tool the pointer is holding.
@@ -155,6 +163,7 @@ impl State {
     /// A new document brings new keys, so a selection, a gesture or a half
     /// written field held over from the last one would point at nothing.
     pub fn reset(&mut self) {
+        self.active = None;
         self.selection = Selection::None;
         self.gesture = Gesture::Idle;
         self.caught = None;
@@ -171,6 +180,7 @@ impl Default for State {
     fn default() -> State {
         State {
             view: View::default(),
+            active: None,
             selection: Selection::None,
             tool: Tool::Select,
             labels: true,

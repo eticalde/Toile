@@ -15,6 +15,8 @@ const ROW_H: f32 = 26.0;
 pub enum Plea {
     /// Start drawing a new piece on the mat.
     Draw,
+    /// Bring a piece to the front: the one the mat draws and the panels edit.
+    Focus(PieceKey),
     /// Take a piece off the table.
     ///
     /// Right away, with no modal: the status bar names the undo that brings
@@ -24,14 +26,15 @@ pub enum Plea {
 
 /// The product tree: the pieces the document draws, and the way to a new one.
 ///
-/// With no document there is nothing to add a piece to, so the "+ Pieza" row
-/// stays a hint: the ways onto the table are on the mat, where a person
-/// looking at nothing is already looking.
+/// The active piece — the one the mat is drawing — is lit; a click on any other
+/// row asks to bring it to the front. With no document there is nothing to add
+/// a piece to, so the "+ Pieza" row stays a hint: the ways onto the table are
+/// on the mat, where a person looking at nothing is already looking.
 pub fn product(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: Option<&Draft>,
-    drawn: Option<PieceKey>,
+    active: Option<PieceKey>,
 ) -> Option<Plea> {
     section(ui, theme, "Producto");
     let mut asked = None;
@@ -41,7 +44,7 @@ pub fn product(
             ui,
             theme,
             &piece.name,
-            drawn == Some(key),
+            active == Some(key),
             0.0,
             |p, r, c| {
                 glyph::paint(p, r, c, PIECE_ICON);
@@ -49,6 +52,8 @@ pub fn product(
         );
         if removal(ui, theme, &row, key) {
             asked = Some(Plea::Remove(key));
+        } else if row.clicked() {
+            asked = Some(Plea::Focus(key));
         }
     }
     if draft.is_some() {

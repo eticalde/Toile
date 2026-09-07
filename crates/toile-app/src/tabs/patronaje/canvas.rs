@@ -41,10 +41,18 @@ pub fn show(
             let mut verbs = Vec::new();
             if state.ask.is_none() {
                 wire::view_keys(ui, &resp, state);
-                if let Some((draft, piece)) = drawing {
+                if let Some(draft) = draft {
+                    // With no piece in front — a product with none drawn yet —
+                    // the mat still takes a drawing: the target is the key the
+                    // next piece will be given, which is the one the draw
+                    // gesture goes on to create. Every other tool needs
+                    // geometry, and there is none, so they fall through to
+                    // nothing.
+                    let target =
+                        piece.unwrap_or_else(|| PieceKey::new(draft.doc().pieces.issued(), 0));
                     let table = wire::Table {
                         doc: draft.doc(),
-                        piece,
+                        piece: target,
                         nodes,
                         tracts: &tracts,
                         bends: &bends,

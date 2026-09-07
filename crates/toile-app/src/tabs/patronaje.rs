@@ -25,7 +25,7 @@ use toile_engine::draft::{Command, Draft, PieceKey};
 use toile_engine::session::Session;
 
 use self::gesture::Gesture;
-use self::state::Tool;
+use self::state::{Selection, Tool};
 use self::wire::Verb;
 use crate::tabs::{Workspace, left_panel, right_panel};
 
@@ -35,7 +35,6 @@ const SIDE: [&str; 2] = ["cintura_lat", "bajo_lat"];
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
-    let piece = w.session.piece();
     // A question waiting on the mat owns the open entry until it is answered.
     // The tiles that would move the stack under it go dead, and so does every
     // edit a panel offers: an entry belongs to the gesture that opened it.
@@ -46,10 +45,15 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         [w.session.can_undo(), w.session.can_redo()]
     };
     let draft = w.session.draft();
+    // The piece the mat draws this frame, and the pieces there were before an
+    // edit: a piece drawn during it becomes the active one afterwards.
+    let active = active_piece(draft, w.patronaje.active, w.session.piece());
+    let before = draft.map(|d| d.doc().piece_keys()).unwrap_or_default();
+    w.patronaje.active = active;
     let state = &mut *w.patronaje;
     let mut verbs = Vec::new();
     verbs.extend(left_panel(ui, theme, |ui| {
-        let plea = tree::product(ui, theme, draft, piece);
+        let plea = tree::product(ui, theme, draft, active);
         tools::grid(ui, theme, state);
         let mut asked: Vec<Verb> = tools::history(ui, theme, ready).into_iter().collect();
         match plea.filter(|_| !asking) {
@@ -66,6 +70,7 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
                     rubber: [0.0, 0.0],
                 };
             }
+            Some(tree::Plea::Focus(key)) => focus(state, key),
             Some(tree::Plea::Remove(key)) => {
                 asked.push(Verb::Begin("borrar pieza"));
                 asked.push(Verb::Edit(Box::new(Command::RemovePiece { piece: key })));
@@ -76,7 +81,7 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         asked
     }));
     let asked = right_panel(ui, theme, |ui| {
-        inspector::show(ui, theme, draft, piece, state)
+        inspector::show(ui, theme, draft, active, state)
     });
     // One field confirmed is one entry of its own, under its own name: an edit
     // from a panel never folds into whatever gesture the mat left open.
@@ -85,14 +90,58 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         verbs.push(Verb::Edit(Box::new(command)));
         verbs.push(Verb::End);
     }
-    verbs.extend(canvas::show(ui, theme, draft, piece, state));
-    if apply(w.session, verbs, &mut w.patronaje.refused) {
+    verbs.extend(canvas::show(ui, theme, draft, active, state));
+    let said = apply(w.session, verbs, &mut w.patronaje.refused);
+    // A piece just drawn becomes the active one, so the mat follows the hand
+    // onto what it drew rather than staying on what was there before.
+    let moved = adopt_new(w, &before);
+    if said || moved {
         // The bars are drawn before the tabs, so what this run has to say
         // reaches the status bar on the frame after it. Nothing else asks for
         // that frame: a refusal sends nothing to the sim, so the viewer is
         // asleep and would sit on a stale bar until the pointer moved again.
         ui.ctx().request_repaint();
     }
+}
+
+/// The piece the mat draws, in order of preference: the one chosen while it
+/// still exists, then the one draping, then the first the product holds.
+///
+/// `None` only for a product with no pieces at all — a blank mat waiting for
+/// its first piece to be drawn.
+fn active_piece(
+    draft: Option<&Draft>,
+    chosen: Option<PieceKey>,
+    draping: Option<PieceKey>,
+) -> Option<PieceKey> {
+    let doc = draft?.doc();
+    let has = |key: PieceKey| doc.pieces.get(key).is_some();
+    chosen
+        .filter(|&key| has(key))
+        .or(draping.filter(|&key| has(key)))
+        .or_else(|| doc.piece_keys().first().copied())
+}
+
+/// Brings a piece to the front: the mat draws it, nothing of the last piece
+/// stays chosen, and the view fits it on the next frame.
+fn focus(state: &mut State, piece: PieceKey) {
+    state.active = Some(piece);
+    state.selection = Selection::None;
+    state.frame = true;
+}
+
+/// Makes a piece just added the active one, and says whether the pieces on the
+/// table changed at all — an addition to follow, or a removal to redraw for.
+fn adopt_new(w: &mut Workspace<'_>, before: &[PieceKey]) -> bool {
+    let after = w
+        .session
+        .draft()
+        .map(|d| d.doc().piece_keys())
+        .unwrap_or_default();
+    if let Some(&fresh) = after.iter().find(|key| !before.contains(key)) {
+        focus(w.patronaje, fresh);
+    }
+    after != before
 }
 
 /// Plays what the panels asked for, in the order they asked for it, and
@@ -143,7 +192,9 @@ fn apply(session: &mut Session, verbs: Vec<Verb>, said: &mut Option<String>) -> 
 /// Each cell says whether it is an alert: a refused edit and a broken contour
 /// are painted to be seen, and everything else stays quiet.
 pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
-    let (Some(draft), Some(piece)) = (session.draft(), session.piece()) else {
+    let draft = session.draft();
+    let piece = active_piece(draft, state.active, session.piece());
+    let (Some(draft), Some(piece)) = (draft, piece) else {
         return vec![("mesa vacía".to_owned(), false), ("cm".to_owned(), false)];
     };
     let name = draft
@@ -185,88 +236,4 @@ fn side_cell(draft: &Draft, piece: PieceKey) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use toile_engine::draft::{
-        Axis, Binding, Command, Doc, MeasureSet, Piece, Point, Winding, block,
-    };
-
-    use super::*;
-
-    /// The two edits the table takes in its stride say nothing: a shape edit
-    /// re-derives, a topology edit goes to the mesher. The one the document
-    /// refuses has to reach the status bar, because the drawing goes on being
-    /// edited either way.
-    #[test]
-    fn an_edit_the_session_refuses_is_said_in_the_status_bar() {
-        let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
-        let piece = session.piece().expect("the session has a document");
-        let node = session
-            .draft()
-            .expect("the session has a document")
-            .points_cm(piece)[0]
-            .0;
-        let mut state = State::default();
-
-        let moved = Verb::Edit(Box::new(Command::SetBinding {
-            point: node,
-            axis: Axis::X,
-            to: Binding::literal(3.0),
-        }));
-        assert!(!apply(&mut session, vec![moved], &mut state.refused));
-        assert_eq!(
-            state.refused, None,
-            "a shape edit re-drapes and says nothing"
-        );
-
-        let sampled = Verb::Edit(Box::new(Command::SetSamples {
-            piece,
-            node,
-            to: 24,
-        }));
-        assert!(!apply(&mut session, vec![sampled], &mut state.refused));
-        assert!(session.remeshing(), "the rebuild is out with the mesher");
-
-        // A sample count no tract may take: the document refuses it, and the
-        // table has to say so.
-        let refused = Verb::Edit(Box::new(Command::SetSamples {
-            piece,
-            node,
-            to: 4096,
-        }));
-        assert!(apply(&mut session, vec![refused], &mut state.refused));
-        let cells = status(&session, &state);
-        assert!(
-            cells
-                .iter()
-                .any(|(cell, alert)| cell.starts_with("rechazado") && *alert),
-            "{cells:?}"
-        );
-    }
-
-    #[test]
-    fn the_side_seam_cell_is_measured_not_quoted() {
-        let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
-        let piece = draft
-            .doc()
-            .piece_named(block::FRONT)
-            .expect("the block draws one piece");
-        // Measured along the flattening: the hip is a curve, so the seam is a
-        // millimetre longer than the chords through its nodes.
-        assert_eq!(side_cell(&draft, piece), "lateral 104.6 cm");
-    }
-
-    #[test]
-    fn a_piece_that_does_not_name_its_side_reports_its_perimeter() {
-        let mut doc = Doc::new(MeasureSet::new("Etienne", [("cintura", 84.0)]));
-        let corners = [[0.0, 0.0], [10.0, 0.0], [10.0, 20.0], [0.0, 20.0]];
-        let points: Vec<_> = corners
-            .into_iter()
-            .map(|[x, y]| doc.points.insert(Point::at(x, y)))
-            .collect();
-        let piece = doc
-            .pieces
-            .insert(Piece::polygon("Cuadro", points, Winding::Cw));
-        let draft = Draft::from_doc(doc).expect("a square resolves");
-        assert_eq!(side_cell(&draft, piece), "perímetro 60.0 cm");
-    }
-}
+mod tests;
