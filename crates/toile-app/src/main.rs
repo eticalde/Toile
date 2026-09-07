@@ -2,6 +2,7 @@
 
 mod bars;
 mod bind;
+mod config;
 mod file;
 mod glyph;
 mod pattern;
@@ -23,12 +24,23 @@ use crate::tabs::Tab;
 use crate::theme::Theme;
 
 fn main() -> eframe::Result {
+    let prefs = config::Prefs::load();
+    let viewport = match prefs.window {
+        Some([x, y, w, h]) => egui::ViewportBuilder::default()
+            .with_position([x, y])
+            .with_inner_size([w, h]),
+        None => egui::ViewportBuilder::default().with_inner_size([1320.0, 780.0]),
+    };
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([1320.0, 780.0]),
+        viewport,
         renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
-    eframe::run_native("Toile", options, Box::new(|cc| Ok(Box::new(App::new(cc)))))
+    eframe::run_native(
+        "Toile",
+        options,
+        Box::new(move |cc| Ok(Box::new(App::new(cc, prefs)))),
+    )
 }
 
 struct App {
@@ -39,10 +51,11 @@ struct App {
     file: File,
     patronaje: tabs::patronaje::State,
     probador: tabs::probador::State,
+    prefs: config::Prefs,
 }
 
 impl App {
-    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+    fn new(cc: &eframe::CreationContext<'_>, prefs: config::Prefs) -> Self {
         let theme = Theme::sastreria();
         theme.apply(&cc.egui_ctx);
         let session = Session::demo_bodice();
@@ -59,6 +72,7 @@ impl App {
             file: File::default(),
             patronaje: tabs::patronaje::State::default(),
             probador,
+            prefs,
         }
     }
 
@@ -123,7 +137,7 @@ impl App {
         if !self.discardable() {
             return;
         }
-        let Some(picked) = file::open() else {
+        let Some(picked) = file::open(self.prefs.last_dir.as_deref()) else {
             return;
         };
         let revision = self.session.revision();
@@ -134,6 +148,8 @@ impl App {
         }) {
             Ok(path) => {
                 let now = self.session.revision();
+                self.prefs.remember(&path);
+                self.prefs.save();
                 self.file.settle(Some(path), now);
             }
             Err(why) => self.file.warn(why, revision),
@@ -152,7 +168,7 @@ impl App {
             return;
         };
         let path = if ask {
-            file::save_as(self.file.stem())
+            file::save_as(self.file.stem(), self.prefs.last_dir.as_deref())
         } else {
             self.file.path().map(Path::to_path_buf)
         };
@@ -161,6 +177,8 @@ impl App {
         };
         match file::write(&path, &text) {
             Ok(()) => {
+                self.prefs.remember(&path);
+                self.prefs.save();
                 self.file.settle(Some(path), revision);
                 let name = self.file.name().to_owned();
                 self.file.say(format!("guardado · {name}"), revision);
@@ -224,6 +242,11 @@ fn shortcut(ui: &egui::Ui) -> Option<Action> {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // Track the window each frame so on_exit writes where it ended up. The
+        // read is cheap and the disk write waits for exit.
+        if let Some(window) = window_geometry(ui.ctx()) {
+            self.prefs.window = Some(window);
+        }
         // The mesher answers on its own thread, and this is the once-a-frame
         // collection that lands its rebuilds. It runs before the bars so a
         // refused contour reaches the status bar on this very frame.
@@ -258,4 +281,20 @@ impl eframe::App for App {
             ui.ctx().request_repaint();
         }
     }
+
+    fn on_exit(&mut self) {
+        self.prefs.save();
+    }
+}
+
+/// The window as `[x, y, width, height]`: outer top-left, inner size, the pair
+/// [`egui::ViewportBuilder`] restores it from. `None` until the platform has
+/// reported both rects.
+fn window_geometry(ctx: &egui::Context) -> Option<[f32; 4]> {
+    ctx.input(|i| {
+        let info = i.viewport();
+        let pos = info.outer_rect?.min;
+        let size = info.inner_rect?.size();
+        Some([pos.x, pos.y, size.x, size.y])
+    })
 }

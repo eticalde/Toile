@@ -12,11 +12,14 @@ const DRAWING: &str = "Dibujo SVG";
 /// A pattern the person picked, and what came out of the file.
 ///
 /// `None` when they picked nothing, which is not a failure and says nothing.
-pub fn open() -> Option<Result<(PathBuf, Doc), String>> {
-    let path = FileDialog::new()
+pub fn open(start_dir: Option<&Path>) -> Option<Result<(PathBuf, Doc), String>> {
+    let mut dialog = FileDialog::new()
         .add_filter(PATTERN, &[PATTERN_EXT])
-        .set_title("Abrir patrón")
-        .pick_file()?;
+        .set_title("Abrir patrón");
+    if let Some(dir) = start_dir {
+        dialog = dialog.set_directory(dir);
+    }
+    let path = dialog.pick_file()?;
     Some(read(path))
 }
 
@@ -31,12 +34,15 @@ fn read(path: PathBuf) -> Result<(PathBuf, Doc), String> {
 
 /// Where the person wants the pattern written, with the extension it is kept
 /// under whether or not they typed it.
-pub fn save_as(stem: &str) -> Option<PathBuf> {
-    let path = FileDialog::new()
+pub fn save_as(stem: &str, start_dir: Option<&Path>) -> Option<PathBuf> {
+    let mut dialog = FileDialog::new()
         .add_filter(PATTERN, &[PATTERN_EXT])
         .set_file_name(format!("{stem}.{PATTERN_EXT}"))
-        .set_title("Guardar patrón como")
-        .save_file()?;
+        .set_title("Guardar patrón como");
+    if let Some(dir) = start_dir {
+        dialog = dialog.set_directory(dir);
+    }
+    let path = dialog.save_file()?;
     Some(with_extension(path, PATTERN_EXT))
 }
 

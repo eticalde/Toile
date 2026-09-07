@@ -3169,6 +3169,8 @@ dependencies = [
  "bytemuck",
  "eframe",
  "rfd",
+ "serde",
+ "serde_json",
  "toile-engine",
 ]
 
