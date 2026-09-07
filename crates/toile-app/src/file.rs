@@ -152,6 +152,50 @@ impl File {
     }
 }
 
+/// A file name for a new product in `dir`, safe to write and free to take.
+///
+/// The product's name with the pattern extension, and a number appended when
+/// that name is already on disk so creating a product never writes over one
+/// that is already there.
+pub fn unique_path(dir: &Path, name: &str) -> PathBuf {
+    let stem = sanitize(name);
+    let first = dir.join(format!("{stem}.{PATTERN_EXT}"));
+    if !first.exists() {
+        return first;
+    }
+    // "blusa base", then "blusa base 2", "blusa base 3", … until one is free.
+    let mut n = 2u32;
+    loop {
+        let path = dir.join(format!("{stem} {n}.{PATTERN_EXT}"));
+        if !path.exists() {
+            return path;
+        }
+        n += 1;
+    }
+}
+
+/// A product name reduced to something a file system will take: the path
+/// separators become dashes, and a name that empties out falls back to the
+/// untitled label so there is always something to write.
+fn sanitize(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| {
+            if matches!(c, '/' | '\\' | ':') {
+                '-'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let trimmed = cleaned.trim().trim_matches('.').trim();
+    if trimmed.is_empty() {
+        UNTITLED.to_owned()
+    } else {
+        trimmed.to_owned()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use toile_engine::draft::{Draft, block};
@@ -197,6 +241,25 @@ mod tests {
         file.settle(Some(PathBuf::from("/tmp/base.toile")), 4);
         assert!(!file.dirty(4));
         assert!(file.dirty(5));
+    }
+
+    #[test]
+    fn a_name_a_file_system_would_choke_on_is_made_safe() {
+        assert_eq!(sanitize("blusa/base"), "blusa-base");
+        assert_eq!(sanitize("  falda  "), "falda");
+        assert_eq!(sanitize("..."), UNTITLED);
+    }
+
+    #[test]
+    fn a_taken_name_gains_a_number_rather_than_overwriting() {
+        let dir = std::env::temp_dir().join(format!("toile-unique-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a scratch folder");
+        let first = unique_path(&dir, "blusa base");
+        assert_eq!(first.file_name().unwrap(), "blusa base.toile");
+        std::fs::write(&first, "").expect("claim the first name");
+        let second = unique_path(&dir, "blusa base");
+        assert_eq!(second.file_name().unwrap(), "blusa base 2.toile");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

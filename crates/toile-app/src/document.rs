@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use eframe::egui;
 use toile_engine::draft::Doc;
@@ -7,6 +8,10 @@ use toile_engine::session::{Session, SessionError};
 
 use crate::file::{self, Action, File};
 use crate::{config, tabs};
+
+/// How long the document sits still before an autosave writes it: long enough
+/// that a burst of edits coalesces into one write, short enough to keep work.
+const AUTOSAVE_IDLE: Duration = Duration::from_millis(800);
 
 impl crate::App {
     /// Where a file dialog should open: the last folder used, else the default
@@ -60,12 +65,79 @@ impl crate::App {
         }
     }
 
-    /// Puts a fresh blank product on the table under the name it was given.
+    /// Puts a fresh blank product on the table and gives it a home on disk at
+    /// once, so there is nothing to remember to save. When it cannot be
+    /// written, it opens under its name in memory until saved by hand, and
+    /// the bar says so.
     fn create_named(&mut self, title: String) {
         self.install(Session::blank());
         let now = self.session.revision();
-        self.file = File::new_named(title);
-        self.file.settle(None, now);
+        if let Some(path) = self.place_new(&title) {
+            self.prefs.remember(&path);
+            self.prefs.save();
+            self.file.settle(Some(path), now);
+        } else {
+            self.file = File::new_named(title);
+            self.file.settle(None, now);
+            self.file
+                .warn("no se pudo crear el archivo; usa Guardar", now);
+        }
+    }
+
+    /// Writes the blank product now on the table into a fresh file, and hands
+    /// back where it went. `None` when it cannot be written.
+    fn place_new(&self, title: &str) -> Option<PathBuf> {
+        let dir = config::patterns_dir()?;
+        std::fs::create_dir_all(&dir).ok()?;
+        let path = file::unique_path(&dir, title);
+        let text = self.session.draft()?.doc().to_canonical_json();
+        file::write(&path, &text).ok()?;
+        Some(path)
+    }
+
+    /// Writes the document back to its file once it has sat still long enough,
+    /// so a placed product keeps itself. Every edit restarts the clock and asks
+    /// for a frame, so a burst coalesces into one write that lands even when
+    /// the app is otherwise idle; only a product with a home autosaves.
+    pub(crate) fn autosave(&mut self, ctx: &egui::Context) {
+        let revision = self.session.revision();
+        if self.file.path().is_none() || !self.file.dirty(revision) {
+            self.autosave_due = None;
+            return;
+        }
+        if revision != self.autosave_rev {
+            self.autosave_rev = revision;
+            self.autosave_due = Some(Instant::now() + AUTOSAVE_IDLE);
+        }
+        let Some(due) = self.autosave_due else {
+            return;
+        };
+        if let Some(left) = due.checked_duration_since(Instant::now()) {
+            ctx.request_repaint_after(left);
+        } else {
+            self.autosave_due = None;
+            self.autosave_now();
+        }
+    }
+
+    /// Writes the document back where it lives, quietly: the dirty marker
+    /// clearing is the whole of the report, and a fault raises a notice.
+    fn autosave_now(&mut self) {
+        let revision = self.session.revision();
+        let Some(path) = self.file.path().map(Path::to_path_buf) else {
+            return;
+        };
+        let Some(text) = self
+            .session
+            .draft()
+            .map(|held| held.doc().to_canonical_json())
+        else {
+            return;
+        };
+        match file::write(&path, &text) {
+            Ok(()) => self.file.settle(Some(path), revision),
+            Err(why) => self.file.warn(why, revision),
+        }
     }
 
     /// The dialog that names a new product, shown while `new_product` is set.
@@ -208,9 +280,17 @@ impl crate::App {
         }
     }
 
-    /// Whether work nobody has written down may be thrown away, which is only
-    /// ever the person's own answer.
-    fn discardable(&self) -> bool {
+    /// Whether work nobody has written down may be thrown away.
+    ///
+    /// A placed product autosaves, so a pending write is flushed first: leaving
+    /// one product for another never asks about changes autosave already keeps.
+    /// Only an unplaced product — the edited example, or a creation that could
+    /// not be written — can still have unsaved work, and that is the person's
+    /// own answer.
+    fn discardable(&mut self) -> bool {
+        if self.file.path().is_some() && self.file.dirty(self.session.revision()) {
+            self.autosave_now();
+        }
         !self.file.dirty(self.session.revision()) || file::confirm_discard(self.file.name())
     }
 }

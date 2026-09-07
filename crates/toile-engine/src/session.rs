@@ -84,26 +84,27 @@ impl Session {
     pub fn blank() -> Session {
         let doc = Doc::new(MeasureSet::default());
         let draft = Draft::from_doc(doc).expect("an empty document resolves");
-        let drafted = Drafted { draft, piece: None };
-        Session::build(None, Vec::new(), Some(drafted), None)
+        Session::blank_with(draft)
     }
 
-    /// A document on the table, draping its first piece if it has one.
+    /// A document on the table, draping its first piece if one can be draped.
     ///
-    /// A document with no pieces opens as a blank table wrapping it, ready to
-    /// draw into — the same state a fresh product starts in — so a saved but
-    /// empty product reopens rather than being refused.
+    /// A document with no pieces — or one whose first piece is still too
+    /// partial to mesh, as an autosave taken mid-drawing leaves it — opens as a
+    /// blank table wrapping it, the same state a fresh product starts in, so
+    /// every saved product reopens rather than being refused. Drawing on takes
+    /// the piece up again once its contour can be meshed.
     ///
     /// # Errors
-    /// `SessionError` when the document does not resolve, or its first piece
-    /// carries a contour the mesher refuses.
+    /// `SessionError` when the document itself does not resolve into a draft.
     pub fn from_doc(doc: Doc) -> Result<Session, SessionError> {
         let draft = Draft::from_doc(doc)?;
         let Some(piece) = draft.doc().piece_keys().first().copied() else {
-            let drafted = Drafted { draft, piece: None };
-            return Ok(Session::build(None, Vec::new(), Some(drafted), None));
+            return Ok(Session::blank_with(draft));
         };
-        let (slot, contour, state) = drape_piece(&draft, piece)?;
+        let Ok((slot, contour, state)) = drape_piece(&draft, piece) else {
+            return Ok(Session::blank_with(draft));
+        };
         let handle = spawn_sim(&slot, state);
         let drafted = Drafted {
             draft,
@@ -115,6 +116,13 @@ impl Session {
             Some(drafted),
             Some(handle),
         ))
+    }
+
+    /// A blank table wrapping a document already resolved into a draft: no
+    /// piece drapes, no mesh, no sim thread, until one is drawn or taken up.
+    fn blank_with(draft: Draft) -> Session {
+        let drafted = Drafted { draft, piece: None };
+        Session::build(None, Vec::new(), Some(drafted), None)
     }
 
     /// The document this session edits, when it was opened from one.

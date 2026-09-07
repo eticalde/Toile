@@ -12,6 +12,8 @@ mod theme;
 mod viewport;
 mod widgets;
 
+use std::time::Instant;
+
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
 use toile_engine::session::Session;
@@ -51,6 +53,12 @@ struct App {
     prefs: config::Prefs,
     /// The name being typed for a new product, while its dialog is open.
     new_product: Option<String>,
+    /// The revision autosave last saw, for telling a fresh edit from a frame
+    /// where nothing changed.
+    autosave_rev: u64,
+    /// When the pending autosave is due, set while the document is dirty and
+    /// counting down to a write, cleared once it lands or nothing waits.
+    autosave_due: Option<Instant>,
 }
 
 impl App {
@@ -73,6 +81,8 @@ impl App {
             probador,
             prefs,
             new_product: None,
+            autosave_rev: 0,
+            autosave_due: None,
         }
     }
 }
@@ -133,6 +143,10 @@ impl eframe::App for App {
             let ctx = ui.ctx().clone();
             self.new_product_dialog(&ctx);
         }
+        // A placed product keeps itself: this writes it back once its edits
+        // have settled, so nobody has to remember to save.
+        let ctx = ui.ctx().clone();
+        self.autosave(&ctx);
         // The sim advances on its own clock, so a frame is only final once it
         // has both caught up with the last edit and gone back to sleep. A
         // rebuild out with the mesher asks for frames on its own: queueing it
