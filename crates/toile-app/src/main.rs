@@ -24,12 +24,18 @@ use crate::theme::Theme;
 
 fn main() -> eframe::Result {
     let prefs = config::Prefs::load();
-    let viewport = match prefs.window {
-        Some([x, y, w, h]) => egui::ViewportBuilder::default()
-            .with_position([x, y])
-            .with_inner_size([w, h]),
-        None => egui::ViewportBuilder::default().with_inner_size([1320.0, 780.0]),
-    };
+    let mut viewport = egui::ViewportBuilder::default().with_inner_size(match prefs.window {
+        Some([_, _, w, h]) => [w, h],
+        None => [1320.0, 780.0],
+    });
+    if let Some([x, y, _, _]) = prefs.window {
+        viewport = viewport.with_position([x, y]);
+    }
+    // Fill the screen unless the window was deliberately left floating; the
+    // inner size above is where an un-maximize returns to.
+    if prefs.maximized != Some(false) {
+        viewport = viewport.with_maximized(true);
+    }
     let options = eframe::NativeOptions {
         viewport,
         renderer: eframe::Renderer::Wgpu,
@@ -85,6 +91,25 @@ impl App {
             autosave_due: None,
         }
     }
+
+    /// Remembers the window between runs: the maximized state always, and the
+    /// floating geometry only while it is not maximized, so a window left
+    /// filling the screen reopens that way and one resized smaller reopens at
+    /// the size it was left.
+    fn track_window(&mut self, ctx: &egui::Context) {
+        ctx.input(|i| {
+            let info = i.viewport();
+            if let Some(maximized) = info.maximized {
+                self.prefs.maximized = Some(maximized);
+            }
+            if info.maximized != Some(true)
+                && let (Some(outer), Some(inner)) = (info.outer_rect, info.inner_rect)
+            {
+                let (pos, size) = (outer.min, inner.size());
+                self.prefs.window = Some([pos.x, pos.y, size.x, size.y]);
+            }
+        });
+    }
 }
 
 /// The file keys, which belong to the program and not to any one tab.
@@ -111,9 +136,7 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Track the window each frame so on_exit writes where it ended up. The
         // read is cheap and the disk write waits for exit.
-        if let Some(window) = window_geometry(ui.ctx()) {
-            self.prefs.window = Some(window);
-        }
+        self.track_window(ui.ctx());
         // The mesher answers on its own thread, and this is the once-a-frame
         // collection that lands its rebuilds. It runs before the bars so a
         // refused contour reaches the status bar on this very frame.
@@ -160,16 +183,4 @@ impl eframe::App for App {
     fn on_exit(&mut self) {
         self.prefs.save();
     }
-}
-
-/// The window as `[x, y, width, height]`: outer top-left, inner size, the pair
-/// [`egui::ViewportBuilder`] restores it from. `None` until the platform has
-/// reported both rects.
-fn window_geometry(ctx: &egui::Context) -> Option<[f32; 4]> {
-    ctx.input(|i| {
-        let info = i.viewport();
-        let pos = info.outer_rect?.min;
-        let size = info.inner_rect?.size();
-        Some([pos.x, pos.y, size.x, size.y])
-    })
 }

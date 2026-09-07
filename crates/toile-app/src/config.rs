@@ -20,7 +20,15 @@ const RECENTS: usize = 10;
 #[serde(default)]
 pub struct Prefs {
     /// Window geometry as `[x, y, width, height]`: outer top-left, inner size.
+    ///
+    /// The floating geometry, tracked only while the window is not filling the
+    /// screen, so a maximized window still knows the size to restore to.
     pub window: Option<[f32; 4]>,
+    /// Whether the window was left filling the screen, to open it that way
+    /// again. `None` when it has never been recorded — an old preferences file,
+    /// or the first run — which opens maximized: filling the screen is the
+    /// default, and only a window deliberately made to float records `false`.
+    pub maximized: Option<bool>,
     /// Patterns opened or saved, most recent first.
     pub recents: Vec<PathBuf>,
     /// The folder the file dialog should open in next.
