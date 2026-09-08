@@ -3,18 +3,36 @@
 // The body golden is asserted bit-identical on macOS ARM and Linux x86 at once,
 // and the existing goldens already live inside that regime; a transcendental
 // here would drift the last bits between the two machines and break the gate.
-// This is why the superellipse is limited to n in {2, 4} (2/n in {1.0, 0.5},
-// i.e. sqrt only) and ring directions come from a literal-seeded rotor below.
+// This is why roundness is a point-wise blend between an ellipse (n = 2) and a
+// rounded square (n = 4, i.e. sqrt only) rather than a fractional exponent,
+// and ring directions come from a literal-seeded rotor below.
 
-/// One superelliptic cross-section: centre `(cx, cz)`, half-width `a` on x,
-/// half-depth `b` on z, exponent `n`, at height `y`. Only n in {2, 4} are used.
+/// Aspect and roundness of one section, per half: `rho` is half-depth over
+/// half-width, `round` 0 is an ellipse and 1 a rounded square.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Shape {
+    pub rho_front: f64,
+    pub rho_back: f64,
+    pub round_front: f64,
+    pub round_back: f64,
+}
+
+/// One cross-section at height `y`, centred on `(cx, cz)`.
+///
+/// The side columns sit at exactly `cx ± a`; the front (+z) and back (−z)
+/// halves carry their own depth and roundness, which is how a bust leads the
+/// waist and a seat trails it while the ring centre stays on the side-seam
+/// plane.
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct Ring {
     pub cx: f64,
     pub cz: f64,
     pub y: f64,
     pub a: f64,
-    pub b: f64,
-    pub n: f64,
+    pub depth_front: f64,
+    pub depth_back: f64,
+    pub round_front: f64,
+    pub round_back: f64,
 }
 
 /// The `seg` unit directions around a ring as `(cos, sin)` pairs, turned out by
@@ -40,45 +58,60 @@ pub(crate) fn unit_dirs(seg: u32) -> Vec<(f64, f64)> {
     out
 }
 
-/// Warps one unit direction onto the superellipse. n = 2 is a plain ellipse;
-/// n = 4 raises each component to 2/n = 0.5, i.e. `sign * sqrt(|c|)`.
-pub(crate) fn point(r: &Ring, dir: (f64, f64)) -> [f32; 3] {
-    // `< 3.0` splits the only two exponents in play (2 and 4) without an
-    // equality compare on a float; interpolation keeps n exactly on 2 or 4.
-    let f = |c: f64| {
-        if r.n < 3.0 {
-            c
-        } else {
-            c.signum() * c.abs().sqrt()
-        }
+/// Warps one unit direction onto the ring. Each component is blended between
+/// itself (an ellipse) and `sign * sqrt(|c|)` (the rounded square) by the
+/// half's roundness; at `v = 0` both halves land on exactly `cx ± a`.
+pub(crate) fn point(r: &Ring, (u, v): (f64, f64)) -> [f64; 3] {
+    let sq = |c: f64| c.signum() * c.abs().sqrt();
+    let (b, t) = if v < 0.0 {
+        (r.depth_back, r.round_back)
+    } else {
+        (r.depth_front, r.round_front)
     };
-    [
-        (r.cx + r.a * f(dir.0)) as f32,
-        r.y as f32,
-        (r.cz + r.b * f(dir.1)) as f32,
-    ]
+    let fx = u + t * (sq(u) - u);
+    let fz = v + t * (sq(v) - v);
+    [r.cx + r.a * fx, r.y, r.cz + b * fz]
 }
 
-/// Turns a measured girth into the `(a, b)` axes for aspect ρ = b/a and
-/// exponent n. A superellipse has no closed-form perimeter, so the tape is
-/// honoured numerically: sum the chords of a unit ring, then scale so its
-/// perimeter equals the girth (cm→m by /100).
-pub(crate) fn axes_for_girth(c_cm: f64, rho: f64, n: f64, dirs: &[(f64, f64)]) -> (f64, f64) {
-    let unit = Ring {
-        cx: 0.0,
-        cz: 0.0,
-        y: 0.0,
-        a: 1.0,
-        b: rho,
-        n,
-    };
+/// The chord-sum perimeter of a ring over the given directions.
+pub(crate) fn perimeter(r: &Ring, dirs: &[(f64, f64)]) -> f64 {
     let mut p = 0.0;
     for w in dirs.windows(2) {
-        let a = point(&unit, w[0]);
-        let b = point(&unit, w[1]);
-        let (dx, dz) = (f64::from(b[0] - a[0]), f64::from(b[2] - a[2]));
+        let a = point(r, w[0]);
+        let b = point(r, w[1]);
+        let (dx, dz) = (b[0] - a[0], b[2] - a[2]);
         p += (dx * dx + dz * dz).sqrt();
     }
-    let a = (c_cm / 100.0) / p;
-    (a, a * rho)
+    p
+}
+
+/// A ring whose perimeter is a measured girth. There is no closed form for
+/// a blended superellipse, so the tape is honoured numerically: sum the chords
+/// of a unit ring, then scale so its perimeter equals the girth (cm→m by /100).
+pub(crate) fn from_girth(
+    girth_cm: f64,
+    s: Shape,
+    cx: f64,
+    cz: f64,
+    y: f64,
+    dirs: &[(f64, f64)],
+) -> Ring {
+    let unit = from_width(1.0, s, 0.0, 0.0, 0.0);
+    let a = (girth_cm / 100.0) / perimeter(&unit, dirs);
+    from_width(a, s, cx, cz, y)
+}
+
+/// A ring sized by its half-width, for sections that are not a tape (the
+/// crotch, the shoulders, the jaw).
+pub(crate) fn from_width(a: f64, s: Shape, cx: f64, cz: f64, y: f64) -> Ring {
+    Ring {
+        cx,
+        cz,
+        y,
+        a,
+        depth_front: a * s.rho_front,
+        depth_back: a * s.rho_back,
+        round_front: s.round_front,
+        round_back: s.round_back,
+    }
 }

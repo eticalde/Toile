@@ -21,9 +21,12 @@ impl Camera {
     const TARGET: [f32; 3] = [0.0, 0.02, 0.0];
     const FOV_Y: f32 = 55.0;
 
-    /// Framed for a person-height figure centred on the origin. Distance 2.6
-    /// sits inside the existing zoom clamp; at FOV 55° a ~1.7 m body fills the
-    /// frame with margin.
+    /// Framed for a person-height figure centred on the origin, head to feet
+    /// and the A-pose arms. Distance 2.6 sits inside the existing zoom clamp;
+    /// at FOV 55° the crown and the ankles project to about 64 % of the
+    /// half-height and the wrists (±0.38 m) to under a third of the
+    /// half-width down to an aspect of 0.8, so the whole dummy keeps a margin
+    /// in any viewport the panels leave.
     pub fn for_body() -> Self {
         Self {
             yaw: 0.6,

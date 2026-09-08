@@ -1,34 +1,61 @@
-/// A person's lower-body measurements, in centimetres.
+/// A person's body measurements, in centimetres.
 ///
 /// English field names by STD-001; each maps to one catalogue name the
 /// Maniquies tab edits (the Spanish-name mapping is done in
 /// `toile_engine::body`, where the names stay data rather than identifiers).
+/// Semantics follow ISO 8559-1 so the same tape that drafts a pattern sizes
+/// the dummy. A value the person omits is completed by `PartialMeasures`.
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BodyMeasures {
-    /// Estatura: floor to the crown of the head.
+    /// Stature ("`estatura`"): floor to the crown of the head.
     pub height: f64,
-    /// Cintura: waist girth.
+    /// Waist girth ("`cintura`").
     pub waist: f64,
-    /// Cadera: hip girth.
+    /// Hip girth ("`cadera`").
     pub hip: f64,
-    /// Muslo: thigh girth.
+    /// Thigh girth ("`muslo`").
     pub thigh: f64,
-    /// Rodilla: knee girth.
+    /// Knee girth ("`rodilla`").
     pub knee: f64,
-    /// Tobillo: ankle girth.
+    /// Ankle girth ("`tobillo`").
     pub ankle: f64,
-    /// Tiro: waist to crotch, which anchors the crotch height.
+    /// Rise ("`tiro`"): waist to crotch, which anchors the crotch height.
     pub rise: f64,
-    /// Largo lateral: waist to ankle down the outside.
+    /// Outseam ("`largo_lateral`"): waist to ankle down the outside.
     pub outseam: f64,
-    /// Entrepierna: crotch to ankle; a documented cross-check, not an anchor.
+    /// Inseam ("`entrepierna`"): crotch to ankle; a documented cross-check, not
+    /// an anchor.
     pub inseam: f64,
-    /// Altura de cadera: the drop from waist to hip.
+    /// Hip drop ("`altura_cadera`"): the drop from waist to hip.
     pub hip_drop: f64,
+    /// Neck-base girth ("`cuello`"), where a collar sits.
+    pub neck: f64,
+    /// Bust or chest girth ("`pecho`") at the fullest point.
+    pub bust: f64,
+    /// Upper chest girth ("`pecho_alto`") at armpit level.
+    pub upper_chest: f64,
+    /// Underbust girth ("`bajo_pecho`"), directly under the bust.
+    pub underbust: f64,
+    /// Shoulder width ("`hombros`"): shoulder point to shoulder point across
+    /// the back.
+    pub shoulder_width: f64,
+    /// Arm length ("`brazo`"): shoulder point to wrist with the arm hanging.
+    pub arm_length: f64,
+    /// Upper-arm girth ("`brazo_contorno`") at the fullest point.
+    pub upper_arm: f64,
+    /// Wrist girth ("`muneca`").
+    pub wrist: f64,
+    /// Back length ("`largo_espalda`"): nape to waist down the spine. It scales
+    /// the whole torso stack, so it is not re-measurable on the dummy.
+    pub back_length: f64,
+    /// Head girth ("`cabeza`") above the brows.
+    pub head: f64,
 }
 
 impl Default for BodyMeasures {
-    /// Public-domain drafting-book values, internally consistent
-    /// (rise 27 ≈ outseam 104 − inseam 78 = 26).
+    /// Public-domain drafting-book values for a 178 cm reference body,
+    /// internally consistent (rise 27 ≈ outseam 104 − inseam 78 = 26; bust 96
+    /// over underbust 88 gives the chest-versus-bust rules room to act).
     fn default() -> Self {
         Self {
             height: 178.0,
@@ -41,6 +68,16 @@ impl Default for BodyMeasures {
             outseam: 104.0,
             inseam: 78.0,
             hip_drop: 20.0,
+            neck: 39.0,
+            bust: 96.0,
+            upper_chest: 94.0,
+            underbust: 88.0,
+            shoulder_width: 46.0,
+            arm_length: 60.0,
+            upper_arm: 30.0,
+            wrist: 17.0,
+            back_length: 44.5,
+            head: 57.0,
         }
     }
 }
@@ -53,7 +90,7 @@ pub struct BodyRes {
     pub seg: u32,
     /// Interpolated rings inserted between each pair of landmark rings.
     pub loft_steps: u32,
-    /// Rings from the waist up to the crown dome.
+    /// Rings of the skull cap from the head's widest ring to the crown.
     pub dome_rings: u32,
 }
 

@@ -1,5 +1,7 @@
-use crate::loft::{hip_half_width, landmarks, leg, trunk, vertex_normals};
+use crate::landmarks::landmarks;
+use crate::loft::vertex_normals;
 use crate::params::{BodyMeasures, BodyRes};
+use crate::parts::{Ctx, Part, Side, arm, leg, trunk};
 use crate::ring::unit_dirs;
 
 /// A triangulated body surface in the renderer's terms.
@@ -23,24 +25,36 @@ impl BodyMesh {
     }
 }
 
-/// Lofts the body for one set of measurements at the given resolution.
-///
-/// The three parts (trunk-with-dome and two legs) are concatenated with their
-/// indices rebased by the running vertex count — the same rebase the sphere's
-/// index plan uses — then the figure is centred vertically and its normals are
-/// computed from the final positions.
-pub fn body_mesh(m: &BodyMeasures, res: BodyRes) -> BodyMesh {
+/// The five parts in their fixed order, uncentred (ankle joint at y = 0):
+/// trunk with neck and head, left leg, right leg, left arm, right arm.
+pub(crate) fn parts(m: &BodyMeasures, res: BodyRes) -> [Part; 5] {
     let dirs = unit_dirs(res.seg);
     let lm = landmarks(m);
-    let dx = hip_half_width(m, &dirs);
+    let c = Ctx {
+        m,
+        res,
+        lm: &lm,
+        dirs: &dirs,
+    };
+    [
+        trunk(&c),
+        leg(&c, Side::Left),
+        leg(&c, Side::Right),
+        arm(&c, Side::Left),
+        arm(&c, Side::Right),
+    ]
+}
 
+/// Lofts the body for one set of measurements at the given resolution.
+///
+/// The parts are concatenated with their indices rebased by the running
+/// vertex count — the same rebase the sphere's index plan uses — then the
+/// figure is centred vertically and its normals are computed from the final
+/// positions.
+pub fn body_mesh(m: &BodyMeasures, res: BodyRes) -> BodyMesh {
     let mut positions: Vec<f32> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
-    for (verts, idx) in [
-        trunk(m, res, &lm, &dirs),
-        leg(m, res, &lm, -dx, &dirs),
-        leg(m, res, &lm, dx, &dirs),
-    ] {
+    for (verts, idx) in parts(m, res) {
         let base = (positions.len() / 3) as u32;
         positions.extend_from_slice(&verts);
         indices.extend(idx.into_iter().map(|i| i + base));
@@ -48,7 +62,7 @@ pub fn body_mesh(m: &BodyMeasures, res: BodyRes) -> BodyMesh {
 
     // Centre the figure on the origin: the parts are built with the ankle joint
     // at y = 0 and the crown at y = crown, so shift down by half the height.
-    let shift = (lm.crown * 0.5) as f32;
+    let shift = (landmarks(m).crown * 0.5) as f32;
     for y in positions.iter_mut().skip(1).step_by(3) {
         *y -= shift;
     }

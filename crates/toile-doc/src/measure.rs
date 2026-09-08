@@ -21,7 +21,7 @@ impl MeasureSet {
     ///
     /// A name outside the catalogue is allowed: the catalogue guides, it does
     /// not rule.
-    pub const CATALOGUE: [&'static str; 10] = [
+    pub const CATALOGUE: [&'static str; 20] = [
         "cintura",
         "cadera",
         "muslo",
@@ -32,6 +32,16 @@ impl MeasureSet {
         "entrepierna",
         "altura_cadera",
         "estatura",
+        "cuello",
+        "pecho",
+        "pecho_alto",
+        "bajo_pecho",
+        "hombros",
+        "brazo",
+        "brazo_contorno",
+        "muneca",
+        "largo_espalda",
+        "cabeza",
     ];
 
     /// Whether the catalogue names this measurement.
@@ -105,6 +115,7 @@ mod tests {
         assert_eq!(set.get("largo_manga"), Some(60.0));
         assert_eq!(set.uncatalogued(), ["largo_manga"]);
         assert!(MeasureSet::is_catalogued("altura_cadera"));
+        assert!(MeasureSet::is_catalogued("muneca"));
         assert!(!MeasureSet::is_catalogued("largo_manga"));
     }
 

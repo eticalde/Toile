@@ -4,17 +4,30 @@ use super::State;
 use crate::theme::Theme;
 use crate::widgets::{Editable, Edited, formula_row, section, section_with};
 
-/// Girth measurements, each catalogue name with the label the panel shows.
-const CONTORNOS: [(&str, &str); 5] = [
+/// Girth measurements, each catalogue name with the label the panel shows,
+/// ordered top-down the body: the tape starts at the neck and ends at the
+/// ankle, then the arm and the head, which sit off the trunk's line.
+const CONTORNOS: [(&str, &str); 12] = [
+    ("cuello", "Cuello"),
+    ("pecho_alto", "Pecho alto"),
+    ("pecho", "Contorno de pecho"),
+    ("bajo_pecho", "Bajo pecho"),
     ("cintura", "Cintura"),
     ("cadera", "Cadera"),
     ("muslo", "Muslo"),
     ("rodilla", "Rodilla"),
     ("tobillo", "Tobillo"),
+    ("brazo_contorno", "Contorno de brazo"),
+    ("muneca", "Muñeca"),
+    ("cabeza", "Contorno de cabeza"),
 ];
 
-/// Vertical measurements.
-const LARGOS: [(&str, &str); 4] = [
+/// Vertical measurements and the one width (the shoulders), top-down as
+/// well: the trunk lengths, the arm, then the legs.
+const LARGOS: [(&str, &str); 7] = [
+    ("largo_espalda", "Largo de espalda"),
+    ("brazo", "Largo de brazo"),
+    ("hombros", "Ancho de hombros"),
     ("tiro", "Tiro"),
     ("largo_lateral", "Largo lateral"),
     ("entrepierna", "Entrepierna"),
@@ -27,20 +40,28 @@ const CUERPO: [(&str, &str); 1] = [("estatura", "Estatura")];
 /// The editable inspector: every catalogue measurement over the line that says
 /// what it comes to. A confirmed value goes to the measure set and marks the
 /// state dirty, so the central panel rebuilds the body before the next frame.
+///
+/// Twenty rows outgrow any window height, so the groups scroll under a pinned
+/// title; the sections keep their order, so the scroll position is the only
+/// thing that moves.
 pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
     section_with(ui, theme, "Medidas · Etienne", "cm");
-    section(ui, theme, "Contornos");
-    for entry in CONTORNOS {
-        row(ui, theme, st, entry);
-    }
-    section(ui, theme, "Largos");
-    for entry in LARGOS {
-        row(ui, theme, st, entry);
-    }
-    section(ui, theme, "Cuerpo");
-    for entry in CUERPO {
-        row(ui, theme, st, entry);
-    }
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            section(ui, theme, "Contornos");
+            for entry in CONTORNOS {
+                row(ui, theme, st, entry);
+            }
+            section(ui, theme, "Largos y anchos");
+            for entry in LARGOS {
+                row(ui, theme, st, entry);
+            }
+            section(ui, theme, "Cuerpo");
+            for entry in CUERPO {
+                row(ui, theme, st, entry);
+            }
+        });
 }
 
 /// Draws one measurement row and, when it is confirmed with a number, writes it
