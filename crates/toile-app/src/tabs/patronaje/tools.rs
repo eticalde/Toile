@@ -9,14 +9,9 @@ use crate::widgets::{CORNER, PAD, section};
 /// The nine tools: the name, the icon that stands for it, and whether the
 /// program can already do it. A tile that cannot is drawn dead and answers
 /// nothing, because a button that lies is worse than a gap.
-const TOOLS: [(&str, &str, bool); 9] = [
+const TOOLS: [(&str, &str, bool); 8] = [
     ("Seleccionar", "3 2 13 8 8.8 9 7 13 3 2", true),
     ("Punto", "o 8 8 2.5", true),
-    (
-        "Recta",
-        "3.5 12.5 12.5 3.5; o 3.5 12 1.4; o 12 3.5 1.4",
-        true,
-    ),
     (
         "Curva",
         "2 13 5 12 8 9 11 4 14 3; 2 13 5 9; o 5 9 1.3",
@@ -39,7 +34,6 @@ fn tool_of(name: &str) -> Option<Tool> {
     match name {
         "Seleccionar" => Some(Tool::Select),
         "Punto" => Some(Tool::Point),
-        "Recta" => Some(Tool::Line),
         "Curva" => Some(Tool::Curve),
         _ => None,
     }

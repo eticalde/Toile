@@ -66,10 +66,13 @@ impl Selection {
     }
 }
 
-/// The tool in hand, out of the nine the panel offers.
+/// The tool in hand: what a press on the mat does to the piece in front.
 ///
-/// Only the ones whose phases have arrived are here: a variant nothing can
-/// choose would be a promise the tiles do not keep.
+/// Only editing tools live here. Drawing a new piece is not a tool but an
+/// explicit act — "+ Pieza" in the product tree — so a stray press never grows
+/// the product a piece nobody asked for. Only the tools whose phases have
+/// arrived are here: a variant nothing can choose would be a promise the tiles
+/// do not keep.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Tool {
     /// Choose and move what is already drawn.
@@ -77,8 +80,6 @@ pub enum Tool {
     Select,
     /// Put a node on the tract under the pointer.
     Point,
-    /// Draw a new piece, vertex by vertex.
-    Line,
     /// Bend a straight tract, and pull the handles of a bent one.
     Curve,
 }

@@ -19,15 +19,6 @@ const SIDES: usize = 3;
 /// The finest a free vertex is written to, in centimetres.
 const HUNDREDTHS: f64 = 100.0;
 
-/// The Line tool's first press: the drawing opens on its first vertex.
-pub(super) fn start(
-    at: Pos2,
-    mods: Mods,
-    ctx: &EditContext<'_>,
-) -> (Gesture, Vec<Command>, Feedback) {
-    place(Vec::new(), at, mods, ctx)
-}
-
 /// Reduces one event against the drawing in progress.
 ///
 /// No command goes out until the contour closes: Escape walks away from any

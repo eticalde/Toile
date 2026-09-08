@@ -67,11 +67,9 @@ fn press(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>,
     if mods.space {
         return (Gesture::Pan { from: at }, Vec::new(), Feedback::default());
     }
-    // The Line tool draws wherever it is pressed: a node under the pointer is
-    // a snap candidate for the vertex, not something to take in hand.
-    if ctx.tool == Tool::Line {
-        return draw::start(at, mods, ctx);
-    }
+    // A press never begins a piece: drawing runs only inside the `Drawing`
+    // gesture, which "+ Pieza" opens deliberately. A press here takes what is
+    // already drawn in hand, or sweeps a band, or does nothing.
     if let Some(key) = take::node_at(at, ctx) {
         return take::grab(key, at, mods, ctx);
     }
@@ -152,7 +150,6 @@ fn idle(key: Key, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, 
         },
         (Key::V, false, _) => tool(Tool::Select),
         (Key::P, false, _) => tool(Tool::Point),
-        (Key::L, false, _) => tool(Tool::Line),
         (Key::C, false, _) => tool(Tool::Curve),
         _ => Feedback::default(),
     };

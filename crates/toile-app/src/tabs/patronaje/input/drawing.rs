@@ -15,8 +15,14 @@ use super::*;
 const CORNERS: [[f64; 2]; 4] = [[20.0, 0.0], [30.0, 0.0], [30.0, 8.0], [20.0, 8.0]];
 
 /// Feeds one press per corner and hands back the gesture it leaves.
+///
+/// The drawing starts open, the way "+ Pieza" opens it: a press begins a piece
+/// only inside the `Drawing` gesture, never on its own.
 fn placed(ctx: &EditContext<'_>, corners: &[[f64; 2]]) -> Gesture {
-    let mut gesture = Gesture::Idle;
+    let mut gesture = Gesture::Drawing {
+        pending: Vec::new(),
+        rubber: [0.0, 0.0],
+    };
     for &at in corners {
         let (next, commands, feedback) =
             update(gesture, Input::Down(on_glass(at), Mods::default()), ctx);
@@ -38,7 +44,7 @@ fn pending(gesture: &Gesture) -> &[[f64; 2]] {
 #[test]
 fn the_whole_drawing_gesture_makes_one_piece_in_one_entry() {
     let table = bent();
-    let ctx = table.holding(Selection::None, Tool::Line);
+    let ctx = table.holding(Selection::None, Tool::Select);
     let gesture = placed(&ctx, &CORNERS);
     assert_eq!(pending(&gesture), &CORNERS);
 
@@ -113,7 +119,7 @@ fn the_whole_drawing_gesture_makes_one_piece_in_one_entry() {
 #[test]
 fn enter_closes_the_contour_and_a_triangle_is_enough() {
     let table = bent();
-    let ctx = table.holding(Selection::None, Tool::Line);
+    let ctx = table.holding(Selection::None, Tool::Select);
     let gesture = placed(&ctx, &CORNERS[..3]);
     let (gesture, commands, feedback) =
         update(gesture, Input::Key(Key::Enter, Mods::default()), &ctx);
@@ -125,7 +131,7 @@ fn enter_closes_the_contour_and_a_triangle_is_enough() {
 #[test]
 fn a_contour_of_two_vertices_does_not_close() {
     let table = bent();
-    let ctx = table.holding(Selection::None, Tool::Line);
+    let ctx = table.holding(Selection::None, Tool::Select);
     let gesture = placed(&ctx, &CORNERS[..2]);
     let (gesture, commands, _) = update(gesture, Input::Key(Key::Enter, Mods::default()), &ctx);
     assert!(commands.is_empty(), "two vertices are a line, not a piece");
@@ -135,7 +141,7 @@ fn a_contour_of_two_vertices_does_not_close() {
 #[test]
 fn escape_walks_away_from_the_drawing_commandless() {
     let table = bent();
-    let ctx = table.holding(Selection::None, Tool::Line);
+    let ctx = table.holding(Selection::None, Tool::Select);
     let gesture = placed(&ctx, &CORNERS[..3]);
     let (gesture, commands, feedback) =
         update(gesture, Input::Key(Key::Escape, Mods::default()), &ctx);
@@ -148,7 +154,7 @@ fn escape_walks_away_from_the_drawing_commandless() {
 #[test]
 fn backspace_takes_the_last_vertex_back() {
     let table = bent();
-    let ctx = table.holding(Selection::None, Tool::Line);
+    let ctx = table.holding(Selection::None, Tool::Select);
     let gesture = placed(&ctx, &CORNERS[..3]);
     let (gesture, commands, _) = update(gesture, Input::Key(Key::Backspace, Mods::default()), &ctx);
     assert!(commands.is_empty());
@@ -158,7 +164,7 @@ fn backspace_takes_the_last_vertex_back() {
 #[test]
 fn the_rubber_line_follows_the_pointer() {
     let table = bent();
-    let ctx = table.holding(Selection::None, Tool::Line);
+    let ctx = table.holding(Selection::None, Tool::Select);
     let gesture = placed(&ctx, &CORNERS[..1]);
     let (gesture, _, feedback) = update(
         gesture,
@@ -173,14 +179,17 @@ fn the_rubber_line_follows_the_pointer() {
 }
 
 #[test]
-fn the_line_tool_draws_instead_of_grabbing() {
+fn a_vertex_pressed_on_a_node_while_drawing_is_caught_by_it() {
     let table = bent();
-    // The snap is live: a press on an existing node is a vertex caught by
-    // that node, not a drag taking it in hand.
-    let ctx = table.snapping(Selection::None, Tool::Line);
+    // The snap is live: pressed inside the drawing gesture, an existing node is
+    // a vertex caught by that node, not the node taken in hand.
+    let ctx = table.snapping(Selection::None, Tool::Select);
     let at = table.nodes[2].1;
     let (gesture, commands, feedback) = update(
-        Gesture::Idle,
+        Gesture::Drawing {
+            pending: Vec::new(),
+            rubber: [0.0, 0.0],
+        },
         Input::Down(on_glass(at), Mods::default()),
         &ctx,
     );

@@ -57,14 +57,14 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         tools::grid(ui, theme, state);
         let mut asked: Vec<Verb> = tools::history(ui, theme, ready).into_iter().collect();
         match plea.filter(|_| !asking) {
-            // "+ Pieza" puts the Line tool in hand with the drawing already
-            // begun, so the very next click on the mat places a vertex. A
-            // drawing already in progress starts over: the row was pressed
-            // to start one.
+            // "+ Pieza" opens the drawing gesture, so the very next click on
+            // the mat places the first vertex — the one deliberate way to
+            // begin a piece. A drawing already in progress starts over: the
+            // row was pressed to start one.
             Some(tree::Plea::Draw)
                 if matches!(state.gesture, Gesture::Idle | Gesture::Drawing { .. }) =>
             {
-                state.tool = Tool::Line;
+                state.tool = Tool::Select;
                 state.gesture = Gesture::Drawing {
                     pending: Vec::new(),
                     rubber: [0.0, 0.0],
@@ -200,6 +200,15 @@ fn apply(session: &mut Session, verbs: Vec<Verb>, said: &mut Option<String>) -> 
 /// Each cell says whether it is an alert: a refused edit and a broken contour
 /// are painted to be seen, and everything else stays quiet.
 pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
+    // While a piece is being drawn the bar tells how to finish it: with no
+    // menu and no tool tile any more, this is where the two keys are named.
+    if matches!(state.gesture, Gesture::Drawing { .. }) {
+        return vec![
+            ("dibujando pieza".to_owned(), false),
+            ("Enter cierra · Esc cancela".to_owned(), false),
+            ("cm".to_owned(), false),
+        ];
+    }
     let draft = session.draft();
     let piece = active_piece(draft, state.active, session.piece());
     let (Some(draft), Some(piece)) = (draft, piece) else {
