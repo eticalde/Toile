@@ -53,7 +53,7 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let state = &mut *w.patronaje;
     let mut verbs = Vec::new();
     verbs.extend(left_panel(ui, theme, |ui| {
-        let plea = tree::product(ui, theme, draft, active);
+        let plea = tree::product(ui, theme, draft, active, &mut state.renaming);
         tools::grid(ui, theme, state);
         let mut asked: Vec<Verb> = tools::history(ui, theme, ready).into_iter().collect();
         match plea.filter(|_| !asking) {
@@ -71,6 +71,14 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
                 };
             }
             Some(tree::Plea::Focus(key)) => focus(state, key),
+            Some(tree::Plea::Rename(key, to)) => {
+                asked.push(Verb::Begin("renombrar pieza"));
+                asked.push(Verb::Edit(Box::new(Command::RenamePiece {
+                    piece: key,
+                    to,
+                })));
+                asked.push(Verb::End);
+            }
             Some(tree::Plea::Remove(key)) => {
                 asked.push(Verb::Begin("borrar pieza"));
                 asked.push(Verb::Edit(Box::new(Command::RemovePiece { piece: key })));

@@ -126,6 +126,9 @@ pub struct State {
     /// first. A matter of view, never the document's: which piece is in
     /// front of the person is not something the file remembers.
     pub active: Option<PieceKey>,
+    /// The piece being renamed in the product tree, and the name typed so far,
+    /// while its row is an open field. A matter of view, like the active piece.
+    pub renaming: Option<(PieceKey, String)>,
     /// What the inspector is pointed at.
     pub selection: Selection,
     /// The tool the pointer is holding.
@@ -164,6 +167,7 @@ impl State {
     /// written field held over from the last one would point at nothing.
     pub fn reset(&mut self) {
         self.active = None;
+        self.renaming = None;
         self.selection = Selection::None;
         self.gesture = Gesture::Idle;
         self.caught = None;
@@ -181,6 +185,7 @@ impl Default for State {
         State {
             view: View::default(),
             active: None,
+            renaming: None,
             selection: Selection::None,
             tool: Tool::Select,
             labels: true,
