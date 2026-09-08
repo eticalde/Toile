@@ -91,6 +91,7 @@ pub struct Workspace<'a> {
     pub session: &'a mut Session,
     pub patronaje: &'a mut patronaje::State,
     pub probador: &'a mut probador::State,
+    pub maniquies: &'a mut maniquies::State,
 }
 
 /// Library or tool column, on the left.

@@ -21,6 +21,17 @@ impl Camera {
     const TARGET: [f32; 3] = [0.0, 0.02, 0.0];
     const FOV_Y: f32 = 55.0;
 
+    /// Framed for a person-height figure centred on the origin. Distance 2.6
+    /// sits inside the existing zoom clamp; at FOV 55° a ~1.7 m body fills the
+    /// frame with margin.
+    pub fn for_body() -> Self {
+        Self {
+            yaw: 0.6,
+            pitch: 0.12,
+            distance: 2.6,
+        }
+    }
+
     pub fn orbit(&mut self, dx: f32, dy: f32) {
         self.yaw += dx * 0.01;
         // Stop short of the poles, where the up vector degenerates.

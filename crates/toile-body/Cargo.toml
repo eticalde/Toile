@@ -1,0 +1,12 @@
+[package]
+name = "toile-body"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lints]
+workspace = true
+# Intentionally no [dependencies]: pure std math keeps deny and machete trivial
+# and lets the body mesh be goldened without a chain of crates under it.

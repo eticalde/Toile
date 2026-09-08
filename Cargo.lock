@@ -3175,6 +3175,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "toile-body"
+version = "0.1.0"
+
+[[package]]
 name = "toile-cli"
 version = "0.1.0"
 dependencies = [
@@ -3202,6 +3206,7 @@ dependencies = [
  "arc-swap",
  "crossbeam-channel",
  "thiserror 2.0.20",
+ "toile-body",
  "toile-doc",
  "toile-geom",
  "toile-mesh",

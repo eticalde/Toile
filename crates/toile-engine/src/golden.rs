@@ -32,6 +32,25 @@ pub fn flatten_front_hash() -> u64 {
     h
 }
 
+/// Lofts the reference mannequin and hashes the bits of its mesh.
+///
+/// One level below any drape: no solver and no GPU, and — like
+/// `flatten_front_hash` — it touches only `+ - * / sqrt` and f64 literals, so
+/// it is bit-identical on macOS ARM and Linux x86. A drift in the loft math
+/// moves it before it can reach a mesh nobody can read. Take the new value from
+/// the assertion and commit it in the same change, saying why.
+pub fn body_mesh_hash() -> u64 {
+    let mesh = crate::body::body_from_measures(&crate::body::default_measures());
+    let mut h = FNV_BASIS;
+    for f in mesh.positions.iter().chain(&mesh.normals) {
+        h = (h ^ u64::from(f.to_bits())).wrapping_mul(FNV_PRIME);
+    }
+    for &i in &mesh.indices {
+        h = (h ^ u64::from(i)).wrapping_mul(FNV_PRIME);
+    }
+    h
+}
+
 /// Drapes the demo bodice, moves the shoulder point 2 cm, drapes again, and
 /// hashes the result.
 ///

@@ -3,9 +3,11 @@ use eframe::egui_wgpu::RenderState;
 use toile_engine::session::Session;
 use toile_engine::sync::Snapshot;
 
+mod body;
 mod camera;
 mod render;
 
+pub use body::BodyView;
 use camera::{Camera, norm3};
 
 use crate::theme::Theme;

@@ -56,6 +56,7 @@ struct App {
     file: File,
     patronaje: tabs::patronaje::State,
     probador: tabs::probador::State,
+    maniquies: tabs::maniquies::State,
     prefs: config::Prefs,
     /// The name being typed for a new product, while its dialog is open.
     new_product: Option<String>,
@@ -77,6 +78,7 @@ impl App {
             .clone()
             .expect("eframe was configured with the wgpu renderer");
         let probador = tabs::probador::State::new(rs.clone(), &theme, &session);
+        let maniquies = tabs::maniquies::State::new(rs.clone(), &theme);
         Self {
             theme,
             tab: Tab::Patronaje,
@@ -85,6 +87,7 @@ impl App {
             file: File::default(),
             patronaje: tabs::patronaje::State::default(),
             probador,
+            maniquies,
             prefs,
             new_product: None,
             autosave_rev: 0,
@@ -151,6 +154,7 @@ impl eframe::App for App {
             session: &mut self.session,
             patronaje: &mut self.patronaje,
             probador: &mut self.probador,
+            maniquies: &mut self.maniquies,
         };
         self.tab.show(ui, &mut workspace);
         if let Some(action) = self

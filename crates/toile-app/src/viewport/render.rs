@@ -1,11 +1,13 @@
 mod layout;
 mod pipeline;
+mod solid;
 mod sphere;
 
 use eframe::egui_wgpu::RenderState;
 use eframe::wgpu;
 use layout::BufferPlan;
 use pipeline::build_pipeline;
+pub use solid::SolidRenderer;
 
 use crate::theme::Theme;
 
