@@ -7,10 +7,22 @@ pub(crate) use trunk::{shoulder_half_width, trunk};
 
 use crate::landmarks::Landmarks;
 use crate::params::{BodyMeasures, BodyRes};
+use crate::profile::nearest;
 use crate::ring::{Ring, Shape, from_girth};
+use crate::station::Station;
 
-/// One lofted part: f32 xyz vertices and CCW triangle indices into them.
-pub(crate) type Part = (Vec<f32>, Vec<u32>);
+/// One lofted part: f32 xyz vertices, CCW triangle indices into them, and the
+/// station tag of every vertex.
+pub(crate) type Part = (Vec<f32>, Vec<u32>, Vec<u8>);
+
+/// The station tag of every ring a tube through `table` emits at `steps`
+/// rings per span.
+pub(crate) fn tags(table: &[Station], steps: u32) -> Vec<u8> {
+    nearest(table.len(), steps)
+        .into_iter()
+        .map(|i| table[i].tag())
+        .collect()
+}
 
 /// Which side of the body a limb hangs on; left is −x.
 #[derive(Debug, Clone, Copy)]

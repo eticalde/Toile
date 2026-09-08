@@ -12,7 +12,7 @@ pub use defect::Defect;
 pub use edit::Recompile;
 pub use env::{Env, EnvError};
 pub use resolve::{Resolved, to_document, to_metres};
-pub use toile_body::BodyMesh;
+pub use toile_body::{BodyMesh, Station};
 // The one door between the document and the interface. The desktop app
 // depends on this crate and on nothing else of Toile's, so a type reaches it
 // only by being written on this list, one reviewable line at a time.

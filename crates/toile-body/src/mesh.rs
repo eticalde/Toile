@@ -16,6 +16,10 @@ pub struct BodyMesh {
     pub normals: Vec<f32>,
     /// CCW triangle indices into `positions`.
     pub indices: Vec<u32>,
+    /// The [`Station`](crate::Station) tag of every vertex, so a client can
+    /// light the region a measurement is read at. Topology, not geometry: it
+    /// never changes with the tape.
+    pub stations: Vec<u8>,
 }
 
 impl BodyMesh {
@@ -54,10 +58,12 @@ pub(crate) fn parts(m: &BodyMeasures, res: BodyRes) -> [Part; 5] {
 pub fn body_mesh(m: &BodyMeasures, res: BodyRes) -> BodyMesh {
     let mut positions: Vec<f32> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
-    for (verts, idx) in parts(m, res) {
+    let mut stations: Vec<u8> = Vec::new();
+    for (verts, idx, tags) in parts(m, res) {
         let base = (positions.len() / 3) as u32;
         positions.extend_from_slice(&verts);
         indices.extend(idx.into_iter().map(|i| i + base));
+        stations.extend(tags);
     }
 
     // Centre the figure on the origin: the parts are built with the ankle joint
@@ -72,5 +78,6 @@ pub fn body_mesh(m: &BodyMeasures, res: BodyRes) -> BodyMesh {
         positions,
         normals,
         indices,
+        stations,
     }
 }

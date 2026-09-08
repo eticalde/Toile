@@ -1,8 +1,8 @@
-use eframe::egui::{self, Id};
+use eframe::egui::{self, RichText, Slider, SliderClamping};
 
 use super::State;
 use crate::theme::Theme;
-use crate::widgets::{Editable, Edited, formula_row, section, section_with};
+use crate::widgets::{PAD, section, section_with};
 
 /// Girth measurements, each catalogue name with the label the panel shows,
 /// ordered top-down the body: the tape starts at the neck and ends at the
@@ -37,9 +37,42 @@ const LARGOS: [(&str, &str); 7] = [
 /// The one whole-body measurement.
 const CUERPO: [(&str, &str); 1] = [("estatura", "Estatura")];
 
-/// The editable inspector: every catalogue measurement over the line that says
-/// what it comes to. A confirmed value goes to the measure set and marks the
-/// state dirty, so the central panel rebuilds the body before the next frame.
+/// The width the slider leaves for its value box and the panel's padding.
+const VALUE_W: f32 = 78.0;
+
+/// The span a slider offers each measurement, in centimetres: wide enough for
+/// real bodies and every factory size, tight enough that a drag stays fine.
+/// A value typed into the box may sit outside it.
+fn span(name: &str) -> (f64, f64) {
+    match name {
+        "estatura" => (140.0, 210.0),
+        // A neck and a knee happen to span the same tape, as do a back
+        // length and a shoulder width; the pairs are one arm each.
+        "cuello" | "rodilla" => (28.0, 60.0),
+        "pecho_alto" => (60.0, 150.0),
+        "pecho" => (60.0, 160.0),
+        "bajo_pecho" => (55.0, 140.0),
+        "cintura" => (50.0, 150.0),
+        "cadera" => (60.0, 170.0),
+        "muslo" => (35.0, 90.0),
+        "tobillo" => (16.0, 40.0),
+        "brazo_contorno" => (18.0, 55.0),
+        "muneca" => (12.0, 26.0),
+        "cabeza" => (48.0, 66.0),
+        "largo_espalda" | "hombros" => (30.0, 60.0),
+        "brazo" => (45.0, 80.0),
+        "tiro" => (18.0, 40.0),
+        "largo_lateral" => (80.0, 130.0),
+        "entrepierna" => (55.0, 100.0),
+        "altura_cadera" => (12.0, 30.0),
+        _ => (0.0, 250.0),
+    }
+}
+
+/// The editable inspector: every catalogue measurement as a slider with its
+/// value box. A change goes to the measure set and marks the state dirty, so
+/// the central panel rebuilds the body before the next frame; a row under the
+/// pointer or in hand lights its region on the body.
 ///
 /// Twenty rows outgrow any window height, so the groups scroll under a pinned
 /// title; the sections keep their order, so the scroll position is the only
@@ -61,62 +94,50 @@ pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
             for entry in CUERPO {
                 row(ui, theme, st, entry);
             }
+            ui.add_space(PAD);
         });
 }
 
-/// Draws one measurement row and, when it is confirmed with a number, writes it
-/// back and asks for a rebuild.
-///
-/// The in-progress text lives on the tab, so a row with the focus paints
-/// whatever has been typed — faults and all — while the measure set keeps the
-/// last value that parsed. Nothing reaches the body until a finite number does.
+/// One measurement: its label over a slider that fills the panel. The label
+/// takes the accent while the row is the one lighting the body.
 fn row(ui: &mut egui::Ui, theme: &Theme, st: &mut State, entry: (&str, &str)) {
     let (name, label) = entry;
     // The state seeds every catalogue name from `default_measures`, so a row
     // always has a value; 0.0 only guards a name deliberately cleared.
-    let value = st.measures.get(name).unwrap_or(0.0);
-    let source = format!("{value:.1}");
+    let mut value = st.measures.get(name).unwrap_or(0.0);
+    let (lo, hi) = span(name);
+    let lit = st.highlight.as_deref() == Some(name);
+    let ink = if lit { theme.accent } else { theme.ink_soft };
 
-    let held = st
-        .editing
-        .as_ref()
-        .filter(|(of, _)| of == name)
-        .map(|(_, text)| text.clone());
-    let fault = held.as_deref().and_then(unparsed);
-    let note = fault.clone().unwrap_or_else(|| "cm".to_owned());
+    let scoped = ui.scope(|ui| {
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            ui.add_space(PAD);
+            ui.label(RichText::new(label).size(12.0).color(ink));
+        });
+        ui.horizontal(|ui| {
+            ui.add_space(PAD);
+            ui.spacing_mut().slider_width = (ui.available_width() - PAD - VALUE_W).max(60.0);
+            ui.add(
+                Slider::new(&mut value, lo..=hi)
+                    .suffix(" cm")
+                    .fixed_decimals(1)
+                    .trailing_fill(true)
+                    .clamping(SliderClamping::Edits),
+            )
+        })
+        .inner
+    });
+    let slider = scoped.inner;
 
-    let edited = formula_row(
-        ui,
-        theme,
-        Id::new(("maniquies-measure", name)),
-        &Editable {
-            label,
-            source: &source,
-            note: &note,
-            fault: fault.is_some(),
-            held: held.as_deref(),
-        },
-    );
-    match edited {
-        Edited::Idle => {}
-        Edited::Typing(text) => st.editing = Some((name.to_owned(), text)),
-        Edited::Done(text) => match text.trim().parse::<f64>() {
-            Ok(to) if to.is_finite() => {
-                st.measures.values.insert(name.to_owned(), to);
-                st.dirty = true;
-                st.editing = None;
-                ui.ctx().request_repaint();
-            }
-            // Keep the unparsed text so the faulted row goes on showing it.
-            _ => st.editing = Some((name.to_owned(), text)),
-        },
+    if slider.changed() && value.is_finite() {
+        st.measures.values.insert(name.to_owned(), value);
+        st.dirty = true;
+        ui.ctx().request_repaint();
     }
-}
-
-/// Why the text in a box is not a measurement, or `None` when it is a number.
-fn unparsed(text: &str) -> Option<String> {
-    match text.trim().parse::<f64>() {
-        Ok(value) if value.is_finite() => None,
-        _ => Some("no es un número".to_owned()),
+    // Hovering anywhere on the row, or holding the slider, lights its region;
+    // the last one lit stays so once the pointer moves on to the body.
+    if scoped.response.hovered() || slider.hovered() || slider.dragged() || slider.has_focus() {
+        st.highlight = Some(name.to_owned());
     }
 }

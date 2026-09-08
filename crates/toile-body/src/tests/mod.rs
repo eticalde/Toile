@@ -6,6 +6,7 @@
 
 mod anatomy;
 mod derive;
+mod station;
 
 use crate::landmarks::landmarks;
 use crate::loft::vertex_normals;
@@ -13,6 +14,7 @@ use crate::mesh::{BodyMesh, body_mesh, parts};
 use crate::params::{BodyMeasures, BodyRes};
 use crate::parts::Part;
 use crate::ring::{Shape, from_girth, perimeter, unit_dirs};
+use crate::station::Station;
 
 /// The default resolution's radial segments.
 const SEG: usize = 32;
@@ -81,6 +83,8 @@ fn the_mesh_is_well_formed() {
     assert!(m.indices.iter().all(|&i| (i as usize) < n));
     assert!(m.positions.iter().all(|f| f.is_finite()));
     assert!(m.normals.iter().all(|f| f.is_finite()));
+    assert_eq!(m.stations.len(), n, "one station tag per vertex");
+    assert!(m.stations.iter().all(|&t| t < Station::COUNT));
 }
 
 #[test]
@@ -113,6 +117,7 @@ fn topology_is_fixed_across_measurements() {
     let b = body_mesh(&wide, BodyRes::default());
     assert_eq!(a.positions.len(), b.positions.len());
     assert_eq!(a.indices, b.indices);
+    assert_eq!(a.stations, b.stations, "tags are topology, not tape");
 }
 
 #[test]

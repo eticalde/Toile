@@ -1,7 +1,8 @@
-use super::{Ctx, Part, head};
+use super::{Ctx, Part, head, tags};
 use crate::loft::loft;
 use crate::profile::{dome, tube};
 use crate::ring::{Ring, Shape, from_width};
+use crate::station::{Station, TRUNK};
 
 // Section shapes of the torso, crotch to shoulders. Each ring's centre stays
 // on the side-seam plane, so the spine's S-curve and the bust's lead emerge
@@ -109,6 +110,11 @@ pub(crate) fn stations(c: &Ctx) -> [Ring; 12] {
 pub(crate) fn trunk(c: &Ctx) -> Part {
     let secs = stations(c);
     let mut rings = tube(&secs, c.res.loft_steps, c.dirs);
+    let mut marks = tags(&TRUNK, c.res.loft_steps);
     rings.extend(dome(&secs[11], c.lm.crown, c.res.dome_rings, c.dirs));
-    loft(&rings, true, false)
+    marks.extend(std::iter::repeat_n(
+        Station::Crown.tag(),
+        c.res.dome_rings as usize,
+    ));
+    loft(&rings, &marks, true, false)
 }

@@ -3,7 +3,7 @@ mod measures;
 use eframe::egui::{self, Color32, Painter, Pos2, Rect, Shape, Stroke, pos2, vec2};
 use eframe::egui_wgpu::RenderState;
 use toile_engine::body;
-use toile_engine::draft::MeasureSet;
+use toile_engine::draft::{MeasureSet, Station};
 
 use crate::tabs::{Workspace, left_panel, right_panel};
 use crate::theme::Theme;
@@ -22,9 +22,13 @@ pub struct State {
     /// The measurements driving the body, keyed by catalogue name (the user's
     /// Spanish data), edited in the inspector.
     measures: MeasureSet,
-    /// The catalogue name being written and the text so far, kept off the
-    /// measure set until it parses, so a half-typed value still paints.
-    editing: Option<(String, String)>,
+    /// The catalogue name whose region the body lights: the row last hovered
+    /// or handled, kept lit after the pointer leaves it so the person can look
+    /// from the slider to the body.
+    highlight: Option<String>,
+    /// The station mask the body was last coloured with, so a frame that
+    /// changes nothing uploads nothing.
+    lit: u32,
     /// A value changed this frame; rebuild the mesh before the next paint.
     dirty: bool,
 }
@@ -33,15 +37,24 @@ impl State {
     pub fn new(rs: RenderState, theme: &Theme) -> Self {
         let measures = body::default_measures();
         let mut view = BodyView::new(&rs, theme);
-        view.set_mesh(&rs, &body::body_from_measures(&measures));
+        view.set_mesh(&rs, &body::body_from_measures(&measures), 0);
         Self {
             rs,
             view,
             measures,
-            editing: None,
+            highlight: None,
+            lit: 0,
             dirty: false,
         }
     }
+}
+
+/// The bit mask of a set of stations, one bit per tag: what the body view
+/// colours by.
+fn mask_of(stations: &[Station]) -> u32 {
+    stations
+        .iter()
+        .fold(0, |mask, s| mask | (1 << u32::from(s.tag())))
 }
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
@@ -51,13 +64,22 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     right_panel(ui, theme, |ui| measures::panel(ui, theme, st));
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let size = ui.available_size();
+        let mask = st
+            .highlight
+            .as_deref()
+            .map_or(0, |name| mask_of(body::stations_for(name)));
         // A measurement edit only marks the state dirty; the rebuild happens
         // here, once, right before the frame that shows it. The loft is
-        // microseconds, so there is no thread and no generation gating.
+        // microseconds, so there is no thread and no generation gating. A
+        // change of highlight alone recolours without relofting.
         if st.dirty {
             let mesh = body::body_from_measures(&st.measures);
-            st.view.set_mesh(&st.rs, &mesh);
+            st.view.set_mesh(&st.rs, &mesh, mask);
             st.dirty = false;
+            st.lit = mask;
+        } else if mask != st.lit {
+            st.view.set_highlight(&st.rs, mask);
+            st.lit = mask;
         }
         st.view.show(ui, size, &st.rs, theme);
     });

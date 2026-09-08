@@ -2,16 +2,20 @@ use crate::parts::Part;
 
 /// Grid-triangulates consecutive rings (each `seg + 1` wide, seam duplicated)
 /// into CCW-outward quads, optionally fan-capping the first and last ring.
-/// This is the one place the f64 geometry is cast to the renderer's f32, after
-/// any placement, so a rotated arm is rounded once.
-pub(crate) fn loft(rings: &[Vec<[f64; 3]>], cap_lo: bool, cap_hi: bool) -> Part {
+/// Each ring's vertices take that ring's station tag, and a cap's centre takes
+/// its ring's. This is the one place the f64 geometry is cast to the
+/// renderer's f32, after any placement, so a rotated arm is rounded once.
+pub(crate) fn loft(rings: &[Vec<[f64; 3]>], tags: &[u8], cap_lo: bool, cap_hi: bool) -> Part {
+    debug_assert_eq!(rings.len(), tags.len(), "one tag per ring");
     let width = rings.first().map_or(0, Vec::len);
     let seg = width.saturating_sub(1) as u32;
     let mut verts: Vec<f32> = Vec::new();
-    for ring in rings {
+    let mut stations: Vec<u8> = Vec::new();
+    for (ring, &tag) in rings.iter().zip(tags) {
         for p in ring {
             verts.extend(p.iter().map(|&c| c as f32));
         }
+        stations.extend(std::iter::repeat_n(tag, ring.len()));
     }
     let mut idx: Vec<u32> = Vec::new();
     let width_u = width as u32;
@@ -25,12 +29,14 @@ pub(crate) fn loft(rings: &[Vec<[f64; 3]>], cap_lo: bool, cap_hi: bool) -> Part 
     }
     if cap_lo && !rings.is_empty() {
         fan(&mut verts, &mut idx, 0, seg, true);
+        stations.push(tags[0]);
     }
     if cap_hi && rings.len() > 1 {
         let start = (rings.len() - 1) as u32 * width_u;
         fan(&mut verts, &mut idx, start, seg, false);
+        stations.push(tags[rings.len() - 1]);
     }
-    (verts, idx)
+    (verts, idx, stations)
 }
 
 /// Fans the ring whose first vertex is `start` to a fresh centroid vertex.

@@ -8,10 +8,12 @@ mod params;
 mod parts;
 mod profile;
 mod ring;
+mod station;
 
 pub use derive::PartialMeasures;
 pub use mesh::{BodyMesh, body_mesh};
 pub use params::{BodyMeasures, BodyRes};
+pub use station::Station;
 
 #[cfg(test)]
 mod tests;

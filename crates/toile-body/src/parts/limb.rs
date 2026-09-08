@@ -1,7 +1,8 @@
-use super::{Ctx, Part, Side, place, shoulder_half_width, trunk};
+use super::{Ctx, Part, Side, place, shoulder_half_width, tags, trunk};
 use crate::loft::loft;
 use crate::profile::tube;
 use crate::ring::{Ring, Shape, from_girth};
+use crate::station::{ARM, LEG};
 
 /// The A-pose: each arm tilts 20° outward from the vertical. Pasted as
 /// `cos`/`sin` literals because no trig may run at mesh time.
@@ -95,7 +96,8 @@ pub(crate) fn leg(c: &Ctx, side: Side) -> Part {
         from_girth(m.knee, KNEE, cx, 0.0, c.lm.knee, c.dirs),
         thigh_ring(c, cx),
     ];
-    loft(&tube(&secs, c.res.loft_steps, c.dirs), true, true)
+    let rings = tube(&secs, c.res.loft_steps, c.dirs);
+    loft(&rings, &tags(&LEG, c.res.loft_steps), true, true)
 }
 
 /// The arm's length from the joint, kept away from zero so its stations stay
@@ -135,5 +137,5 @@ pub(crate) fn joint(c: &Ctx, side: Side) -> [f64; 3] {
 pub(crate) fn arm(c: &Ctx, side: Side) -> Part {
     let mut rings = tube(&arm_stations(c), c.res.loft_steps, c.dirs);
     place(&mut rings, side.sign(), joint(c, side), POSE_COS, POSE_SIN);
-    loft(&rings, true, true)
+    loft(&rings, &tags(&ARM, c.res.loft_steps), true, true)
 }

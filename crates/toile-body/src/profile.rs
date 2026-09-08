@@ -61,6 +61,27 @@ pub(crate) fn interpolate(secs: &[Ring], steps: u32) -> Vec<Ring> {
     out
 }
 
+/// The nearest station of every ring `interpolate` emits through `stations`
+/// stations with `steps` rings per span: a ring in the lower half of a span
+/// belongs to the station under it, one in the upper half to the station over
+/// it, and a station's own ring to itself. Counts alone decide, so the tags
+/// are topology and a measurement lights a band around its station rather
+/// than a hairline.
+pub(crate) fn nearest(stations: usize, steps: u32) -> Vec<usize> {
+    let denom = steps + 1;
+    let mut out = Vec::new();
+    for i in 0..stations.saturating_sub(1) {
+        for k in 0..=steps {
+            // `2k < denom` is `s < 0.5` with no division.
+            out.push(if 2 * k < denom { i } else { i + 1 });
+        }
+    }
+    if stations > 0 {
+        out.push(stations - 1);
+    }
+    out
+}
+
 /// The point rings of a tube through ordered stations.
 pub(crate) fn tube(secs: &[Ring], steps: u32, dirs: &[(f64, f64)]) -> Vec<Vec<[f64; 3]>> {
     interpolate(secs, steps)
