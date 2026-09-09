@@ -356,6 +356,11 @@ blockquote.frase b{
     <b>Descartado — base mesh + morphs (MakeHuman CC0)</b>
     <p>Era la única alternativa legalmente shippeable, y se descarta para v1 por tres costos: la circunferencia queda aproximada cuando el criterio número uno es que el número medido sea el escrito; cada actualización del asset movería todos los goldens del maniquí; y obligaba a vendorizar MBs con <code>PROVENANCE.md</code>, check de assets y disciplina de sala limpia desde el día uno (reimplementar el motor de morphs sin abrir el Python AGPL). <strong>Coste asumido del descarte:</strong> menos realismo anatómico — sin vientre, glúteo prominente ni asimetrías — aceptable porque el patronista clásico drafta sobre maniquí de sastre, no sobre cliente. <strong>Y reversible barato:</strong> el pipeline de bake es idéntico aguas abajo, así que MakeHuman-CC0 o un glTF de escaneo pueden entrar después como <em>segundo productor de malla</em> sin tocar solver ni formato.</p>
   </div>
+
+  <div class="decision">
+    <b>Enmienda · 2026-09-08</b>
+    <p>La reversibilidad se ejerció: el segundo productor de malla es el cuerpo <strong>Anny</strong> (NAVER; assets MakeHuman CC0 reimplementados en Rust), con los 40 targets <code>measure-*</code> como palanca por contorno y goldens propios. El maniquí de sastre de esta página se queda como modo. Plan y veredicto en <a href="./anny.html">PLAN-003 El cuerpo Anny</a>.</p>
+  </div>
 </section>
 
 <section id="maniqui">

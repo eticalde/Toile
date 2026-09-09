@@ -1,0 +1,511 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toile — PLAN-003 El cuerpo Anny</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Public+Sans:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#fafaf7;
+  --surface:#ffffff;
+  --ink:#23282e;
+  --muted:#6a7480;
+  --chalk:#2f5fd0;        /* tiza de sastre */
+  --thread:#c2403a;       /* papel carbón / hilo rojo */
+  --line:#dcdcd4;
+  --grid:rgba(35,40,46,.10);
+  --chip-bg:rgba(47,95,208,.08);
+  --thread-bg:rgba(194,64,58,.07);
+  --display:"Archivo",-apple-system,"Helvetica Neue",Arial,sans-serif;
+  --body:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#18271f;      /* mat de corte */
+    --surface:#1e2f26;
+    --ink:#e7eae2;        /* tiza */
+    --muted:#96a69a;
+    --chalk:#a5bdfa;
+    --thread:#f0907f;
+    --line:#31453a;
+    --grid:rgba(231,234,226,.07);
+    --chip-bg:rgba(165,189,250,.12);
+    --thread-bg:rgba(240,144,127,.10);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  font-family:var(--body);
+  font-size:16.5px;
+  line-height:1.65;
+  color:var(--ink);
+  background-color:var(--paper);
+  background-image:radial-gradient(var(--grid) 1px, transparent 1px);
+  background-size:26px 26px;
+}
+@media (prefers-color-scheme: dark){
+  body{
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size:39px 39px;
+  }
+}
+a{color:var(--chalk)}
+a:hover{text-decoration-thickness:2px}
+:focus-visible{outline:2px solid var(--chalk);outline-offset:2px;border-radius:2px}
+code,.crate{font-family:var(--mono);font-size:.86em;background:var(--chip-bg);padding:.08em .38em;border-radius:3px;white-space:nowrap}
+
+/* ---------- hero ---------- */
+.hero{
+  border-bottom:2px solid var(--ink);
+  padding:3.2rem 1.5rem 2.4rem;
+}
+.hero-inner{
+  max-width:1080px;margin:0 auto;
+  display:flex;gap:3rem;align-items:center;justify-content:space-between;flex-wrap:wrap;
+}
+.eyebrow{
+  font-family:var(--mono);font-size:.72rem;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 .9rem;
+}
+.eyebrow a{color:inherit;text-decoration:none}
+.eyebrow a:hover{color:var(--chalk)}
+h1{
+  font-family:var(--display);
+  font-variation-settings:"wdth" 118;
+  font-weight:880;
+  font-size:clamp(2.5rem,6vw,4.2rem);
+  line-height:.98;letter-spacing:-.015em;text-transform:uppercase;
+  margin:0 0 .8rem;
+}
+.hero-sub{max-width:34rem;color:var(--muted);margin:0 0 1.6rem}
+.titleblock{
+  display:inline-grid;grid-template-columns:auto auto auto auto;
+  border:1.5px solid var(--ink);
+  font-family:var(--mono);font-size:.78rem;
+  background:var(--surface);
+}
+.titleblock div{padding:.5rem .9rem;border-left:1.5px solid var(--ink)}
+.titleblock div:first-child{border-left:none}
+.titleblock b{display:block;font-weight:500;color:var(--muted);font-size:.66rem;letter-spacing:.14em;text-transform:uppercase}
+@media (max-width:600px){
+  .titleblock{grid-template-columns:auto auto}
+  .titleblock div:nth-child(3){border-left:none}
+  .titleblock div:nth-child(n+3){border-top:1.5px solid var(--ink)}
+}
+.hero-figure{flex:0 1 208px;min-width:176px;color:var(--ink)}
+.hero-figure svg{width:100%;height:auto;display:block}
+.hero-figure .draw{stroke-dasharray:1600;stroke-dashoffset:0}
+@media (prefers-reduced-motion: no-preference){
+  .hero-figure .draw{animation:trace 1.4s ease-out}
+  @keyframes trace{from{stroke-dashoffset:1600}to{stroke-dashoffset:0}}
+}
+
+/* ---------- layout ---------- */
+.wrap{
+  max-width:1080px;margin:0 auto;padding:2.5rem 1.5rem 4rem;
+  display:grid;grid-template-columns:215px minmax(0,1fr);gap:3rem;
+}
+nav.toc{position:sticky;top:1.5rem;align-self:start;font-size:.85rem}
+nav.toc p{font-family:var(--mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:0 0 .7rem}
+nav.toc ol{list-style:none;margin:0;padding:0}
+nav.toc li{margin:.32rem 0}
+nav.toc li.sub{margin-left:.95rem;font-size:.8rem}
+nav.toc a{text-decoration:none;color:var(--ink);border-left:2px solid transparent;padding-left:.55rem;display:inline-block}
+nav.toc li.sub a{color:var(--muted)}
+nav.toc a:hover{border-left-color:var(--chalk);color:var(--chalk)}
+@media (max-width:880px){
+  .wrap{grid-template-columns:1fr;gap:1.5rem}
+  nav.toc{position:static}
+  nav.toc ol{display:flex;flex-wrap:wrap;gap:.25rem .9rem}
+  nav.toc li.sub{display:none}
+}
+main{max-width:72ch}
+
+/* ---------- section headers ---------- */
+section{margin:0 0 3.6rem}
+h2{
+  font-family:var(--display);font-variation-settings:"wdth" 112;font-weight:820;
+  font-size:1.7rem;line-height:1.15;text-transform:uppercase;letter-spacing:.005em;
+  margin:0 0 1.2rem;padding-top:2.2rem;
+  border-top:2px solid var(--ink);
+}
+h2 .num{font-family:var(--mono);font-weight:400;font-size:.8rem;color:var(--muted);display:block;letter-spacing:.2em;margin-bottom:.35rem}
+h3{
+  font-family:var(--display);font-variation-settings:"wdth" 108;font-weight:750;
+  font-size:1.13rem;text-transform:uppercase;letter-spacing:.02em;margin:2.2rem 0 .6rem;
+}
+
+/* ---------- bloques decisión / descartado ---------- */
+.decision,.discarded{margin:1rem 0;padding:.15rem 0 .15rem 1.1rem}
+.decision{border-left:3px solid var(--chalk)}
+.discarded{border-left:3px dashed var(--thread)}
+.decision > b:first-child,.discarded > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;
+  display:block;margin-bottom:.3rem;
+}
+.decision > b:first-child{color:var(--chalk)}
+.discarded > b:first-child{color:var(--thread)}
+.decision p,.discarded p{margin:.5rem 0}
+
+/* ---------- listas con piquetes ---------- */
+ol,ul{padding-left:1.4rem}
+li{margin:.45rem 0}
+ul.notch{list-style:none;padding-left:1.15rem}
+ul.notch li{position:relative}
+ul.notch li::before{
+  content:"";position:absolute;left:-1.15rem;top:.62em;
+  border-left:.42em solid var(--chalk);border-top:.3em solid transparent;border-bottom:.3em solid transparent;
+}
+ol.plan{counter-reset:paso;list-style:none;padding-left:2.1rem}
+ol.plan li{counter-increment:paso;position:relative;margin:.9rem 0}
+ol.plan li::before{
+  content:counter(paso);position:absolute;left:-2.1rem;top:.1em;
+  font-family:var(--mono);font-size:.8rem;width:1.5em;height:1.5em;line-height:1.45em;text-align:center;
+  border:1.5px solid var(--ink);border-radius:50%;background:var(--surface);
+}
+
+/* ---------- tablas ---------- */
+.tscroll{overflow-x:auto;margin:1.2rem 0;border:1.5px solid var(--line);border-radius:3px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);text-align:left;
+}
+th,td{padding:.6rem .85rem;border-bottom:1px dashed var(--line);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td:first-child{white-space:nowrap}
+td.wrap{white-space:normal}
+
+/* ---------- misc ---------- */
+.lead{font-size:1.06rem}
+.lead::first-letter{
+  font-family:var(--display);font-weight:880;font-size:3.1em;float:left;
+  line-height:.8;padding:.06em .12em 0 0;color:var(--chalk);
+}
+hr{border:none;border-top:1.5px dashed var(--line);margin:2rem 0}
+.refs{font-size:.9rem}
+.refs li{margin:.55rem 0}
+.refs span{color:var(--muted)}
+footer{border-top:2px solid var(--ink);margin-top:1rem;padding:1.4rem 1.5rem 3rem;font-size:.8rem;color:var(--muted)}
+footer .fin{max-width:1080px;margin:0 auto;font-family:var(--mono)}
+
+/* ---------- bloques de código ---------- */
+pre{
+  font-family:var(--mono);font-size:.78rem;line-height:1.55;
+  background:var(--surface);border:1.5px solid var(--line);border-left-width:3px;
+  border-radius:3px;padding:.8rem 1rem;overflow-x:auto;margin:.7rem 0;
+}
+pre code{background:none;padding:0;white-space:pre;font-size:inherit;color:inherit}
+pre.no{border-left-color:var(--thread)}
+pre.si{border-left-color:var(--chalk)}
+
+/* ---------- regla numerada ---------- */
+.rule{border-left:3px solid var(--ink);padding:.1rem 0 .1rem 1.1rem;margin:1.5rem 0}
+.rule > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:.35rem;
+}
+.rule p:first-of-type{font-weight:600;margin-top:0}
+.tag-ok,.tag-no{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;padding:.16em .55em;border-radius:2px;white-space:nowrap}
+.tag-ok{background:var(--chip-bg);color:var(--chalk)}
+.tag-no{background:var(--thread-bg);color:var(--thread)}
+.chip{
+  font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.18em .6em;border-radius:2px;background:var(--chip-bg);color:var(--chalk);
+}
+
+/* ---------- la frase de la entrega ---------- */
+blockquote.frase{
+  margin:1.4rem 0;padding:1.1rem 1.3rem;
+  border:1.5px solid var(--ink);border-left-width:5px;border-left-color:var(--chalk);
+  background:var(--surface);border-radius:3px;
+  font-size:1.04rem;line-height:1.6;
+}
+blockquote.frase p{margin:0}
+blockquote.frase b{
+  display:block;font-family:var(--mono);font-weight:500;font-size:.66rem;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--chalk);margin-bottom:.5rem;
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <div>
+      <p class="eyebrow"><a href="./architecture.html">Toile</a> · Documentación</p>
+      <h1>El cuerpo Anny</h1>
+      <p class="hero-sub">El maniquí realista: un cuerpo humano de artista (MakeHuman, CC0) reimplementado en Rust desde sus datos, generado a partir de sexo, edad y estatura, y afinado parte por parte a la medida exacta de la cinta. El maniquí de sastre procedimental sigue como modo; el patronaje sigue leyendo la cinta; los goldens no se mueven.</p>
+      <div class="titleblock" role="group" aria-label="Datos del documento">
+        <div><b>Documento</b>PLAN-003</div>
+        <div><b>Estado</b>Propuesto</div>
+        <div><b>Alcance</b>A0–A8</div>
+        <div><b>Fecha</b>2026-09-08</div>
+      </div>
+    </div>
+    <div class="hero-figure" aria-hidden="true">
+      <!-- la pose de reposo de MakeHuman: brazos a ~40° del eje, piernas
+           levemente abiertas; las líneas punteadas son estaciones con palanca -->
+      <svg viewBox="0 0 168 330" fill="none" stroke="currentColor" stroke-width="1.4">
+        <circle class="draw" cx="84" cy="30" r="15"/>
+        <path class="draw" d="M78 46 L78 56 L60 62 L34 118 L26 116 L52 58 L64 52 L104 52 L116 58 L142 116 L134 118 L108 62 L90 56 L90 46"/>
+        <path class="draw" d="M62 60 C58 90 56 120 58 150 C60 200 58 250 56 296 L70 296 L78 200 L84 160 L90 200 L98 296 L112 296 C110 250 108 200 110 150 C112 120 110 90 106 60"/>
+        <g stroke="var(--chalk)" stroke-width=".9" stroke-dasharray="3 3">
+          <line x1="40" y1="96" x2="128" y2="96"/>
+          <line x1="40" y1="122" x2="128" y2="122"/>
+          <line x1="40" y1="150" x2="128" y2="150"/>
+          <line x1="40" y1="230" x2="128" y2="230"/>
+        </g>
+        <line x1="10" y1="299" x2="158" y2="299" stroke-width="1" opacity=".55"/>
+        <g stroke="none" fill="currentColor" font-family="IBM Plex Mono,monospace" font-size="6.2" opacity=".8">
+          <text x="132" y="98">PECHO</text>
+          <text x="132" y="124">CINTURA</text>
+          <text x="132" y="152">CADERA</text>
+          <text x="132" y="232">RODILLA</text>
+        </g>
+        <g stroke="none" fill="currentColor" font-family="IBM Plex Mono,monospace" font-size="6.2" opacity=".75">
+          <text x="84" y="314" text-anchor="middle">CUERPO ANNY · POSE DE REPOSO</text>
+          <text x="84" y="324" text-anchor="middle">13 380 VÉRTICES · CC0</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contenido">
+  <p>Contenido</p>
+  <ol>
+    <li><a href="#frase">1 · La frase de la entrega</a></li>
+    <li><a href="#veredicto">2 · Por qué cambia el veredicto</a></li>
+    <li><a href="#verificado">3 · Lo verificado</a></li>
+    <li><a href="#flujo">4 · El flujo de v1</a></li>
+    <li class="sub"><a href="#palancas">4.1 Una palanca por parte</a></li>
+    <li class="sub"><a href="#residual">4.2 El residual, dicho</a></li>
+    <li><a href="#determinismo">5 · Determinismo y goldens</a></li>
+    <li><a href="#fases">6 · Las fases A0–A8</a></li>
+    <li><a href="#dueno">7 · Las decisiones del dueño</a></li>
+    <li><a href="#animacion">8 · Animación: reservado</a></li>
+    <li><a href="#fuentes">9 · Fuentes</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<section id="frase">
+  <h2><span class="num">§ 1</span>La frase de la entrega</h2>
+  <blockquote class="frase">
+    <b>Lo que v1 promete</b>
+    <p>Pides un maniquí nuevo con sexo, edad y estatura; Toile genera un cuerpo humano real en milisegundos; afinas cada parte a la medida exacta de tu cinta —cintura 84, cadera 98— con una palanca por contorno; y cada fila te dice, sin maquillaje, cuánto mide el cuerpo donde el modelo no llega. El patronaje sigue resolviendo contra la cinta escrita, no contra el cuerpo.</p>
+  </blockquote>
+  <p class="lead">Este documento fija el <strong>segundo productor de malla</strong> que PLAN-002 dejó previsto en su §2 como «reversible barato»: el maniquí de sastre procedimental no se retira, se le pone al lado un cuerpo de artista. La animación —caminar con la prenda puesta, mapa de tensiones— <strong>no está en v1</strong>; se investiga y se documenta en el kanban (<a href="#animacion">§ 8</a>) para una versión futura.</p>
+</section>
+
+<section id="veredicto">
+  <h2><span class="num">§ 2</span>Por qué cambia el veredicto</h2>
+
+  <p>PLAN-002 descartó «base mesh + morphs (MakeHuman CC0)» por tres costos: la circunferencia quedaba aproximada, cada actualización del asset movía los goldens, y obligaba a vendorizar megabytes con disciplina de sala limpia. Los tres se pagan hoy de otra manera, y por eso el veredicto cambia sin contradecir al anterior:</p>
+  <ul class="notch">
+    <li><strong>La exactitud vuelve por otra puerta.</strong> MakeHuman trae <strong>40 targets <code>measure-*</code></strong> —una palanca por contorno: cintura, caderas, busto, bajo busto, cuello, brazo, muñeca, muslo, rodilla, pantorrilla, tobillo, más largos y anchos—. Afinar la cintura a 84 exactos es un problema de <em>una variable</em> por parte, no un ajuste global. 18 de las 20 medidas del catálogo tienen palanca propia; sólo <code>tiro</code> y <code>pecho_alto</code> van acopladas, y el residual se muestra, no se esconde.</li>
+    <li><strong>Los goldens no se mueven.</strong> El loft conserva el suyo (<code>0x5f47_f494_d7a6_4138</code>) y el drapeado el eterno (<code>0x534dd0e5200e8e4a</code>); el cuerpo Anny crea goldens <strong>nuevos</strong> y propios, calculados por el evaluador de Toile, nunca por PyTorch.</li>
+    <li><strong>La sala limpia es barata.</strong> Los <code>.target</code> son texto plano disperso y <code>base.obj</code> es texto: el <em>baker</em> se escribe en Rust puro (<code>flate2</code> + <code>serde_json</code>, ya en el lock) y no hay Python en ningún punto del pipeline. Lo que se embarca es un asset derivado de datos CC0 con su <code>PROVENANCE.txt</code>.</li>
+  </ul>
+
+  <p>Y la razón de fondo: Anny es exactamente lo que la decisión del 2026-09-05 no podía tener. Aquella rechazó SMPL (research-only, patentado) y el <em>código</em> de MakeHuman (AGPL). Anny usa los <em>assets</em> CC0 de MakeHuman con código Apache-2.0 — y Toile no shippea el código: lo reimplementa.</p>
+
+  <div class="tscroll"><table>
+    <thead><tr><th>Pieza</th><th>Licencia</th><th>¿Se embarca?</th><th>Veredicto</th></tr></thead>
+    <tbody>
+      <tr><td><a href="https://github.com/naver/anny/blob/main/LICENSE">Código de Anny</a> †</td><td class="wrap">Apache-2.0 (NAVER Corp., 2025)</td><td class="wrap">No — Toile reimplementa en Rust desde el spec</td><td><span class="tag-ok">referencia</span></td></tr>
+      <tr><td><a href="https://github.com/naver/anny/tree/main/src/anny/data/mpfb2">data/mpfb2</a> †</td><td class="wrap"><strong>CC0 1.0</strong>: <code>base.obj</code> (cabecera de septiembre 2020), 1 258 <code>.target</code>, <code>rig.default.json</code>, <code>weights.makehuman.json</code>, grupos de vértices</td><td class="wrap">Sí, sólo el grupo <code>body</code> y los targets de cuerpo</td><td><span class="tag-ok">libre</span></td></tr>
+      <tr><td><code>weights.default.json</code> †</td><td class="wrap">Declarado CC0 pero con cabecera «Copyright NAVER 2025» (regenerado por su script)</td><td class="wrap">No — se regenera desde <code>weights.makehuman.json</code></td><td><span class="chip">evitar</span></td></tr>
+      <tr><td><code>anny.pth</code>, <code>soma.pth</code>, <code>coco.pth</code>, edición de desnudez</td><td class="wrap">Apache-2.0 (NAVER)</td><td class="wrap">No — sirven a la re-pose con SVD y a los keypoints, ambos fuera del contrato</td><td><span class="chip">no necesario</span></td></tr>
+      <tr><td>Topologías <code>smplx</code> / <code>smpl</code></td><td class="wrap">Non-commercial (descarga aparte)</td><td class="wrap">Jamás; ni descargarlas — la suite de tests de Anny lo hace, así que <strong>no se corre</strong></td><td><span class="tag-no">prohibido</span></td></tr>
+    </tbody>
+  </table></div>
+  <p><span style="color:var(--muted);font-size:.85rem">† verificado en fuente primaria por el estudio de viabilidad del 2026-09-08 y re-verificado a mano.</span></p>
+
+  <div class="decision">
+    <b>Decisión propuesta</b>
+    <p><strong>GO con condiciones</strong>: adoptar el cuerpo Anny como segundo productor de malla detrás del mismo contrato <code>BodyMesh</code>, construido desde datos CC0 por un evaluador propio en Rust, en un crate nuevo <code>toile-anny</code>. Condiciones que rompen el GO si se abandonan: cadena CC0 sólo-cuerpo; evaluador y goldens propios; el loft se queda como modo; sólo adultos en v1; las medidas siguen siendo el input; v1 conserva la pose de reposo de MakeHuman.</p>
+  </div>
+</section>
+
+<section id="verificado">
+  <h2><span class="num">§ 3</span>Lo verificado</h2>
+  <p>El estudio ejecutó Anny (vía <code>uv</code> y PyTorch, en un scratchpad, sin tocar Toile) y un revisor adversarial intentó refutar cada afirmación. Lo que sigue sobrevivió al ataque; lo inferido lleva su marca.</p>
+  <ul class="notch">
+    <li><strong>La matemática cabe en el contrato.</strong> En reposo, <code>vértice = plantilla + Σ c·B</code>; los coeficientes salen de interpolación lineal a trozos (una división), productos y <code>max(±v, 0)</code>. Sin <code>sqrt</code> ni transcendentales en la ruta de vértices; la topología depende sólo de la configuración.</li>
+    <li><strong>El mesh es una variedad cerrada.</strong> Grupo <code>body</code>: 13 380 vértices, 13 378 quads → 26 756 triángulos, género 0, cero aristas de borde, orientación hacia afuera. Es lo que el pipeline SDF de PLAN-002 §7 quiere, sin trabajo extra.</li>
+    <li><strong>La pose de reposo no es la pose por defecto de Anny.</strong> La salida por defecto aplica una re-pose dependiente de la forma (1–3,5 cm, no rígida) desde una caché NAVER con SVD. v1 usa la pose de reposo de MakeHuman —brazos a ≈ 40°, antebrazos inclinados, piernas 6–9° abiertas— y el fixture de acuerdo se toma de <code>rest_vertices</code>.</li>
+    <li><strong>El default de Anny es un niño.</strong> Todo en 0,5 es un cuerpo de 1,63 m y 12,7 años. v1 es sólo adultos (edad ≥ 0,77; 25 años ≡ 0,779); <code>gender 0</code> es masculino por convención de Anny (el metadata de MakeHuman dice lo contrario: se porta la de Anny).</li>
+    <li><strong>El ajuste funciona.</strong> Un Levenberg-Marquardt con 4 fenotipos y 18 palancas dejó un rms ≈ 1,5 cm sobre la cinta por defecto de Toile. <em>Inferido para v1</em>: el afinado por parte de §4 llega más lejos en 18 de 20 medidas, porque cada palanca resuelve su contorno de forma exacta y sólo el acople del pecho deja residuo.</li>
+    <li><strong>Tamaño y velocidad.</strong> Tier adulto: 2 023 285 entradas → 16,2 MB raw con cuantización i16 sin pérdida (verificada), 7–11 MB comprimido; ≈ 19,5 MB embebidos. Evaluación en torch 6,1 ms/cuerpo; <em>estimado</em> en Rust 3–5 ms (un frame: el patrón «reconstruir antes de pintar» sobrevive). Todas las edades: 29 MB.</li>
+    <li><strong>Los priors poblacionales de Anny tienen un bug de unidades</strong> (años alimentados como edades en [0,1]); no se usan. Sólo la altura-por-edad (OMS) es sólida.</li>
+  </ul>
+</section>
+
+<section id="flujo">
+  <h2><span class="num">§ 4</span>El flujo de v1</h2>
+  <p>Tres pasos, en el orden en que un sastre piensa: primero quién es la persona, después cuánto mide.</p>
+  <ol class="plan">
+    <li><strong>Nuevo maniquí.</strong> La pestaña pide los inputs de Anny con defaults de adulto: <em>sexo</em> (masculino / femenino / sin especificar → continuo 0,5), <em>edad</em> en años, <em>estatura</em>, y tres fenotipos con valor por defecto que se pueden tocar —<em>complexión</em> (peso), <em>músculo</em>, <em>proporciones</em>—. Con sólo la estatura ya hay cuerpo.</li>
+    <li><strong>Generar.</strong> El evaluador de <code>toile-anny</code> loftea el cuerpo desde el asset embebido y lo entrega como <code>BodyMesh { positions, normals, indices, stations }</code>: el viewport, la cámara, los sliders y el resaltado por estación funcionan sin cambios. El modo «maniquí de sastre» (el loft) sigue a un clic.</li>
+    <li><strong>Afinar por parte.</strong> Cada una de las 20 filas del panel de medidas gana un valor <em>exacto</em>: escribir «cintura 84» mueve la palanca <code>measure-waist-circ</code> hasta que el anillo de la cintura mide 84 — un problema de una variable, monótono, con iteraciones fijas. La fila muestra <em>dado · medido · Δ</em>.</li>
+  </ol>
+
+  <h3 id="palancas">4.1 Una palanca por parte</h3>
+  <p>El mapa entre el catálogo de PLAN-002 §4 y los targets de MakeHuman. Donde hay palanca propia, el afinado es exacto salvo acople; donde no, la fila lo dice.</p>
+  <div class="tscroll"><table>
+    <thead><tr><th>Catálogo</th><th>Palanca</th><th>Anillo</th><th>Nota</th></tr></thead>
+    <tbody>
+      <tr><td><code>estatura</code></td><td class="wrap">fenotipo <code>height</code></td><td>—</td><td class="wrap">Efectivamente exacta (109 cm por unidad)</td></tr>
+      <tr><td><code>cuello</code></td><td><code>measure-neck-circ</code></td><td>NeckBase</td><td class="wrap">+5,4 / −4,1 cm por unidad</td></tr>
+      <tr><td><code>pecho</code></td><td><code>measure-bust-circ</code></td><td>Bust</td><td class="wrap">+17,1 / −16,0; mueve también bajo pecho y pecho alto ≈ 1:1</td></tr>
+      <tr><td><code>bajo_pecho</code></td><td><code>measure-underbust-circ</code></td><td>Underbust</td><td class="wrap">Acoplado con el pecho: dos barridos</td></tr>
+      <tr><td><code>pecho_alto</code></td><td class="wrap">— (vía <code>bust-circ</code>, <code>shoulder-dist</code>)</td><td>Armpit</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual ≈ 2 cm</td></tr>
+      <tr><td><code>cintura</code></td><td><code>measure-waist-circ</code></td><td>Waist</td><td class="wrap">+10,6 / −10,2; filtra ≈ 30 % al bajo pecho</td></tr>
+      <tr><td><code>cadera</code></td><td><code>measure-hips-circ</code></td><td>Hip</td><td class="wrap">+17,3 / −7,7; puede saturar en −1 con cinturas anchas</td></tr>
+      <tr><td><code>muslo</code></td><td><code>measure-thigh-circ</code></td><td>Thigh</td><td class="wrap"></td></tr>
+      <tr><td><code>rodilla</code></td><td><code>measure-knee-circ</code></td><td>Knee</td><td class="wrap"></td></tr>
+      <tr><td><code>tobillo</code></td><td><code>measure-ankle-circ</code></td><td>Ankle</td><td class="wrap"></td></tr>
+      <tr><td><code>brazo_contorno</code></td><td><code>measure-upperarm-circ</code></td><td>Biceps</td><td class="wrap"></td></tr>
+      <tr><td><code>muneca</code></td><td><code>measure-wrist-circ</code></td><td>Wrist</td><td class="wrap"></td></tr>
+      <tr><td><code>cabeza</code></td><td><code>head-scale-horiz</code></td><td>HeadMax</td><td class="wrap"></td></tr>
+      <tr><td><code>hombros</code></td><td><code>measure-shoulder-dist</code></td><td>Shoulder</td><td class="wrap"></td></tr>
+      <tr><td><code>brazo</code></td><td class="wrap"><code>measure-upperarm-length</code> + <code>lowerarm-length</code></td><td>Wrist</td><td class="wrap">Dos palancas atadas en proporción</td></tr>
+      <tr><td><code>largo_espalda</code></td><td><code>measure-napetowaist-dist</code></td><td>Waist</td><td class="wrap">Mueve la estatura: se resuelve antes que ella</td></tr>
+      <tr><td><code>altura_cadera</code></td><td><code>measure-waisttohip-dist</code></td><td>Hip</td><td class="wrap">Ídem</td></tr>
+      <tr><td><code>largo_lateral</code></td><td class="wrap"><code>upperleg-height</code> + <code>lowerleg-height</code></td><td>Ankle</td><td class="wrap">Atadas; la entrepierna cae de ellas</td></tr>
+      <tr><td><code>entrepierna</code></td><td class="wrap">(las mismas dos)</td><td>Crotch</td><td class="wrap">Residual ≈ 2 cm: la entrepierna de Anny es alta (0,489 de la estatura)</td></tr>
+      <tr><td><code>tiro</code></td><td class="wrap">— (proporciones, <code>waisttohip-dist</code>)</td><td>Crotch</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual ≈ 3 cm</td></tr>
+    </tbody>
+  </table></div>
+
+  <p><strong>El orden del afinado es fijo</strong> y por eso determinista: primero la estatura; después los largos que la mueven (espalda, cadera, pierna, brazo); después los contornos del tronco en dos barridos porque se acoplan (pecho, bajo pecho, cintura, caderas); por último las extremidades y la cabeza, que son independientes. Cada palanca se resuelve con el método de la secante en <code>+ − × ÷</code>, seis iteraciones, acotada a [−1, 1]; si el objetivo cae fuera del rango de la palanca, la fila marca <em>tope del modelo</em> y muestra el valor alcanzado.</p>
+
+  <h3 id="residual">4.2 El residual, dicho</h3>
+  <p>El loft garantizaba cada contorno a ulps. El cuerpo Anny no puede: su forma es la de un artista, y dos medidas pueden pedir lo que ningún humano tiene. La regla es <strong>decirlo</strong>: cada fila muestra <em>dado · medido · Δ</em> con tres bandas — ≤ 1 cm en silencio, ≤ 3 cm en ámbar, &gt; 3 cm en rojo con la causa («tope del modelo», «acoplado al pecho»). Y la regla que no cambia: <strong>el patronaje resuelve las fórmulas contra la cinta escrita</strong>, nunca contra lo que el cuerpo alcanzó — el maniquí es para mirar y drapear, la cinta es la verdad del patrón. La derivación por proporción de las medidas omitidas (PLAN-002 M2) deja de mover al maniquí Anny —él tiene su prior— y se ofrece como «tomar del maniquí» explícito, nunca en silencio.</p>
+</section>
+
+<section id="determinismo">
+  <h2><span class="num">§ 5</span>Determinismo y goldens</h2>
+  <div class="rule">
+    <b>Invariante</b>
+    <p>Los goldens del loft y del drapeado no se mueven; el cuerpo Anny añade los suyos.</p>
+    <p><code>G0</code>: hash FNV del asset horneado — cambia sólo si cambia la fuente CC0 o el baker, y lo dice el commit. <code>G1</code>: hash de la malla del cuerpo de referencia (masculino, edad 0,8, resto 0,5: estatura 190,0, cintura 85,8, caderas 109,3 cm), bit-idéntico en macOS ARM y Linux x86 como los demás. <code>G2</code>: hash de los bits de la palanca afinada y de la malla para la cinta por defecto de Toile. El acuerdo con PyTorch (≤ 1 µm contra <code>rest_vertices</code>) es un test de tolerancia, jamás un golden.</p>
+  </div>
+  <p>Todo lo que toca la malla vive en el régimen de PLAN-002 §10: suma ponderada de deltas en orden fijo, secante en <code>+ − × ÷</code>, escala del recién nacido como literales, normales por área con <code>sqrt</code>. El grep de funciones vetadas de <code>tools/verify.sh</code> se extiende a <code>toile-anny/</code>. La re-pose de Anny (Procrustes, SVD, <code>atan2</code>) queda fuera del contrato para siempre; la pose A de 20° futura se hará con cinemática directa y cos/sin literales (A6).</p>
+</section>
+
+<section id="fases">
+  <h2><span class="num">§ 6</span>Las fases A0–A8</h2>
+  <p>La puerta es la de siempre: <code>./tools/verify.sh</code> en verde, con los dos goldens viejos intactos. Esfuerzo en días-agente.</p>
+  <div class="tscroll"><table>
+    <thead><tr><th>Fase</th><th>Título</th><th>Lo que el usuario gana</th><th>Días</th></tr></thead>
+    <tbody>
+      <tr><td>A0</td><td>Decisiones y procedencia</td><td class="wrap">Nada visible. Las respuestas de §7, <code>PROVENANCE.txt</code>, la tabla de licencias enmendada</td><td>0,5</td></tr>
+      <tr><td>A1</td><td>El baker</td><td class="wrap">Invisible: <code>.target.gz</code> + <code>base.obj</code> + JSON → asset compacto (i16 sin pérdida, índices delta), en Rust puro; cabecera con FNV</td><td>2–3</td></tr>
+      <tr><td>A2</td><td>Evaluador y goldens</td><td class="wrap">Invisible: fenotipo → pesos → malla; <code>G0</code>/<code>G1</code> en dos arquitecturas; estaciones desde los grupos de vértices</td><td>1,5–2</td></tr>
+      <tr><td>A3</td><td>Puerta y modo</td><td class="wrap">El maniquí Anny aparece en la pestaña: «Nuevo maniquí» con sexo, edad, estatura; conmutador loft ↔ Anny; preferencia recordada</td><td>1</td></tr>
+      <tr><td>A4</td><td>Anillos y re-medición</td><td class="wrap">Cada fila muestra cuánto mide el cuerpo; los 20 anillos verificados contra el cuerpo de referencia</td><td>1,5–2</td></tr>
+      <tr><td>A5</td><td>Afinado por parte</td><td class="wrap">Escribes 84 y la cintura mide 84; bandas de residual; «tope del modelo»; <code>G2</code></td><td>2–3</td></tr>
+      <tr><td>A6</td><td>Pose A de 20° (opcional)</td><td class="wrap">Brazos como el loft, con cinemática directa y literales</td><td>1,5–2</td></tr>
+      <tr><td>A7</td><td>El Probador sobre Anny</td><td class="wrap">El pantalón drapea sobre un cuerpo humano; el SDF entra por el bake de M8</td><td>0,5</td></tr>
+      <tr><td>A8</td><td>Todas las edades</td><td class="wrap">Niños y ancianos; edad como input de verdad</td><td>—</td></tr>
+    </tbody>
+  </table></div>
+  <p>A0–A5 suman <strong>8,5–12 días-agente</strong>. A5 es más simple que el ajuste global por mínimos cuadrados del estudio (3–4 días) porque el afinado por parte lo reemplaza; el LM queda documentado como opción si alguna vez hace falta un «lo más parecido posible» global.</p>
+  <p>Seguimiento en el kanban: la épica es <a href="https://github.com/eticalde/Toile/issues/48">#48</a>; A0–A1 <a href="https://github.com/eticalde/Toile/issues/49">#49</a>, A2 <a href="https://github.com/eticalde/Toile/issues/50">#50</a>, A3 <a href="https://github.com/eticalde/Toile/issues/51">#51</a>, A4–A5 <a href="https://github.com/eticalde/Toile/issues/52">#52</a>. A6–A8 se abren cuando A5 cierre.</p>
+</section>
+
+<section id="dueno">
+  <h2><span class="num">§ 7</span>Las decisiones del dueño</h2>
+  <p>Ocho preguntas que el estudio elevó y que están <strong>pendientes</strong> al cierre de este documento. Cada una lleva la recomendación del plan; al sellarse pasan a ser vinculantes, como las once de PLAN-002.</p>
+  <div class="tscroll"><table>
+    <thead><tr><th>#</th><th>Pregunta</th><th>Recomendación</th><th>Estado</th></tr></thead>
+    <tbody>
+      <tr><td>G1</td><td class="wrap">¿Cómo se embarca el asset (~19,5 MB)?</td><td class="wrap">Embebido con <code>include_bytes!</code> y commiteado (re-bake determinista, sin LFS); el repo crece 9–12 MB</td><td><span class="chip">pendiente</span></td></tr>
+      <tr><td>G2</td><td class="wrap">¿Sólo adultos en v1?</td><td class="wrap">Sí; todas las edades en A8 con «edad en años» como input</td><td><span class="chip">pendiente</span></td></tr>
+      <tr><td>G3</td><td class="wrap">¿Aceptar la pose de reposo (≈ 40°) para v1 y el primer SDF?</td><td class="wrap">Sí; el re-pose a 20° es A6, opcional</td><td><span class="chip">pendiente</span></td></tr>
+      <tr><td>G4</td><td class="wrap">¿Añadir estaciones Mano / Pie / Cara?</td><td class="wrap">Sí (25 variantes, cabe en la máscara); si no, «muñeca» ilumina la mano entera</td><td><span class="chip">pendiente</span></td></tr>
+      <tr><td>G5</td><td class="wrap">¿Qué inputs más allá de la cinta?</td><td class="wrap">Sexo en tres valores; complexión, músculo y proporciones como sliders con default, no escondidos</td><td><span class="chip">pendiente</span></td></tr>
+      <tr><td>G6</td><td class="wrap">¿El loft se queda?</td><td class="wrap">Sí, como modo permanente: exacto, sin assets, en microsegundos</td><td><span class="chip">pendiente</span></td></tr>
+      <tr><td>G7</td><td class="wrap">¿Atribución a NAVER/Anny?</td><td class="wrap">Por cortesía en docs y <code>PROVENANCE.txt</code>; legalmente no hace falta, nada de NAVER se embarca</td><td><span class="chip">pendiente</span></td></tr>
+      <tr><td>G8</td><td class="wrap">¿Una fila roja bloquea el Probador?</td><td class="wrap">No: el maniquí muestra Δ, el patronaje usa la cinta</td><td><span class="chip">pendiente</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="animacion">
+  <h2><span class="num">§ 8</span>Animación: investigada, documentada, diferida</h2>
+  <p>Anny es un cuerpo <strong>riggeado</strong> —163 huesos de MakeHuman con pesos CC0, skinning lineal y por cuaterniones duales, sin blendshapes correctivos de pose— así que caminar con la prenda puesta y mirar un mapa de tensiones es posible a futuro. El movimiento no viene con Anny (su ejemplo <code>amass_to_anny.py</code> usa AMASS, no comercial). El 2026-09-08 un panel de siete agentes investigó el ecosistema (toolkits, fuentes de movimiento, simulación sobre cuerpo móvil, rigging en Rust, métricas de ajuste) con revisión adversarial de cada licencia en fuente primaria. Lo que sigue es la destilación; el detalle operativo vive en el kanban —la épica <a href="https://github.com/eticalde/Toile/issues/54">#54</a>, el mapa de tensión estático <a href="https://github.com/eticalde/Toile/issues/55">#55</a>, el rig <a href="https://github.com/eticalde/Toile/issues/56">#56</a>, las poses clave <a href="https://github.com/eticalde/Toile/issues/57">#57</a>, el spike del colisionador móvil <a href="https://github.com/eticalde/Toile/issues/58">#58</a>, el ciclo de marcha <a href="https://github.com/eticalde/Toile/issues/59">#59</a>, la tela en movimiento <a href="https://github.com/eticalde/Toile/issues/60">#60</a>, las métricas de ajuste <a href="https://github.com/eticalde/Toile/issues/61">#61</a> y la política de licencias <a href="https://github.com/eticalde/Toile/issues/53">#53</a>— y <strong>no se implementa en v1</strong>.</p>
+
+  <div class="discarded">
+    <b>Descartado — toolkits tipo mmhuman3d</b>
+    <p>Ninguno sirve, y no por su código (mmhuman3d y ROMP son Apache-2.0; HybrIK, WHAM, 4D-Humans, MotionGPT, MDM son MIT) sino por lo que exigen para funcionar: los modelos SMPL/SMPL-X y el dataset AMASS, cuyas licencias prohíben el uso comercial, la redistribución e incluso entrenar para uso comercial. Además resuelven otro problema —vídeo → parámetros SMPL— cuando Toile necesita «un cuerpo CC0 con rig que camine con la prenda encima». Queda como <em>lectura</em> permitida (la IK analítica de HybrIK, las convenciones de <code>kinematics.py</code> de Anny) y, para un lejano «vídeo → pose», sólo herramientas externas limpias de punta a punta (MediaPipe Pose, SAM 3D Body → MHR), nunca dependencias.</p>
+  </div>
+
+  <div class="decision">
+    <b>Estrategia de movimiento</b>
+    <p><strong>Un ciclo de marcha propio, paramétrico y determinista</strong>: curvas articulares de Boulic (1990) ajustadas a datos reales CC BY 4.0 (Fukuchi 2018), tabuladas offline a 64 fases como cuaterniones literales; en runtime sólo nlerp/Catmull-Rom. Bucle perfecto, sin licencia de datos, mandos que importan para el ajuste (zancada, cadencia, balanceo, rotación pélvica). Como contraste, clips reales con licencia verificada: CMU («free for all uses»; agradecer NSF EIA-0196217), su conversión BVH de cgspeed, 100STYLE (CC BY 4.0), ACCAD (CC BY 3.0). Mixamo sólo por importación local del usuario (Adobe no permite redistribuir los ficheros). Hallazgo clave: Anny redistribuye en CC0 <code>rig.cmu_mb.json</code> —los 31 huesos con los nombres exactos del BVH de CMU— anclado a los mismos <em>joint cubes</em> que el rig MakeHuman, así que el retarget se deriva mecánicamente sin copiar los JSON GPL de MakeWalk.</p>
+  </div>
+
+  <h3>Las etapas T1–T4</h3>
+  <div class="tscroll"><table>
+    <thead><tr><th>Etapa</th><th>Qué entrega</th><th>Depende de</th><th>Días</th></tr></thead>
+    <tbody>
+      <tr><td>T1</td><td class="wrap"><strong>Mapa de tensión estático</strong> sobre el drapeado de hoy: deformación por arista y por triángulo (urdimbre / trama / bies, dirección dominante como el Strain Map de CLO), distancia al cuerpo, bandas 100 → 120 %, leyenda. Función pura sobre posiciones; golden <code>M0</code>. <strong>No necesita Anny</strong>: es el primer paso y el más barato</td><td class="wrap">#17, #43</td><td>3–5</td></tr>
+      <tr><td>T2</td><td class="wrap"><strong>Poses clave</strong> sobre el cuerpo Anny riggeado: <code>toile-rig</code> (esqueleto, cinemática directa y skinning en <code>+ − × ÷ √</code>, cero dependencias, golden <code>R0</code>/<code>R1</code>), biblioteca de nueve poses (brazos arriba, sentado, cuclillas, zancada…), re-horneado del SDF por pose, drapeado a equilibrio y mapas comparados (golden <code>R2</code>)</td><td class="wrap">A2, T1</td><td>14–20</td></tr>
+      <tr><td>T3</td><td class="wrap"><strong>Ciclo de marcha</strong>: el paso grande. Spike previo del colisionador móvil (cápsulas vs SDF de reposo vs re-horneado; coste de la auto-colisión); trait <code>Collider</code> por los dos caminos del solver; fricción relativa a la superficie móvil; pose interpolada por substep; sleep del worker suspendido; auto-colisión por hash espacial (el flag que el ADR presupuestó aparte y #17 ya promete); play / pausa / scrub. Golden <code>R3</code></td><td class="wrap">T2, #17, #30, #39</td><td>30–40</td></tr>
+      <tr><td>T4</td><td class="wrap"><strong>Métricas de ajuste con números</strong>: holgura por anillo ISO 8559-1, apriete y presión (bandas 1,5 / 2,5 / 4,3 / 5,9 kPa de la literatura ergonómica), envolvente por ciclo con migración de la prenda; tabla exportable cuyo hash es el golden <code>F0</code></td><td class="wrap">T1, #18, #47; T2/T3 para las variantes</td><td>6–10</td></tr>
+    </tbody>
+  </table></div>
+  <p>Orden recomendado: política de licencias → T1 → cuerpo Anny (A0–A5) → rig → spike → poses → marcha → colisionador móvil → métricas. Los días son estimaciones sin medir; el spike de T3 es el que convierte estimaciones en presupuesto. Todo en CPU f32 en el camino golden; la trigonometría vive en herramientas de horneado cuya salida se hashea; GPU nunca es referencia.</p>
+
+  <h3>La política de licencias del movimiento</h3>
+  <p>Complementa a #32 y queda como issue propia (AN-8). <strong>Lista blanca verificada:</strong> CMU original (nunca vía AMASS), cgspeed, 100STYLE, ACCAD, Fukuchi 2018, Mesh2Motion (CC0), rigs, pesos y poses CC0 de MakeHuman; de Anny <strong>sólo</strong> <code>src/anny/data/mpfb2/</code>. <strong>Lista negra:</strong> SMPL/SMPL-X/MANO/FLAME, AMASS y todo derivado (HumanML3D, Motion-X, MoVi, los checkpoints de MotionBERT), LaFAN1, Bandai Namco, SFU, Human3.6M, OpenPose, GVHMR, EasyMocap, SNUG, SMPLer-X, MotionDiffuse; redistribuir Mixamo o Rokoko; enlazar Blender/MPFB2/MakeWalk (GPL), ArcSim, <code>ozz-animation-rs</code> (MPL). Código de referencia permitido: Anny, Warp, Newton, MuJoCo, Genesis, Taichi, MHR (Apache-2.0), PhysX 5 y Chrono (BSD-3), Bullet (zlib); crates <code>gltf</code>, <code>bvh_anim_parser</code> (MIT, sólo en herramienta), <code>parry3d</code>, <code>wide</code>.</p>
+
+  <h3>Preguntas al dueño que deja la animación</h3>
+  <ul class="notch">
+    <li>¿Adelantar T1 (mapa de tensión estático) a v1? Es barato y no necesita Anny.</li>
+    <li>Fuente de marcha por defecto: ciclo escrito a mano (16 keys) o procedimental Boulic + Fukuchi; ¿entran 2–3 clips CMU en el repo con <code>ATTRIBUTION.md</code>?</li>
+    <li>Rig objetivo: 163 huesos o la poda <code>anny</code> de 104 (para tela basta 104).</li>
+    <li>Postura de referencia P0 del mapa de ajuste — cruzada con la condición del GO (v1 conserva los ≈ 40° de MakeHuman) y con A6.</li>
+    <li>Cadena CC0 del rig: ampliar §2 con los vértices <em>helper</em> de los joint cubes y sus deltas (sin ellos no hay esqueleto).</li>
+    <li>Horneado del SDF: propio (grid golden-izable, cero dependencias en el camino golden) o <code>parry3d</code> (grid como fixture, sólo el drapeado bajo golden).</li>
+    <li>Correctivos de pose: estudiar MHR (Apache-2.0) como referencia, o aceptar el colapso de axila y entrepierna marcándolo como zona no fiable del mapa.</li>
+  </ul>
+</section>
+
+<section id="fuentes">
+  <h2><span class="num">§ 9</span>Fuentes</h2>
+  <ul class="refs">
+    <li><a href="https://github.com/naver/anny">naver/anny</a> <span>— código Apache-2.0; commit 81ca83e estudiado; README §License.</span></li>
+    <li><a href="https://europe.naverlabs.com/blog/anny-a-free-to-use-3d-human-parametric-model-for-all-ages/">Anny: a free-to-use 3D human parametric model for all ages</a> <span>— NAVER Labs Europe.</span></li>
+    <li><a href="https://github.com/naver/anny/blob/main/src/anny/data/mpfb2/LICENSE.md">CC0 1.0 de los assets MakeHuman/MPFB2</a> <span>— y <a href="https://static.makehumancommunity.org/about/license.html">la página de licencias de MakeHuman</a>.</span></li>
+    <li><a href="./maniqui.html">PLAN-002 Maniquíes</a> <span>— §2 veredicto de licencias, §7 pipeline SDF, §10 el golden que no se mueve.</span></li>
+    <li><a href="./architecture.html">ADR-001</a> <span>— determinismo, XPBD, el avatar por SDF.</span></li>
+    <li>Estudio de viabilidad Anny → Toile (2026-09-08) <span>— siete agentes: tres lecturas del código, dos diseños, veredicto y desafío adversarial; cifras y citas archivo:línea en el journal de la sesión.</span></li>
+  </ul>
+  <hr>
+  <p class="refs">Este documento es el plan del segundo productor de malla que PLAN-002 dejó previsto. Su arquitectura es la de <a href="./architecture.html">ADR-001</a>; la pestaña que lo consume, <a href="./maniqui.html">PLAN-002</a>; las reglas de su código, <a href="./style.html">STD-001</a>.</p>
+</section>
+
+</main>
+</div>
+
+<footer>
+  <div class="fin">TOILE · PLAN-003 · <a href="https://github.com/eticalde/Toile">github.com/eticalde/Toile</a> · <a href="./architecture.html">ADR-001</a> · <a href="./patronaje.html">PLAN-001</a> · <a href="./maniqui.html">PLAN-002</a> · <a href="./style.html">STD-001</a></div>
+</footer>
+
+</body>
+</html>
