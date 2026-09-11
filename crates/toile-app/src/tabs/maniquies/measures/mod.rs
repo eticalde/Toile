@@ -147,6 +147,12 @@ fn row(ui: &mut egui::Ui, theme: &Theme, st: &mut State, entry: (&str, &str)) {
 
     if slider.changed() && value.is_finite() {
         st.measures.values.insert(name.to_owned(), value);
+        ui.ctx().request_repaint();
+    }
+    // A rebuild — and, for Anny, a full 20-row solve — only runs once the
+    // edit commits (the slider releases, a click lands, or the value box
+    // loses focus), never once per drag frame: see `build`'s own doc.
+    if (slider.drag_stopped() || slider.lost_focus() || slider.clicked()) && value.is_finite() {
         st.dirty = true;
         ui.ctx().request_repaint();
     }
@@ -156,6 +162,6 @@ fn row(ui: &mut egui::Ui, theme: &Theme, st: &mut State, entry: (&str, &str)) {
         st.highlight = Some(name.to_owned());
     }
     if st.model == BodyModel::Anny {
-        delta::row(ui, theme, name, value, st.anny_measures.as_ref());
+        delta::row(ui, theme, name, value, st.anny_solved.as_ref());
     }
 }

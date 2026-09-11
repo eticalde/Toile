@@ -1,31 +1,45 @@
+mod bust_apex;
 mod groups;
 mod obj;
 mod quad;
-/// Bakes the seventeen anatomical rings `toile_anny::measure` reads a
-/// generated body against: cut once here, against the neutral template,
-/// then walked (never re-cut) at runtime as the phenotype morphs the mesh.
+/// Bakes the anatomical rings `toile_anny::measure` reads a generated body
+/// against: cut once here, against the neutral template, then walked
+/// (never re-cut) at runtime as the phenotype morphs the mesh.
 ///
 /// Several placements depart from where their name would literally point,
 /// because this mesh's topology does not allow it, or because the literal
 /// joint turns out not to be the anatomically honest choice — logged here
 /// rather than in a scattered set of comments.
 ///
-/// `pecho_alto` cannot sit at the scapula/clavicle joint height the
-/// catalogue names for "armpit level": by there, the mesh has already
-/// fused the arm's surface into the torso's (no gap remains to cut
+/// **A girth ring's own position and a length's end point need not be the
+/// same vertex.** `pecho_alto` cannot sit at the scapula/clavicle joint
+/// height the catalogue names for "armpit level": by there, the mesh has
+/// already fused the arm's surface into the torso's (no gap remains to cut
 /// through), so a horizontal cut traces up over the shoulder and down the
 /// arm instead of around the chest — `rings::bands::highest_unfused_trunk_y`
 /// finds the highest cut that still separates them, the honest reading of
-/// "as high as a tape can go."
+/// "as high as a tape can go." `tobillo` is not literally at the ankle
+/// joint either: that joint sits at the boundary into the foot, where the
+/// cross-section is already an elongated foot shape rather than a round
+/// ankle, so `rings::legs::ANKLE_T` backs off slightly toward the knee, to
+/// the narrowest point actually on the leg. `muneca` similarly backs off
+/// from the hand joint (`rings::arms::WRIST_T`): the forearm tapers
+/// smoothly all the way into the hand with no distinct wrist-bone pinch on
+/// this mesh, so a cut right at the joint barely responds to the build and
+/// gender morphs at all. For the same fusion reason as `pecho_alto`, the
+/// two `Shoulder*` girth landmark rings (used only for `hombros`) reuse
+/// `rings::bands::limb_fullest`'s own discovered offset rather than sitting
+/// exactly at the shoulder joint.
 ///
-/// `tobillo` is not literally at the ankle joint either: that joint sits
-/// at the boundary into the foot, where the cross-section is already an
-/// elongated foot shape rather than a round ankle, so `rings::legs::ANKLE_T`
-/// backs off slightly toward the knee, to the narrowest point actually on
-/// the leg. `muneca` similarly backs off from the hand joint
-/// (`rings::arms::WRIST_T`): the forearm tapers smoothly all the way into
-/// the hand with no distinct wrist-bone pinch on this mesh, so a cut right
-/// at the joint barely responds to the build and gender morphs at all.
+/// None of that is true of a *length*'s own end points, though: `brazo`
+/// runs between `RingId::Acromion` (the highest body vertex within a small
+/// radius of the shoulder joint — the top of the deltoid cap, not the ball
+/// joint buried inside it) and `RingId::WristJoint` (the body vertex
+/// nearest the hand joint) — both single-point landmarks, found on the
+/// surface rather than cut, since no plane at either true joint can
+/// separate the limb from its neighbour. Earlier, `brazo` mistakenly
+/// reused the girth rings' own points as its ends, which is what left it
+/// short.
 ///
 /// `crotch` is not the pelvis joint: that joint sits about 10 cm above
 /// where the legs actually separate. `rings::bands::fork_y` finds the
@@ -34,16 +48,33 @@ mod quad;
 /// above it, so its "fullest section" cannot be both thighs still pressed
 /// together rather than the seat.
 ///
-/// For the same fusion reason as `pecho_alto`, the two `Shoulder*` girth
-/// landmark rings (used only for `hombros`) reuse
-/// `rings::bands::limb_fullest`'s own discovered offset rather than sitting
-/// exactly at the shoulder joint. `brazo`'s own starting point does not
-/// reuse that offset, though: a length landmark can sit anywhere on the
-/// surface nearest the joint, so `rings::arms::bake` also stores the single
-/// body vertex nearest the true shoulder joint (`RingId::ShoulderJoint`) —
-/// not a cut, since no plane there can separate arm from torso, but a
-/// legitimate single-point landmark that follows the mesh the same way a
-/// ring's points do.
+/// `largo_espalda`'s nape is not the neck ring either: a ring cut at the
+/// neck joint is a full loop around the neck, so even its own most
+/// posterior point sits partway around that loop rather than squarely on
+/// the spine. `RingId::NapeBase` is found the same way as the acromion — a
+/// single surface point, the most posterior vertex in a band centred on
+/// the neck joint's own height, near the midline — not by reading anything
+/// off the `Neck` ring, which stays exactly where it is for `cuello`.
+/// Searching lower, toward the shoulder, looked like the anatomically
+/// obvious direction for "the base of the neck" and was tried first, but
+/// it measurably *shortened* `largo_espalda` instead of lengthening it —
+/// see `rings::legs`'s doc for the evidence. Even centred on the neck
+/// joint the number still falls short of a generic 47–52 cm table
+/// (currently around 32–36 cm): sweeping candidate heights all the way up
+/// through the head shows `largo_espalda` only reaching that range well
+/// into jaw/skull territory, so the shortfall is this mesh's own
+/// proportion — a short neck-to-waist span — rather than a landmark left
+/// in the wrong place.
+///
+/// `pecho` is cut directly at the breast targets' own displacement-
+/// weighted apex height (`bust_apex::weighted_mean_height`), no band, no
+/// search: the neutral template carries no breast at all, so a fullest-
+/// point scan there could only ever rediscover the ribcage, wherever it
+/// was anchored. Cutting at that exact height means the female-specific
+/// deltas push exactly those vertices forward once a phenotype applies
+/// them, and `pecho − bajo_pecho` (`bajo_pecho` is a fixed drop below the
+/// same height) grows on its own — verified at close to 15 cm on the
+/// female default, against under 3 cm before this fix.
 mod rings;
 mod station;
 mod targets;
@@ -81,7 +112,7 @@ pub fn run(args: &[String]) {
     };
 
     let parsed_targets = targets::discover_and_read(root);
-    let baked = bake(&obj_text, &groups_text, parsed_targets);
+    let baked = bake(&obj_text, &groups_text, parsed_targets, root);
     let bytes = asset::encode(&baked);
     match std::fs::write(OUT, &bytes) {
         Ok(()) => println!(
@@ -96,12 +127,15 @@ pub fn run(args: &[String]) {
     }
 }
 
-/// The bake itself, kept apart from file I/O so a test can drive it on a
-/// crafted fixture without touching the disk. `parsed_targets` is already
-/// read, quantized and in its fixed bake order (see
+/// The bake itself, kept apart from most file I/O so a test can drive it on
+/// a crafted fixture without touching the disk — except `root`, needed to
+/// separately read `targets/breast/breast-point-incr.target.gz` for
+/// [`bust_apex::weighted_mean_height`], since that file is not part of
+/// `parsed_targets` (it is never baked as a row). `parsed_targets` is
+/// otherwise already read, quantized and in its fixed bake order (see
 /// `targets::discover_and_read`); building the row table here is then just
 /// concatenating each target's deltas and recording where they landed.
-fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>) -> Baked {
+fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>, root: &str) -> Baked {
     let groups = groups::parse(groups_text);
     let body_range = groups::single_range(&groups, "body");
     assert_eq!(
@@ -156,7 +190,9 @@ fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>) ->
         .iter()
         .map(|(name, v)| (name.clone(), to_body_space(*v)))
         .collect();
-    let (ring_ranges, ring_points) = rings::bake(&ring_positions, &ring_tris, &ring_joints);
+    let bust_apex_y = bust_apex::weighted_mean_height(root, &ring_positions);
+    let (ring_ranges, ring_points) =
+        rings::bake(&ring_positions, &ring_tris, &ring_joints, bust_apex_y);
 
     let mut rows = Vec::with_capacity(parsed_targets.len());
     let mut deltas: Vec<Delta> = Vec::new();
@@ -230,7 +266,7 @@ mod tests {
         let total_deltas: usize = parsed_targets.iter().map(|t| t.deltas.len()).sum();
         assert_eq!(total_deltas, 2_124_560);
 
-        let baked = bake(&obj_text, &groups_text, parsed_targets);
+        let baked = bake(&obj_text, &groups_text, parsed_targets, &root);
         assert_eq!(baked.positions.len(), 13_380 * 3);
         assert_eq!(baked.indices.len(), 26_756 * 3);
         assert_eq!(baked.stations.len(), 13_380);

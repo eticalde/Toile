@@ -54,6 +54,67 @@ pub(super) fn nearest_vertex(positions: &[[f64; 3]], target: [f64; 3]) -> u32 {
     best as u32
 }
 
+/// The index of the highest (greatest `y`) body vertex within `radius` of
+/// `centre`.
+///
+/// Used for the acromion (see `crate::anny_bake`'s doc): the shoulder's
+/// bony top has no joint of its own marking it (`joint-r-shoulder` marks
+/// the ball joint, inside the arm), but it is exactly the topmost point of
+/// the deltoid cap over that joint, findable directly on the mesh surface.
+///
+/// # Panics
+/// If no vertex lies within `radius` of `centre`: a bake-time placement
+/// mistake (too small a radius), not a data problem.
+pub(super) fn topmost_vertex_within(positions: &[[f64; 3]], centre: [f64; 3], radius: f64) -> u32 {
+    let mut best: Option<(usize, f64)> = None;
+    for (i, &p) in positions.iter().enumerate() {
+        if dist(p, centre) > radius {
+            continue;
+        }
+        if best.is_none_or(|(_, best_y)| p[1] > best_y) {
+            best = Some((i, p[1]));
+        }
+    }
+    best.map_or_else(
+        || panic!("no vertex within {radius} m of {centre:?}"),
+        |(i, _)| i as u32,
+    )
+}
+
+/// The index of the most posterior (smallest `z`) body vertex whose height
+/// falls in `[y_lo, y_hi]` and whose distance from the sagittal midline
+/// (`|x|`) is at most `x_abs_max`.
+///
+/// Used for the nape (the C7 vertebra, at the back of the base of the
+/// neck): unlike the acromion, there is no nearby joint to search around
+/// at all, but the nape is still a findable surface feature — the most
+/// posterior point of the back, restricted to the neck-to-shoulder height
+/// band and to the midline, so it cannot wander onto a shoulder blade.
+///
+/// # Panics
+/// If no vertex satisfies both bounds: a bake-time placement mistake in
+/// the band or the midline tolerance, not a data problem.
+pub(super) fn most_posterior_in_band(
+    positions: &[[f64; 3]],
+    y_lo: f64,
+    y_hi: f64,
+    x_abs_max: f64,
+) -> u32 {
+    let mut best: Option<(usize, f64)> = None;
+    for (i, &p) in positions.iter().enumerate() {
+        if p[1] < y_lo || p[1] > y_hi || p[0].abs() > x_abs_max {
+            continue;
+        }
+        if best.is_none_or(|(_, best_z)| p[2] < best_z) {
+            best = Some((i, p[2]));
+        }
+    }
+    best.map_or_else(
+        || panic!("no vertex in y=[{y_lo}, {y_hi}], |x| <= {x_abs_max}"),
+        |(i, _)| i as u32,
+    )
+}
+
 /// A named joint's centroid, by its full `joint-*` group name.
 ///
 /// # Panics
@@ -106,5 +167,39 @@ mod tests {
         let positions = vec![[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [1.0, 1.0, 1.0]];
         assert_eq!(nearest_vertex(&positions, [1.1, 1.1, 1.1]), 2);
         assert_eq!(nearest_vertex(&positions, [9.0, 0.0, 0.0]), 1);
+    }
+
+    #[test]
+    fn topmost_vertex_within_ignores_a_higher_point_outside_the_radius() {
+        let positions = vec![
+            [0.0, 0.15, 0.0],  // within radius, the higher of the two nearby
+            [0.05, 0.10, 0.0], // within radius, lower
+            [0.0, 100.0, 0.0], // far away and much higher: must be excluded
+        ];
+        assert_eq!(topmost_vertex_within(&positions, [0.0, 0.0, 0.0], 0.2), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "no vertex within")]
+    fn topmost_vertex_within_panics_if_nothing_is_close_enough() {
+        let positions = vec![[10.0, 10.0, 10.0]];
+        topmost_vertex_within(&positions, [0.0, 0.0, 0.0], 0.1);
+    }
+
+    #[test]
+    fn most_posterior_in_band_respects_both_the_height_and_the_midline() {
+        let positions = vec![
+            [0.0, 0.5, -0.2],  // in band, on the midline: the answer
+            [0.0, 0.9, -0.5],  // more posterior, but off the height band
+            [0.10, 0.5, -0.9], // most posterior of all, but off the midline
+        ];
+        assert_eq!(most_posterior_in_band(&positions, 0.4, 0.6, 0.05), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "no vertex in")]
+    fn most_posterior_in_band_panics_if_nothing_qualifies() {
+        let positions = vec![[0.0, 0.0, 0.0]];
+        most_posterior_in_band(&positions, 1.0, 2.0, 0.01);
     }
 }

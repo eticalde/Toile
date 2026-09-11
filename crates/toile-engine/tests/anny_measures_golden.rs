@@ -7,17 +7,24 @@
 /// This is the third vertical slice's golden: the first pinned the bare
 /// neutral template (`0xb3f8_8dd8_6abc_c96f`), the second pinned the
 /// phenotype-driven mesh (`0x6254_3e96_3147_07eb`); this one pins where the
-/// seventeen measurement rings land on that same mesh. A change to a
-/// ring's placement — a different band, a different step, a different
-/// loop picked — moves this hash without moving either mesh golden, since
-/// measuring only reads positions, never writes them. It moved once
-/// already, from `0x065f_1605_154b_0935`, when the crotch landmark was
-/// corrected from the pelvis joint to the true leg fork, the hip band was
-/// constrained to sit above that fork, the neck-base landmark moved from
-/// the ring's centroid to its most posterior point, `brazo` was anchored
-/// on the true shoulder joint instead of the girth ring, and `muneca`
-/// backed off from the hand joint to a point that actually responds to
-/// the build and gender morphs.
+/// measurement rings land on that same mesh. A change to a ring's
+/// placement — a different band, a different step, a different loop
+/// picked — moves this hash without moving either mesh golden, since
+/// measuring only reads positions, never writes them.
+///
+/// It has moved twice since it was first pinned at `0x065f_1605_154b_0935`:
+/// once when the crotch landmark was corrected from the pelvis joint to
+/// the true leg fork, the hip band was constrained to sit above that
+/// fork, the neck-base landmark moved from the neck ring's centroid to
+/// its most posterior point, `brazo` was anchored on the nearest vertex to
+/// the shoulder joint instead of the girth ring, and `muneca` backed off
+/// from the hand joint to a point that actually responds to the build and
+/// gender morphs (giving `0x3728_9125_b54b_0935`); and again when `brazo`
+/// moved to the acromion and the wrist joint (proper single-point length
+/// landmarks distinct from both girth rings), the nape moved from a band
+/// toward the shoulder to a band centred on the neck joint itself, and
+/// `pecho` moved from a fullest-point scan to a direct cut at the breast
+/// targets' own displacement-weighted apex height.
 ///
 /// Take the new value from this assertion and update the constant in the
 /// same commit, saying why.
@@ -25,7 +32,7 @@
 fn the_anny_measures_hash_to_a_fixed_value() {
     assert_eq!(
         toile_engine::golden::anny_measures_hash(),
-        0x3728_9125_b54b_0935,
+        0x7a8f_c7b2_754b_0935,
         "the Anny body's measured values changed bits: a ring moved on \
          purpose, or a dependency drifted under it"
     );

@@ -79,7 +79,7 @@ pub fn anny_mesh_hash() -> u64 {
         height: 0.5,
         proportions: 0.5,
     };
-    let mesh = toile_anny::body_mesh(&phenotype);
+    let mesh = toile_anny::body_mesh(&phenotype, &[0.0; 20]);
     let mut h = FNV_BASIS;
     for f in mesh.positions.iter().chain(&mesh.normals) {
         h = (h ^ u64::from(f.to_bits())).wrapping_mul(FNV_PRIME);
@@ -121,6 +121,7 @@ pub fn anny_measures_hash() -> u64 {
         crate::body::BodyModel::Anny,
         &crate::body::default_measures(),
         &phenotype,
+        &crate::body::NO_LEVERS,
     );
     let measured = crate::body::measured_anny(&mesh);
     let mut h = FNV_BASIS;
@@ -129,6 +130,40 @@ pub fn anny_measures_hash() -> u64 {
             .get(name)
             .unwrap_or_else(|| panic!("measured_anny did not report `{name}`"));
         h = (h ^ v.to_bits()).wrapping_mul(FNV_PRIME);
+    }
+    h
+}
+
+/// Solves every lever against Toile's own default tape and hashes the
+/// result.
+///
+/// Runs against `crate::body::default_measures` for a fixed,
+/// gender-unspecified adult phenotype, and hashes the 20 solved lever
+/// values together with the resulting mesh's positions and normals.
+///
+/// This is the fourth vertical slice's golden: it moves when the solver's
+/// own math changes (the secant step, the fixed order, the tolerance) or
+/// when a ring a lever is solved against moves, and it stays put across
+/// everything that keeps producing the same lever vector — proof the solve
+/// is deterministic, not just that today's numbers happen to match.
+///
+/// # Panics
+/// If the shipped asset fails to decode: see `toile_anny::body_mesh`'s doc.
+pub fn anny_solved_hash() -> u64 {
+    let phenotype = toile_anny::phenotype::Phenotype::default();
+    let measures = crate::body::default_measures();
+    let solved = crate::body::solve_anny(&measures, &phenotype);
+    let mesh = toile_anny::body_mesh(&solved.phenotype, &solved.levers);
+
+    let mut h = FNV_BASIS;
+    for &t in &solved.levers {
+        h = (h ^ t.to_bits()).wrapping_mul(FNV_PRIME);
+    }
+    for f in mesh.positions.iter().chain(&mesh.normals) {
+        h = (h ^ u64::from(f.to_bits())).wrapping_mul(FNV_PRIME);
+    }
+    for &i in &mesh.indices {
+        h = (h ^ u64::from(i)).wrapping_mul(FNV_PRIME);
     }
     h
 }

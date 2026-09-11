@@ -1,11 +1,6 @@
 use super::intersect::Crossing;
 use super::{Joints, bands, intersect, select};
 
-/// Half-width and step of the band scanned around the chest joint for
-/// `pecho`, in metres.
-const BUST_BAND_HALF_M: f64 = 0.03;
-const BUST_STEP_M: f64 = 0.005;
-
 /// How far below `pecho`'s own found height `bajo_pecho` is cut.
 const UNDERBUST_DROP_M: f64 = 0.04;
 
@@ -63,7 +58,12 @@ fn ring_at(positions: &[[f64; 3]], tris: &[[u32; 3]], y: f64) -> Vec<Crossing> {
         .unwrap_or_else(|| panic!("no valid trunk cross-section at y = {y}"))
 }
 
-pub(super) fn bake(positions: &[[f64; 3]], tris: &[[u32; 3]], j: &Joints) -> TrunkRings {
+pub(super) fn bake(
+    positions: &[[f64; 3]],
+    tris: &[[u32; 3]],
+    j: &Joints,
+    bust_apex_y: f64,
+) -> TrunkRings {
     let upper_chest_y = bands::highest_unfused_trunk_y(
         positions,
         tris,
@@ -71,15 +71,16 @@ pub(super) fn bake(positions: &[[f64; 3]], tris: &[[u32; 3]], j: &Joints) -> Tru
     );
     let upper_chest = ring_at(positions, tris, upper_chest_y);
 
-    let (bust, bust_y) = bands::trunk_extremum(
-        positions,
-        tris,
-        j.spine1[1] - BUST_BAND_HALF_M,
-        j.spine1[1] + BUST_BAND_HALF_M,
-        BUST_STEP_M,
-        true,
-    );
-    let underbust = ring_at(positions, tris, bust_y - UNDERBUST_DROP_M);
+    // No band, no search: `bust_apex_y` already answers "where is the
+    // apex", read directly off the breast targets themselves
+    // (`crate::anny_bake::bust_apex`) rather than guessed from a joint. A
+    // fullest-point scan on the neutral template could only ever rediscover
+    // the ribcage, since the template carries no breast to find at all —
+    // see `crate::anny_bake`'s doc. Cutting here instead means the female
+    // deltas push exactly these vertices forward once a phenotype applies
+    // them, and the perimeter grows on its own.
+    let bust = ring_at(positions, tris, bust_apex_y);
+    let underbust = ring_at(positions, tris, bust_apex_y - UNDERBUST_DROP_M);
 
     let (waist, _) = bands::trunk_extremum(
         positions,

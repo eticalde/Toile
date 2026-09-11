@@ -9,6 +9,16 @@ use toile_body::{BodyMesh, BodyRes, PartialMeasures, Station, body_mesh};
 
 use crate::draft::MeasureSet;
 
+/// Writing a value into a measures row and solving the Anny body's levers
+/// until it agrees — one lever (or tied pair) per row, a fixed order, and
+/// an honest "tope del modelo" when the target is out of the model's reach.
+mod solve;
+pub use solve::{AnnySolve, SolvedRow, solve_anny};
+
+/// The lever vector every row is at, with no name pulled — the state a
+/// freshly chosen phenotype starts from before anything is solved.
+pub const NO_LEVERS: [f64; 20] = [0.0; 20];
+
 /// Reads every catalogue measurement directly off a generated Anny mesh's
 /// own positions, keyed by the catalogue's Spanish names.
 ///
@@ -56,9 +66,8 @@ pub enum BodyModel {
     #[default]
     TailorDummy,
     /// The Anny body baked from CC0 MakeHuman/MPFB2 data, morphed by a
-    /// [`Phenotype`]. The catalogue's `measure-*` levers are baked into the
-    /// asset but not yet applied — the tape still does not shape this body;
-    /// see `body_from_measures_with`'s doc.
+    /// [`Phenotype`] and solved toward the tape's own catalogue values —
+    /// see [`solve_anny`] and `body_from_measures_with`'s doc.
     Anny,
 }
 
@@ -168,17 +177,25 @@ pub fn body_from_measures(m: &MeasureSet) -> BodyMesh {
 /// Lofts a body with the chosen model.
 ///
 /// `TailorDummy` reads `m` exactly as [`body_from_measures`] does and
-/// ignores `anny`. `Anny` ignores `m` — a [`MeasureSet`] cannot express sex
-/// or age, so the Maniquies tab owns a `Phenotype` value of its own and
-/// hands it here, the same way it owns `m` — and morphs the baked template
-/// by `anny`. The two producers never share a dependency: `toile-anny`'s own
-/// `BodyMesh` is field-for-field identical to `toile_body`'s, so this is the
-/// one place their values are moved across.
-pub fn body_from_measures_with(model: BodyModel, m: &MeasureSet, anny: &Phenotype) -> BodyMesh {
+/// ignores `anny`/`levers` — the tailor's dummy has no levers at all, and
+/// hits every girth by construction. `Anny` ignores `m` directly — a
+/// [`MeasureSet`] cannot express sex or age, so the Maniquies tab owns a
+/// `Phenotype` value of its own and hands it here, the same way it owns
+/// `m` — and morphs the baked template by `anny` and `levers` (see
+/// [`solve_anny`] for how `levers` gets its values from `m`). The two
+/// producers never share a dependency: `toile-anny`'s own `BodyMesh` is
+/// field-for-field identical to `toile_body`'s, so this is the one place
+/// their values are moved across.
+pub fn body_from_measures_with(
+    model: BodyModel,
+    m: &MeasureSet,
+    anny: &Phenotype,
+    levers: &[f64; 20],
+) -> BodyMesh {
     match model {
         BodyModel::TailorDummy => body_from_measures(m),
         BodyModel::Anny => {
-            let mesh = toile_anny::body_mesh(anny);
+            let mesh = toile_anny::body_mesh(anny, levers);
             BodyMesh {
                 positions: mesh.positions,
                 normals: mesh.normals,

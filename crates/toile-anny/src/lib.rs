@@ -19,5 +19,9 @@ mod normals;
 /// The phenotype: what drives the mesh, and the math that turns it into the
 /// per-row weights the asset's deltas are summed with.
 pub mod phenotype;
+/// Writing a number into a row moves the body: a fixed-iteration secant
+/// solve per lever (or per tied pair), cheap because it only ever touches
+/// the vertices the lever it is solving actually moves.
+pub mod solve;
 
 pub use mesh::{BodyMesh, body_mesh};

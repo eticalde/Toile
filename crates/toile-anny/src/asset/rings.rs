@@ -1,9 +1,9 @@
-/// One of the seventeen anatomical rings this asset carries.
+/// One of the anatomical rings this asset carries.
 ///
-/// Twelve are catalogue girths; five are landmark-only (`Crotch`, the two
-/// `Shoulder*`, `ShoulderJoint` and `Elbow`) that no catalogue name reads
-/// directly but the length formulas in `crate::measure` need as an anchor
-/// point.
+/// Twelve are catalogue girths; the rest are landmark-only (`Crotch`, the
+/// two `Shoulder*`, `Elbow`, `Acromion`, `WristJoint` and `NapeBase`) that
+/// no catalogue name reads directly but the length formulas in
+/// `crate::measure` need as an anchor point.
 ///
 /// A ring is a fixed loop of points on the *neutral* body mesh (see
 /// `RingPoint`): baked once, from the mesh alone, and never touched again —
@@ -52,25 +52,40 @@ pub enum RingId {
     /// Landmark only: the right upper arm, cut at the same offset as
     /// [`RingId::UpperArm`] — see `crate::asset`'s doc on why that is also
     /// the closest valid cut to the shoulder joint. Anchors `hombros`, not
-    /// `brazo` — see [`RingId::ShoulderJoint`] for that.
+    /// `brazo` — see [`RingId::Acromion`] for that.
     ShoulderRight,
     /// Landmark only: the left counterpart of [`RingId::ShoulderRight`],
     /// anchoring `hombros`.
     ShoulderLeft,
     /// Landmark only: the right elbow, anchoring the bend in `brazo`.
     Elbow,
+    /// Landmark only: a single point — the highest body vertex within a
+    /// small radius of the right shoulder joint, i.e. the top of the
+    /// deltoid cap rather than the ball joint itself — anchoring the start
+    /// of `brazo`. A length landmark can sit anywhere on the surface near
+    /// the joint even where a girth ring cannot cut cleanly; see
+    /// `crate::asset`'s doc. Not a cut, so it is one of the rings with
+    /// exactly one point rather than a closed loop.
+    Acromion,
     /// Landmark only: a single point — the body vertex nearest the right
-    /// shoulder joint on the neutral template — anchoring the start of
-    /// `brazo`. Unlike [`RingId::ShoulderRight`], this is not a cut at all
-    /// (the plane there cannot separate arm from torso), so it is the one
-    /// ring with exactly one point rather than a closed loop; see
-    /// `crate::asset`'s doc.
-    ShoulderJoint,
+    /// hand joint — anchoring the end of `brazo`. Distinct from
+    /// [`RingId::Wrist`], which is the girth ring three-quarters down the
+    /// forearm; see `crate::asset`'s doc on why a length's end point need
+    /// not be where its girth ring sits.
+    WristJoint,
+    /// Landmark only: a single point — the most posterior body vertex in a
+    /// band centred on the neck joint's own height, near the sagittal
+    /// midline — anchoring the top of `largo_espalda`: the nape, the C7
+    /// vertebra at the back of the base of the neck. Distinct from
+    /// [`RingId::Neck`]'s own most posterior point because a ring cut at
+    /// the joint is a full loop, not a search — see `crate::anny_bake`'s
+    /// doc for the evidence behind exactly where this band sits.
+    NapeBase,
 }
 
 impl RingId {
     /// How many rings the asset carries.
-    pub const COUNT: usize = 17;
+    pub const COUNT: usize = 19;
 
     /// Every ring, in the asset's own fixed storage order.
     pub const ALL: [RingId; RingId::COUNT] = [
@@ -90,14 +105,19 @@ impl RingId {
         RingId::ShoulderRight,
         RingId::ShoulderLeft,
         RingId::Elbow,
-        RingId::ShoulderJoint,
+        RingId::Acromion,
+        RingId::WristJoint,
+        RingId::NapeBase,
     ];
 
-    /// Whether this ring is a single point (see [`RingId::ShoulderJoint`])
-    /// rather than a closed loop. A single-point "ring" is a landmark that
-    /// cannot be cut as a real section; every other ring must close.
+    /// Whether this ring is a single point rather than a closed loop. A
+    /// single-point "ring" is a landmark that cannot be cut as a real
+    /// section; every other ring must close.
     pub fn is_single_point(self) -> bool {
-        matches!(self, RingId::ShoulderJoint)
+        matches!(
+            self,
+            RingId::Acromion | RingId::WristJoint | RingId::NapeBase
+        )
     }
 }
 

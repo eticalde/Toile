@@ -1,5 +1,5 @@
 use eframe::egui::{self, Color32, RichText};
-use toile_engine::draft::MeasureSet;
+use toile_engine::body::AnnySolve;
 
 use crate::theme::Theme;
 use crate::widgets::PAD;
@@ -22,33 +22,42 @@ fn band_color(theme: &Theme, delta_cm: f64) -> Color32 {
     }
 }
 
-/// The *medido* and Δ line under a slider: what the Anny body actually
-/// measures for `name`, and how far that sits from `dado_cm` (what the
-/// slider says). Draws nothing when `measured` carries no such name — the
-/// tailor's dummy is never handed a `measured` set, so it never gains this
-/// line at all.
+/// The *medido* and Δ line under a slider: what the last solve's Anny body
+/// actually measures for `name`, how far that sits from `dado_cm` (what
+/// the slider says), and — when it matters — why a gap remains. Draws
+/// nothing when `solved` is `None` (the tailor's dummy never solves, so it
+/// never gains this line) or when `name` names no catalogue row (which
+/// does not happen for the panel's own rows).
 ///
-/// Nothing here ever moves `dado_cm` or the body: this slice only reports
-/// the gap. Closing it is the next slice's per-part solver.
-pub fn row(
-    ui: &mut egui::Ui,
-    theme: &Theme,
-    name: &str,
-    dado_cm: f64,
-    measured: Option<&MeasureSet>,
-) {
-    let Some(medido) = measured.and_then(|m| m.get(name)) else {
+/// A row with no lever of its own (`tiro`, `pecho_alto`, `entrepierna` and
+/// `cabeza` — see `toile_engine::body::solve_anny`'s doc) still shows a
+/// real Δ, but is marked "sin palanca propia" rather than left to look like
+/// the solver merely failed there. A row whose lever hit its own `±1`
+/// bound without closing Δ is marked "tope del modelo" instead: the target
+/// sits outside what this body can become, not a solver giving up early.
+pub fn row(ui: &mut egui::Ui, theme: &Theme, name: &str, dado_cm: f64, solved: Option<&AnnySolve>) {
+    let Some(r) = solved.and_then(|s| s.rows.get(name)) else {
         return;
     };
-    let delta = medido - dado_cm;
+    let delta = r.delta_cm.unwrap_or(r.medido_cm - dado_cm);
     let color = band_color(theme, delta);
+    let note = if r.saturated {
+        " · tope del modelo"
+    } else if !r.has_lever {
+        " · sin palanca propia"
+    } else {
+        ""
+    };
     ui.horizontal(|ui| {
         ui.add_space(PAD);
         ui.label(
-            RichText::new(format!("medido {medido:.1} cm · Δ {delta:+.1}"))
-                .size(10.5)
-                .monospace()
-                .color(color),
+            RichText::new(format!(
+                "medido {:.1} cm · Δ {delta:+.1}{note}",
+                r.medido_cm
+            ))
+            .size(10.5)
+            .monospace()
+            .color(color),
         );
     });
 }

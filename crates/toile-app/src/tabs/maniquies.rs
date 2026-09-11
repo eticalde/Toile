@@ -1,15 +1,15 @@
+mod library;
 mod measures;
 mod phenotype;
 
-use eframe::egui::{self, Color32, Painter, Pos2, Rect, Shape, Stroke, pos2, vec2};
+use eframe::egui;
 use eframe::egui_wgpu::RenderState;
-use toile_engine::body::{self, BodyModel, Phenotype};
-use toile_engine::draft::{MeasureSet, Station};
+use toile_engine::body::{self, AnnySolve, BodyModel, Phenotype};
+use toile_engine::draft::{BodyMesh, MeasureSet, Station};
 
 use crate::tabs::{Workspace, left_panel, right_panel};
 use crate::theme::Theme;
 use crate::viewport::BodyView;
-use crate::widgets::{list_row_icon, section};
 
 /// The mannequins tab: an editable set of body measurements and the procedural
 /// 3D dummy they loft, regenerated live as a value changes.
@@ -33,12 +33,14 @@ pub struct State {
     /// centimetres — shown next to the height slider since Anny's own
     /// `height` input is not centimetres (see `body::stature_cm`).
     anny_stature_cm: f32,
-    /// Every catalogue measurement the last-built Anny mesh actually came
-    /// to, keyed by the catalogue's Spanish names — the *medido* half of
-    /// each row's dado/medido/Δ. `None` while the tailor's dummy is
-    /// showing: that model has no such reading, and its rows keep no
-    /// medido column at all.
-    anny_measures: Option<MeasureSet>,
+    /// The last full lever solve against `measures`: the phenotype with its
+    /// `height` closed against `estatura`, the 20 lever values that closed
+    /// (or came as close as the model allows to) every other row, and each
+    /// row's medido/Δ/tope-del-modelo outcome — the *medido* half of the
+    /// measures panel's dado/medido/Δ. `None` while the tailor's dummy is
+    /// showing: that model has no levers and no such reading, so its rows
+    /// keep no medido column at all.
+    anny_solved: Option<AnnySolve>,
     /// The catalogue name whose region the body lights: the row last hovered
     /// or handled, kept lit after the pointer leaves it so the person can look
     /// from the slider to the body.
@@ -109,9 +111,7 @@ impl State {
         };
         let anny = AnnyControls::default();
         let mut view = BodyView::new(&rs, theme);
-        let mesh = body::body_from_measures_with(model, &measures, &anny.to_phenotype());
-        let anny_stature_cm = body::stature_cm(&mesh);
-        let anny_measures = (model == BodyModel::Anny).then(|| body::measured_anny(&mesh));
+        let (mesh, anny_solved, anny_stature_cm) = build(model, &measures, &anny);
         view.set_mesh(&rs, &mesh, 0);
         Self {
             rs,
@@ -120,7 +120,7 @@ impl State {
             model,
             anny,
             anny_stature_cm,
-            anny_measures,
+            anny_solved,
             highlight: None,
             lit: 0,
             dirty: false,
@@ -131,6 +131,47 @@ impl State {
     /// preference to remember on exit.
     pub fn uses_anny(&self) -> bool {
         self.model == BodyModel::Anny
+    }
+}
+
+/// Builds the mesh the current model shows.
+///
+/// The tailor's dummy reads `measures` directly and carries no levers at
+/// all, so it hits every girth by construction and `build` reports no
+/// solve. Anny instead solves first: [`body::solve_anny`] runs a fixed
+/// order of secant solves (`estatura`'s `height` phenotype input, then the
+/// lengths that move stature, then the trunk girths in two coupled sweeps,
+/// then the independent limbs and head) and hands back the phenotype and
+/// lever vector that came closest to `measures`, which is what the mesh is
+/// actually lofted from — not the raw, unsolved phenotype `anny` carries.
+///
+/// Called once per commit (a slider release, a typed value, a model
+/// switch), never per drag frame: a full 20-row solve costs low
+/// milliseconds, cheap enough to not need a background thread, too much to
+/// pay 60 times a second while a slider is merely being dragged.
+fn build(
+    model: BodyModel,
+    measures: &MeasureSet,
+    anny: &AnnyControls,
+) -> (BodyMesh, Option<AnnySolve>, f32) {
+    match model {
+        BodyModel::TailorDummy => {
+            let mesh = body::body_from_measures_with(
+                model,
+                measures,
+                &anny.to_phenotype(),
+                &body::NO_LEVERS,
+            );
+            let stature = body::stature_cm(&mesh);
+            (mesh, None, stature)
+        }
+        BodyModel::Anny => {
+            let solved = body::solve_anny(measures, &anny.to_phenotype());
+            let mesh =
+                body::body_from_measures_with(model, measures, &solved.phenotype, &solved.levers);
+            let stature = body::stature_cm(&mesh);
+            (mesh, Some(solved), stature)
+        }
     }
 }
 
@@ -145,7 +186,7 @@ fn mask_of(stations: &[Station]) -> u32 {
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
     let st = &mut *w.maniquies;
-    left_panel(ui, theme, |ui| library(ui, theme, st));
+    left_panel(ui, theme, |ui| library::panel(ui, theme, st));
     right_panel(ui, theme, |ui| {
         phenotype::panel(ui, theme, st);
         measures::panel(ui, theme, st);
@@ -162,11 +203,10 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         // and no generation gating. A change of highlight alone recolours
         // without rebuilding.
         if st.dirty {
-            let mesh =
-                body::body_from_measures_with(st.model, &st.measures, &st.anny.to_phenotype());
-            st.anny_measures = (st.model == BodyModel::Anny).then(|| body::measured_anny(&mesh));
+            let (mesh, anny_solved, stature) = build(st.model, &st.measures, &st.anny);
+            st.anny_solved = anny_solved;
             if st.model == BodyModel::Anny {
-                st.anny_stature_cm = body::stature_cm(&mesh);
+                st.anny_stature_cm = stature;
             }
             st.view.set_mesh(&st.rs, &mesh, mask);
             st.dirty = false;
@@ -177,79 +217,4 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         }
         st.view.show(ui, size, &st.rs, theme);
     });
-}
-
-// ── panels ────────────────────────────────────────────────────────────────
-
-/// The library column: the model switch, then the still-static mockup for
-/// standard tables and saved personas (a persistent persona library on disk
-/// is a follow-up).
-fn library(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
-    section(ui, theme, "Modelo");
-    let dummy = list_row_icon(
-        ui,
-        theme,
-        "Maniquí de sastre",
-        st.model == BodyModel::TailorDummy,
-        person_icon,
-    );
-    let anny = list_row_icon(
-        ui,
-        theme,
-        "Cuerpo Anny",
-        st.model == BodyModel::Anny,
-        person_icon,
-    );
-    let chosen = if dummy.clicked() {
-        Some(BodyModel::TailorDummy)
-    } else if anny.clicked() {
-        Some(BodyModel::Anny)
-    } else {
-        None
-    };
-    if let Some(model) = chosen
-        && model != st.model
-    {
-        st.model = model;
-        st.dirty = true;
-    }
-
-    section(ui, theme, "Tablas estándar");
-    for name in ["Talla 38 · ES", "Talla M · ISO 8559"] {
-        list_row_icon(ui, theme, name, false, table_icon);
-    }
-    section(ui, theme, "Personas");
-    for (name, selected) in [("Etienne", true), ("Ana", false)] {
-        list_row_icon(ui, theme, name, selected, person_icon);
-    }
-    list_row_icon(ui, theme, "Nueva persona", false, plus_icon);
-}
-
-// ── glyphs ────────────────────────────────────────────────────────────────
-
-fn table_icon(painter: &Painter, r: Rect, color: Color32) {
-    let stroke = Stroke::new(1.4, color);
-    let b = r.shrink2(vec2(2.0, 3.0));
-    painter.rect_stroke(b, 1.0, stroke, egui::StrokeKind::Inside);
-    let (split, column) = (b.top() + b.height() * 0.4, b.left() + b.width() * 0.34);
-    painter.line_segment([pos2(b.left(), split), pos2(b.right(), split)], stroke);
-    painter.line_segment([pos2(column, b.top()), pos2(column, b.bottom())], stroke);
-}
-
-fn person_icon(painter: &Painter, r: Rect, color: Color32) {
-    let stroke = Stroke::new(1.4, color);
-    let c = r.center();
-    painter.circle_stroke(c - vec2(0.0, 3.0), 2.6, stroke);
-    let shoulders: Vec<Pos2> = [-5.0_f32, -3.4, -1.6, 0.0, 1.6, 3.4, 5.0]
-        .iter()
-        .map(|&x| c + vec2(x, 6.0 - (25.0 - x * x).sqrt() * 0.9))
-        .collect();
-    painter.add(Shape::line(shoulders, stroke));
-}
-
-fn plus_icon(painter: &Painter, r: Rect, color: Color32) {
-    let stroke = Stroke::new(1.4, color);
-    let c = r.center();
-    painter.line_segment([c - vec2(0.0, 5.0), c + vec2(0.0, 5.0)], stroke);
-    painter.line_segment([c - vec2(5.0, 0.0), c + vec2(5.0, 0.0)], stroke);
 }

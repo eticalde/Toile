@@ -24,7 +24,6 @@ struct Joints {
     elbow_r: [f64; 3],
     elbow_l: [f64; 3],
     hand_r: [f64; 3],
-    spine1: [f64; 3],
     spine3: [f64; 3],
     pelvis: [f64; 3],
     scapula_r: [f64; 3],
@@ -43,7 +42,6 @@ fn gather(joints: &[(String, [f64; 3])]) -> Joints {
         elbow_r: joint(joints, "joint-r-elbow"),
         elbow_l: joint(joints, "joint-l-elbow"),
         hand_r: joint(joints, "joint-r-hand"),
-        spine1: joint(joints, "joint-spine-1"),
         spine3: joint(joints, "joint-spine-3"),
         pelvis: joint(joints, "joint-pelvis"),
         scapula_r: joint(joints, "joint-r-scapula"),
@@ -71,7 +69,7 @@ fn limb_ring(
         .unwrap_or_else(|| panic!("{label}: no valid, unfused limb cross-section at {point:?}"))
 }
 
-/// Bakes all seventeen rings from the neutral template, in [`RingId::ALL`]
+/// Bakes all nineteen rings from the neutral template, in [`RingId::ALL`]
 /// order, ready to flatten into [`toile_anny::asset::Baked`]'s ring table.
 ///
 /// `positions` and `joints` must already be in the mesh's own final space
@@ -82,11 +80,12 @@ pub fn bake(
     positions: &[[f64; 3]],
     tris: &[[u32; 3]],
     joints: &[(String, [f64; 3])],
+    bust_apex_y: f64,
 ) -> (Vec<RingRange>, Vec<RingPoint>) {
     let j = gather(joints);
     let legs = legs::bake(positions, tris, &j);
     let arms = arms::bake(positions, tris, &j);
-    let trunk = trunk::bake(positions, tris, &j);
+    let trunk = trunk::bake(positions, tris, &j, bust_apex_y);
 
     let rings = [
         legs.neck,
@@ -105,13 +104,15 @@ pub fn bake(
         arms.shoulder_r,
         arms.shoulder_l,
         arms.elbow,
-        arms.shoulder_joint,
+        arms.acromion,
+        arms.wrist_joint,
+        legs.nape,
     ];
     debug_assert_eq!(rings.len(), RingId::COUNT);
     flatten(rings)
 }
 
-/// Quantizes seventeen crossing-loops into the asset's flat `(RingRange,
+/// Quantizes nineteen crossing-loops into the asset's flat `(RingRange,
 /// RingPoint)` shape, in the array's own order (which is [`RingId::ALL`]).
 ///
 /// # Panics

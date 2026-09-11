@@ -5,7 +5,7 @@ mod geom;
 #[cfg(test)]
 mod tests;
 
-use geom::{back_point, centroid, dist, perimeter};
+use geom::{centroid, dist, perimeter};
 
 /// The number of body vertices every baked ring indexes into (see `crate`'s
 /// doc): the fixed shape [`measure`] requires of its `positions` argument.
@@ -59,14 +59,15 @@ pub struct Measures {
     /// distance, not the true path down the outside of the leg ISO 8559
     /// specifies — see [`measure`]'s doc.
     pub outseam: f32,
-    /// The neck ring's most posterior point (the nape) to waist centroid
-    /// (`largo_espalda`) — see [`measure`]'s doc on why the nape, not the
-    /// whole ring's centroid.
+    /// The nape landmark ([`RingId::NapeBase`]) to waist centroid
+    /// (`largo_espalda`) — see [`measure`]'s doc on why the nape sits below
+    /// the neck ring, not on it.
     pub back_length: f32,
-    /// The right shoulder joint (not the [`RingId::ShoulderRight`] girth
-    /// ring, which cannot sit at the joint itself) to elbow, plus elbow to
-    /// wrist, summed along the two segments rather than measured straight
-    /// (`brazo`).
+    /// The acromion ([`RingId::Acromion`], not the [`RingId::ShoulderRight`]
+    /// girth ring, which cannot sit at the true shoulder) to elbow, plus
+    /// elbow to the wrist joint ([`RingId::WristJoint`], not the
+    /// [`RingId::Wrist`] girth ring), summed along the two segments rather
+    /// than measured straight (`brazo`).
     pub arm_length: f32,
     /// Left shoulder centroid to right shoulder centroid (`hombros`).
     pub shoulder_width: f32,
@@ -82,7 +83,7 @@ fn ring_points(id: RingId) -> &'static [crate::asset::RingPoint] {
 }
 
 /// Measures every catalogue value off `positions` (already morphed by a
-/// phenotype), by walking the seventeen rings baked into the shipped asset.
+/// phenotype), by walking the nineteen rings baked into the shipped asset.
 ///
 /// See `crate`'s module doc for why the rings are cut once at bake time
 /// rather than intersected against `positions` here. Every step is
@@ -101,19 +102,20 @@ fn ring_points(id: RingId) -> &'static [crate::asset::RingPoint] {
 /// (`altura_cadera`) is always shorter than `rise` (`tiro`) — see the
 /// crate's tests.
 ///
-/// Two lengths come up short of generic anthropometric tables even after
-/// anchoring on the right landmark, and are reported honestly rather than
-/// forced to match: `back_length` (nape to waist) lands around 34–38 cm on
-/// the reference bodies against a generic ~47–52 cm table value, because
-/// [`RingId::Waist`] — kept as is, since its girth matches independent
-/// `PyTorch` measurements of this same mesh — sits proportionally higher up
-/// the torso here than those tables assume; `arm_length` (shoulder to
-/// wrist) lands around 48–54 cm against a generic ~62–68 cm, because this
-/// rig's own shoulder-to-elbow and elbow-to-wrist segments are
-/// proportionally short of typical human ratios even measured from the
-/// true joints. Neither is a ring miscalibration this module can correct
-/// without moving a ring the mesh's own independently-verified numbers
-/// depend on.
+/// `back_length` (nape to waist) is the one measurement still reported
+/// short of a generic anthropometric table after an honest search for a
+/// better landmark: it lands around 32–36 cm on the reference bodies
+/// against a generic ~47–52 cm table value. [`RingId::NapeBase`] is found
+/// by direct surface search rather than assumed, and searching lower —
+/// down toward the shoulder, the anatomically obvious direction for "the
+/// base of the neck" — measurably made it worse, not better (see
+/// `crate::anny_bake`'s doc for the evidence); reaching 47–52 cm this way
+/// would require a "nape" already up in jaw or skull territory. This is
+/// this specific mesh's own proportion — a short neck-to-waist span — not
+/// a ring left in the wrong place, and [`RingId::Waist`] stays exactly
+/// where it is regardless: its girth matches independent `PyTorch`
+/// measurements of this same mesh, so moving it to lengthen `back_length`
+/// would trade one honest number for another.
 ///
 /// # Panics
 /// If `positions` does not hold exactly [`BODY_VERTEX_COUNT`] xyz triples.
@@ -145,12 +147,12 @@ pub fn measure(positions: &[f32]) -> Measures {
     let hip_c = cen(RingId::Hip);
     let crotch_c = cen(RingId::Crotch);
     let ankle_c = cen(RingId::Ankle);
-    let neck_back = back_point(positions, ring_points(RingId::Neck));
+    let nape_c = cen(RingId::NapeBase);
     let shoulder_l_c = cen(RingId::ShoulderLeft);
     let shoulder_r_c = cen(RingId::ShoulderRight);
-    let shoulder_joint = cen(RingId::ShoulderJoint);
+    let acromion_c = cen(RingId::Acromion);
     let elbow_c = cen(RingId::Elbow);
-    let wrist_c = cen(RingId::Wrist);
+    let wrist_joint_c = cen(RingId::WristJoint);
 
     Measures {
         height,
@@ -170,8 +172,8 @@ pub fn measure(positions: &[f32]) -> Measures {
         hip_drop: cm(waist_c, hip_c),
         inseam: cm(crotch_c, ankle_c),
         outseam: cm(waist_c, ankle_c),
-        back_length: cm(neck_back, waist_c),
-        arm_length: cm(shoulder_joint, elbow_c) + cm(elbow_c, wrist_c),
+        back_length: cm(nape_c, waist_c),
+        arm_length: cm(acromion_c, elbow_c) + cm(elbow_c, wrist_joint_c),
         shoulder_width: cm(shoulder_l_c, shoulder_r_c),
     }
 }

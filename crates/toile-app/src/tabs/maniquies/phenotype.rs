@@ -9,8 +9,12 @@ use crate::widgets::{PAD, section};
 const VALUE_W: f32 = 78.0;
 
 /// The six phenotype controls Anny's evaluator takes, shown only while the
-/// Anny model is selected — the tailor's dummy has no such inputs. A change
-/// marks the tab dirty, the same way a measurement edit does.
+/// Anny model is selected — the tailor's dummy has no such inputs. A
+/// committed change marks the tab dirty, the same way a measurement edit
+/// does: every phenotype change also re-solves the 20 levers (`solve_anny`
+/// takes the phenotype, not just `measures`), so this waits for a slider
+/// release, a click or a lost focus rather than running once per drag
+/// frame — see `super::build`'s own doc.
 pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
     if st.model != BodyModel::Anny {
         return;
@@ -82,7 +86,10 @@ pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
 
 /// One phenotype slider: a label above, then a slider filling the panel's
 /// width the same way `measures::row` lays out a measurement, but editing a
-/// plain `f64` rather than the measure set.
+/// plain `f64` rather than the measure set. Returns whether the edit just
+/// committed — the slider released, a click landed, or the value box lost
+/// focus — which is when the caller should re-solve, not on every frame a
+/// drag merely continues.
 fn row(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -110,5 +117,5 @@ fn row(
             )
         })
         .inner;
-    slider.changed() && value.is_finite()
+    (slider.drag_stopped() || slider.lost_focus() || slider.clicked()) && value.is_finite()
 }

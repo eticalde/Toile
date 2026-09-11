@@ -48,27 +48,6 @@ pub(crate) fn centroid(positions: &[f32], ring: &[RingPoint]) -> [f32; 3] {
     [sum[0] / n, sum[1] / n, sum[2] / n]
 }
 
-/// The most posterior point on a ring: the one with the smallest z, on this
-/// mesh's own axis convention (negative z is the back — verified against
-/// the shipped template, where the head ring's rear extent, the skull's
-/// occiput, reaches noticeably further from centre than its front, the
-/// brow).
-///
-/// Used for the neck ring's contribution to `back_length`: the nape (the
-/// C7 vertebra) sits at the *back* of the neck, and a plain centroid over
-/// the whole ring would average that in with the throat at the front,
-/// landing on neither.
-pub(crate) fn back_point(positions: &[f32], ring: &[RingPoint]) -> [f32; 3] {
-    let mut best = at(positions, ring[0]);
-    for &p in &ring[1..] {
-        let q = at(positions, p);
-        if q[2] < best[2] {
-            best = q;
-        }
-    }
-    best
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -106,15 +85,6 @@ mod tests {
         assert!((c[0] - 0.5).abs() < 1.0e-6);
         assert!((c[1] - 0.0).abs() < 1.0e-6);
         assert!((c[2] - 0.5).abs() < 1.0e-6);
-    }
-
-    #[test]
-    fn back_point_picks_the_smallest_z() {
-        let (positions, ring) = square_ring();
-        // Vertices 0 and 1 sit at z = 0.0, the ring's smallest; back_point
-        // must return one of them, not the centroid.
-        let b = back_point(&positions, &ring);
-        assert!(b[2].abs() < 1.0e-6, "expected z = 0.0, got {b:?}");
     }
 
     #[test]

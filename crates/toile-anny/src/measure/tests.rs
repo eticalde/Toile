@@ -7,14 +7,22 @@ use crate::phenotype::Phenotype;
 /// be sitting on a shared crossed triangle, which means the loop is broken.
 const MAX_RING_EDGE_M: f32 = 0.08;
 
-/// Every ring the baker wrote is either the one documented single-point
-/// landmark ([`RingId::is_single_point`]) or a genuine closed loop over the
-/// neutral template: non-empty, and every consecutive pair of points
-/// (wrapping from the last back to the first) sits close enough together
-/// to have come from one crossed triangle.
-#[test]
-fn every_ring_is_a_single_point_or_a_closed_non_empty_loop() {
-    let baked = decoded();
+/// No lever pulled — every measurement in this file is about the
+/// phenotype-only body, not the solver.
+const ZERO: [f64; 20] = [0.0; 20];
+
+/// Checks every ring is either the documented single-point landmark or a
+/// genuine closed loop over `positions`: non-empty, and every consecutive
+/// pair of points (wrapping from the last back to the first) sits close
+/// enough together to have come from one crossed triangle.
+///
+/// A ring's own vertex indices never change under any phenotype or lever
+/// (see `measuring_different_phenotypes_does_not_change_the_ring_tables`),
+/// but whether those indices still sit close enough to look like one
+/// shared triangle can, in principle, break if a lever stretched its
+/// vertices far apart — which is why this is reusable against the bare
+/// template and against any morphed or solved mesh alike.
+fn assert_rings_are_closed(positions: &[f32]) {
     for id in RingId::ALL {
         let points = ring_points(id);
         assert!(!points.is_empty(), "{id:?} is empty");
@@ -25,8 +33,8 @@ fn every_ring_is_a_single_point_or_a_closed_non_empty_loop() {
         assert!(points.len() >= 3, "{id:?} has too few points to be a loop");
         let n = points.len();
         for i in 0..n {
-            let a = geom::at(&baked.positions, points[i]);
-            let b = geom::at(&baked.positions, points[(i + 1) % n]);
+            let a = geom::at(positions, points[i]);
+            let b = geom::at(positions, points[(i + 1) % n]);
             let d = geom::dist(a, b);
             assert!(
                 d < MAX_RING_EDGE_M,
@@ -37,6 +45,46 @@ fn every_ring_is_a_single_point_or_a_closed_non_empty_loop() {
     }
 }
 
+#[test]
+fn every_ring_is_a_single_point_or_a_closed_non_empty_loop() {
+    assert_rings_are_closed(&decoded().positions);
+}
+
+/// The fourth slice's structural requirement: solving a lever all the way
+/// to its own `±1` bound — the most a lever can ever stretch its vertices —
+/// must not tear open the loop its own ring walks. Driven through
+/// `crate::solve::solve_girth` rather than a hand-picked lever value, so
+/// this exercises the real solver path, not just an arbitrary morph.
+#[test]
+fn rings_stay_closed_after_a_lever_is_solved_to_its_bound() {
+    use crate::phenotype::LEVERS;
+
+    let phenotype = Phenotype::default();
+    let lever_id = |label: &str| {
+        LEVERS
+            .iter()
+            .position(|&l| l == label)
+            .expect("known lever label") as u8
+    };
+    let ids = [lever_id("waist-circ")];
+    // Ask for something no waist can reach, so the secant runs to the +1
+    // bound rather than settling short of it.
+    let solved = crate::solve::solve_girth(&phenotype, &ZERO, &ids, 1000.0, |m| m.waist);
+    assert!(solved.saturated, "1000 cm should saturate the waist lever");
+
+    let mut levers = ZERO;
+    levers[ids[0] as usize] = solved.value;
+    let mesh = body_mesh(&phenotype, &levers);
+    assert_rings_are_closed(&mesh.positions);
+    let m = measure(&mesh.positions);
+    assert!(
+        m.hip_drop < m.rise,
+        "altura_cadera {} is not shorter than tiro {} even at the waist's own bound",
+        m.hip_drop,
+        m.rise
+    );
+}
+
 /// The baked `(vertex, vertex, t)` rings are read-only data: measuring two
 /// wildly different bodies must never leave them changed, since a ring's
 /// whole point is to be fixed geometry that only the *positions* it is
@@ -44,7 +92,7 @@ fn every_ring_is_a_single_point_or_a_closed_non_empty_loop() {
 #[test]
 fn measuring_different_phenotypes_does_not_change_the_ring_tables() {
     let before = decoded().ring_points.clone();
-    let _ = measure(&body_mesh(&Phenotype::default()).positions);
+    let _ = measure(&body_mesh(&Phenotype::default(), &ZERO).positions);
     let extreme = Phenotype {
         gender: 0.0,
         age: 1.0,
@@ -53,7 +101,7 @@ fn measuring_different_phenotypes_does_not_change_the_ring_tables() {
         height: 1.0,
         proportions: 1.0,
     };
-    let _ = measure(&body_mesh(&extreme).positions);
+    let _ = measure(&body_mesh(&extreme, &ZERO).positions);
     assert_eq!(before, decoded().ring_points);
 }
 
@@ -77,7 +125,7 @@ fn hip_drop_is_always_shorter_than_rise() {
                     height: 0.5,
                     proportions: 0.5,
                 };
-                let m = measure(&body_mesh(&phenotype).positions);
+                let m = measure(&body_mesh(&phenotype, &ZERO).positions);
                 assert!(
                     m.hip_drop < m.rise,
                     "gender={gender} weight={weight} muscle={muscle}: \
@@ -108,7 +156,7 @@ fn waist_girth_increases_monotonically_as_build_increases() {
             height: 0.5,
             proportions: 0.5,
         };
-        let waist = measure(&body_mesh(&phenotype).positions).waist;
+        let waist = measure(&body_mesh(&phenotype, &ZERO).positions).waist;
         if let Some(before) = previous {
             assert!(
                 waist > before,
@@ -136,7 +184,7 @@ fn the_reference_adult_measures_within_plausible_human_ranges() {
         height: 0.5,
         proportions: 0.5,
     };
-    let m = measure(&body_mesh(&phenotype).positions);
+    let m = measure(&body_mesh(&phenotype, &ZERO).positions);
 
     let in_range = |name: &str, v: f32, lo: f32, hi: f32| {
         assert!(
@@ -161,10 +209,44 @@ fn the_reference_adult_measures_within_plausible_human_ranges() {
     in_range("hip_drop", m.hip_drop, 16.0, 24.0);
     in_range("inseam", m.inseam, 65.0, 95.0);
     in_range("outseam", m.outseam, 90.0, 140.0);
-    // Both come up short of generic anthropometric tables even at the
-    // right landmark — see `measure`'s own doc for why, and why that is
-    // not a ring placement bug this module can correct.
-    in_range("back_length", m.back_length, 30.0, 45.0);
-    in_range("arm_length", m.arm_length, 45.0, 60.0);
+    // Short of a generic anthropometric table even at the best landmark an
+    // honest search finds — see `measure`'s own doc for the evidence this
+    // is this mesh's own proportion, not a ring placement bug.
+    in_range("back_length", m.back_length, 28.0, 40.0);
+    in_range("arm_length", m.arm_length, 58.0, 68.0);
     in_range("shoulder_width", m.shoulder_width, 35.0, 55.0);
+}
+
+/// `RingId::Bust` is cut where the breast targets themselves say the apex
+/// sits (`crate::asset`'s doc), so a female-default body's breast should
+/// show up as a real difference between `pecho` and `bajo_pecho` — not the
+/// under-3-cm gap the old ribcage-only scan produced. Male is checked too,
+/// as a guard against the fix instead flattening the male reading.
+#[test]
+fn the_female_default_shows_a_real_bust_apex() {
+    let female = Phenotype {
+        gender: 1.0,
+        ..Phenotype::default()
+    };
+    let m = measure(&body_mesh(&female, &ZERO).positions);
+    let gap = m.bust - m.underbust;
+    assert!(
+        (9.0..=16.0).contains(&gap),
+        "female bust - underbust = {gap:.2} cm, expected roughly 10-15"
+    );
+
+    let male = Phenotype {
+        gender: 0.0,
+        age: 0.8,
+        muscle: 0.5,
+        weight: 0.5,
+        height: 0.5,
+        proportions: 0.5,
+    };
+    let m = measure(&body_mesh(&male, &ZERO).positions);
+    let gap = m.bust - m.underbust;
+    assert!(
+        (3.0..=12.0).contains(&gap),
+        "male bust - underbust = {gap:.2} cm moved out of a plausible range"
+    );
 }

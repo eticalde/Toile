@@ -8,6 +8,16 @@ mod keys;
 use interp::{coefficients, linspace, race_weights};
 pub use keys::{KEYS, LEVERS, lever_from_stem, mask_from_stem};
 
+/// The bitmask of the two `KEYS` positions that make up the `height`
+/// feature (`minheight`, `maxheight`). Exposed for `crate::solve`, which
+/// needs to tell a weighted row that changes as the height phenotype input
+/// varies from one that does not, to build the right baseline for its
+/// `estatura` secant loop.
+pub(crate) fn height_key_mask() -> u32 {
+    let (start, len) = keys::HEIGHT;
+    ((1u32 << len) - 1) << start
+}
+
 /// Years-to-parameter control points for [`age_param_from_years`]: a young
 /// adult, a mid-life adult, and an old adult, each paired with the Anny
 /// `age` parameter that reproduces `MakeHuman`'s own age-by-height curve at

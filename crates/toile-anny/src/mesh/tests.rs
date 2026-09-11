@@ -3,6 +3,9 @@ use super::*;
 const VERTEX_COUNT: usize = 13_380;
 const TRIANGLE_COUNT: usize = 26_756;
 
+/// No lever pulled — the phenotype-only body the second slice shipped.
+const ZERO: [f64; 20] = [0.0; 20];
+
 /// A mesh's bounding-box height along y (up), in the mesh's own metres.
 fn bbox_height(m: &BodyMesh) -> f32 {
     let ys = m.positions.iter().skip(1).step_by(3);
@@ -16,7 +19,7 @@ fn bbox_height(m: &BodyMesh) -> f32 {
 
 #[test]
 fn the_shipped_asset_loads_at_the_expected_size() {
-    let m = body_mesh(&Phenotype::default());
+    let m = body_mesh(&Phenotype::default(), &ZERO);
     assert_eq!(m.vertex_count(), VERTEX_COUNT);
     assert_eq!(m.positions.len(), VERTEX_COUNT * 3);
     assert_eq!(m.normals.len(), VERTEX_COUNT * 3);
@@ -26,14 +29,14 @@ fn the_shipped_asset_loads_at_the_expected_size() {
 
 #[test]
 fn every_index_is_in_range_and_every_position_is_finite() {
-    let m = body_mesh(&Phenotype::default());
+    let m = body_mesh(&Phenotype::default(), &ZERO);
     assert!(m.indices.iter().all(|&i| (i as usize) < m.vertex_count()));
     assert!(m.positions.iter().all(|f| f.is_finite()));
 }
 
 #[test]
 fn every_station_tag_is_below_the_count() {
-    let m = body_mesh(&Phenotype::default());
+    let m = body_mesh(&Phenotype::default(), &ZERO);
     for &tag in &m.stations {
         assert!(
             u32::from(tag) < u32::from(toile_body::Station::COUNT),
@@ -44,7 +47,7 @@ fn every_station_tag_is_below_the_count() {
 
 #[test]
 fn all_twenty_two_stations_are_carried_by_some_vertex() {
-    let m = body_mesh(&Phenotype::default());
+    let m = body_mesh(&Phenotype::default(), &ZERO);
     for station in toile_body::Station::ALL {
         assert!(
             m.stations.contains(&station.tag()),
@@ -55,7 +58,7 @@ fn all_twenty_two_stations_are_carried_by_some_vertex() {
 
 #[test]
 fn every_normal_is_unit_length() {
-    let m = body_mesh(&Phenotype::default());
+    let m = body_mesh(&Phenotype::default(), &ZERO);
     for n in m.normals.as_chunks::<3>().0 {
         let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
         assert!((len - 1.0).abs() < 1.0e-4, "normal length {len}");
@@ -73,7 +76,7 @@ fn normals_point_outward() {
     // property instead: the divergence theorem says the signed volume
     // enclosed, summed one tetrahedron per triangle from any apex, is
     // positive exactly when the winding is CCW-outward.
-    let m = body_mesh(&Phenotype::default());
+    let m = body_mesh(&Phenotype::default(), &ZERO);
     let at = |i: u32| {
         let i = i as usize * 3;
         [
@@ -106,12 +109,15 @@ fn normals_point_outward() {
 
 #[test]
 fn two_different_phenotypes_move_the_mesh() {
-    let a = body_mesh(&Phenotype::default());
-    let b = body_mesh(&Phenotype {
-        muscle: 1.0,
-        weight: 1.0,
-        ..Phenotype::default()
-    });
+    let a = body_mesh(&Phenotype::default(), &ZERO);
+    let b = body_mesh(
+        &Phenotype {
+            muscle: 1.0,
+            weight: 1.0,
+            ..Phenotype::default()
+        },
+        &ZERO,
+    );
     assert_ne!(
         a.positions, b.positions,
         "a heavier, more muscular body must differ"
@@ -120,14 +126,20 @@ fn two_different_phenotypes_move_the_mesh() {
 
 #[test]
 fn a_taller_height_parameter_gives_a_taller_bounding_box() {
-    let short = body_mesh(&Phenotype {
-        height: 0.0,
-        ..Phenotype::default()
-    });
-    let tall = body_mesh(&Phenotype {
-        height: 1.0,
-        ..Phenotype::default()
-    });
+    let short = body_mesh(
+        &Phenotype {
+            height: 0.0,
+            ..Phenotype::default()
+        },
+        &ZERO,
+    );
+    let tall = body_mesh(
+        &Phenotype {
+            height: 1.0,
+            ..Phenotype::default()
+        },
+        &ZERO,
+    );
     assert!(
         bbox_height(&tall) > bbox_height(&short),
         "height 1.0 ({} m) should stand taller than height 0.0 ({} m)",
@@ -138,14 +150,20 @@ fn a_taller_height_parameter_gives_a_taller_bounding_box() {
 
 #[test]
 fn male_and_female_defaults_differ() {
-    let male = body_mesh(&Phenotype {
-        gender: 0.0,
-        ..Phenotype::default()
-    });
-    let female = body_mesh(&Phenotype {
-        gender: 1.0,
-        ..Phenotype::default()
-    });
+    let male = body_mesh(
+        &Phenotype {
+            gender: 0.0,
+            ..Phenotype::default()
+        },
+        &ZERO,
+    );
+    let female = body_mesh(
+        &Phenotype {
+            gender: 1.0,
+            ..Phenotype::default()
+        },
+        &ZERO,
+    );
     assert_ne!(male.positions, female.positions);
 }
 
@@ -155,15 +173,18 @@ fn topology_is_fixed_across_phenotypes() {
     // only positions may move with the phenotype, never the triangulation
     // or the station assignment, because both are baked from the template
     // alone.
-    let a = body_mesh(&Phenotype::default());
-    let b = body_mesh(&Phenotype {
-        gender: 0.0,
-        age: 1.0,
-        muscle: 1.0,
-        weight: 0.0,
-        height: 1.0,
-        proportions: 1.0,
-    });
+    let a = body_mesh(&Phenotype::default(), &ZERO);
+    let b = body_mesh(
+        &Phenotype {
+            gender: 0.0,
+            age: 1.0,
+            muscle: 1.0,
+            weight: 0.0,
+            height: 1.0,
+            proportions: 1.0,
+        },
+        &ZERO,
+    );
     assert_eq!(a.indices, b.indices);
     assert_eq!(a.stations, b.stations);
 }
@@ -174,13 +195,19 @@ fn a_phenotype_below_the_adult_floor_matches_the_floor() {
     // floor to the same mesh as the floor itself, not silently drift toward
     // a body the asset cannot produce.
     let floor = phenotype::adult_age_floor();
-    let floored = body_mesh(&Phenotype {
-        age: -1.0,
-        ..Phenotype::default()
-    });
-    let at_floor = body_mesh(&Phenotype {
-        age: floor,
-        ..Phenotype::default()
-    });
+    let floored = body_mesh(
+        &Phenotype {
+            age: -1.0,
+            ..Phenotype::default()
+        },
+        &ZERO,
+    );
+    let at_floor = body_mesh(
+        &Phenotype {
+            age: floor,
+            ..Phenotype::default()
+        },
+        &ZERO,
+    );
     assert_eq!(floored.positions, at_floor.positions);
 }

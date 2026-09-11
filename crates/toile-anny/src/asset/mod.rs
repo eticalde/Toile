@@ -30,7 +30,7 @@ const FNV_PRIME: u64 = 0x0100_0000_01b3;
 /// Metres, y-up, centred, CCW-outward triangles, one station tag per vertex
 /// — the template, unchanged from v1 — plus every baked target's row and
 /// delta run, in the fixed order the baker discovered them in, plus the
-/// sixteen measurement rings cut once from the neutral template (see
+/// nineteen measurement rings cut once from the neutral template (see
 /// [`RingId`]). Normals are not part of the asset — they are cheap to
 /// recompute and storing them would let the two drift apart.
 ///

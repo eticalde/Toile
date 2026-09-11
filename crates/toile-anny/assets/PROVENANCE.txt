@@ -2,13 +2,15 @@ Toile — crates/toile-anny/assets/body.bin — provenance
 =======================================================
 
 This asset is baked by `toile anny-bake` (crates/toile-cli/src/anny_bake.rs)
-from 378 files under naver/anny's src/anny/data/mpfb2/, and from nothing
-else: the neutral template (base.obj, basemesh_vertex_groups.json) plus 376
-`.target.gz` morph targets — the adult tier described below. No NAVER code
-is included, run, or shipped: the bake reads plain-text mesh data, JSON and
-gzip, and the station-assignment rule, the quad-to-triangle split, the
-phenotype math and the asset format are all reimplemented in Rust from
-scratch.
+from 379 files under naver/anny's src/anny/data/mpfb2/, and from nothing
+else: the neutral template (base.obj, basemesh_vertex_groups.json) plus 377
+`.target.gz` files under targets/ — the adult tier described below. 376 of
+those are baked as rows; the 377th (breast-point-incr.target.gz) is read
+only to locate the bust ring's cutting height and never becomes a row. No
+NAVER code is included, run, or shipped: the bake reads plain-text mesh
+data, JSON and gzip, and the station-assignment rule, the quad-to-triangle
+split, the phenotype math and the asset format are all reimplemented in
+Rust from scratch.
 
 Source repository
 ------------------
@@ -34,15 +36,27 @@ Files the bake consumed, and their licence
 
   src/anny/data/mpfb2/targets/breast/*.target.gz
     Every file starting with "female" or "male" and containing "-young" or
-    "-old": 144 files (cup size and firmness live only here).
+    "-old": 144 files (cup size and firmness live only here), baked as
+    weighted rows the same way as the macrodetail files above.
+
+  src/anny/data/mpfb2/targets/breast/breast-point-incr.target.gz
+    Read on its own, separately from the 144 above: this single file
+    displaces exactly the vertices that make up the breast, peaking at the
+    nipple, so its displacement-weighted mean vertex height is a
+    principled bust-line estimate read directly off the CC0 data. Used
+    only to choose where `RingId::Bust` is cut at bake time; it contributes
+    no row and no delta entry to the shipped asset. See
+    crates/toile-cli/src/anny_bake/bust_apex.rs.
 
   src/anny/data/mpfb2/targets/{arms,feet,hands,legs,neck,torso}/measure-*.target.gz
     All 40 `measure-*` lever files (20 contours/lengths, each with an
-    `-incr` and a `-decr` half). Baked as rows and exposed, but not yet
-    applied to the mesh — the next slice wires them to the tape.
+    `-incr` and a `-decr` half). Baked as rows and driven by the
+    fourth slice's per-catalogue secant solver — see
+    crates/toile-anny/src/solve/.
 
-  192 + 144 + 40 = 376 target files, 2,124,560 delta entries kept on body
-  vertices (index < 13,380; a delta on any other vertex is discarded).
+  192 + 144 + 40 = 376 target files baked as rows, 2,124,560 delta entries
+  kept on body vertices (index < 13,380; a delta on any other vertex is
+  discarded), plus the 377th file above, read but never baked.
 
   Nothing else under data/mpfb2/ feeds this bake: not the non-adult age
   targets, not the other ~880 face/hand/asymmetry targets, no rig, no
@@ -56,12 +70,13 @@ sha256 of the two template files
   8cb1417bc55ae5ec8aa99f90734e81ed5fbb556511ff6a2c00e0534b70911444  mesh_metadata/basemesh_vertex_groups.json
   f6089cba01cb570a24712b41ab8a586ccd3cc5ef53dc266ca50b95c288956d2c  LICENSE.md
 
-sha256 of the 376 target files consumed
+sha256 of the 377 target files consumed
 ------------------------------------------
 Paths below are relative to src/anny/data/mpfb2/targets/. The whole list
-(each line as printed here, joined by "\n", with a trailing newline) hashes
-to fb564f5c61df3c3483c2bce5274967e313c2491e1a580eff630594aa606c4933 — one
-number to check the manifest below has not drifted, without re-hashing 376
+(each line stripped of its leading indentation, joined by "\n", with a
+trailing newline) hashes to
+560c364db18ec17dd0a164f766c40242ebac77b54095b57d1f4393fb0247f511 — one
+number to check the manifest below has not drifted, without re-hashing 377
 files by hand.
 
   arms/measure-lowerarm-length-decr.target.gz  c2ebdaf38b9fedc6db399039d95303adc6bc7614f007416f4ace0b573ecfd4c2
@@ -70,6 +85,7 @@ files by hand.
   arms/measure-upperarm-circ-incr.target.gz  fb7eafc4c8887700b7091a1bbdf402e47c768f4589e1cf50bc2976e6379f406f
   arms/measure-upperarm-length-decr.target.gz  8f9b7a3494ce54b7560c10cf2ae5b350752a56c6918e28230b9035d43b139afc
   arms/measure-upperarm-length-incr.target.gz  72890d3448778f6d25e3c9abd540582ad36598a832c28fd0b1e16073b1b3f962
+  breast/breast-point-incr.target.gz  ece2122416ff27e49ab87e2db273eac6646be85f7ad35d45c823cb25314245c0
   breast/female-old-averagemuscle-averageweight-averagecup-maxfirmness.target.gz  ff16ba55e416aa88eafdfe1208c46a7ee15d57ddf19a36ac2fa93354b7d888c6
   breast/female-old-averagemuscle-averageweight-averagecup-minfirmness.target.gz  d540606390168f2bf0b02bc2df9006d36744fa03aac5a6a2e977bad930d85410
   breast/female-old-averagemuscle-averageweight-maxcup-averagefirmness.target.gz  a0916a319d648ff75dd6cfb19c1286f98c3da2296983604c9c6cdbe14e28f066
