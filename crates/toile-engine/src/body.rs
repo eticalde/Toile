@@ -1,3 +1,10 @@
+/// Anny's phenotype inputs (sex, age, build, muscle, height, proportions),
+/// re-exported here rather than left for callers to reach through
+/// `toile-anny` directly — the app depends on `toile-engine` only, and this
+/// is the one type its Anny controls need.
+pub use toile_anny::phenotype::Phenotype;
+/// Converts an age in years to the parameter [`Phenotype::age`] takes.
+pub use toile_anny::phenotype::age_param_from_years;
 use toile_body::{BodyMesh, BodyRes, PartialMeasures, Station, body_mesh};
 
 use crate::draft::MeasureSet;
@@ -11,12 +18,10 @@ pub enum BodyModel {
     /// The procedural loft: exact to the tape, no asset, microseconds.
     #[default]
     TailorDummy,
-    /// The neutral Anny body baked from CC0 MakeHuman/MPFB2 data.
-    ///
-    /// TODO: the measure set is ignored for this model today. The next slice
-    /// adds sex, age and stature as phenotype inputs and lets the catalogue's
-    /// levers fine-tune each contour, the way `body_from_measures` already
-    /// does for the loft.
+    /// The Anny body baked from CC0 MakeHuman/MPFB2 data, morphed by a
+    /// [`Phenotype`]. The catalogue's `measure-*` levers are baked into the
+    /// asset but not yet applied — the tape still does not shape this body;
+    /// see `body_from_measures_with`'s doc.
     Anny,
 }
 
@@ -125,24 +130,42 @@ pub fn body_from_measures(m: &MeasureSet) -> BodyMesh {
 
 /// Lofts a body with the chosen model.
 ///
-/// `TailorDummy` reads `m` exactly as [`body_from_measures`] does. `Anny`
-/// ignores `m` and returns the neutral bake — see [`BodyModel::Anny`]'s doc
-/// for what the next slice adds. The two producers never share a dependency:
-/// `toile-anny`'s own `BodyMesh` is field-for-field identical to
-/// `toile_body`'s, so this is the one place their values are moved across.
-pub fn body_from_measures_with(model: BodyModel, m: &MeasureSet) -> BodyMesh {
+/// `TailorDummy` reads `m` exactly as [`body_from_measures`] does and
+/// ignores `anny`. `Anny` ignores `m` — a [`MeasureSet`] cannot express sex
+/// or age, so the Maniquies tab owns a `Phenotype` value of its own and
+/// hands it here, the same way it owns `m` — and morphs the baked template
+/// by `anny`. The two producers never share a dependency: `toile-anny`'s own
+/// `BodyMesh` is field-for-field identical to `toile_body`'s, so this is the
+/// one place their values are moved across.
+pub fn body_from_measures_with(model: BodyModel, m: &MeasureSet, anny: &Phenotype) -> BodyMesh {
     match model {
         BodyModel::TailorDummy => body_from_measures(m),
         BodyModel::Anny => {
-            let anny = toile_anny::body_mesh();
+            let mesh = toile_anny::body_mesh(anny);
             BodyMesh {
-                positions: anny.positions,
-                normals: anny.normals,
-                indices: anny.indices,
-                stations: anny.stations,
+                positions: mesh.positions,
+                normals: mesh.normals,
+                indices: mesh.indices,
+                stations: mesh.stations,
             }
         }
     }
+}
+
+/// The mesh's bounding-box height along y (up), in centimetres.
+///
+/// Anny's own `height` phenotype input is not centimetres by itself (it is
+/// the `[0, 1]` position between `minheight` and `maxheight`), so this is
+/// the honest number to show next to that slider: the stature the
+/// generated body actually measures.
+pub fn stature_cm(mesh: &BodyMesh) -> f32 {
+    let ys = mesh.positions.iter().skip(1).step_by(3);
+    let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+    for &y in ys {
+        lo = lo.min(y);
+        hi = hi.max(y);
+    }
+    (hi - lo) * 100.0
 }
 
 #[cfg(test)]

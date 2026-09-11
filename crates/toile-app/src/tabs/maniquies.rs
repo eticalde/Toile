@@ -1,8 +1,9 @@
 mod measures;
+mod phenotype;
 
 use eframe::egui::{self, Color32, Painter, Pos2, Rect, Shape, Stroke, pos2, vec2};
 use eframe::egui_wgpu::RenderState;
-use toile_engine::body::{self, BodyModel};
+use toile_engine::body::{self, BodyModel, Phenotype};
 use toile_engine::draft::{MeasureSet, Station};
 
 use crate::tabs::{Workspace, left_panel, right_panel};
@@ -23,9 +24,15 @@ pub struct State {
     /// Spanish data), edited in the inspector.
     measures: MeasureSet,
     /// Which mesh producer is showing. Switching rebuilds the mesh; the
-    /// tailor's dummy reads `measures`; Anny does not yet (see
-    /// `BodyModel::Anny`'s doc).
+    /// tailor's dummy reads `measures`; Anny reads `anny` instead.
     model: BodyModel,
+    /// Anny's phenotype controls, edited only while `model` is `Anny`; see
+    /// `phenotype::panel`.
+    anny: AnnyControls,
+    /// The stature the last-built Anny mesh actually measured, in
+    /// centimetres — shown next to the height slider since Anny's own
+    /// `height` input is not centimetres (see `body::stature_cm`).
+    anny_stature_cm: f32,
     /// The catalogue name whose region the body lights: the row last hovered
     /// or handled, kept lit after the pointer leaves it so the person can look
     /// from the slider to the body.
@@ -35,6 +42,53 @@ pub struct State {
     lit: u32,
     /// A value changed this frame; rebuild the mesh before the next paint.
     dirty: bool,
+}
+
+/// The six phenotype controls the person edits, in their own natural units
+/// (years for age, Anny's own `[0, 1]` for everything else); converted to a
+/// `Phenotype` only when a mesh is built.
+struct AnnyControls {
+    /// `0.0` male .. `1.0` female.
+    sex: f64,
+    /// In years; converted with `body::age_param_from_years`.
+    age_years: f64,
+    /// Build: `0.0` thinnest .. `1.0` heaviest.
+    weight: f64,
+    /// `0.0` least muscular .. `1.0` most muscular.
+    muscle: f64,
+    /// Anny's own height parameter, not centimetres — see `anny_stature_cm`.
+    height: f64,
+    /// `0.0` typical proportions .. `1.0` atypical.
+    proportions: f64,
+}
+
+impl Default for AnnyControls {
+    /// A 25-year-old adult at every other neutral midpoint — the same
+    /// default `Phenotype::default()` carries, spelled out here because the
+    /// person edits years, not Anny's raw age parameter.
+    fn default() -> Self {
+        Self {
+            sex: 0.5,
+            age_years: 25.0,
+            weight: 0.5,
+            muscle: 0.5,
+            height: 0.5,
+            proportions: 0.5,
+        }
+    }
+}
+
+impl AnnyControls {
+    fn to_phenotype(&self) -> Phenotype {
+        Phenotype {
+            gender: self.sex,
+            age: body::age_param_from_years(self.age_years),
+            muscle: self.muscle,
+            weight: self.weight,
+            height: self.height,
+            proportions: self.proportions,
+        }
+    }
 }
 
 impl State {
@@ -47,13 +101,18 @@ impl State {
         } else {
             BodyModel::TailorDummy
         };
+        let anny = AnnyControls::default();
         let mut view = BodyView::new(&rs, theme);
-        view.set_mesh(&rs, &body::body_from_measures_with(model, &measures), 0);
+        let mesh = body::body_from_measures_with(model, &measures, &anny.to_phenotype());
+        let anny_stature_cm = body::stature_cm(&mesh);
+        view.set_mesh(&rs, &mesh, 0);
         Self {
             rs,
             view,
             measures,
             model,
+            anny,
+            anny_stature_cm,
             highlight: None,
             lit: 0,
             dirty: false,
@@ -79,7 +138,10 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
     let st = &mut *w.maniquies;
     left_panel(ui, theme, |ui| library(ui, theme, st));
-    right_panel(ui, theme, |ui| measures::panel(ui, theme, st));
+    right_panel(ui, theme, |ui| {
+        phenotype::panel(ui, theme, st);
+        measures::panel(ui, theme, st);
+    });
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let size = ui.available_size();
         let mask = st
@@ -92,7 +154,11 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         // and no generation gating. A change of highlight alone recolours
         // without rebuilding.
         if st.dirty {
-            let mesh = body::body_from_measures_with(st.model, &st.measures);
+            let mesh =
+                body::body_from_measures_with(st.model, &st.measures, &st.anny.to_phenotype());
+            if st.model == BodyModel::Anny {
+                st.anny_stature_cm = body::stature_cm(&mesh);
+            }
             st.view.set_mesh(&st.rs, &mesh, mask);
             st.dirty = false;
             st.lit = mask;

@@ -51,17 +51,35 @@ pub fn body_mesh_hash() -> u64 {
     h
 }
 
-/// Loads the neutral Anny body and hashes the bits of its mesh, the same way
-/// [`body_mesh_hash`] hashes the loft.
+/// Loads a reference adult Anny body and hashes the bits of its mesh, the
+/// same way [`body_mesh_hash`] hashes the loft.
+///
+/// The reference phenotype is male (`gender: 0.0`, Anny's own convention),
+/// age parameter `0.8` (Anny's raw unit, not years — a blend leaning toward
+/// `old`, since it sits between the `young` anchor at 2/3 and the `old`
+/// anchor at 1.0), and every other input at Anny's neutral `0.5`. It is
+/// deliberately not the all-`0.5` default: pinning a phenotype that moves
+/// gender and age away from their symmetric midpoints means a mistake in an
+/// interpolation direction cannot hide behind symmetry the way it could at
+/// the bare template.
 ///
 /// The asset is baked once and committed (`crates/toile-anny/assets/body.bin`);
-/// this only decodes it and computes normals, both in the `+ - * / sqrt`
-/// regime, so the result is bit-identical on macOS ARM and Linux x86. It moves
-/// only when the asset is re-baked or the normal computation changes — take
-/// the new value from the assertion and commit it in the same change, saying
-/// why.
+/// this only decodes it, applies the phenotype's weighted deltas and computes
+/// normals, all in the `+ - * / sqrt` regime, so the result is bit-identical
+/// on macOS ARM and Linux x86. It moves when the asset is re-baked, when the
+/// reference phenotype above changes, or when the evaluator's math changes —
+/// take the new value from the assertion and commit it in the same change,
+/// saying why.
 pub fn anny_mesh_hash() -> u64 {
-    let mesh = toile_anny::body_mesh();
+    let phenotype = toile_anny::phenotype::Phenotype {
+        gender: 0.0,
+        age: 0.8,
+        muscle: 0.5,
+        weight: 0.5,
+        height: 0.5,
+        proportions: 0.5,
+    };
+    let mesh = toile_anny::body_mesh(&phenotype);
     let mut h = FNV_BASIS;
     for f in mesh.positions.iter().chain(&mesh.normals) {
         h = (h ^ u64::from(f.to_bits())).wrapping_mul(FNV_PRIME);

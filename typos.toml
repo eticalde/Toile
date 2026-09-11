@@ -64,3 +64,5 @@ simular = "simular"
 normales = "normales"
 # "sequential", the other bench phase name.
 secuencial = "secuencial"
+# "components", in the anny-bake panic message naming a malformed target line.
+componentes = "componentes"

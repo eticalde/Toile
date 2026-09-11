@@ -9,7 +9,7 @@ publish = false
 # Intentionally no [dependencies]: the runtime only decodes an embedded byte
 # blob with std math, the same contract toile-body carries, so the golden
 # path never grows a chain of crates under it. The bake that turned the CC0
-# MakeHuman/MPFB2 source data into that blob needs JSON parsing; it lives in
+# MakeHuman/MPFB2 source data into that blob needs JSON and gzip; it lives in
 # toile-cli, which already carries dependencies, and this crate defines only
 # the asset's format (the writer the baker calls and the reader this crate
 # uses) so the two sides of the format cannot drift apart.

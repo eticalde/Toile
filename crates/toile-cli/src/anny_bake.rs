@@ -2,8 +2,10 @@ mod groups;
 mod obj;
 mod quad;
 mod station;
+mod targets;
 
-use toile_anny::asset::{self, Baked};
+use targets::ParsedTarget;
+use toile_anny::asset::{self, Baked, Delta, Row};
 
 /// Where the asset lands, relative to this crate's own manifest: the baker
 /// always writes to the tree it ships from, never wherever `cargo run`
@@ -34,22 +36,28 @@ pub fn run(args: &[String]) {
         Err(why) => return eprintln!("no se pudo leer «{groups_path}»: {why}"),
     };
 
-    let baked = bake(&obj_text, &groups_text);
+    let parsed_targets = targets::discover_and_read(root);
+    let baked = bake(&obj_text, &groups_text, parsed_targets);
     let bytes = asset::encode(&baked);
     match std::fs::write(OUT, &bytes) {
         Ok(()) => println!(
-            "{OUT}: {} bytes, {} vértices, {} triángulos",
+            "{OUT}: {} bytes, {} vértices, {} triángulos, {} filas, {} deltas",
             bytes.len(),
             baked.positions.len() / 3,
-            baked.indices.len() / 3
+            baked.indices.len() / 3,
+            baked.rows.len(),
+            baked.deltas.len()
         ),
         Err(why) => eprintln!("no se pudo escribir «{OUT}»: {why}"),
     }
 }
 
 /// The bake itself, kept apart from file I/O so a test can drive it on a
-/// crafted fixture without touching the disk.
-fn bake(obj_text: &str, groups_text: &str) -> Baked {
+/// crafted fixture without touching the disk. `parsed_targets` is already
+/// read, quantized and in its fixed bake order (see
+/// `targets::discover_and_read`); building the row table here is then just
+/// concatenating each target's deltas and recording where they landed.
+fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>) -> Baked {
     let groups = groups::parse(groups_text);
     let body_range = groups::single_range(&groups, "body");
     assert_eq!(
@@ -87,10 +95,23 @@ fn bake(obj_text: &str, groups_text: &str) -> Baked {
         .map(|&v| station::classify(v, &joints).tag())
         .collect();
 
+    let mut rows = Vec::with_capacity(parsed_targets.len());
+    let mut deltas: Vec<Delta> = Vec::new();
+    for target in parsed_targets {
+        rows.push(Row {
+            kind: target.kind,
+            offset: deltas.len() as u32,
+            length: target.deltas.len() as u32,
+        });
+        deltas.extend(target.deltas);
+    }
+
     Baked {
         positions,
         indices,
         stations,
+        rows,
+        deltas,
     }
 }
 
@@ -130,9 +151,25 @@ mod tests {
         let groups_text =
             std::fs::read_to_string(format!("{root}/mesh_metadata/basemesh_vertex_groups.json"))
                 .unwrap();
-        let baked = bake(&obj_text, &groups_text);
+        let parsed_targets = targets::discover_and_read(&root);
+        assert_eq!(
+            parsed_targets.len(),
+            376,
+            "48 + 72 + 72 + 144 weighted rows, plus 40 levers"
+        );
+        let lever_rows = parsed_targets
+            .iter()
+            .filter(|t| matches!(t.kind, toile_anny::asset::RowKind::Lever { .. }))
+            .count();
+        assert_eq!(lever_rows, 40);
+        let total_deltas: usize = parsed_targets.iter().map(|t| t.deltas.len()).sum();
+        assert_eq!(total_deltas, 2_124_560);
+
+        let baked = bake(&obj_text, &groups_text, parsed_targets);
         assert_eq!(baked.positions.len(), 13_380 * 3);
         assert_eq!(baked.indices.len(), 26_756 * 3);
         assert_eq!(baked.stations.len(), 13_380);
+        assert_eq!(baked.rows.len(), 376);
+        assert_eq!(baked.deltas.len(), 2_124_560);
     }
 }

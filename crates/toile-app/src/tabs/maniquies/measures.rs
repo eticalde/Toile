@@ -81,14 +81,14 @@ fn span(name: &str) -> (f64, f64) {
 pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
     section_with(ui, theme, "Medidas · Etienne", "cm");
     if st.model == BodyModel::Anny {
-        // Honest rather than mysterious: the sliders below still edit the
-        // measure set (the pattern keeps reading it), but this model does not
-        // yet have the phenotype and per-part levers that would let them move
-        // its mesh — that lands in a follow-up slice.
+        // Honest rather than mysterious: the phenotype above now shapes this
+        // body, but the sliders below still do not — the catalogue's
+        // per-part levers are baked into the asset but not yet wired to the
+        // tape, so fine-tuning an exact contour is a follow-up slice.
         footer_note(
             ui,
             theme,
-            "El cuerpo Anny aún no se ajusta con estas medidas.",
+            "El fenotipo ya da forma a este cuerpo; la cinta (estas medidas) todavía no lo ajusta.",
         );
     }
     egui::ScrollArea::vertical()
