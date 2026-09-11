@@ -10,6 +10,7 @@ publish = false
 arc-swap = "1"
 crossbeam-channel = "0.5"
 thiserror = "2"
+toile-anny = { path = "../toile-anny" }
 toile-body = { path = "../toile-body" }
 toile-doc = { path = "../toile-doc" }
 toile-geom = { path = "../toile-geom" }

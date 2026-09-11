@@ -27,6 +27,12 @@ impl Camera {
     /// half-height and the wrists (±0.38 m) to under a third of the
     /// half-width down to an aspect of 0.8, so the whole dummy keeps a margin
     /// in any viewport the panels leave.
+    ///
+    /// Re-checked for the Anny body, which is shorter (1.666 m against the
+    /// dummy's 1.71 m, so ~61 % of the half-height) but reaches wider at the
+    /// fingertips of its ~40°-out arms (±0.496 m against the dummy's ±0.38 m,
+    /// ~46 % of the half-width at the same aspect of 0.8). Both stay well
+    /// inside frame, so this framing is shared rather than given its own.
     pub fn for_body() -> Self {
         Self {
             yaw: 0.6,

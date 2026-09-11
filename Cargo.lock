@@ -3163,6 +3163,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "toile-anny"
+version = "0.1.0"
+dependencies = [
+ "toile-body",
+]
+
+[[package]]
 name = "toile-app"
 version = "0.1.0"
 dependencies = [
@@ -3183,6 +3190,9 @@ name = "toile-cli"
 version = "0.1.0"
 dependencies = [
  "rayon",
+ "serde_json",
+ "toile-anny",
+ "toile-body",
  "toile-doc",
  "toile-engine",
  "toile-mesh",
@@ -3206,6 +3216,7 @@ dependencies = [
  "arc-swap",
  "crossbeam-channel",
  "thiserror 2.0.20",
+ "toile-anny",
  "toile-body",
  "toile-doc",
  "toile-geom",

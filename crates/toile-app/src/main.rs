@@ -78,7 +78,7 @@ impl App {
             .clone()
             .expect("eframe was configured with the wgpu renderer");
         let probador = tabs::probador::State::new(rs.clone(), &theme, &session);
-        let maniquies = tabs::maniquies::State::new(rs.clone(), &theme);
+        let maniquies = tabs::maniquies::State::new(rs.clone(), &theme, prefs.anny_body);
         Self {
             theme,
             tab: Tab::Patronaje,
@@ -185,6 +185,7 @@ impl eframe::App for App {
     }
 
     fn on_exit(&mut self) {
+        self.prefs.anny_body = self.maniquies.uses_anny();
         self.prefs.save();
     }
 }

@@ -1,8 +1,9 @@
 use eframe::egui::{self, RichText, Slider, SliderClamping};
+use toile_engine::body::BodyModel;
 
 use super::State;
 use crate::theme::Theme;
-use crate::widgets::{PAD, section, section_with};
+use crate::widgets::{PAD, footer_note, section, section_with};
 
 /// Girth measurements, each catalogue name with the label the panel shows,
 /// ordered top-down the body: the tape starts at the neck and ends at the
@@ -79,6 +80,17 @@ fn span(name: &str) -> (f64, f64) {
 /// thing that moves.
 pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
     section_with(ui, theme, "Medidas · Etienne", "cm");
+    if st.model == BodyModel::Anny {
+        // Honest rather than mysterious: the sliders below still edit the
+        // measure set (the pattern keeps reading it), but this model does not
+        // yet have the phenotype and per-part levers that would let them move
+        // its mesh — that lands in a follow-up slice.
+        footer_note(
+            ui,
+            theme,
+            "El cuerpo Anny aún no se ajusta con estas medidas.",
+        );
+    }
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {

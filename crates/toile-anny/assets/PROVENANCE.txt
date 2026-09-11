@@ -1,0 +1,60 @@
+Toile — crates/toile-anny/assets/body.bin — provenance
+=======================================================
+
+This asset is baked by `toile anny-bake` (crates/toile-cli/src/anny_bake.rs)
+from three files under naver/anny's src/anny/data/mpfb2/, and from nothing
+else. No NAVER code is included, run, or shipped: the bake reads plain-text
+mesh data and JSON, and the station-assignment rule, the quad-to-triangle
+split and the asset format are all reimplemented in Rust from scratch.
+
+Source repository
+------------------
+  https://github.com/naver/anny
+  commit 81ca83e202273b306205c1cc15f33734be31e48c (2026-08-13)
+  Code licence: Apache-2.0 (NAVER Corp.) — not used by this bake.
+
+Files the bake consumed, and their licence
+-------------------------------------------
+  src/anny/data/mpfb2/3dobjs/base.obj
+  src/anny/data/mpfb2/mesh_metadata/basemesh_vertex_groups.json
+    Licence: CC0 1.0 Universal (public domain dedication). See
+    src/anny/data/mpfb2/LICENSE.md in the same repository, and the header of
+    base.obj reproduced below. CC0 requires no attribution notice; this file
+    exists for traceability, not licence compliance.
+
+  Nothing else under data/mpfb2/ (no .target files, no rig, no weights, no
+  textures) feeds this bake. Explicitly never read: anny.pth, soma.pth,
+  coco.pth, weights.default.json, or the smpl/smplx topologies — all outside
+  this slice's contract regardless of their own licence.
+
+sha256 of the files the bake consumed
+--------------------------------------
+  8e761e6624b8f54536409135d1636da63b32486a90d4897f84e121d144f6fb4c  3dobjs/base.obj
+  8cb1417bc55ae5ec8aa99f90734e81ed5fbb556511ff6a2c00e0534b70911444  mesh_metadata/basemesh_vertex_groups.json
+  f6089cba01cb570a24712b41ab8a586ccd3cc5ef53dc266ca50b95c288956d2c  LICENSE.md
+
+The first 14 lines of base.obj, verbatim (the CC0 declaration)
+-----------------------------------------------------------------
+# This is a mesh file for MakeHuman
+#
+# This asset was explicitly released as CC0 in september 2020. The license
+# text for CC0 can be found in the root of this repository.
+#
+# The copyright holders at the point of the release to CC0 were:
+#
+# Copyright (C) 2020 Data Collection AB, https://www.datacollection.se
+# Copyright (C) 2020 Joel Palmius
+# Copyright (C) 2020 Jonas Hauquier
+#
+# The primary legal contact for MakeHuman is Data Collection AB.
+#
+# For more information, see homepage at http://www.makehumancommunity.org
+
+What the bake keeps
+--------------------
+Only the `body` vertex group (13,380 of base.obj's 19,158 vertices, and its
+13,378 quad faces): the neutral hm08 base mesh's skin, not the helper
+geometry, joint cubes, hair, teeth or genital helpers the same file carries.
+The 125 `joint-*` vertex groups from basemesh_vertex_groups.json are read
+only for their centroids, to assign each kept vertex a Station tag; none of
+their vertices are themselves shipped in the asset.

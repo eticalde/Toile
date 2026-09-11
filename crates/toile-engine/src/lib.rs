@@ -3,7 +3,8 @@
 //! Everything the UI can do is expressible here, which is what keeps the whole
 //! product testable in CI without opening a window.
 
-/// The procedural tailor's dummy, lofted from a measure set.
+/// The two body producers: the procedural tailor's dummy lofted from a
+/// measure set, and the neutral Anny body baked from CC0 data.
 pub mod body;
 /// The edit compiler: a contour change becomes a new rest state.
 pub mod couture;

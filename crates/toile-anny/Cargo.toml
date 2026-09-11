@@ -1,0 +1,26 @@
+[package]
+name = "toile-anny"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+# Intentionally no [dependencies]: the runtime only decodes an embedded byte
+# blob with std math, the same contract toile-body carries, so the golden
+# path never grows a chain of crates under it. The bake that turned the CC0
+# MakeHuman/MPFB2 source data into that blob needs JSON parsing; it lives in
+# toile-cli, which already carries dependencies, and this crate defines only
+# the asset's format (the writer the baker calls and the reader this crate
+# uses) so the two sides of the format cannot drift apart.
+[dependencies]
+
+# Test-only: some tests check the baked station tags against the canonical
+# `Station` enum (its `COUNT` and the full `ALL` list) so a reorder over
+# there cannot go unnoticed here. A dev-dependency never reaches the shipped
+# crate, so the runtime's dependency graph above stays empty.
+[dev-dependencies]
+toile-body = { path = "../toile-body" }
+
+[lints]
+workspace = true

@@ -2,6 +2,24 @@ use toile_body::{BodyMesh, BodyRes, PartialMeasures, Station, body_mesh};
 
 use crate::draft::MeasureSet;
 
+/// Which mesh producer the Maniquies tab loads.
+///
+/// Both return the same [`BodyMesh`] shape, so the viewport, the camera and
+/// the station highlight work identically regardless of which one is chosen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BodyModel {
+    /// The procedural loft: exact to the tape, no asset, microseconds.
+    #[default]
+    TailorDummy,
+    /// The neutral Anny body baked from CC0 MakeHuman/MPFB2 data.
+    ///
+    /// TODO: the measure set is ignored for this model today. The next slice
+    /// adds sex, age and stature as phenotype inputs and lets the catalogue's
+    /// levers fine-tune each contour, the way `body_from_measures` already
+    /// does for the loft.
+    Anny,
+}
+
 /// The stations a catalogue measurement is read at: the region the interface
 /// lights while the person handles that measurement.
 ///
@@ -103,6 +121,28 @@ pub fn body_from_measures(m: &MeasureSet) -> BodyMesh {
     }
     .complete();
     body_mesh(&measures, BodyRes::default())
+}
+
+/// Lofts a body with the chosen model.
+///
+/// `TailorDummy` reads `m` exactly as [`body_from_measures`] does. `Anny`
+/// ignores `m` and returns the neutral bake — see [`BodyModel::Anny`]'s doc
+/// for what the next slice adds. The two producers never share a dependency:
+/// `toile-anny`'s own `BodyMesh` is field-for-field identical to
+/// `toile_body`'s, so this is the one place their values are moved across.
+pub fn body_from_measures_with(model: BodyModel, m: &MeasureSet) -> BodyMesh {
+    match model {
+        BodyModel::TailorDummy => body_from_measures(m),
+        BodyModel::Anny => {
+            let anny = toile_anny::body_mesh();
+            BodyMesh {
+                positions: anny.positions,
+                normals: anny.normals,
+                indices: anny.indices,
+                stations: anny.stations,
+            }
+        }
+    }
 }
 
 #[cfg(test)]

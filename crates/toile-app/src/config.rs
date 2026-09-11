@@ -33,6 +33,12 @@ pub struct Prefs {
     pub recents: Vec<PathBuf>,
     /// The folder the file dialog should open in next.
     pub last_dir: Option<PathBuf>,
+    /// Whether the Maniquies tab last showed the Anny body rather than the
+    /// tailor's dummy. A bare bool rather than an enum because there are
+    /// exactly two models today; the struct-level `#[serde(default)]` above
+    /// is what lets a preferences file written before this field existed
+    /// still load, opening on the dummy.
+    pub anny_body: bool,
 }
 
 /// The file as it sits on disk: the version alongside the preferences, so a

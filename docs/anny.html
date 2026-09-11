@@ -414,7 +414,7 @@ blockquote.frase b{
     <tbody>
       <tr><td>A0</td><td>Decisiones y procedencia</td><td class="wrap">Nada visible. Las respuestas de §7, <code>PROVENANCE.txt</code>, la tabla de licencias enmendada</td><td>0,5</td></tr>
       <tr><td>A1</td><td>El baker</td><td class="wrap">Invisible: <code>.target.gz</code> + <code>base.obj</code> + JSON → asset compacto (i16 sin pérdida, índices delta), en Rust puro; cabecera con FNV</td><td>2–3</td></tr>
-      <tr><td>A2</td><td>Evaluador y goldens</td><td class="wrap">Invisible: fenotipo → pesos → malla; <code>G0</code>/<code>G1</code> en dos arquitecturas; estaciones desde los grupos de vértices</td><td>1,5–2</td></tr>
+      <tr><td>A2</td><td>Evaluador y goldens</td><td class="wrap">Invisible: fenotipo → pesos → malla; <code>G0</code>/<code>G1</code> en dos arquitecturas; estaciones desde los <em>joint cubes</em></td><td>1,5–2</td></tr>
       <tr><td>A3</td><td>Puerta y modo</td><td class="wrap">El maniquí Anny aparece en la pestaña: «Nuevo maniquí» con sexo, edad, estatura; conmutador loft ↔ Anny; preferencia recordada</td><td>1</td></tr>
       <tr><td>A4</td><td>Anillos y re-medición</td><td class="wrap">Cada fila muestra cuánto mide el cuerpo; los 20 anillos verificados contra el cuerpo de referencia</td><td>1,5–2</td></tr>
       <tr><td>A5</td><td>Afinado por parte</td><td class="wrap">Escribes 84 y la cintura mide 84; bandas de residual; «tope del modelo»; <code>G2</code></td><td>2–3</td></tr>
@@ -425,6 +425,16 @@ blockquote.frase b{
   </table></div>
   <p>A0–A5 suman <strong>8,5–12 días-agente</strong>. A5 es más simple que el ajuste global por mínimos cuadrados del estudio (3–4 días) porque el afinado por parte lo reemplaza; el LM queda documentado como opción si alguna vez hace falta un «lo más parecido posible» global.</p>
   <p>Seguimiento en el kanban: la épica es <a href="https://github.com/eticalde/Toile/issues/48">#48</a>; A0–A1 <a href="https://github.com/eticalde/Toile/issues/49">#49</a>, A2 <a href="https://github.com/eticalde/Toile/issues/50">#50</a>, A3 <a href="https://github.com/eticalde/Toile/issues/51">#51</a>, A4–A5 <a href="https://github.com/eticalde/Toile/issues/52">#52</a>. A6–A8 se abren cuando A5 cierre.</p>
+
+  <div class="decision">
+    <b>Entregado · 2026-09-11 · el cuerpo neutro</b>
+    <p>La implementación no siguió las fases en capas horizontales sino en <strong>rebanadas verticales</strong>, para ver algo y de-riesgar el pipeline entero antes de apilarle 1 258 targets. La primera corta A1, A2 y A3 en su mínimo común: <strong>el cuerpo neutro de MakeHuman se ve en la pestaña</strong>, conmutable contra el maniquí de sastre, con sus estaciones y su resaltado. Baker en <code>toile-cli</code> (<code>anny-bake</code>), formato y lector en <code>toile-anny</code> (cero dependencias de runtime, como <code>toile-body</code>), asset de 495 040 bytes commiteado y <strong>reproducible byte a byte</strong> desde los datos CC0, golden nuevo <code>0xb3f8_8dd8_6abc_c96f</code>. Sin targets, el asset pesa medio mega: la <a href="#dueno">decisión G1</a> sobre el blob de ~19 MB se puede tomar más tarde, ya con el pipeline probado. Las rebanadas siguientes son aditivas: targets macro (sexo, edad, estatura) y luego las palancas <code>measure-*</code>.</p>
+  </div>
+
+  <div class="discarded">
+    <b>Corregido contra los datos reales</b>
+    <p>El plan daba por hecho que las estaciones saldrían de los <em>grupos anatómicos</em> de <code>basemesh_vertex_groups.json</code>. <strong>No existen</strong>: ese archivo solo trae <code>body</code>, geometría auxiliar, los <em>joint cubes</em> y la simetría. La vía correcta —y mejor— son los <strong>125 joint cubes</strong> con nombre del propio OBJ: cada vértice se asigna a la articulación más cercana y de ahí a su estación, con las cuatro que no tienen articulación propia (<code>Calf</code>, <code>Forearm</code>, <code>Biceps</code>, <code>NeckTop</code>) resueltas por la fracción a lo largo del segmento entre las dos que la flanquean. Es data-driven y maneja bien los brazos, que un criterio por altura confundiría con el torso.</p>
+  </div>
 </section>
 
 <section id="dueno">

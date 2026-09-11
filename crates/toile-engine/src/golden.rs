@@ -51,6 +51,27 @@ pub fn body_mesh_hash() -> u64 {
     h
 }
 
+/// Loads the neutral Anny body and hashes the bits of its mesh, the same way
+/// [`body_mesh_hash`] hashes the loft.
+///
+/// The asset is baked once and committed (`crates/toile-anny/assets/body.bin`);
+/// this only decodes it and computes normals, both in the `+ - * / sqrt`
+/// regime, so the result is bit-identical on macOS ARM and Linux x86. It moves
+/// only when the asset is re-baked or the normal computation changes — take
+/// the new value from the assertion and commit it in the same change, saying
+/// why.
+pub fn anny_mesh_hash() -> u64 {
+    let mesh = toile_anny::body_mesh();
+    let mut h = FNV_BASIS;
+    for f in mesh.positions.iter().chain(&mesh.normals) {
+        h = (h ^ u64::from(f.to_bits())).wrapping_mul(FNV_PRIME);
+    }
+    for &i in &mesh.indices {
+        h = (h ^ u64::from(i)).wrapping_mul(FNV_PRIME);
+    }
+    h
+}
+
 /// Drapes the demo bodice, moves the shoulder point 2 cm, drapes again, and
 /// hashes the result.
 ///

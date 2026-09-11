@@ -2,7 +2,7 @@ mod measures;
 
 use eframe::egui::{self, Color32, Painter, Pos2, Rect, Shape, Stroke, pos2, vec2};
 use eframe::egui_wgpu::RenderState;
-use toile_engine::body;
+use toile_engine::body::{self, BodyModel};
 use toile_engine::draft::{MeasureSet, Station};
 
 use crate::tabs::{Workspace, left_panel, right_panel};
@@ -22,6 +22,10 @@ pub struct State {
     /// The measurements driving the body, keyed by catalogue name (the user's
     /// Spanish data), edited in the inspector.
     measures: MeasureSet,
+    /// Which mesh producer is showing. Switching rebuilds the mesh; the
+    /// tailor's dummy reads `measures`; Anny does not yet (see
+    /// `BodyModel::Anny`'s doc).
+    model: BodyModel,
     /// The catalogue name whose region the body lights: the row last hovered
     /// or handled, kept lit after the pointer leaves it so the person can look
     /// from the slider to the body.
@@ -34,18 +38,32 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(rs: RenderState, theme: &Theme) -> Self {
+    /// `anny_body` seeds the model from the saved preference, so the tab
+    /// reopens on whichever body the person last looked at.
+    pub fn new(rs: RenderState, theme: &Theme, anny_body: bool) -> Self {
         let measures = body::default_measures();
+        let model = if anny_body {
+            BodyModel::Anny
+        } else {
+            BodyModel::TailorDummy
+        };
         let mut view = BodyView::new(&rs, theme);
-        view.set_mesh(&rs, &body::body_from_measures(&measures), 0);
+        view.set_mesh(&rs, &body::body_from_measures_with(model, &measures), 0);
         Self {
             rs,
             view,
             measures,
+            model,
             highlight: None,
             lit: 0,
             dirty: false,
         }
+    }
+
+    /// Whether the tab is currently showing the Anny body, for the
+    /// preference to remember on exit.
+    pub fn uses_anny(&self) -> bool {
+        self.model == BodyModel::Anny
     }
 }
 
@@ -59,8 +77,8 @@ fn mask_of(stations: &[Station]) -> u32 {
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
-    left_panel(ui, theme, |ui| library(ui, theme));
     let st = &mut *w.maniquies;
+    left_panel(ui, theme, |ui| library(ui, theme, st));
     right_panel(ui, theme, |ui| measures::panel(ui, theme, st));
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let size = ui.available_size();
@@ -68,12 +86,13 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
             .highlight
             .as_deref()
             .map_or(0, |name| mask_of(body::stations_for(name)));
-        // A measurement edit only marks the state dirty; the rebuild happens
-        // here, once, right before the frame that shows it. The loft is
-        // microseconds, so there is no thread and no generation gating. A
-        // change of highlight alone recolours without relofting.
+        // A measurement edit or a model switch only marks the state dirty;
+        // the rebuild happens here, once, right before the frame that shows
+        // it. Both producers answer in microseconds, so there is no thread
+        // and no generation gating. A change of highlight alone recolours
+        // without rebuilding.
         if st.dirty {
-            let mesh = body::body_from_measures(&st.measures);
+            let mesh = body::body_from_measures_with(st.model, &st.measures);
             st.view.set_mesh(&st.rs, &mesh, mask);
             st.dirty = false;
             st.lit = mask;
@@ -87,9 +106,39 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
 
 // ── panels ────────────────────────────────────────────────────────────────
 
-/// The library column, still a static mockup: standard tables and saved
-/// personas are a follow-up (a persistent persona library on disk).
-fn library(ui: &mut egui::Ui, theme: &Theme) {
+/// The library column: the model switch, then the still-static mockup for
+/// standard tables and saved personas (a persistent persona library on disk
+/// is a follow-up).
+fn library(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
+    section(ui, theme, "Modelo");
+    let dummy = list_row_icon(
+        ui,
+        theme,
+        "Maniquí de sastre",
+        st.model == BodyModel::TailorDummy,
+        person_icon,
+    );
+    let anny = list_row_icon(
+        ui,
+        theme,
+        "Cuerpo Anny",
+        st.model == BodyModel::Anny,
+        person_icon,
+    );
+    let chosen = if dummy.clicked() {
+        Some(BodyModel::TailorDummy)
+    } else if anny.clicked() {
+        Some(BodyModel::Anny)
+    } else {
+        None
+    };
+    if let Some(model) = chosen
+        && model != st.model
+    {
+        st.model = model;
+        st.dirty = true;
+    }
+
     section(ui, theme, "Tablas estándar");
     for name in ["Talla 38 · ES", "Talla M · ISO 8559"] {
         list_row_icon(ui, theme, name, false, table_icon);
