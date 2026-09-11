@@ -9,6 +9,43 @@ use toile_body::{BodyMesh, BodyRes, PartialMeasures, Station, body_mesh};
 
 use crate::draft::MeasureSet;
 
+/// Reads every catalogue measurement directly off a generated Anny mesh's
+/// own positions, keyed by the catalogue's Spanish names.
+///
+/// This is the *medido* half of the tab's dado/medido/Δ row, alongside
+/// [`default_measures`]'s dado. `mesh` must be the Anny model's own output
+/// (see `body_from_measures_with`): the tailor's dummy has no such ring
+/// data and [`toile_anny::measure::measure`] would panic on its
+/// differently-shaped positions.
+pub fn measured_anny(mesh: &BodyMesh) -> MeasureSet {
+    let m = toile_anny::measure::measure(&mesh.positions);
+    MeasureSet::new(
+        "Medido",
+        [
+            ("estatura", f64::from(m.height)),
+            ("cuello", f64::from(m.neck)),
+            ("pecho", f64::from(m.bust)),
+            ("pecho_alto", f64::from(m.upper_chest)),
+            ("bajo_pecho", f64::from(m.underbust)),
+            ("cintura", f64::from(m.waist)),
+            ("cadera", f64::from(m.hip)),
+            ("muslo", f64::from(m.thigh)),
+            ("rodilla", f64::from(m.knee)),
+            ("tobillo", f64::from(m.ankle)),
+            ("brazo_contorno", f64::from(m.upper_arm)),
+            ("muneca", f64::from(m.wrist)),
+            ("cabeza", f64::from(m.head)),
+            ("tiro", f64::from(m.rise)),
+            ("altura_cadera", f64::from(m.hip_drop)),
+            ("entrepierna", f64::from(m.inseam)),
+            ("largo_lateral", f64::from(m.outseam)),
+            ("largo_espalda", f64::from(m.back_length)),
+            ("brazo", f64::from(m.arm_length)),
+            ("hombros", f64::from(m.shoulder_width)),
+        ],
+    )
+}
+
 /// Which mesh producer the Maniquies tab loads.
 ///
 /// Both return the same [`BodyMesh`] shape, so the viewport, the camera and

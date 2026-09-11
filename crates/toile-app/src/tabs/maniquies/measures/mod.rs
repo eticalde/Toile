@@ -1,3 +1,5 @@
+mod delta;
+
 use eframe::egui::{self, RichText, Slider, SliderClamping};
 use toile_engine::body::BodyModel;
 
@@ -81,14 +83,15 @@ fn span(name: &str) -> (f64, f64) {
 pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
     section_with(ui, theme, "Medidas · Etienne", "cm");
     if st.model == BodyModel::Anny {
-        // Honest rather than mysterious: the phenotype above now shapes this
-        // body, but the sliders below still do not — the catalogue's
-        // per-part levers are baked into the asset but not yet wired to the
-        // tape, so fine-tuning an exact contour is a follow-up slice.
+        // Honest rather than mysterious: the phenotype shapes this body,
+        // and every row below now says how far the body actually lands
+        // from the tape — dado, medido, Δ. Making a value exact, so medido
+        // catches up to dado, is the next slice's per-part solver.
         footer_note(
             ui,
             theme,
-            "El fenotipo ya da forma a este cuerpo; la cinta (estas medidas) todavía no lo ajusta.",
+            "El fenotipo da forma a este cuerpo; cada fila dice cuánto mide de verdad y a qué \
+             distancia queda de tu cinta. Ajustarlo hasta que coincidan es la siguiente pieza.",
         );
     }
     egui::ScrollArea::vertical()
@@ -151,5 +154,8 @@ fn row(ui: &mut egui::Ui, theme: &Theme, st: &mut State, entry: (&str, &str)) {
     // the last one lit stays so once the pointer moves on to the body.
     if scoped.response.hovered() || slider.hovered() || slider.dragged() || slider.has_focus() {
         st.highlight = Some(name.to_owned());
+    }
+    if st.model == BodyModel::Anny {
+        delta::row(ui, theme, name, value, st.anny_measures.as_ref());
     }
 }

@@ -33,6 +33,12 @@ pub struct State {
     /// centimetres — shown next to the height slider since Anny's own
     /// `height` input is not centimetres (see `body::stature_cm`).
     anny_stature_cm: f32,
+    /// Every catalogue measurement the last-built Anny mesh actually came
+    /// to, keyed by the catalogue's Spanish names — the *medido* half of
+    /// each row's dado/medido/Δ. `None` while the tailor's dummy is
+    /// showing: that model has no such reading, and its rows keep no
+    /// medido column at all.
+    anny_measures: Option<MeasureSet>,
     /// The catalogue name whose region the body lights: the row last hovered
     /// or handled, kept lit after the pointer leaves it so the person can look
     /// from the slider to the body.
@@ -105,6 +111,7 @@ impl State {
         let mut view = BodyView::new(&rs, theme);
         let mesh = body::body_from_measures_with(model, &measures, &anny.to_phenotype());
         let anny_stature_cm = body::stature_cm(&mesh);
+        let anny_measures = (model == BodyModel::Anny).then(|| body::measured_anny(&mesh));
         view.set_mesh(&rs, &mesh, 0);
         Self {
             rs,
@@ -113,6 +120,7 @@ impl State {
             model,
             anny,
             anny_stature_cm,
+            anny_measures,
             highlight: None,
             lit: 0,
             dirty: false,
@@ -156,6 +164,7 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         if st.dirty {
             let mesh =
                 body::body_from_measures_with(st.model, &st.measures, &st.anny.to_phenotype());
+            st.anny_measures = (st.model == BodyModel::Anny).then(|| body::measured_anny(&mesh));
             if st.model == BodyModel::Anny {
                 st.anny_stature_cm = body::stature_cm(&mesh);
             }

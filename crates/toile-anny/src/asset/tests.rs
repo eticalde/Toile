@@ -43,6 +43,33 @@ fn sample() -> Baked {
                 dz: 1,
             },
         ],
+        ring_ranges: vec![
+            RingRange {
+                offset: 0,
+                length: 2,
+            },
+            RingRange {
+                offset: 2,
+                length: 1,
+            },
+        ],
+        ring_points: vec![
+            RingPoint {
+                vertex_a: 0,
+                vertex_b: 1,
+                t: 0.5,
+            },
+            RingPoint {
+                vertex_a: 1,
+                vertex_b: 2,
+                t: 0.25,
+            },
+            RingPoint {
+                vertex_a: 2,
+                vertex_b: 0,
+                t: 0.75,
+            },
+        ],
     }
 }
 
@@ -56,6 +83,8 @@ fn round_trips_a_small_baked_body() {
     assert_eq!(back.stations, baked.stations);
     assert_eq!(back.rows, baked.rows);
     assert_eq!(back.deltas, baked.deltas);
+    assert_eq!(back.ring_ranges, baked.ring_ranges);
+    assert_eq!(back.ring_points, baked.ring_points);
 }
 
 #[test]
@@ -77,11 +106,11 @@ fn rejects_a_foreign_file() {
 }
 
 #[test]
-fn rejects_the_old_version_one_layout() {
-    // A version-1 file has no row/delta counts at all, so a version-2
-    // reader must refuse it by version rather than misreading its stations
-    // as a row table.
+fn rejects_an_older_version_layout() {
+    // A version-1 or version-2 file has a different header shape entirely
+    // (no row/delta counts, or no ring counts), so this reader must refuse
+    // it by version rather than misreading one section as another.
     let mut bytes = encode(&sample());
-    bytes[8..12].copy_from_slice(&1u32.to_le_bytes());
-    assert!(matches!(decode(&bytes), Err(DecodeError::BadVersion(1))));
+    bytes[8..12].copy_from_slice(&2u32.to_le_bytes());
+    assert!(matches!(decode(&bytes), Err(DecodeError::BadVersion(2))));
 }

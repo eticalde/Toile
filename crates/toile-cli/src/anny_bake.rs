@@ -1,6 +1,50 @@
 mod groups;
 mod obj;
 mod quad;
+/// Bakes the seventeen anatomical rings `toile_anny::measure` reads a
+/// generated body against: cut once here, against the neutral template,
+/// then walked (never re-cut) at runtime as the phenotype morphs the mesh.
+///
+/// Several placements depart from where their name would literally point,
+/// because this mesh's topology does not allow it, or because the literal
+/// joint turns out not to be the anatomically honest choice — logged here
+/// rather than in a scattered set of comments.
+///
+/// `pecho_alto` cannot sit at the scapula/clavicle joint height the
+/// catalogue names for "armpit level": by there, the mesh has already
+/// fused the arm's surface into the torso's (no gap remains to cut
+/// through), so a horizontal cut traces up over the shoulder and down the
+/// arm instead of around the chest — `rings::bands::highest_unfused_trunk_y`
+/// finds the highest cut that still separates them, the honest reading of
+/// "as high as a tape can go."
+///
+/// `tobillo` is not literally at the ankle joint either: that joint sits
+/// at the boundary into the foot, where the cross-section is already an
+/// elongated foot shape rather than a round ankle, so `rings::legs::ANKLE_T`
+/// backs off slightly toward the knee, to the narrowest point actually on
+/// the leg. `muneca` similarly backs off from the hand joint
+/// (`rings::arms::WRIST_T`): the forearm tapers smoothly all the way into
+/// the hand with no distinct wrist-bone pinch on this mesh, so a cut right
+/// at the joint barely responds to the build and gender morphs at all.
+///
+/// `crotch` is not the pelvis joint: that joint sits about 10 cm above
+/// where the legs actually separate. `rings::bands::fork_y` finds the
+/// fork itself — the lowest horizontal cut that still encloses both legs
+/// as one loop — and `cadera`'s band is constrained to start strictly
+/// above it, so its "fullest section" cannot be both thighs still pressed
+/// together rather than the seat.
+///
+/// For the same fusion reason as `pecho_alto`, the two `Shoulder*` girth
+/// landmark rings (used only for `hombros`) reuse
+/// `rings::bands::limb_fullest`'s own discovered offset rather than sitting
+/// exactly at the shoulder joint. `brazo`'s own starting point does not
+/// reuse that offset, though: a length landmark can sit anywhere on the
+/// surface nearest the joint, so `rings::arms::bake` also stores the single
+/// body vertex nearest the true shoulder joint (`RingId::ShoulderJoint`) —
+/// not a cut, since no plane there can separate arm from torso, but a
+/// legitimate single-point landmark that follows the mesh the same way a
+/// ring's points do.
+mod rings;
 mod station;
 mod targets;
 
@@ -75,15 +119,16 @@ fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>) ->
 
     let body_verts = &obj.vertices[body_range.0..=body_range.1];
     let centre = bbox_centre(body_verts);
+    let to_body_space = |v: [f64; 3]| {
+        [
+            (v[0] - centre[0]) * 0.1,
+            (v[1] - centre[1]) * 0.1,
+            (v[2] - centre[2]) * 0.1,
+        ]
+    };
     let positions: Vec<f32> = body_verts
         .iter()
-        .flat_map(|v| {
-            [
-                ((v[0] - centre[0]) * 0.1) as f32,
-                ((v[1] - centre[1]) * 0.1) as f32,
-                ((v[2] - centre[2]) * 0.1) as f32,
-            ]
-        })
+        .flat_map(|&v| to_body_space(v).map(|c| c as f32))
         .collect();
 
     let indices = quad::triangulate(&obj.group_quads, &obj.vertices);
@@ -94,6 +139,24 @@ fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>) ->
         .iter()
         .map(|&v| station::classify(v, &joints).tag())
         .collect();
+
+    // The rings are cut against the exact f32 bytes the asset ships (widened
+    // back to f64 only for the intersection math), not the raw f64 OBJ
+    // coordinates: that is what `toile_anny::measure` will actually walk at
+    // runtime, and the two must agree bit for bit on which side of a plane
+    // a vertex sits.
+    let ring_positions: Vec<[f64; 3]> = positions
+        .as_chunks::<3>()
+        .0
+        .iter()
+        .map(|c| c.map(f64::from))
+        .collect();
+    let ring_tris: Vec<[u32; 3]> = indices.as_chunks::<3>().0.to_vec();
+    let ring_joints: Vec<(String, [f64; 3])> = joints
+        .iter()
+        .map(|(name, v)| (name.clone(), to_body_space(*v)))
+        .collect();
+    let (ring_ranges, ring_points) = rings::bake(&ring_positions, &ring_tris, &ring_joints);
 
     let mut rows = Vec::with_capacity(parsed_targets.len());
     let mut deltas: Vec<Delta> = Vec::new();
@@ -112,6 +175,8 @@ fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>) ->
         stations,
         rows,
         deltas,
+        ring_ranges,
+        ring_points,
     }
 }
 
@@ -171,5 +236,15 @@ mod tests {
         assert_eq!(baked.stations.len(), 13_380);
         assert_eq!(baked.rows.len(), 376);
         assert_eq!(baked.deltas.len(), 2_124_560);
+        assert_eq!(baked.ring_ranges.len(), toile_anny::asset::RingId::COUNT);
+        assert!(
+            baked.ring_ranges.iter().all(|r| r.length > 0),
+            "every ring must have at least one point"
+        );
+        assert_eq!(
+            baked.ring_points.len() as u32,
+            baked.ring_ranges.iter().map(|r| r.length).sum::<u32>(),
+            "the flat point array must hold exactly the ranges' own lengths"
+        );
     }
 }

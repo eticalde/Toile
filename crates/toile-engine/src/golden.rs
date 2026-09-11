@@ -90,6 +90,49 @@ pub fn anny_mesh_hash() -> u64 {
     h
 }
 
+/// Loads the same reference adult Anny body [`anny_mesh_hash`] hashes and
+/// hashes its 20 catalogue measurements together.
+///
+/// Reads them with `crate::body::measured_anny`, in the catalogue's own
+/// fixed order (`toile_doc::MeasureSet::CATALOGUE`). One level above
+/// [`anny_mesh_hash`]: the mesh golden catches a change to the template,
+/// the phenotype math or the deltas; this one additionally catches a
+/// change to where a ring is cut — a different band, a different step, a
+/// different loop picked — without moving either of the mesh goldens,
+/// since measuring never touches a position. Only `+ - * / sqrt` reaches a
+/// measured number, so this is bit-identical on macOS ARM and Linux x86
+/// the same way the others are. Take the new value from the assertion and
+/// commit it in the same change, saying why.
+///
+/// # Panics
+/// If `measured_anny` ever omits one of the catalogue's own 20 names: that
+/// would mean the two have drifted apart, which is a bug to fix rather
+/// than a shape to hash around.
+pub fn anny_measures_hash() -> u64 {
+    let phenotype = toile_anny::phenotype::Phenotype {
+        gender: 0.0,
+        age: 0.8,
+        muscle: 0.5,
+        weight: 0.5,
+        height: 0.5,
+        proportions: 0.5,
+    };
+    let mesh = crate::body::body_from_measures_with(
+        crate::body::BodyModel::Anny,
+        &crate::body::default_measures(),
+        &phenotype,
+    );
+    let measured = crate::body::measured_anny(&mesh);
+    let mut h = FNV_BASIS;
+    for name in toile_doc::MeasureSet::CATALOGUE {
+        let v = measured
+            .get(name)
+            .unwrap_or_else(|| panic!("measured_anny did not report `{name}`"));
+        h = (h ^ v.to_bits()).wrapping_mul(FNV_PRIME);
+    }
+    h
+}
+
 /// Drapes the demo bodice, moves the shoulder point 2 cm, drapes again, and
 /// hashes the result.
 ///

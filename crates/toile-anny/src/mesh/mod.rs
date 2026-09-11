@@ -10,7 +10,7 @@ mod tests;
 /// The bytes `assets/body.bin` carries, embedded so the crate has no runtime
 /// file to find and no path to get wrong. Regenerate it with
 /// `cargo run -p toile-cli -- anny-bake RUTA/a/mpfb2`.
-const ASSET: &[u8] = include_bytes!("../../assets/body.bin");
+pub(crate) const ASSET: &[u8] = include_bytes!("../../assets/body.bin");
 
 /// The asset decoded once per process rather than once per mesh: the row
 /// table and 2,124,560 deltas are the bulk of its ~17 MB, and every field
@@ -20,7 +20,11 @@ const ASSET: &[u8] = include_bytes!("../../assets/body.bin");
 /// cost; see the crate's tests for the measured split.
 static DECODED: OnceLock<Baked> = OnceLock::new();
 
-fn decoded() -> &'static Baked {
+/// The shipped asset, decoded once. `pub(crate)` so [`crate::measure`] can
+/// read the ring tables off the same cached [`Baked`] value this module
+/// builds meshes from, rather than paying to decode the ~17 MB payload a
+/// second time.
+pub(crate) fn decoded() -> &'static Baked {
     DECODED.get_or_init(|| {
         asset::decode(ASSET).expect("the shipped asset decodes: it is baked and tested here")
     })
