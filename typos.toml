@@ -66,3 +66,6 @@ normales = "normales"
 secuencial = "secuencial"
 # "components", in the anny-bake panic message naming a malformed target line.
 componentes = "componentes"
+# "several/various", the new-mannequin dialog's own no-library-yet notice.
+# crates/toile-app/src/tabs/maniquies/identity.rs
+varios = "varios"

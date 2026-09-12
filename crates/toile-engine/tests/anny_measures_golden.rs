@@ -24,7 +24,13 @@
 /// landmarks distinct from both girth rings), the nape moved from a band
 /// toward the shoulder to a band centred on the neck joint itself, and
 /// `pecho` moved from a fullest-point scan to a direct cut at the breast
-/// targets' own displacement-weighted apex height.
+/// targets' own displacement-weighted apex height (giving
+/// `0x7a8f_c7b2_754b_0935`); and again when `entrepierna` and
+/// `largo_lateral` moved from [`toile_anny::asset::RingId::Ankle`]'s ring
+/// to the floor — a tailor's tape runs to the ground, not the ankle
+/// (giving `0x0d36_daf4_d54b_0935`); and once more when those two became
+/// *heights above* the floor rather than straight lines to one sole, which
+/// in an A-pose folded the 20 cm stance width into both of them.
 ///
 /// Take the new value from this assertion and update the constant in the
 /// same commit, saying why.
@@ -32,7 +38,7 @@
 fn the_anny_measures_hash_to_a_fixed_value() {
     assert_eq!(
         toile_engine::golden::anny_measures_hash(),
-        0x7a8f_c7b2_754b_0935,
+        0x10b8_4bdf_754b_0935,
         "the Anny body's measured values changed bits: a ring moved on \
          purpose, or a dependency drifted under it"
     );

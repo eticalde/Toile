@@ -32,27 +32,7 @@ pub fn flatten_front_hash() -> u64 {
     h
 }
 
-/// Lofts the reference mannequin and hashes the bits of its mesh.
-///
-/// One level below any drape: no solver and no GPU, and — like
-/// `flatten_front_hash` — it touches only `+ - * / sqrt` and f64 literals, so
-/// it is bit-identical on macOS ARM and Linux x86. A drift in the loft math
-/// moves it before it can reach a mesh nobody can read. Take the new value from
-/// the assertion and commit it in the same change, saying why.
-pub fn body_mesh_hash() -> u64 {
-    let mesh = crate::body::body_from_measures(&crate::body::default_measures());
-    let mut h = FNV_BASIS;
-    for f in mesh.positions.iter().chain(&mesh.normals) {
-        h = (h ^ u64::from(f.to_bits())).wrapping_mul(FNV_PRIME);
-    }
-    for &i in &mesh.indices {
-        h = (h ^ u64::from(i)).wrapping_mul(FNV_PRIME);
-    }
-    h
-}
-
-/// Loads a reference adult Anny body and hashes the bits of its mesh, the
-/// same way [`body_mesh_hash`] hashes the loft.
+/// Loads a reference adult Anny body and hashes the bits of its mesh.
 ///
 /// The reference phenotype is male (`gender: 0.0`, Anny's own convention),
 /// age parameter `0.8` (Anny's raw unit, not years — a blend leaning toward
@@ -117,12 +97,7 @@ pub fn anny_measures_hash() -> u64 {
         height: 0.5,
         proportions: 0.5,
     };
-    let mesh = crate::body::body_from_measures_with(
-        crate::body::BodyModel::Anny,
-        &crate::body::default_measures(),
-        &phenotype,
-        &crate::body::NO_LEVERS,
-    );
+    let mesh = crate::body::body_mesh(&phenotype, &crate::body::NO_LEVERS);
     let measured = crate::body::measured_anny(&mesh);
     let mut h = FNV_BASIS;
     for name in toile_doc::MeasureSet::CATALOGUE {

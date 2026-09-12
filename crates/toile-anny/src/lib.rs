@@ -1,7 +1,7 @@
 //! The Anny body: a real human mesh baked once from CC0 `MakeHuman`/MPFB2
 //! data (see `assets/PROVENANCE.txt`) and morphed here at runtime by a
-//! phenotype (sex, age, build, muscle, height, proportions), as a second
-//! producer of `BodyMesh` alongside `toile_body`'s procedural loft.
+//! phenotype (sex, age, build, muscle, height, proportions) — Toile's one
+//! and only body producer.
 
 /// The asset's binary format: the writer the `toile-cli` baker calls and the
 /// reader this crate uses, kept in one module so the two cannot drift apart.
@@ -23,5 +23,7 @@ pub mod phenotype;
 /// solve per lever (or per tied pair), cheap because it only ever touches
 /// the vertices the lever it is solving actually moves.
 pub mod solve;
+mod station;
 
 pub use mesh::{BodyMesh, body_mesh};
+pub use station::Station;

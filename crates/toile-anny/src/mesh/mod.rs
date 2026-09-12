@@ -33,9 +33,7 @@ pub(crate) fn decoded() -> &'static Baked {
 /// A triangulated body surface in the renderer's terms.
 ///
 /// Metres, y-up, centred on the bounding-box centre of the source body,
-/// CCW-outward winding, unit outward normals — the same shape as
-/// `toile_body::BodyMesh`, so `toile_engine::body` can move the fields
-/// straight across without either crate depending on the other.
+/// CCW-outward winding, unit outward normals.
 pub struct BodyMesh {
     /// Vertex positions as xyz triples.
     pub positions: Vec<f32>,
@@ -43,10 +41,9 @@ pub struct BodyMesh {
     pub normals: Vec<f32>,
     /// CCW triangle indices into `positions`.
     pub indices: Vec<u32>,
-    /// The `Station` tag of every vertex, matching `toile_body::Station`'s
-    /// numbering byte for byte (the baker writes it from that very enum), so
-    /// a client can light the region a measurement is read at exactly as it
-    /// does for the procedural dummy.
+    /// The [`crate::Station`] tag of every vertex, so a client can light the
+    /// region a measurement is read at while the person handles it. The
+    /// baker writes it once from that same enum, at bake time.
     pub stations: Vec<u8>,
 }
 

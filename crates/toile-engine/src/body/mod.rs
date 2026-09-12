@@ -5,7 +5,9 @@
 pub use toile_anny::phenotype::Phenotype;
 /// Converts an age in years to the parameter [`Phenotype::age`] takes.
 pub use toile_anny::phenotype::age_param_from_years;
-use toile_body::{BodyMesh, BodyRes, PartialMeasures, Station, body_mesh};
+/// Anny's own mesh, the one body producer Toile has: the same type
+/// `toile_engine::draft::BodyMesh` re-exports.
+pub use toile_anny::{BodyMesh, Station, body_mesh};
 
 use crate::draft::MeasureSet;
 
@@ -23,10 +25,7 @@ pub const NO_LEVERS: [f64; 20] = [0.0; 20];
 /// own positions, keyed by the catalogue's Spanish names.
 ///
 /// This is the *medido* half of the tab's dado/medido/Δ row, alongside
-/// [`default_measures`]'s dado. `mesh` must be the Anny model's own output
-/// (see `body_from_measures_with`): the tailor's dummy has no such ring
-/// data and [`toile_anny::measure::measure`] would panic on its
-/// differently-shaped positions.
+/// [`default_measures`]'s dado.
 pub fn measured_anny(mesh: &BodyMesh) -> MeasureSet {
     let m = toile_anny::measure::measure(&mesh.positions);
     MeasureSet::new(
@@ -54,21 +53,6 @@ pub fn measured_anny(mesh: &BodyMesh) -> MeasureSet {
             ("hombros", f64::from(m.shoulder_width)),
         ],
     )
-}
-
-/// Which mesh producer the Maniquies tab loads.
-///
-/// Both return the same [`BodyMesh`] shape, so the viewport, the camera and
-/// the station highlight work identically regardless of which one is chosen.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum BodyModel {
-    /// The procedural loft: exact to the tape, no asset, microseconds.
-    #[default]
-    TailorDummy,
-    /// The Anny body baked from CC0 MakeHuman/MPFB2 data, morphed by a
-    /// [`Phenotype`] and solved toward the tape's own catalogue values —
-    /// see [`solve_anny`] and `body_from_measures_with`'s doc.
-    Anny,
 }
 
 /// The stations a catalogue measurement is read at: the region the interface
@@ -106,7 +90,8 @@ pub fn stations_for(name: &str) -> &'static [Station] {
     }
 }
 
-/// The reference measure set the tab seeds with and the golden pins.
+/// The reference measure set the tab seeds a fresh mannequin with and the
+/// golden pins.
 ///
 /// It uses the Spanish catalogue names (the user's data) with the
 /// public-domain drafting-book defaults. Every catalogue name is written out
@@ -139,79 +124,12 @@ pub fn default_measures() -> MeasureSet {
     )
 }
 
-/// Reads the catalogue names from a measure set and lofts the body; any name
-/// the set omits or leaves non-finite is derived from the stature and the
-/// other values by proportion.
-///
-/// This is the one place the Spanish catalogue (data) meets the English
-/// `BodyMeasures` (identifiers); the app never constructs `BodyMeasures`
-/// itself.
-pub fn body_from_measures(m: &MeasureSet) -> BodyMesh {
-    let g = |name: &str| m.get(name).filter(|v| v.is_finite());
-    let measures = PartialMeasures {
-        height: g("estatura"),
-        waist: g("cintura"),
-        hip: g("cadera"),
-        thigh: g("muslo"),
-        knee: g("rodilla"),
-        ankle: g("tobillo"),
-        rise: g("tiro"),
-        outseam: g("largo_lateral"),
-        inseam: g("entrepierna"),
-        hip_drop: g("altura_cadera"),
-        neck: g("cuello"),
-        bust: g("pecho"),
-        upper_chest: g("pecho_alto"),
-        underbust: g("bajo_pecho"),
-        shoulder_width: g("hombros"),
-        arm_length: g("brazo"),
-        upper_arm: g("brazo_contorno"),
-        wrist: g("muneca"),
-        back_length: g("largo_espalda"),
-        head: g("cabeza"),
-    }
-    .complete();
-    body_mesh(&measures, BodyRes::default())
-}
-
-/// Lofts a body with the chosen model.
-///
-/// `TailorDummy` reads `m` exactly as [`body_from_measures`] does and
-/// ignores `anny`/`levers` — the tailor's dummy has no levers at all, and
-/// hits every girth by construction. `Anny` ignores `m` directly — a
-/// [`MeasureSet`] cannot express sex or age, so the Maniquies tab owns a
-/// `Phenotype` value of its own and hands it here, the same way it owns
-/// `m` — and morphs the baked template by `anny` and `levers` (see
-/// [`solve_anny`] for how `levers` gets its values from `m`). The two
-/// producers never share a dependency: `toile-anny`'s own `BodyMesh` is
-/// field-for-field identical to `toile_body`'s, so this is the one place
-/// their values are moved across.
-pub fn body_from_measures_with(
-    model: BodyModel,
-    m: &MeasureSet,
-    anny: &Phenotype,
-    levers: &[f64; 20],
-) -> BodyMesh {
-    match model {
-        BodyModel::TailorDummy => body_from_measures(m),
-        BodyModel::Anny => {
-            let mesh = toile_anny::body_mesh(anny, levers);
-            BodyMesh {
-                positions: mesh.positions,
-                normals: mesh.normals,
-                indices: mesh.indices,
-                stations: mesh.stations,
-            }
-        }
-    }
-}
-
 /// The mesh's bounding-box height along y (up), in centimetres.
 ///
 /// Anny's own `height` phenotype input is not centimetres by itself (it is
 /// the `[0, 1]` position between `minheight` and `maxheight`), so this is
-/// the honest number to show next to that slider: the stature the
-/// generated body actually measures.
+/// the honest number to show next to the body: the stature the generated
+/// mesh actually measures.
 pub fn stature_cm(mesh: &BodyMesh) -> f32 {
     let ys = mesh.positions.iter().skip(1).step_by(3);
     let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
@@ -237,11 +155,12 @@ mod tests {
         assert!(stations_for("no_es_una_medida").is_empty());
     }
 
-    /// The tags the loft writes are the ones the mapping reads: the reference
-    /// body carries a vertex for every station a measurement names.
+    /// The tags the baker wrote are the ones the mapping reads: the
+    /// reference body carries a vertex for every station a measurement
+    /// names.
     #[test]
     fn the_body_carries_every_station_the_mapping_names() {
-        let mesh = body_from_measures(&default_measures());
+        let mesh = body_mesh(&Phenotype::default(), &NO_LEVERS);
         for name in MeasureSet::CATALOGUE {
             for station in stations_for(name) {
                 assert!(

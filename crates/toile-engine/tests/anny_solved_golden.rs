@@ -24,7 +24,16 @@
 /// treats it — so `estatura` settles within its own tight tolerance and
 /// `largo_lateral` (and `entrepierna`, which has no lever of its own but
 /// shares that lever pair) carry whatever residual the coupling leaves
-/// instead.
+/// instead (giving `0x4b89_4f27_006a_f5e1`); and again when `entrepierna`
+/// and `largo_lateral` started measuring to the floor instead of the
+/// ankle ring and the group's own settling test was fixed to watch the
+/// `height` parameter itself rather than `estatura`'s already-close
+/// achieved value, which used to call the group settled after a single
+/// round even while the lengths it had just solved were about to go
+/// stale. `largo_lateral`'s tied leg-height pair now correctly saturates
+/// at its own bound on Toile's default tape: fully shortened, the model's
+/// own leg-to-torso ratio still cannot reach a floor-based 104 cm at 178
+/// cm of stature, which the ankle-based reading never revealed.
 ///
 /// Take the new value from this assertion and update the constant in the
 /// same commit, saying why.
@@ -32,7 +41,7 @@
 fn solving_the_default_tape_hashes_to_a_fixed_value() {
     assert_eq!(
         toile_engine::golden::anny_solved_hash(),
-        0x4b89_4f27_006a_f5e1,
+        0x4af5_aada_7f1b_67d4,
         "the default tape's solved levers or mesh changed bits: the solver \
          changed on purpose, a ring it solves against moved, or a \
          dependency drifted under it"

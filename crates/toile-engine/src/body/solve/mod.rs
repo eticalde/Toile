@@ -155,14 +155,20 @@ const STATURE_LENGTHS: [&str; 4] = ["largo_espalda", "altura_cadera", "largo_lat
 /// fixed cap, not an unbounded loop: past this many rounds the last
 /// round's values stand as final, and whatever the coupling could not
 /// close is reported as the length rows' own Δ rather than chased forever.
-const STATURE_ROUNDS: u32 = 4;
+/// This group settles within three rounds on every tape this crate's own
+/// tests exercise, so the cap is a safety margin, not the expected count.
+const STATURE_ROUNDS: u32 = 6;
 
-/// How close `estatura` must land to its dado to call the group settled
-/// and stop early. Anny's own body budget treats stature as effectively
-/// hard — `docs/anny.html`'s plan quotes a far tighter tolerance for it
-/// than for a length or a girth — so this is tighter than either ever
-/// needs to be.
-const STATURE_SETTLED_CM: f64 = 0.2;
+/// How little the `height` phenotype input may move between two rounds
+/// before the group counts as settled.
+///
+/// This tests the *parameter* itself, not `estatura`'s own achieved
+/// centimetres: a single height solve nearly always lands within
+/// `toile_anny::solve::TOLERANCE_CM` of its target by construction, so
+/// testing the achieved value instead would call the group settled after
+/// the very first round even while the lengths it just solved — against a
+/// height that is about to move again — still have real work left to do.
+const HEIGHT_SETTLED: f64 = 1.0e-4;
 
 /// Solves `estatura` (the `height` phenotype input) together with
 /// [`STATURE_LENGTHS`], since the leg-height and torso-length levers those
@@ -171,21 +177,24 @@ const STATURE_SETTLED_CM: f64 = 0.2;
 ///
 /// Seeds `height` once against zero levers (matching what a single,
 /// unrevisited pass would do), then alternates solving the four lengths
-/// and revisiting height, stopping as soon as stature is within
-/// [`STATURE_SETTLED_CM`] or [`STATURE_ROUNDS`] extra rounds have run,
-/// whichever comes first. Both branches of that stop are exercised by
-/// this crate's own tests, and every comparison it makes is `+ - * /`
-/// over already-deterministic floats, so two calls with the same inputs
-/// still take the same path and land on the same bits — the early exit
-/// does not reopen the non-determinism the fixed-iteration secant itself
-/// avoids.
+/// and revisiting height, stopping as soon as `height` itself has stopped
+/// moving between rounds ([`HEIGHT_SETTLED`]) or [`STATURE_ROUNDS`] extra
+/// rounds have run, whichever comes first. Both branches of that stop are
+/// exercised by this crate's own tests, and every comparison it makes is
+/// `+ - * /` over already-deterministic floats, so two calls with the
+/// same inputs still take the same path and land on the same bits — the
+/// early exit does not reopen the non-determinism the fixed-iteration
+/// secant itself avoids.
 ///
 /// Stature wins when the two cannot both be satisfied: a length's own
 /// secant always re-targets its own catalogue value fresh every round, so
-/// it is the *lengths* — most visibly `largo_lateral`'s tied leg-height
-/// pair, and `entrepierna`, which shares that pair without a lever of its
-/// own — that carry whatever residual the coupling leaves once this loop
-/// stops, not `estatura`.
+/// it is the *lengths* that carry whatever residual the coupling leaves
+/// once this loop stops, not `estatura`. `largo_lateral`'s tied leg-height
+/// pair is the one most likely to actually saturate here, since those two
+/// levers are the only ones in this group that also move the mesh's own
+/// vertical extent — `entrepierna`, which shares that pair without a
+/// lever of its own, then inherits the same limit even though it is never
+/// itself solved.
 fn solve_stature_group(
     current: &mut Phenotype,
     levers: &mut [f64; 20],
@@ -203,6 +212,7 @@ fn solve_stature_group(
     current.height = seed.value;
     saturated.insert("estatura".to_owned(), seed.saturated);
 
+    let mut previous_height = current.height;
     for _round in 0..STATURE_ROUNDS {
         for name in STATURE_LENGTHS {
             solve_one(levers, current, measures, name, saturated);
@@ -210,9 +220,10 @@ fn solve_stature_group(
         let revisited = solve::solve_height(current, levers, target);
         current.height = revisited.value;
         saturated.insert("estatura".to_owned(), revisited.saturated);
-        if (revisited.achieved_cm - target).abs() <= STATURE_SETTLED_CM {
+        if (current.height - previous_height).abs() <= HEIGHT_SETTLED {
             break;
         }
+        previous_height = current.height;
     }
 }
 

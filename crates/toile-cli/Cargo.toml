@@ -12,7 +12,6 @@ path = "src/main.rs"
 
 [dependencies]
 toile-anny = { path = "../toile-anny" }
-toile-body = { path = "../toile-body" }
 toile-engine = { path = "../toile-engine" }
 toile-doc = { path = "../toile-doc" }
 toile-mesh = { path = "../toile-mesh" }

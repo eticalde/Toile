@@ -56,12 +56,16 @@ fn a_full_solve_keeps_topology_and_the_hip_above_the_fork() {
 /// if any, showing up on the length rows instead.
 #[test]
 fn estatura_lands_close_on_the_default_tape_even_though_it_used_to_miss_by_five_cm() {
+    // The tightest tolerance in this crate belongs to stature: a person
+    // checks it against a wall with a pencil, so this is deliberately
+    // tighter than a length or a girth ever needs to be.
+    const STATURE_TOLERANCE_CM: f64 = 0.2;
     let phenotype = Phenotype::default();
     let measures = default_measures();
     let solved = solve_anny(&measures, &phenotype);
     let row = &solved.rows["estatura"];
     assert!(
-        row.delta_cm.unwrap().abs() <= STATURE_SETTLED_CM,
+        row.delta_cm.unwrap().abs() <= STATURE_TOLERANCE_CM,
         "estatura missed its dado by {:.2} cm after the stature group ran",
         row.delta_cm.unwrap()
     );

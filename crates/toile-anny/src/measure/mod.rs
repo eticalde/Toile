@@ -14,9 +14,9 @@ const BODY_VERTEX_COUNT: usize = 13_380;
 /// The 20 catalogue measurements read directly off a generated Anny mesh, in
 /// centimetres.
 ///
-/// Field names mirror `toile_body::PartialMeasures`'s English identifiers —
-/// the Spanish catalogue names those map to are the boundary layer's
-/// business (`toile_engine::body`), never this crate's, per STD-001.
+/// Field names are English identifiers — the Spanish catalogue names these
+/// map to are the boundary layer's business (`toile_engine::body`), never
+/// this crate's, per STD-001.
 ///
 /// This is the *measured* half of the tab's dado/medido/Δ row: what this
 /// body actually comes to, as opposed to what the tape (a [`crate::Phenotype`]
@@ -53,11 +53,13 @@ pub struct Measures {
     pub rise: f32,
     /// Waist centroid to hip centroid (`altura_cadera`).
     pub hip_drop: f32,
-    /// Crotch centroid to ankle centroid (`entrepierna`).
+    /// The crotch centroid's height above the floor (`entrepierna`) — a
+    /// tailor's tape runs to the ground, not the ankle; see [`measure`]'s
+    /// doc.
     pub inseam: f32,
-    /// Waist centroid to ankle centroid (`largo_lateral`); a straight
-    /// distance, not the true path down the outside of the leg ISO 8559
-    /// specifies — see [`measure`]'s doc.
+    /// The waist centroid's height above the floor (`largo_lateral`); not
+    /// the true path down the outside of the leg ISO 8559 specifies — see
+    /// [`measure`]'s doc.
     pub outseam: f32,
     /// The nape landmark ([`RingId::NapeBase`]) to waist centroid
     /// (`largo_espalda`) — see [`measure`]'s doc on why the nape sits below
@@ -93,11 +95,29 @@ fn ring_points(id: RingId) -> &'static [crate::asset::RingPoint] {
 /// differentiable function of the phenotype — the property the next
 /// slice's per-part solver depends on.
 ///
-/// `largo_lateral` (`outseam`) is reported as the straight centroid-to-
-/// centroid distance rather than the true path down the outside of the leg
-/// ISO 8559 specifies; that is an honest approximation, not a bug, and the
-/// interface should say so rather than claim ISO conformance. The hip-to-
-/// waist relationship is structural rather than incidental: [`RingId::Hip`]
+/// `entrepierna` (`inseam`) and `largo_lateral` (`outseam`) are heights
+/// above the floor — the same `lo` the stature is measured down to, so the
+/// parts still sum to the whole — rather than distances to
+/// [`RingId::Ankle`]'s ring, for two separate reasons. The tape runs to
+/// the ground: a pattern maker writes down the floor-to-crotch length, and
+/// the drafting-book tape this crate is checked against is floor-based, so
+/// stopping at the ankle is a deliberate departure from the ankle wording
+/// the project's own plan quotes out of ISO 8559's trouser-inseam clause.
+/// The distance the change closes is about 15 cm, not the ~7 cm an
+/// ankle-to-floor estimate suggests, because [`RingId::Ankle`] is cut most
+/// of the way down the shin rather than at the ankle joint — measured on
+/// the reference adult, that ring's centroid sits 15.4 cm above the sole.
+/// And it is a *height*, not a straight line to a sole, because the feet
+/// in Anny's A-pose stand about 20 cm either side of the midline the waist
+/// and crotch centroids lie on: a straight line would fold that stance
+/// width into the measurement (2.6 cm on the inseam), making the number
+/// depend on the pose rather than on the body.
+///
+/// `outseam` is the waist's own height rather than the path down the
+/// outside of the leg ISO 8559 specifies, which is an honest
+/// approximation the interface should state rather than claim ISO
+/// conformance for. The hip-to-waist relationship is structural rather
+/// than incidental: [`RingId::Hip`]
 /// is baked strictly above [`RingId::Crotch`] (the fork), so `hip_drop`
 /// (`altura_cadera`) is always shorter than `rise` (`tiro`) — see the
 /// crate's tests.
@@ -146,7 +166,6 @@ pub fn measure(positions: &[f32]) -> Measures {
     let waist_c = cen(RingId::Waist);
     let hip_c = cen(RingId::Hip);
     let crotch_c = cen(RingId::Crotch);
-    let ankle_c = cen(RingId::Ankle);
     let nape_c = cen(RingId::NapeBase);
     let shoulder_l_c = cen(RingId::ShoulderLeft);
     let shoulder_r_c = cen(RingId::ShoulderRight);
@@ -170,8 +189,8 @@ pub fn measure(positions: &[f32]) -> Measures {
         head: per(RingId::Head),
         rise: cm(waist_c, crotch_c),
         hip_drop: cm(waist_c, hip_c),
-        inseam: cm(crotch_c, ankle_c),
-        outseam: cm(waist_c, ankle_c),
+        inseam: (crotch_c[1] - lo) * 100.0,
+        outseam: (waist_c[1] - lo) * 100.0,
         back_length: cm(nape_c, waist_c),
         arm_length: cm(acromion_c, elbow_c) + cm(elbow_c, wrist_joint_c),
         shoulder_width: cm(shoulder_l_c, shoulder_r_c),

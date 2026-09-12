@@ -1,12 +1,11 @@
 /// Area-weighted vertex normals: accumulate each triangle's `cross(p1-p0,
 /// p2-p0)` into its three vertices, then normalize.
 ///
-/// Duplicated from `toile_body`'s identical helper rather than shared: this
-/// crate carries zero dependencies, including on its workspace siblings, so
-/// the golden path never grows a chain of crates under it. The two are kept
-/// in the same `+ - * / sqrt` regime on purpose — a platform's IEEE-754 sqrt
-/// is correctly rounded, which is what makes both bit-identical on macOS ARM
-/// and Linux x86.
+/// This crate carries zero dependencies, so this stays self-contained
+/// rather than reaching for a mesh-processing crate: the golden path never
+/// grows a chain of crates under it. Kept in the `+ - * / sqrt` regime on
+/// purpose — a platform's IEEE-754 sqrt is correctly rounded, which is what
+/// makes the result bit-identical on macOS ARM and Linux x86.
 ///
 /// The asset's CCW winding makes the result point outward; a vertex with no
 /// face (none exist in the shipped body, but a malformed asset could have

@@ -1,4 +1,5 @@
 use super::*;
+use crate::Station;
 
 const VERTEX_COUNT: usize = 13_380;
 const TRIANGLE_COUNT: usize = 26_756;
@@ -39,7 +40,7 @@ fn every_station_tag_is_below_the_count() {
     let m = body_mesh(&Phenotype::default(), &ZERO);
     for &tag in &m.stations {
         assert!(
-            u32::from(tag) < u32::from(toile_body::Station::COUNT),
+            u32::from(tag) < u32::from(Station::COUNT),
             "tag {tag} is not a real station"
         );
     }
@@ -48,7 +49,7 @@ fn every_station_tag_is_below_the_count() {
 #[test]
 fn all_twenty_two_stations_are_carried_by_some_vertex() {
     let m = body_mesh(&Phenotype::default(), &ZERO);
-    for station in toile_body::Station::ALL {
+    for station in Station::ALL {
         assert!(
             m.stations.contains(&station.tag()),
             "no vertex is tagged {station:?}"
@@ -67,11 +68,10 @@ fn every_normal_is_unit_length() {
 
 #[test]
 fn normals_point_outward() {
-    // toile_body's per-part version dots each vertex's normal against the
-    // vector from its own ring's centroid, which works because a ring is
-    // star-shaped around it. The whole body is not star-shaped around any
-    // one point — an outstretched arm's surface does not point away from
-    // the torso's centroid — so that test measured only 58% outward here.
+    // Dotting each vertex's normal against the vector from a single
+    // reference point only works when the mesh is star-shaped around that
+    // point — an outstretched arm's surface does not point away from the
+    // torso's centroid, so that approach measures only 58% outward here.
     // A closed, consistently-wound mesh has a much stronger and exact
     // property instead: the divergence theorem says the signed volume
     // enclosed, summed one tetrahedron per triangle from any apex, is
@@ -169,8 +169,7 @@ fn male_and_female_defaults_differ() {
 
 #[test]
 fn topology_is_fixed_across_phenotypes() {
-    // The same property `toile_body`'s loft pins for its own measure sets:
-    // only positions may move with the phenotype, never the triangulation
+    // Only positions may move with the phenotype, never the triangulation
     // or the station assignment, because both are baked from the template
     // alone.
     let a = body_mesh(&Phenotype::default(), &ZERO);

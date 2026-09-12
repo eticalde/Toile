@@ -1,5 +1,5 @@
-use toile_body::Station;
-use toile_body::Station::{
+use toile_anny::Station;
+use toile_anny::Station::{
     Ankle, Armpit, Biceps, Bust, Calf, Cheek, Crotch, Crown, Deltoid, Elbow, Forearm, HeadMax, Hip,
     Jaw, Knee, NeckBase, NeckTop, Shoulder, Thigh, Underbust, Waist, Wrist,
 };

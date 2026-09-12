@@ -1,10 +1,12 @@
 /// Where on the body a vertex sits: the anatomical station its ring is
 /// nearest to.
 ///
-/// Every vertex the loft emits carries one of these, so the interface can
-/// light the region a measurement is read at while the person handles it. The
-/// tags are bookkeeping over the mesh, not geometry: they depend on the
-/// resolution alone, never on the tape, and they never enter the body golden.
+/// Every vertex the mesh carries has one of these, so the interface can
+/// light the region a measurement is read at while the person handles it.
+/// The tags are bookkeeping over the mesh, not geometry: the baker assigns
+/// them once from the neutral template's own joint positions, they never
+/// change with the phenotype or a lever, and they never enter a mesh
+/// golden.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Station {
@@ -89,32 +91,3 @@ impl Station {
         self as u8
     }
 }
-
-/// The trunk's stations, crotch to the head's widest ring, in loft order; the
-/// skull cap above them is tagged `Crown`.
-pub(crate) const TRUNK: [Station; 12] = [
-    Station::Crotch,
-    Station::Hip,
-    Station::Waist,
-    Station::Underbust,
-    Station::Bust,
-    Station::Armpit,
-    Station::Shoulder,
-    Station::NeckBase,
-    Station::NeckTop,
-    Station::Jaw,
-    Station::Cheek,
-    Station::HeadMax,
-];
-
-/// A leg's stations, ankle to thigh, in loft order.
-pub(crate) const LEG: [Station; 4] = [Station::Ankle, Station::Calf, Station::Knee, Station::Thigh];
-
-/// An arm's stations, wrist to deltoid, in loft order.
-pub(crate) const ARM: [Station; 5] = [
-    Station::Wrist,
-    Station::Forearm,
-    Station::Elbow,
-    Station::Biceps,
-    Station::Deltoid,
-];

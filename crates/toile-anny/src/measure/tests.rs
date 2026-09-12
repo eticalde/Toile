@@ -207,8 +207,12 @@ fn the_reference_adult_measures_within_plausible_human_ranges() {
     in_range("head", m.head, 52.0, 62.0);
     in_range("rise", m.rise, 25.0, 36.0);
     in_range("hip_drop", m.hip_drop, 16.0, 24.0);
-    in_range("inseam", m.inseam, 65.0, 95.0);
-    in_range("outseam", m.outseam, 90.0, 140.0);
+    // Heights above the floor, not distances to the ankle ring, so both sit
+    // noticeably higher than a generic ankle-based table would suggest —
+    // see `measure`'s own doc for how much of that is the floor itself
+    // versus where the ankle ring is cut.
+    in_range("inseam", m.inseam, 88.0, 105.0);
+    in_range("outseam", m.outseam, 115.0, 145.0);
     // Short of a generic anthropometric table even at the best landmark an
     // honest search finds — see `measure`'s own doc for the evidence this
     // is this mesh's own proportion, not a ring placement bug.

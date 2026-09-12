@@ -1,7 +1,6 @@
 mod delta;
 
 use eframe::egui::{self, RichText, Slider, SliderClamping};
-use toile_engine::body::BodyModel;
 
 use super::State;
 use crate::theme::Theme;
@@ -81,19 +80,18 @@ fn span(name: &str) -> (f64, f64) {
 /// title; the sections keep their order, so the scroll position is the only
 /// thing that moves.
 pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
-    section_with(ui, theme, "Medidas · Etienne", "cm");
-    if st.model == BodyModel::Anny {
-        // Honest rather than mysterious: the phenotype shapes this body,
-        // and every row below now says how far the body actually lands
-        // from the tape — dado, medido, Δ. Making a value exact, so medido
-        // catches up to dado, is the next slice's per-part solver.
-        footer_note(
-            ui,
-            theme,
-            "El fenotipo da forma a este cuerpo; cada fila dice cuánto mide de verdad y a qué \
-             distancia queda de tu cinta. Ajustarlo hasta que coincidan es la siguiente pieza.",
-        );
-    }
+    section_with(ui, theme, &format!("Medidas · {}", st.name), "cm");
+    // Honest rather than mysterious: the phenotype shapes this body, and
+    // every row below says how far it actually lands from the tape —
+    // dado, medido, Δ. Writing a new dado into a row re-solves the levers
+    // that can close the gap; the two reasons one cannot are shown inline.
+    footer_note(
+        ui,
+        theme,
+        "El fenotipo da forma a este cuerpo; cada fila dice cuánto mide de verdad y a qué \
+         distancia queda de tu cinta. Escribir un valor mueve las palancas que pueden \
+         alcanzarlo.",
+    );
     egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
@@ -161,7 +159,5 @@ fn row(ui: &mut egui::Ui, theme: &Theme, st: &mut State, entry: (&str, &str)) {
     if scoped.response.hovered() || slider.hovered() || slider.dragged() || slider.has_focus() {
         st.highlight = Some(name.to_owned());
     }
-    if st.model == BodyModel::Anny {
-        delta::row(ui, theme, name, value, st.anny_solved.as_ref());
-    }
+    delta::row(ui, theme, name, value, &st.anny_solved);
 }
