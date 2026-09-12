@@ -1,6 +1,127 @@
+use eframe::egui::{Pos2, Rect, pos2, vec2};
 use toile_engine::draft::{Axis, Binding, Command, Doc, MeasureSet, Piece, Point, Winding, block};
 
 use super::*;
+use crate::theme::Theme;
+
+/// One press or release of the primary button, where the pointer is.
+fn button(at: Pos2, pressed: bool) -> egui::Event {
+    egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::default(),
+    }
+}
+
+/// Clicks the product tree at `at` and hands back what it asked for.
+///
+/// Three passes, because egui hit-tests against the rects the last one
+/// allocated: the row has to have been drawn before it can be pressed.
+fn click_the_tree(
+    draft: Option<&Draft>,
+    renaming: &mut Option<(PieceKey, String)>,
+    at: Pos2,
+) -> Option<tree::Plea> {
+    let ctx = egui::Context::default();
+    let theme = Theme::sastreria();
+    theme.apply(&ctx);
+    let screen = Rect::from_min_size(pos2(0.0, 0.0), vec2(1320.0, 780.0));
+    let mut seen = None;
+    for events in [
+        vec![egui::Event::PointerMoved(at)],
+        vec![button(at, true)],
+        vec![button(at, false)],
+    ] {
+        let input = egui::RawInput {
+            screen_rect: Some(screen),
+            events,
+            ..Default::default()
+        };
+        let pass = ctx.run_ui(input, |ui| {
+            let plea = left_panel(ui, &theme, |ui| {
+                tree::product(ui, &theme, draft, None, renaming, false)
+            });
+            seen = plea.or(seen.take());
+        });
+        pass.drop_without_applying_deltas();
+    }
+    seen
+}
+
+/// The row that starts a piece answers whether or not a product is under it.
+///
+/// It was once two rows painted the same: live over a document, inert over
+/// nothing. At launch there is no document, so the row a person pressed was
+/// the inert one — pixel for pixel the live one, and unable to answer.
+#[test]
+fn the_row_that_starts_a_piece_answers_a_click_on_an_empty_table() {
+    // With no pieces above it the row sits right under the "Producto" caption:
+    // 34 pt of section, 3 pt of spacing, half of a 26 pt row.
+    let mut renaming = None;
+    assert_eq!(
+        click_the_tree(None, &mut renaming, pos2(100.0, 50.0)),
+        Some(tree::Plea::Draw),
+        "the row asks for a piece with nothing on the table too"
+    );
+
+    // And one piece lower down, with a product under it: the state that always
+    // worked, kept working.
+    let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
+    assert_eq!(
+        click_the_tree(Some(&draft), &mut renaming, pos2(100.0, 79.0)),
+        Some(tree::Plea::Draw),
+        "one piece row above it moves it down, it does not silence it"
+    );
+}
+
+/// A name being typed outlives the click that ends it, wherever that click
+/// lands.
+///
+/// The click that leaves the field is the click that presses the row under it,
+/// so both arrive on the same frame and the tree may only answer one of them.
+#[test]
+fn the_row_that_starts_a_piece_does_not_swallow_a_rename() {
+    let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
+    let piece = draft.doc().piece_keys()[0];
+    let mut renaming = Some((piece, "Delantero izquierdo".to_owned()));
+    assert_eq!(
+        click_the_tree(Some(&draft), &mut renaming, pos2(100.0, 79.0)),
+        Some(tree::Plea::Rename(piece, "Delantero izquierdo".to_owned())),
+        "the name typed reaches the document; the press can be repeated"
+    );
+}
+
+/// The plea has two answers, and the one over an empty table is what lets the
+/// row be live there at all: it asks for the product a piece would belong to,
+/// instead of opening a drawing gesture over nothing.
+#[test]
+fn the_plus_row_asks_for_a_product_before_it_opens_a_drawing() {
+    let mut empty = State::default();
+    begin_piece(&mut empty, false);
+    assert_eq!(
+        empty.asked,
+        Some(Action::New),
+        "with no document the press asks the application for a product"
+    );
+    assert_eq!(
+        empty.gesture,
+        Gesture::Idle,
+        "and opens nothing on a mat with nothing to draw on"
+    );
+
+    let mut placed = State::default();
+    begin_piece(&mut placed, true);
+    assert_eq!(placed.asked, None, "with a product there is nothing to ask");
+    assert_eq!(
+        placed.gesture,
+        Gesture::Drawing {
+            pending: Vec::new(),
+            rubber: [0.0, 0.0],
+        },
+        "the mat is left waiting for the first vertex"
+    );
+}
 
 /// The two edits the table takes in its stride say nothing: a shape edit
 /// re-derives, a topology edit goes to the mesher. The one the document

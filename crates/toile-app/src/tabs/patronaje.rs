@@ -27,6 +27,7 @@ use toile_engine::session::Session;
 use self::gesture::Gesture;
 use self::state::{Selection, Tool};
 use self::wire::Verb;
+use crate::file::Action;
 use crate::tabs::{Workspace, left_panel, right_panel};
 
 /// The two nodes a base block names for the side seam, so the bar can measure
@@ -52,23 +53,24 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     w.patronaje.active = active;
     let state = &mut *w.patronaje;
     let mut verbs = Vec::new();
+    let drawing = matches!(state.gesture, Gesture::Drawing { .. });
     verbs.extend(left_panel(ui, theme, |ui| {
-        let plea = tree::product(ui, theme, draft, active, &mut state.renaming);
+        let plea = tree::product(ui, theme, draft, active, &mut state.renaming, drawing);
         tools::grid(ui, theme, state);
         let mut asked: Vec<Verb> = tools::history(ui, theme, ready).into_iter().collect();
         match plea.filter(|_| !asking) {
-            // "+ Pieza" opens the drawing gesture, so the very next click on
-            // the mat places the first vertex — the one deliberate way to
-            // begin a piece. A drawing already in progress starts over: the
-            // row was pressed to start one.
+            // A drawing already in progress starts over: the row was pressed
+            // to start one.
             Some(tree::Plea::Draw)
                 if matches!(state.gesture, Gesture::Idle | Gesture::Drawing { .. }) =>
             {
-                state.tool = Tool::Select;
-                state.gesture = Gesture::Drawing {
-                    pending: Vec::new(),
-                    rubber: [0.0, 0.0],
-                };
+                begin_piece(state, draft.is_some());
+                // The bars are drawn before the tabs, so what the press just
+                // did reaches the status bar only on the frame after it, and
+                // nothing else asks for that frame: an open drawing sends
+                // nothing to the sim, so the viewer is asleep and the bar
+                // would sit silent until the pointer moved again.
+                ui.ctx().request_repaint();
             }
             Some(tree::Plea::Focus(key)) => focus(state, key),
             Some(tree::Plea::Rename(key, to)) => {
@@ -128,6 +130,27 @@ fn active_piece(
         .filter(|&key| has(key))
         .or(draping.filter(|&key| has(key)))
         .or_else(|| doc.piece_keys().first().copied())
+}
+
+/// What "+ Pieza" does, which turns on whether there is a product to add the
+/// piece to.
+///
+/// With a document on the table it opens the drawing gesture, so the very next
+/// click on the mat places the first vertex — the one deliberate way to begin a
+/// piece. With none it asks the application for a product instead, down the
+/// channel the empty mat's own splash asks along: a piece cannot exist outside
+/// a product, so naming one is what the press really wants, and it is one click
+/// away instead of none.
+fn begin_piece(state: &mut State, has_document: bool) {
+    if !has_document {
+        state.asked = Some(Action::New);
+        return;
+    }
+    state.tool = Tool::Select;
+    state.gesture = Gesture::Drawing {
+        pending: Vec::new(),
+        rubber: [0.0, 0.0],
+    };
 }
 
 /// Brings a piece to the front: the mat draws it, nothing of the last piece

@@ -31,15 +31,20 @@ pub enum Plea {
 ///
 /// The active piece — the one the mat is drawing — is lit; a click on any other
 /// row brings it to the front, the pencil renames it in place, the cross takes
-/// it off. With no document there is nothing to add a piece to, so the "+
-/// Pieza" row stays a hint: the ways onto the table are on the mat, where a
-/// person looking at nothing is already looking.
+/// it off. The "+ Pieza" row answers with a document or without one: over an
+/// empty table the tab turns the plea into the question that has to come first,
+/// which product is this. A row that leads somewhere beats a row that only
+/// looks as though it would.
+///
+/// `drawing` is whether a piece is being drawn already, which is what keeps the
+/// row lit for as long as the drawing it opened is on the mat.
 pub fn product(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: Option<&Draft>,
     active: Option<PieceKey>,
     renaming: &mut Option<(PieceKey, String)>,
+    drawing: bool,
 ) -> Option<Plea> {
     section(ui, theme, "Producto");
     let mut asked = None;
@@ -82,12 +87,11 @@ pub fn product(
             asked = Some(Plea::Focus(key));
         }
     }
-    if draft.is_some() {
-        if plus_row(ui, theme, "Pieza").clicked() {
-            asked = Some(Plea::Draw);
-        }
-    } else {
-        ghost_row(ui, theme, "Pieza");
+    // The rename wins here too: the click that leaves the field is the click
+    // that lands on this row, and a name already typed is worth more than a
+    // press the person can simply repeat.
+    if plus_row(ui, theme, "Pieza", drawing).clicked() && asked.is_none() {
+        asked = Some(Plea::Draw);
     }
     asked
 }
@@ -165,33 +169,38 @@ fn removal(ui: &mut egui::Ui, theme: &Theme, row: &Response, key: PieceKey) -> b
     hit.clicked()
 }
 
-/// The live "add a piece" row: it starts the drawing gesture on the mat.
-fn plus_row(ui: &mut egui::Ui, theme: &Theme, label: &str) -> Response {
+/// The "add a piece" row: it asks for the drawing gesture on the mat.
+///
+/// It rests in `ink_soft`, the ink of a control waiting to be used, and never
+/// in `muted`, which is what a tile whose phase has not arrived is drawn in.
+///
+/// It lights the way a chosen piece row does, and it lights on the press
+/// rather than after it: the drawing it opens has nothing to show until the
+/// first vertex lands and the status bar is drawn before the tabs, so for one
+/// frame this row is the only place the press can be seen at all.
+fn plus_row(ui: &mut egui::Ui, theme: &Theme, label: &str, armed: bool) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
-    let ink = if resp.hovered() {
-        theme.ink_soft
+    let lit = armed || resp.clicked() || resp.is_pointer_button_down_on();
+    let tint = if lit {
+        0.16
+    } else if resp.hovered() {
+        0.07
     } else {
-        theme.muted
+        0.0
     };
-    if resp.hovered() {
-        ui.painter()
-            .rect_filled(rect, 0.0, theme.accent.gamma_multiply(0.07));
-    }
-    paint_row(ui, rect, label, ink);
-    resp
-}
-
-/// The same row, inert: a hint of what a document would allow.
-fn ghost_row(ui: &mut egui::Ui, theme: &Theme, label: &str) {
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::hover());
-    paint_row(ui, rect, label, theme.muted);
-}
-
-fn paint_row(ui: &egui::Ui, rect: Rect, label: &str, ink: egui::Color32) {
+    let ink = if lit || resp.hovered() {
+        theme.ink
+    } else {
+        theme.ink_soft
+    };
     let p = ui.painter();
+    if tint > 0.0 {
+        p.rect_filled(rect, 0.0, theme.accent.gamma_multiply(tint));
+    }
     let slot = Rect::from_center_size(rect.left_center() + vec2(34.0, 0.0), Vec2::splat(16.0));
     glyph::paint(p, slot, ink, PLUS);
     let at = rect.left_center() + vec2(50.0, 0.0);
     let font = FontId::proportional(13.0);
     p.text(at, Align2::LEFT_CENTER, label, font, ink);
+    resp
 }

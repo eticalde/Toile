@@ -1,5 +1,5 @@
 use eframe::egui;
-use toile_engine::draft::{self, Binding, Command, PointKey};
+use toile_engine::draft::{self, Binding, Command, Draft, PieceKey, PointKey};
 use toile_engine::session::Session;
 
 use crate::theme::Theme;
@@ -25,9 +25,7 @@ const MOVE: &str = "mover punto";
 /// formula keeps its formula, and the resolved value is never written back
 /// over it.
 pub struct Drag {
-    /// Where the node sits in the contour, for the mark that says it is held.
-    index: usize,
-    /// The node in hand.
+    /// The node in hand, and the mark that says so.
     point: PointKey,
     /// What its two coordinates were bound to when it was grabbed.
     origin: [Binding; 2],
@@ -49,12 +47,30 @@ impl Drag {
     }
 }
 
+/// A node of the drafted piece as this panel holds it: what a command names,
+/// and where the pointer finds it.
+///
+/// The key and the two places are made together out of one entry of the node
+/// list and never travel apart, which is the whole of the guarantee that a
+/// press moves the node it landed on. The drawn line is a different and longer
+/// sequence — every bent tract puts curve samples between two nodes — so no
+/// position in it may be used to name a node.
+struct Node {
+    /// The node itself.
+    point: PointKey,
+    /// Where it resolved to, in centimetres.
+    at: [f64; 2],
+    /// The same place in panel points.
+    screen: egui::Pos2,
+}
+
 /// Draws the 2D pattern and applies drags straight to the session.
 ///
 /// Every drag frame recompiles the rest state, so the 3D panel is already
 /// showing the edit by the time the pointer moves again. A session with no
 /// document behind it draws its contour and nothing more: there is no node to
-/// name in a command, and this panel writes no other kind of edit.
+/// name in a command, and this panel writes no other kind of edit — so it
+/// paints no grabbable mark either.
 pub fn show(
     ui: &mut egui::Ui,
     size: egui::Vec2,
@@ -65,18 +81,25 @@ pub fn show(
     let (resp, painter) = widgets::mat_canvas(ui, theme, size);
     let rect = resp.rect;
 
+    // The line is the flattening, curves and all: it is what the cloth is cut
+    // along. The dots below are the nodes, which are fewer.
     let contour: Vec<[f64; 2]> = session.contour().to_vec();
     let view = View::fit(&contour, rect);
-    let pts: Vec<egui::Pos2> = contour.iter().map(|&p| view.to_screen(p)).collect();
+    let line: Vec<egui::Pos2> = contour.iter().map(|&p| view.to_screen(p)).collect();
     painter.add(egui::Shape::closed_line(
-        pts.clone(),
+        line,
         egui::Stroke::new(1.6, theme.outline),
     ));
+    let nodes = match (session.draft(), session.piece()) {
+        (Some(draft), Some(piece)) => nodes_of(draft, piece, &view),
+        _ => Vec::new(),
+    };
 
     if resp.drag_started()
         && let Some(pos) = resp.interact_pointer_pos()
     {
-        *drag = nearest(&pts, pos).and_then(|i| grab(session, i, pts[i] - pos));
+        *drag =
+            nearest(&nodes, pos).and_then(|node| grab(session.draft()?, node, node.screen - pos));
         if drag.is_some() {
             // One drag, one entry: the frames in between fold into it.
             session.begin_gesture(MOVE);
@@ -93,46 +116,64 @@ pub fn show(
         let _ = session.edit(held.moved_to(at));
     }
 
-    for (i, q) in pts.iter().enumerate() {
-        let (r, color) = if drag.as_ref().is_some_and(|held| held.index == i) {
+    for node in &nodes {
+        let (r, color) = if drag.as_ref().is_some_and(|held| held.point == node.point) {
             (5.0, theme.alert)
         } else {
             (2.4, theme.accent)
         };
-        painter.circle_filled(*q, r, color);
+        painter.circle_filled(node.screen, r, color);
     }
-    widgets::canvas_label(
-        &painter,
-        theme,
-        rect,
-        "PATRÓN 2D — arrastra un punto · las costuras en azul",
-    );
+    // The caption promised seams in blue that this panel has never drawn, and
+    // an invitation to drag that only holds once there is something to drag.
+    // It says what is on the glass now, and nothing else.
+    let caption = if nodes.is_empty() {
+        "PATRÓN 2D — el contorno que se drapea"
+    } else {
+        "PATRÓN 2D — arrastra un nodo"
+    };
+    widgets::canvas_label(&painter, theme, rect, caption);
+}
+
+/// The piece's nodes on the glass, in contour order.
+///
+/// Only the nodes. The samples the flattening puts along a bent tract are
+/// places on a line, not entities of the document, and there is no command
+/// that moves one; painting them as grabbable dots is what let a press on a
+/// curve write a move of some other node entirely.
+fn nodes_of(draft: &Draft, piece: PieceKey, view: &View) -> Vec<Node> {
+    draft
+        .points_cm(piece)
+        .iter()
+        .map(|&(point, at)| Node {
+            point,
+            at,
+            screen: view.to_screen(draft::to_metres(at)),
+        })
+        .collect()
 }
 
 /// The node a press lands on, with what it was bound to at that moment.
 ///
-/// The index is a position in the contour, which is what this panel draws;
-/// while every tract is a straight line that is the same thing as the node at
-/// that position.
-fn grab(session: &Session, index: usize, offset: egui::Vec2) -> Option<Drag> {
-    let draft = session.draft()?;
-    let &(point, from) = draft.points_cm(session.piece()?).get(index)?;
-    let held = draft.doc().points.get(point)?;
+/// `None` when the document has since lost the node, which leaves the press
+/// holding nothing rather than holding a neighbour.
+fn grab(draft: &Draft, node: &Node, offset: egui::Vec2) -> Option<Drag> {
+    let held = draft.doc().points.get(node.point)?;
     Some(Drag {
-        index,
-        point,
+        point: node.point,
         origin: [held.x.clone(), held.y.clone()],
-        from,
+        from: node.at,
         offset,
     })
 }
 
-fn nearest(pts: &[egui::Pos2], pos: egui::Pos2) -> Option<usize> {
-    let mut best = (GRAB_RADIUS, None);
-    for (i, q) in pts.iter().enumerate() {
-        let d = q.distance(pos);
+/// The node under the pointer, if one is within reach of it.
+fn nearest(nodes: &[Node], pos: egui::Pos2) -> Option<&Node> {
+    let mut best: (f32, Option<&Node>) = (GRAB_RADIUS, None);
+    for node in nodes {
+        let d = node.screen.distance(pos);
         if d < best.0 {
-            best = (d, Some(i));
+            best = (d, Some(node));
         }
     }
     best.1
@@ -176,3 +217,6 @@ impl View {
         ]
     }
 }
+
+#[cfg(test)]
+mod tests;
