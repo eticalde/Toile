@@ -109,7 +109,7 @@ h1{
 }
 
 /* ---------- layout ---------- */
-.wrap{
+.page{
   max-width:1080px;margin:0 auto;padding:2.5rem 1.5rem 4rem;
   display:grid;grid-template-columns:215px minmax(0,1fr);gap:3rem;
 }
@@ -122,7 +122,7 @@ nav.toc a{text-decoration:none;color:var(--ink);border-left:2px solid transparen
 nav.toc li.sub a{color:var(--muted)}
 nav.toc a:hover{border-left-color:var(--chalk);color:var(--chalk)}
 @media (max-width:880px){
-  .wrap{grid-template-columns:1fr;gap:1.5rem}
+  .page{grid-template-columns:1fr;gap:1.5rem}
   nav.toc{position:static}
   nav.toc ol{display:flex;flex-wrap:wrap;gap:.25rem .9rem}
   nav.toc li.sub{display:none}
@@ -243,7 +243,7 @@ blockquote.frase b{
     <div>
       <p class="eyebrow"><a href="./architecture.html">Toile</a> · Documentación</p>
       <h1>El cuerpo Anny</h1>
-      <p class="hero-sub">El maniquí realista: un cuerpo humano de artista (MakeHuman, CC0) reimplementado en Rust desde sus datos, generado a partir de sexo, edad y estatura, y afinado parte por parte a la medida exacta de la cinta. El maniquí de sastre procedimental sigue como modo; el patronaje sigue leyendo la cinta; los goldens no se mueven.</p>
+      <p class="hero-sub">El maniquí realista: un cuerpo humano de artista (MakeHuman, CC0) reimplementado en Rust desde sus datos, generado a partir de sexo, edad y estatura, y afinado parte por parte a la medida exacta de la cinta. El patronaje sigue leyendo la cinta; el golden de la esfera no se mueve.</p>
       <div class="titleblock" role="group" aria-label="Datos del documento">
         <div><b>Documento</b>PLAN-003</div>
         <div><b>Estado</b>Propuesto</div>
@@ -280,7 +280,7 @@ blockquote.frase b{
   </div>
 </header>
 
-<div class="wrap">
+<div class="page">
 <nav class="toc" aria-label="Contenido">
   <p>Contenido</p>
   <ol>
@@ -307,6 +307,12 @@ blockquote.frase b{
     <p>Pides un maniquí nuevo con sexo, edad y estatura; Toile genera un cuerpo humano real en milisegundos; afinas cada parte a la medida exacta de tu cinta —cintura 84, cadera 98— con una palanca por contorno; y cada fila te dice, sin maquillaje, cuánto mide el cuerpo donde el modelo no llega. El patronaje sigue resolviendo contra la cinta escrita, no contra el cuerpo.</p>
   </blockquote>
   <p class="lead">Este documento fija el <strong>segundo productor de malla</strong> que PLAN-002 dejó previsto en su §2 como «reversible barato»: el maniquí de sastre procedimental no se retira, se le pone al lado un cuerpo de artista. La animación —caminar con la prenda puesta, mapa de tensiones— <strong>no está en v1</strong>; se investiga y se documenta en el kanban (<a href="#animacion">§ 8</a>) para una versión futura.</p>
+
+  <div class="discarded">
+    <b>Enmienda · 2026-09-11</b>
+    <p>El plan decía «no se retira»; se retiró. Con las palancas <code>measure-*</code> funcionando, mantener dos productores de malla costaba una rama en cada punto del código y una pregunta —«¿en qué modo estoy?»— que el patronista no debería tener que responder. La <a href="#dueno">decisión G6</a> queda revertida y el cuerpo Anny es el único; la caja <code>toile-body</code> y su golden se borraron en <a href="https://github.com/eticalde/Toile/issues/62">#62</a>.</p>
+    <p><strong>Lo que se pierde:</strong> el loft era el único cuerpo que acertaba cada contorno a ulps. Se asume porque el patronaje resuelve contra la cinta escrita, nunca contra lo que el cuerpo alcanzó (<a href="#residual">§ 4.2</a>, decisión G8).</p>
+  </div>
 </section>
 
 <section id="veredicto">
@@ -358,7 +364,7 @@ blockquote.frase b{
   <p>Tres pasos, en el orden en que un sastre piensa: primero quién es la persona, después cuánto mide.</p>
   <ol class="plan">
     <li><strong>Nuevo maniquí.</strong> La pestaña pide los inputs de Anny con defaults de adulto: <em>sexo</em> (masculino / femenino / sin especificar → continuo 0,5), <em>edad</em> en años, <em>estatura</em>, y tres fenotipos con valor por defecto que se pueden tocar —<em>complexión</em> (peso), <em>músculo</em>, <em>proporciones</em>—. Con sólo la estatura ya hay cuerpo.</li>
-    <li><strong>Generar.</strong> El evaluador de <code>toile-anny</code> loftea el cuerpo desde el asset embebido y lo entrega como <code>BodyMesh { positions, normals, indices, stations }</code>: el viewport, la cámara, los sliders y el resaltado por estación funcionan sin cambios. El modo «maniquí de sastre» (el loft) sigue a un clic.</li>
+    <li><strong>Generar.</strong> El evaluador de <code>toile-anny</code> loftea el cuerpo desde el asset embebido y lo entrega como <code>BodyMesh { positions, normals, indices, stations }</code>: el viewport, la cámara, los sliders y el resaltado por estación funcionan sin cambios.</li>
     <li><strong>Afinar por parte.</strong> Cada una de las 20 filas del panel de medidas gana un valor <em>exacto</em>: escribir «cintura 84» mueve la palanca <code>measure-waist-circ</code> hasta que el anillo de la cintura mide 84 — un problema de una variable, monótono, con iteraciones fijas. La fila muestra <em>dado · medido · Δ</em>.</li>
   </ol>
 
@@ -371,7 +377,7 @@ blockquote.frase b{
       <tr><td><code>cuello</code></td><td><code>measure-neck-circ</code></td><td>NeckBase</td><td class="wrap">+5,4 / −4,1 cm por unidad</td></tr>
       <tr><td><code>pecho</code></td><td><code>measure-bust-circ</code></td><td>Bust</td><td class="wrap">+17,1 / −16,0; mueve también bajo pecho y pecho alto ≈ 1:1</td></tr>
       <tr><td><code>bajo_pecho</code></td><td><code>measure-underbust-circ</code></td><td>Underbust</td><td class="wrap">Acoplado con el pecho: dos barridos</td></tr>
-      <tr><td><code>pecho_alto</code></td><td class="wrap">— (vía <code>bust-circ</code>, <code>shoulder-dist</code>)</td><td>Armpit</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual ≈ 2 cm</td></tr>
+      <tr><td><code>pecho_alto</code></td><td class="wrap">— (vía <code>bust-circ</code>, <code>shoulder-dist</code>)</td><td>Armpit</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual +8,8 cm, el mayor de la tabla y todavía sin diagnóstico (<a href="https://github.com/eticalde/Toile/issues/63">#63</a>)</td></tr>
       <tr><td><code>cintura</code></td><td><code>measure-waist-circ</code></td><td>Waist</td><td class="wrap">+10,6 / −10,2; filtra ≈ 30 % al bajo pecho</td></tr>
       <tr><td><code>cadera</code></td><td><code>measure-hips-circ</code></td><td>Hip</td><td class="wrap">+17,3 / −7,7; puede saturar en −1 con cinturas anchas</td></tr>
       <tr><td><code>muslo</code></td><td><code>measure-thigh-circ</code></td><td>Thigh</td><td class="wrap"></td></tr>
@@ -384,9 +390,9 @@ blockquote.frase b{
       <tr><td><code>brazo</code></td><td class="wrap"><code>measure-upperarm-length</code> + <code>lowerarm-length</code></td><td>Wrist</td><td class="wrap">Dos palancas atadas en proporción</td></tr>
       <tr><td><code>largo_espalda</code></td><td><code>measure-napetowaist-dist</code></td><td>Waist</td><td class="wrap">Mueve la estatura: se resuelve antes que ella</td></tr>
       <tr><td><code>altura_cadera</code></td><td><code>measure-waisttohip-dist</code></td><td>Hip</td><td class="wrap">Ídem</td></tr>
-      <tr><td><code>largo_lateral</code></td><td class="wrap"><code>upperleg-height</code> + <code>lowerleg-height</code></td><td>Ankle</td><td class="wrap">Atadas; la entrepierna cae de ellas</td></tr>
-      <tr><td><code>entrepierna</code></td><td class="wrap">(las mismas dos)</td><td>Crotch</td><td class="wrap">Residual ≈ 2 cm: la entrepierna de Anny es alta (0,489 de la estatura)</td></tr>
-      <tr><td><code>tiro</code></td><td class="wrap">— (proporciones, <code>waisttohip-dist</code>)</td><td>Crotch</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual ≈ 3 cm</td></tr>
+      <tr><td><code>largo_lateral</code></td><td class="wrap"><code>upperleg-height</code> + <code>lowerleg-height</code></td><td class="wrap">Cintura → suelo</td><td class="wrap">Atadas; la entrepierna cae de ellas. <strong>Satura</strong>: con las piernas en su tope corto el modelo no baja de 109,1 cm a 178 de estatura (dado 104)</td></tr>
+      <tr><td><code>entrepierna</code></td><td class="wrap">(las mismas dos)</td><td class="wrap">Crotch → suelo</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual +0,9 cm</td></tr>
+      <tr><td><code>tiro</code></td><td class="wrap">— (proporciones, <code>waisttohip-dist</code>)</td><td>Crotch</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual +3,3 cm</td></tr>
     </tbody>
   </table></div>
 
@@ -394,6 +400,14 @@ blockquote.frase b{
 
   <h3 id="residual">4.2 El residual, dicho</h3>
   <p>El loft garantizaba cada contorno a ulps. El cuerpo Anny no puede: su forma es la de un artista, y dos medidas pueden pedir lo que ningún humano tiene. La regla es <strong>decirlo</strong>: cada fila muestra <em>dado · medido · Δ</em> con tres bandas — ≤ 1 cm en silencio, ≤ 3 cm en ámbar, &gt; 3 cm en rojo con la causa («tope del modelo», «acoplado al pecho»). Y la regla que no cambia: <strong>el patronaje resuelve las fórmulas contra la cinta escrita</strong>, nunca contra lo que el cuerpo alcanzó — el maniquí es para mirar y drapear, la cinta es la verdad del patrón. La derivación por proporción de las medidas omitidas (PLAN-002 M2) deja de mover al maniquí Anny —él tiene su prior— y se ofrece como «tomar del maniquí» explícito, nunca en silencio.</p>
+
+  <div class="decision">
+    <b>El residual medido · 2026-09-11</b>
+    <p>Resolviendo la cinta por defecto de Toile (178 cm), <strong>catorce de las veinte filas cierran en 0,00</strong>. Las que no:</p>
+    <p><code>largo_lateral</code> +5,13 · <code>pecho_alto</code> +8,82 · <code>largo_espalda</code> −3,44 · <code>tiro</code> +3,26 · <code>brazo_contorno</code> +5,72 · <code>altura_cadera</code> +1,32 · <code>entrepierna</code> +0,90 · <code>cabeza</code> +0,71</p>
+    <p><code>largo_lateral</code> y <code>largo_espalda</code> fallan <strong>en sentidos opuestos</strong>, y comparten un extremo: la cintura. Una cinta equivocada no produce eso; un anillo mal colocado sí. Bajar la cintura 3 cm llevaría la suma de los residuales de 13,2 a 4,5 cm. Está medido y abierto en <a href="https://github.com/eticalde/Toile/issues/63">#63</a>, con la evidencia en contra al lado: la cintura del cuerpo resuelto está a 0,613 de la estatura, que es exactamente donde la antropometría la pone.</p>
+    <p><code>brazo_contorno</code> marca «tope del modelo» y <strong>no es un límite del modelo</strong>: el mismo cuerpo llega a 29,3 cm con músculo 0 y complexión 0. El tope quiere decir «no desde este fenotipo», que es justo lo que el flujo de dos etapas espera.</p>
+  </div>
 </section>
 
 <section id="determinismo">
@@ -415,7 +429,7 @@ blockquote.frase b{
       <tr><td>A0</td><td>Decisiones y procedencia</td><td class="wrap">Nada visible. Las respuestas de §7, <code>PROVENANCE.txt</code>, la tabla de licencias enmendada</td><td>0,5</td></tr>
       <tr><td>A1</td><td>El baker</td><td class="wrap">Invisible: <code>.target.gz</code> + <code>base.obj</code> + JSON → asset compacto (i16 sin pérdida, índices delta), en Rust puro; cabecera con FNV</td><td>2–3</td></tr>
       <tr><td>A2</td><td>Evaluador y goldens</td><td class="wrap">Invisible: fenotipo → pesos → malla; <code>G0</code>/<code>G1</code> en dos arquitecturas; estaciones desde los <em>joint cubes</em></td><td>1,5–2</td></tr>
-      <tr><td>A3</td><td>Puerta y modo</td><td class="wrap">El maniquí Anny aparece en la pestaña: «Nuevo maniquí» con sexo, edad, estatura; conmutador loft ↔ Anny; preferencia recordada</td><td>1</td></tr>
+      <tr><td>A3</td><td>Puerta y modo</td><td class="wrap">El maniquí Anny aparece en la pestaña: «Nuevo maniquí» con sexo, edad, estatura; conmutador loft ↔ Anny; preferencia recordada <em>(el conmutador y la preferencia se cayeron con la enmienda de <a href="#frase">§ 1</a>)</em></td><td>1</td></tr>
       <tr><td>A4</td><td>Anillos y re-medición</td><td class="wrap">Cada fila muestra cuánto mide el cuerpo; los 20 anillos verificados contra el cuerpo de referencia</td><td>1,5–2</td></tr>
       <tr><td>A5</td><td>Afinado por parte</td><td class="wrap">Escribes 84 y la cintura mide 84; bandas de residual; «tope del modelo»; <code>G2</code></td><td>2–3</td></tr>
       <tr><td>A6</td><td>Pose A de 20° (opcional)</td><td class="wrap">Brazos como el loft, con cinemática directa y literales</td><td>1,5–2</td></tr>
@@ -428,7 +442,7 @@ blockquote.frase b{
 
   <div class="decision">
     <b>Entregado · 2026-09-11 · el cuerpo neutro</b>
-    <p>La implementación no siguió las fases en capas horizontales sino en <strong>rebanadas verticales</strong>, para ver algo y de-riesgar el pipeline entero antes de apilarle 1 258 targets. La primera corta A1, A2 y A3 en su mínimo común: <strong>el cuerpo neutro de MakeHuman se ve en la pestaña</strong>, conmutable contra el maniquí de sastre, con sus estaciones y su resaltado. Baker en <code>toile-cli</code> (<code>anny-bake</code>), formato y lector en <code>toile-anny</code> (cero dependencias de runtime, como <code>toile-body</code>), asset de 495 040 bytes commiteado y <strong>reproducible byte a byte</strong> desde los datos CC0, golden nuevo <code>0xb3f8_8dd8_6abc_c96f</code>. Sin targets, el asset pesa medio mega: la <a href="#dueno">decisión G1</a> sobre el blob de ~19 MB se puede tomar más tarde, ya con el pipeline probado. Las rebanadas siguientes son aditivas: targets macro (sexo, edad, estatura) y luego las palancas <code>measure-*</code>.</p>
+    <p>La implementación no siguió las fases en capas horizontales sino en <strong>rebanadas verticales</strong>, para ver algo y de-riesgar el pipeline entero antes de apilarle 1 258 targets. La primera corta A1, A2 y A3 en su mínimo común: <strong>el cuerpo neutro de MakeHuman se ve en la pestaña</strong>, conmutable entonces contra el maniquí de sastre, con sus estaciones y su resaltado. Baker en <code>toile-cli</code> (<code>anny-bake</code>), formato y lector en <code>toile-anny</code> (cero dependencias de runtime), asset de 495 040 bytes commiteado y <strong>reproducible byte a byte</strong> desde los datos CC0, golden nuevo <code>0xb3f8_8dd8_6abc_c96f</code>. Sin targets, el asset pesa medio mega: la <a href="#dueno">decisión G1</a> sobre el blob de ~19 MB se puede tomar más tarde, ya con el pipeline probado. Las rebanadas siguientes son aditivas: targets macro (sexo, edad, estatura) y luego las palancas <code>measure-*</code>.</p>
   </div>
 
   <div class="discarded">
@@ -448,7 +462,7 @@ blockquote.frase b{
       <tr><td>G3</td><td class="wrap">¿Aceptar la pose de reposo (≈ 40°) para v1 y el primer SDF?</td><td class="wrap">Sí; el re-pose a 20° es A6, opcional</td><td><span class="chip">pendiente</span></td></tr>
       <tr><td>G4</td><td class="wrap">¿Añadir estaciones Mano / Pie / Cara?</td><td class="wrap">Sí (25 variantes, cabe en la máscara); si no, «muñeca» ilumina la mano entera</td><td><span class="chip">pendiente</span></td></tr>
       <tr><td>G5</td><td class="wrap">¿Qué inputs más allá de la cinta?</td><td class="wrap">Sexo en tres valores; complexión, músculo y proporciones como sliders con default, no escondidos</td><td><span class="chip">pendiente</span></td></tr>
-      <tr><td>G6</td><td class="wrap">¿El loft se queda?</td><td class="wrap">Sí, como modo permanente: exacto, sin assets, en microsegundos</td><td><span class="chip">pendiente</span></td></tr>
+      <tr><td>G6</td><td class="wrap">¿El loft se queda?</td><td class="wrap"><s>Sí, como modo permanente: exacto, sin assets, en microsegundos</s> — <strong>revertida</strong> el 11 de septiembre de 2026 (<a href="https://github.com/eticalde/Toile/issues/62">#62</a>): el cuerpo Anny es el único, ver la enmienda de <a href="#frase">§ 1</a></td><td><span class="tag-no">revertida</span></td></tr>
       <tr><td>G7</td><td class="wrap">¿Atribución a NAVER/Anny?</td><td class="wrap">Por cortesía en docs y <code>PROVENANCE.txt</code>; legalmente no hace falta, nada de NAVER se embarca</td><td><span class="chip">pendiente</span></td></tr>
       <tr><td>G8</td><td class="wrap">¿Una fila roja bloquea el Probador?</td><td class="wrap">No: el maniquí muestra Δ, el patronaje usa la cinta</td><td><span class="chip">pendiente</span></td></tr>
     </tbody>

@@ -109,7 +109,7 @@ h1{
 }
 
 /* ---------- layout ---------- */
-.wrap{
+.page{
   max-width:1080px;margin:0 auto;padding:2.5rem 1.5rem 4rem;
   display:grid;grid-template-columns:215px minmax(0,1fr);gap:3rem;
 }
@@ -122,7 +122,7 @@ nav.toc a{text-decoration:none;color:var(--ink);border-left:2px solid transparen
 nav.toc li.sub a{color:var(--muted)}
 nav.toc a:hover{border-left-color:var(--chalk);color:var(--chalk)}
 @media (max-width:880px){
-  .wrap{grid-template-columns:1fr;gap:1.5rem}
+  .page{grid-template-columns:1fr;gap:1.5rem}
   nav.toc{position:static}
   nav.toc ol{display:flex;flex-wrap:wrap;gap:.25rem .9rem}
   nav.toc li.sub{display:none}
@@ -290,7 +290,7 @@ blockquote.frase b{
   </div>
 </header>
 
-<div class="wrap">
+<div class="page">
 <nav class="toc" aria-label="Contenido">
   <p>Contenido</p>
   <ol>
@@ -360,6 +360,12 @@ blockquote.frase b{
   <div class="decision">
     <b>Enmienda · 2026-09-08</b>
     <p>La reversibilidad se ejerció: el segundo productor de malla es el cuerpo <strong>Anny</strong> (NAVER; assets MakeHuman CC0 reimplementados en Rust), con los 40 targets <code>measure-*</code> como palanca por contorno y goldens propios. El maniquí de sastre de esta página se queda como modo. Plan y veredicto en <a href="./anny.html">PLAN-003 El cuerpo Anny</a>.</p>
+  </div>
+
+  <div class="discarded">
+    <b>Enmienda · 2026-09-11</b>
+    <p>No se quedó. El maniquí de sastre de esta página <strong>se retiró</strong>: la caja <code>toile-body</code>, su loft y su golden <code>0x5f47_f494_d7a6_4138</code> están borrados, y el cuerpo Anny es el único productor de malla (<a href="https://github.com/eticalde/Toile/issues/62">#62</a>). Todo lo que sigue en esta página —el catálogo anclado a ISO 8559-1, las estaciones, la biblioteca de personas, las once decisiones— sigue vigente; lo que cambió es <em>quién</em> convierte esas estaciones en triángulos.</p>
+    <p><strong>Lo que se pierde, dicho:</strong> el loft era el único cuerpo que devolvía cada contorno a ulps del valor escrito, que es justo la ventaja —«ulps contra milímetros»— con la que esta misma sección lo eligió. Se asume porque el patronaje resuelve las fórmulas contra la cinta escrita, nunca contra lo que el maniquí alcanzó: el cuerpo es para mirar y drapear. El precio real es que ahora hay filas que no cierran, y la regla pasa a ser <strong>mostrarlas</strong> — dado, medido y Δ, con la causa.</p>
   </div>
 </section>
 
