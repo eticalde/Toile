@@ -26,7 +26,10 @@ pub fn kinetic_energy(state: &State) -> f32 {
     e * 0.5
 }
 
-/// Largest particle speed — the convergence sensor for sleeping.
+/// Largest particle speed, in metres per second.
+///
+/// Not what sleeping is decided on: that is mean kinetic energy per vertex,
+/// which one loose vertex fluttering cannot hold above the threshold.
 pub fn max_speed(state: &State) -> f32 {
     let mut m = 0.0f32;
     for i in 0..state.len() {

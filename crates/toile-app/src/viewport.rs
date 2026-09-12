@@ -18,6 +18,41 @@ const LIGHT_DIR: [f32; 3] = [0.35, 0.8, 0.45];
 /// Floats per vertex in the renderer's buffer: position, normal, colour.
 const VERTEX_FLOATS: usize = 9;
 
+/// What either 3D canvas says it answers to.
+const HINT: &str = "3D — arrastra para orbitar · rueda para zoom";
+
+/// Shows an offscreen texture as the canvas, taking a drag over it as orbit
+/// and the wheel over it as zoom.
+///
+/// Both canvases are steered alike and say so alike, which is why this is one
+/// function and not two: a drape and a mannequin that turned differently under
+/// the same hand would each have to be learned. With nothing painted yet the
+/// room is taken anyway, so the panels beside it do not jump on the first
+/// frame.
+pub(super) fn steer(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    size: egui::Vec2,
+    texture: Option<egui::TextureId>,
+    camera: &mut Camera,
+) {
+    let Some(tex) = texture else {
+        ui.allocate_space(size);
+        return;
+    };
+    let resp = ui.add(egui::Image::from_texture((tex, size)).sense(egui::Sense::drag()));
+    if resp.dragged() {
+        camera.orbit(resp.drag_delta().x, resp.drag_delta().y);
+    }
+    if resp.hovered() {
+        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
+        if scroll != 0.0 {
+            camera.zoom(scroll);
+        }
+    }
+    canvas_label(ui.painter(), theme, resp.rect, HINT);
+}
+
 /// The 3D half of the split view.
 pub struct Viewport {
     renderer: render::Renderer,
@@ -64,26 +99,7 @@ impl Viewport {
             );
         }
 
-        let Some(tex) = self.renderer.texture_id else {
-            ui.allocate_space(size);
-            return;
-        };
-        let resp = ui.add(egui::Image::from_texture((tex, size)).sense(egui::Sense::drag()));
-        if resp.dragged() {
-            self.camera.orbit(resp.drag_delta().x, resp.drag_delta().y);
-        }
-        if resp.hovered() {
-            let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-            if scroll != 0.0 {
-                self.camera.zoom(scroll);
-            }
-        }
-        canvas_label(
-            ui.painter(),
-            theme,
-            resp.rect,
-            "3D — arrastra para orbitar · rueda para zoom",
-        );
+        steer(ui, theme, size, self.renderer.texture_id, &mut self.camera);
     }
 
     /// Whether this frame can be painted, resizing the buffers when it is the
@@ -131,3 +147,6 @@ impl Viewport {
         u
     }
 }
+
+#[cfg(test)]
+mod tests;

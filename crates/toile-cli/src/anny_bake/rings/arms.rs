@@ -33,15 +33,15 @@ pub(super) struct ArmRings {
 }
 
 /// A girth ring's own position and a length's end point do not have to be
-/// the same vertex — see `crate::anny_bake`'s doc. `upper_arm`, `shoulder_r`
-/// and `shoulder_l` sit where the plane can actually separate arm from
-/// torso (well below the true shoulder joint); `wrist` sits three-quarters
-/// down the forearm, where the girth actually responds to the morphs. But
-/// `brazo` — a *length* — is free to run between the real joints: the
-/// acromion (the shoulder's own bony top, found on the mesh surface rather
-/// than at the ball joint `joint-r-shoulder` marks) and the wrist joint
-/// (the nearest vertex to `joint-r-hand`, not the girth ring's own offset
-/// point).
+/// the same vertex. `upper_arm`, `shoulder_r` and `shoulder_l` sit at the
+/// offset [`bands::limb_fullest`] discovers, where the plane can actually
+/// separate arm from torso (well below the true shoulder joint); `wrist`
+/// sits three-quarters down the forearm, where the girth actually responds
+/// to the morphs. But `brazo` — a *length* — is free to run between the
+/// real joints: the acromion (the shoulder's own bony top, found on the
+/// mesh surface rather than at the ball joint `joint-r-shoulder` marks) and
+/// the wrist joint (the nearest vertex to `joint-r-hand`, not the girth
+/// ring's own offset point).
 pub(super) fn bake(positions: &[[f64; 3]], tris: &[[u32; 3]], j: &Joints) -> ArmRings {
     let (upper_arm, shoulder_t) = bands::limb_fullest(positions, tris, j.shoulder_r, j.elbow_r);
 

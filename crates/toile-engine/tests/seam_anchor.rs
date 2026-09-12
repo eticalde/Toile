@@ -111,7 +111,14 @@ fn side_seam_head_drift() -> Drift {
     let back = demo::pipeline(&back_contour);
     let offset = front.pos2d.len() as u32;
 
-    let (a, _) = pair_seam(&front, (ff[0], ff[1]), &back, (fb[0], fb[1]), offset, PAIRS);
+    let (a, _) = pair_seam(
+        &front,
+        (ff[0], ff[1] - ff[0]),
+        &back,
+        (fb[0], fb[1] - fb[0]),
+        offset,
+        PAIRS,
+    );
     let head = a[0] as usize;
     let sewn_at = locate(&front_contour, front.pos2d[head]);
 

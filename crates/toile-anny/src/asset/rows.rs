@@ -45,8 +45,7 @@ impl Delta {
 /// What a baked row's weight is computed from.
 ///
 /// Either the 26-bit phenotype mask of a weighted macrodetail/breast row,
-/// or the identity of a `measure-*` lever row (baked in this slice, not yet
-/// applied to the mesh — see `crate::phenotype::Phenotype`'s doc).
+/// or the identity of a `measure-*` lever row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RowKind {
     /// A macrodetail or breast target: `mask` has bit `i` set for every

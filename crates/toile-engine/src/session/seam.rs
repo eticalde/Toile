@@ -1,7 +1,7 @@
 use thiserror::Error;
 use toile_doc::{EdgeAnchor, Seam, SeamOrientation};
 
-use crate::couture::ShapePipeline;
+use crate::couture::{ShapePipeline, pair_seam};
 use crate::draft::Draft;
 
 /// What stops a document seam from being paired for sewing.
@@ -17,12 +17,11 @@ pub enum SeamFault {
 
 /// Pairs the two sides of a document seam into solver vertex pairs.
 ///
-/// Fractions are read from the draft at call time, so an edit that changes
-/// the perimeter elsewhere cannot slide the seam along the cloth. The pair
-/// count comes from the finer side's boundary spacing; `Opposed` walks side
-/// `b` tail to head. Indices from `b` are offset by `b_offset` into the
-/// combined solver state. Fewer pairs come back where the nearest boundary
-/// vertex repeats, as on runs sampled more finely than the mesh.
+/// This is where an anchored seam becomes the pair of fraction ranges
+/// [`pair_seam`] walks. Fractions are read from the draft at call time, so an
+/// edit that changes the perimeter elsewhere cannot slide the seam along the
+/// cloth; the pair count comes from the finer side's boundary spacing, and
+/// `Opposed` hands side `b` over tail to head.
 ///
 /// # Errors
 /// `Unanchored` when an anchor names a node its piece does not run through;
@@ -38,6 +37,8 @@ pub fn pair_seam_anchored(
     let (head_a, tail_a) = (read(&seam.a.head)?, read(&seam.a.tail)?);
     let (head_b, tail_b) = (read(&seam.b.head)?, read(&seam.b.tail)?);
 
+    // A span is measured the way the contour runs, so a side that passes the
+    // closure is as long as the walk and never as short as the gap it leaves.
     let span = |head: f64, tail: f64| (tail - head).rem_euclid(1.0);
     let (span_a, span_b) = (span(head_a, tail_a), span(head_b, tail_b));
     if span_a <= f64::EPSILON || span_b <= f64::EPSILON {
@@ -49,24 +50,12 @@ pub fn pair_seam_anchored(
         .max(per_side(span_b, b.n_boundary()))
         .max(2);
 
-    let mut va = Vec::with_capacity(pairs);
-    let mut vb = Vec::with_capacity(pairs);
-    for k in 0..pairs {
-        let u = k as f64 / (pairs - 1) as f64;
-        let fa = (head_a + span_a * u).rem_euclid(1.0);
-        let fb = match seam.orientation {
-            SeamOrientation::Aligned => (head_b + span_b * u).rem_euclid(1.0),
-            SeamOrientation::Opposed => (tail_b - span_b * u).rem_euclid(1.0),
-        };
-        let (pa, pb) = (
-            a.boundary_vertex_near(fa),
-            b.boundary_vertex_near(fb) + b_offset,
-        );
-        if va.last() == Some(&pa) || vb.last() == Some(&pb) {
-            continue;
-        }
-        va.push(pa);
-        vb.push(pb);
-    }
-    Ok((va, vb))
+    // The span goes over as itself. Handing `pair_seam` the far end instead
+    // would make it subtract the near one back out, and that round trip does
+    // not return the span it was given.
+    let run_b = match seam.orientation {
+        SeamOrientation::Aligned => (head_b, span_b),
+        SeamOrientation::Opposed => (tail_b, -span_b),
+    };
+    Ok(pair_seam(a, (head_a, span_a), b, run_b, b_offset, pairs))
 }

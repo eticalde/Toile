@@ -252,10 +252,8 @@ impl Drag {
     /// Where each point in hand is bound now, rounded to `step` centimetres.
     ///
     /// The nodes take the same delta, so a gesture over a whole corner of the
-    /// piece keeps its shape, and a handle's mate takes it reversed. A
-    /// coordinate written as a formula keeps its formula: the delta is
-    /// absorbed into the adjustment term, so the points stay parametric all
-    /// through the gesture instead of only after it.
+    /// piece keeps its shape, and a handle's mate takes it reversed.
+    /// [`bind::placed`] decides what a delta does to the binding it lands on.
     pub fn placed(&self, step: f64) -> Vec<(PointKey, [Binding; 2])> {
         self.carried()
             .map(|(held, delta)| {

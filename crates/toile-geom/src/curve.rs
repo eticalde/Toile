@@ -114,9 +114,7 @@ pub fn arclen(p0: [f64; 2], c1: [f64; 2], c2: [f64; 2], p1: [f64; 2]) -> f64 {
 /// where the control net is symmetric, and on the crotch curve of the block
 /// they differ by 1.7 mm — an order of magnitude past what the drawing
 /// budgets. A place on a contour is said in arc length along the flattening
-/// (`EdgeAnchor.t`), so anything meant for an anchor has to convert; nothing
-/// in the tree calls this yet, and this is the note that says which of the
-/// two it would be handing over.
+/// (`EdgeAnchor.t`), so anything meant for an anchor has to convert.
 pub fn nearest(p0: [f64; 2], c1: [f64; 2], c2: [f64; 2], p1: [f64; 2], q: [f64; 2]) -> (f64, f64) {
     let hit = bez(p0, c1, c2, p1).nearest(Point::new(q[0], q[1]), ACCURACY);
     (hit.t, hit.distance_sq.sqrt())

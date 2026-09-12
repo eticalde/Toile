@@ -41,16 +41,10 @@ const WAIST_STEP_M: f64 = 0.005;
 ///
 /// How much lower is not something this mesh states, so the size of the
 /// drop is settled by what the solved body does with it rather than by
-/// counting scan steps. With no drop at all, `waisttohip-dist` sits pinned
-/// against its short stop — which is how the misplacement announced itself
-/// — and `altura_cadera` still reports a model limit 0.32 cm wide. One
-/// template centimetre closes that row on its dado (to -0.01 cm) and the
-/// lever comes off the stop to do it, settling at -0.48. The ring's own
-/// fall is much smaller than the cut, 0.32 cm on the 178 cm body, because
-/// the lever spends its new freedom re-lengthening the span the cut
-/// shortened. Going further buys nothing: at 1.6 cm the lever is down to
-/// -0.10, `altura_cadera` stays closed, but the waist-to-crotch rise widens
-/// from 2.89 cm over its dado to 3.59 as the crotch falls another 0.87 cm.
+/// counting scan steps: one template centimetre is the smallest drop that
+/// brings `altura_cadera` inside tolerance of its dado. Going further buys
+/// nothing — a larger drop keeps `altura_cadera` closed but widens the
+/// waist-to-crotch rise as the crotch falls with it.
 const WAIST_DROP_M: f64 = 0.010;
 
 /// The band `cadera` is scanned over, expressed as an offset above the
@@ -113,14 +107,9 @@ pub(super) fn bake(
     ) - UPPER_CHEST_DROP_M;
     let upper_chest = ring_at(positions, tris, upper_chest_y);
 
-    // No band, no search: `bust_apex_y` already answers "where is the
-    // apex", read directly off the breast targets themselves
-    // (`crate::anny_bake::bust_apex`) rather than guessed from a joint. A
-    // fullest-point scan on the neutral template could only ever rediscover
-    // the ribcage, since the template carries no breast to find at all —
-    // see `crate::anny_bake`'s doc. Cutting here instead means the female
-    // deltas push exactly these vertices forward once a phenotype applies
-    // them, and the perimeter grows on its own.
+    // No band, no search: `bust_apex_y` already answers where the apex is,
+    // read off the breast targets themselves rather than guessed from a
+    // joint — see `crate::anny_bake::bust_apex`.
     let bust = ring_at(positions, tris, bust_apex_y);
     let underbust = ring_at(positions, tris, bust_apex_y - UNDERBUST_DROP_M);
 

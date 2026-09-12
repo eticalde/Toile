@@ -6,7 +6,6 @@ use super::camera::{Camera, norm3};
 use super::render::SolidRenderer;
 use super::{LIGHT_DIR, VERTEX_FLOATS};
 use crate::theme::Theme;
-use crate::widgets::canvas_label;
 
 /// The 3D body view: an orbit camera over a mesh that is regenerated whenever a
 /// measurement changes and re-uploaded through [`BodyView::set_mesh`], and
@@ -85,25 +84,12 @@ impl BodyView {
         self.renderer
             .paint(rs, (size.x * ppp) as u32, (size.y * ppp) as u32, &uniforms);
 
-        let Some(tex) = self.renderer.texture_id() else {
-            ui.allocate_space(size);
-            return;
-        };
-        let resp = ui.add(egui::Image::from_texture((tex, size)).sense(egui::Sense::drag()));
-        if resp.dragged() {
-            self.camera.orbit(resp.drag_delta().x, resp.drag_delta().y);
-        }
-        if resp.hovered() {
-            let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-            if scroll != 0.0 {
-                self.camera.zoom(scroll);
-            }
-        }
-        canvas_label(
-            ui.painter(),
+        super::steer(
+            ui,
             theme,
-            resp.rect,
-            "3D — arrastra para orbitar · rueda para zoom",
+            size,
+            self.renderer.texture_id(),
+            &mut self.camera,
         );
     }
 

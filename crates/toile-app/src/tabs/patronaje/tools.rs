@@ -6,9 +6,9 @@ use crate::glyph;
 use crate::theme::Theme;
 use crate::widgets::{CORNER, PAD, section};
 
-/// The nine tools: the name, the icon that stands for it, and whether the
-/// program can already do it. A tile that cannot is drawn dead and answers
-/// nothing, because a button that lies is worse than a gap.
+/// The tools: the name, the icon that stands for it, and whether the program
+/// can already do it. A tile that cannot is drawn dead and answers nothing,
+/// because a button that lies is worse than a gap.
 const TOOLS: [(&str, &str, bool); 8] = [
     ("Seleccionar", "3 2 13 8 8.8 9 7 13 3 2", true),
     ("Punto", "o 8 8 2.5", true),

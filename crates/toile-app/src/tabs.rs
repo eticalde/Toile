@@ -7,7 +7,6 @@ use eframe::egui;
 use toile_engine::session::Session;
 
 use crate::theme::Theme;
-use crate::widgets;
 
 /// Left panel width, in points, from the layout mockups.
 const LEFT_W: f32 = 232.0;
@@ -112,17 +111,4 @@ pub fn right_panel<R>(ui: &mut egui::Ui, theme: &Theme, add: impl FnOnce(&mut eg
         .frame(egui::Frame::new().fill(theme.panel))
         .show(ui, add)
         .inner
-}
-
-/// The cutting mat filling whatever the panels left over, with its caption.
-#[allow(
-    dead_code,
-    reason = "the bare mat a tab starts from, before it paints its own content"
-)]
-pub fn mat_center(ui: &mut egui::Ui, theme: &Theme, label: &str) {
-    egui::CentralPanel::no_frame().show(ui, |ui| {
-        let size = ui.available_size();
-        let (resp, painter) = widgets::mat_canvas(ui, theme, size);
-        widgets::canvas_label(&painter, theme, resp.rect, label);
-    });
 }

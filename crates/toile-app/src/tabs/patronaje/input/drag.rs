@@ -21,8 +21,7 @@ pub(super) fn moved(
         // The keyboard has the gesture: a jog of the mouse does not fight it.
         return (gesture::holding(drag), Vec::new(), Feedback::default());
     }
-    // The break latches: a tangent that healed itself the moment the key came
-    // back up would undo the asymmetry the key was held down to make.
+    // `|=`, never `=`: the break latches, for the reason `Drag::free` gives.
     drag.free |= mods.alt;
     let cfg = SnapConfig {
         on: ctx.snap.on && !mods.ctrl,

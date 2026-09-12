@@ -34,8 +34,7 @@ impl Command {
     ///
     /// Folding is declared, never guessed: a drag emits one `MovePoint` per
     /// frame and the gesture keeps one, but two edits that only look alike
-    /// stay two. The undo entry keeps the first inverse either way, so undo
-    /// goes back to where the gesture started rather than to its last frame.
+    /// stay two.
     pub fn coalesce_onto(&self, previous: &Command) -> Coalesced {
         match (self.field(), previous.field()) {
             (Some(field), Some(before)) if field == before => Coalesced::Replaces,

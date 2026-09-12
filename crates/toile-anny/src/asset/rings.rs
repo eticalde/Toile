@@ -9,17 +9,27 @@
 /// `RingPoint`): baked once, from the mesh alone, and never touched again —
 /// [`crate::measure::measure`] only walks it, whatever the phenotype did to
 /// the positions it is walked against.
+///
+/// A girth ring's own position and a length's end point need not be the same
+/// vertex, and several pairs here deliberately are not. A girth has to be
+/// cut where a plane can still separate the limb from the torso, or where
+/// the section is one a tape could actually lie on; a length is free to end
+/// on a single surface vertex at the joint itself.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum RingId {
     /// `cuello`: cut perpendicular to the neck's own axis, at the neck
     /// joint.
     Neck,
-    /// `pecho_alto`: the highest horizontal cut that still separates the
-    /// torso from both arms — see `crate::asset`'s doc on why this sits
-    /// below the shoulder joint itself.
+    /// `pecho_alto`: just below the highest horizontal cut that still
+    /// separates the torso from both arms, which is itself well below the
+    /// shoulder joint — by the joint's own height the two surfaces have
+    /// fused and no plane can part them.
     UpperChest,
-    /// `pecho`: the fullest horizontal section in a band around the chest.
+    /// `pecho`: a horizontal cut at the height the CC0 breast target's own
+    /// displacement-weighted apex falls at. Not a fullest-section scan: the
+    /// neutral template carries no breast, so a scan could only ever find
+    /// the ribcage.
     Bust,
     /// `bajo_pecho`: a fixed offset below [`RingId::Bust`].
     Underbust,
@@ -36,8 +46,7 @@ pub enum RingId {
     /// `tobillo`: cut perpendicular to the lower leg's axis, at the
     /// narrowest section the leg still has before the foot flares into it —
     /// which on this mesh is well up the shin rather than over the ankle
-    /// bone. See [`RingId::AnkleJoint`] for the ankle a *length* runs to,
-    /// and `crate::asset`'s doc for why the two are that far apart.
+    /// bone. See [`RingId::AnkleJoint`] for the ankle a *length* runs to.
     Ankle,
     /// `brazo_contorno`: the fullest cut perpendicular to the upper arm's
     /// own axis.
@@ -50,13 +59,13 @@ pub enum RingId {
     Head,
     /// Landmark only: a horizontal cut at the fork — the lowest section
     /// that still encloses both legs as one loop — anchoring `tiro` and
-    /// `entrepierna`. See `crate::asset`'s doc on why this is not simply
-    /// the pelvis joint.
+    /// `entrepierna`. Not the pelvis joint, which sits well above where the
+    /// legs actually separate.
     Crotch,
     /// Landmark only: the right upper arm, cut at the same offset as
-    /// [`RingId::UpperArm`] — see `crate::asset`'s doc on why that is also
-    /// the closest valid cut to the shoulder joint. Anchors `hombros`, not
-    /// `brazo` — see [`RingId::Acromion`] for that.
+    /// [`RingId::UpperArm`], which is also the closest valid cut to the
+    /// shoulder joint. Anchors `hombros`, not `brazo` — see
+    /// [`RingId::Acromion`] for that.
     ShoulderRight,
     /// Landmark only: the left counterpart of [`RingId::ShoulderRight`],
     /// anchoring `hombros`.
@@ -67,15 +76,15 @@ pub enum RingId {
     /// small radius of the right shoulder joint, i.e. the top of the
     /// deltoid cap rather than the ball joint itself — anchoring the start
     /// of `brazo`. A length landmark can sit anywhere on the surface near
-    /// the joint even where a girth ring cannot cut cleanly; see
-    /// `crate::asset`'s doc. Not a cut, so it is one of the rings with
-    /// exactly one point rather than a closed loop.
+    /// the joint even where a girth ring cannot cut cleanly. Not a cut, so
+    /// it is one of the rings with exactly one point rather than a closed
+    /// loop.
     Acromion,
     /// Landmark only: a single point — the body vertex nearest the right
     /// hand joint — anchoring the end of `brazo`. Distinct from
-    /// [`RingId::Wrist`], which is the girth ring three-quarters down the
-    /// forearm; see `crate::asset`'s doc on why a length's end point need
-    /// not be where its girth ring sits.
+    /// [`RingId::Wrist`], the girth ring three-quarters down the forearm:
+    /// the forearm tapers smoothly into the hand, so a girth cut at the
+    /// joint barely responds to the build and gender morphs.
     WristJoint,
     /// Landmark only: a single point — the body vertex nearest the right
     /// ankle joint, which on this mesh is the medial malleolus, the ankle
@@ -90,9 +99,9 @@ pub enum RingId {
     /// band centred on the neck joint's own height, near the sagittal
     /// midline — anchoring the top of `largo_espalda`: the nape, the C7
     /// vertebra at the back of the base of the neck. Distinct from
-    /// [`RingId::Neck`]'s own most posterior point because a ring cut at
-    /// the joint is a full loop, not a search — see `crate::anny_bake`'s
-    /// doc for the evidence behind exactly where this band sits.
+    /// [`RingId::Neck`]'s own most posterior point, because a ring cut at
+    /// the joint is a full loop and its rearmost point sits partway around
+    /// that loop rather than squarely on the spine.
     NapeBase,
 }
 
@@ -190,8 +199,11 @@ pub struct RingEntry {
     /// where that plane crossed the mesh — but a morph drags them out of
     /// it, and a chord walk that follows them out of plane measures the
     /// wander as if it were girth. Keeping the plane here lets
-    /// [`crate::measure`] sum the girth *in* it whatever the phenotype did;
-    /// see that module for how far the difference actually runs.
+    /// [`crate::measure`] sum the girth *in* it whatever the phenotype did.
+    ///
+    /// It is the plane the ring was *cut* on, which the trunk keeps under a
+    /// morph and a limb does not: a limb girth is read across a slightly
+    /// oblique section, a little under a tape lying flat on the limb.
     ///
     /// Zero for the single-point landmarks ([`RingId::is_single_point`]),
     /// which are surface vertices found by search rather than cuts and so

@@ -82,9 +82,9 @@ fn a_cut_ring_carries_a_unit_plane_and_a_landmark_carries_none() {
     }
 }
 
-/// The fourth slice's structural requirement: solving a lever all the way
-/// to its own `±1` bound — the most a lever can ever stretch its vertices —
-/// must not tear open the loop its own ring walks. Driven through
+/// Solving a lever all the way to its own `±1` bound — the most a lever
+/// can ever stretch its vertices — must not tear open the loop its own ring
+/// walks. Driven through
 /// `crate::solve::solve_girth` rather than a hand-picked lever value, so
 /// this exercises the real solver path, not just an arbitrary morph.
 #[test]
@@ -140,7 +140,7 @@ fn measuring_different_phenotypes_does_not_change_the_ring_tables() {
 /// The waist-to-hip drop must always be shorter than the waist-to-crotch
 /// rise. This is structural, not a tuning constant that happens to hold
 /// for one reference body: [`RingId::Hip`] is baked strictly above
-/// [`RingId::Crotch`] (the fork — see `crate::asset`'s doc), so however the
+/// [`RingId::Crotch`] (the fork), so however the
 /// phenotype moves the waist, hip and crotch, the hip can never be as far
 /// from the waist as the crotch is. Swept across gender, build and muscle
 /// to demonstrate that, not just assert it for one body.
@@ -170,11 +170,11 @@ fn hip_drop_is_always_shorter_than_rise() {
     }
 }
 
-/// The property the next slice's one-dimensional, per-part solver depends
-/// on: sweeping `weight` (build) from thinnest to heaviest, at every other
+/// The monotonicity a one-dimensional per-part solver needs to converge:
+/// sweeping `weight` (build) from thinnest to heaviest, every other
 /// phenotype field fixed, must make the waist girth increase at every step.
-/// If this ever stops holding, that solver cannot converge — so this test
-/// fails loudly rather than the next slice discovering it the hard way.
+/// Asserted here so that losing it fails loudly, rather than surfacing as a
+/// solver that will not settle.
 #[test]
 fn waist_girth_increases_monotonically_as_build_increases() {
     let mut previous: Option<f32> = None;
@@ -239,26 +239,25 @@ fn the_reference_adult_measures_within_plausible_human_ranges() {
     in_range("head", m.head, 52.0, 62.0);
     in_range("rise", m.rise, 25.0, 36.0);
     in_range("hip_drop", m.hip_drop, 16.0, 24.0);
-    // Both are vertical drops rather than straight lines, and they stop in
-    // different places: the inseam at the floor, the outseam at the ankle
-    // landmark — see `measure`'s own doc. Even the outseam still reads high
-    // against a generic table, since it starts at this mesh's waist rather
-    // than following the outside of the leg.
+    // Both are vertical drops, stopping in different places: the inseam at
+    // the floor, the outseam at the ankle landmark. The outseam reads high
+    // against a generic table because it drops from this mesh's waist
+    // rather than following the outside of the leg.
     in_range("inseam", m.inseam, 88.0, 105.0);
     in_range("outseam", m.outseam, 108.0, 138.0);
-    // Short of a generic anthropometric table even at the best landmark an
-    // honest search finds — see `measure`'s own doc for the evidence this
-    // is this mesh's own proportion, not a ring placement bug.
+    // Deliberately short of a generic anthropometric table: this mesh's own
+    // neck-to-waist span is short, and no landmark an honest search finds
+    // reaches the table's range — see `Measures::back_length`.
     in_range("back_length", m.back_length, 28.0, 40.0);
     in_range("arm_length", m.arm_length, 58.0, 68.0);
     in_range("shoulder_width", m.shoulder_width, 35.0, 55.0);
 }
 
-/// `RingId::Bust` is cut where the breast targets themselves say the apex
-/// sits (`crate::asset`'s doc), so a female-default body's breast should
-/// show up as a real difference between `pecho` and `bajo_pecho` — not the
-/// under-3-cm gap the old ribcage-only scan produced. Male is checked too,
-/// as a guard against the fix instead flattening the male reading.
+/// [`RingId::Bust`] is cut where the breast targets themselves say the apex
+/// sits, so a female-default body's breast must show up as a real
+/// difference between `pecho` and `bajo_pecho`. Male is checked too, so
+/// that a change which widens the female gap by flattening the male
+/// reading cannot pass.
 #[test]
 fn the_female_default_shows_a_real_bust_apex() {
     let female = Phenotype {

@@ -257,6 +257,7 @@ pre.si{border-left-color:var(--chalk)}
     <li class="sub"><a href="#p2a">2.1 Doc vs. implementación</a></li>
     <li class="sub"><a href="#p2b">2.2 Qué nunca va</a></li>
     <li class="sub"><a href="#p2c">2.3 El caso <code>//!</code></a></li>
+    <li class="sub"><a href="#p2d">2.4 El bloque que se vuelve documento</a></li>
     <li><a href="#p3">3 · Idioma</a></li>
     <li><a href="#p4">4 · Estructura y modularización</a></li>
     <li class="sub"><a href="#p4b">4.2 Límites de tamaño</a></li>
@@ -438,6 +439,36 @@ ui.ctx().request_repaint();</code></pre>
 <div class="rule">
   <b>Verificado por</b>
   <p><code>clippy::too_long_first_doc_paragraph</code> (estable desde 1.82) para el primer párrafo. El límite de líneas del <code>//!</code> y la prohibición de procedencia <strong>no tienen lint</strong>: script propio (§9) y revisión manual.</p>
+</div>
+
+<div class="axis" id="p2d">
+    <span class="tag">Eje 2.4</span>
+    <h3>El bloque que se vuelve documento</h3>
+    <svg width="110" height="10" viewBox="0 0 110 10" stroke="currentColor" stroke-width="1.2" fill="none" aria-hidden="true"><line x1="5" y1="5" x2="105" y2="5"/><path d="M12 1 5 5l7 4"/><path d="M98 1l7 4-7 4"/></svg>
+  </div>
+
+<p>El <a href="#p2c">eje 2.3</a> cerró la puerta del <code>//!</code>, y la prosa salió por la ventana: un <code>///</code> sobre un <code>mod</code> privado de un binario, que rustdoc no publica nunca, llegó a las <strong>86 líneas</strong>. La regla del <code>//!</code> no lo veía porque el prefijo era otro. El peor bloque del árbol llegó a <strong>108 líneas delante de una sola función</strong>, en un archivo con 154 líneas de comentario para 93 de código.</p>
+
+<p>Lo que falla no es la longitud, es lo que la longitud atrae. Un bloque que pasa cierto tamaño deja de ser un comentario y se vuelve un documento — y un documento que nadie ve <strong>cría un changelog</strong>. Los dos goldens de Anny llegaron a 79 y 65 líneas de historia, con catorce hashes muertos, y ambos mintiendo en la primera frase: uno decía «se ha movido dos veces» y listaba siete. Eso es exactamente la procedencia que el <a href="#p2b">eje 2.2</a> ya prohíbe, entrando por otra puerta.</p>
+
+<div class="decision">
+  <b>Decisión</b>
+  <p><strong>Un bloque de comentario seguido no pasa de 17 líneas.</strong> Cuenta cualquier prefijo — <code>///</code>, <code>//!</code>, <code>//</code> — y se mide por líneas contiguas, no por comentario lógico.</p>
+  <p>17 no es un número redondo, y por eso es el número: es el bloque más largo del árbol que <em>se gana</em> su longitud, el argumento de winding en <code>anny_bake/rings/intersect.rs</code>. Un cap por debajo de él obligaría a estropear el único bloque largo que está bien.</p>
+  <p>Los bloques cercados con <code>```</code> dentro de un doc quedan exentos: una tabla de layout de bytes o un ejemplo no son prosa, y acortarlos dice menos, no más.</p>
+</div>
+
+<p>Qué hacer cuando el bloque no cabe, en orden de preferencia — y ninguna de las tres es «apretar la redacción»:</p>
+
+<ul class="notch">
+  <li><strong>Ponlo donde hace falta.</strong> Casi siempre el bloque largo es una copia: el hecho se escribió donde se descubrió y otra vez donde se necesitaba, y la primera copia no se borró nunca. La versión que sobra es la que está lejos del código que la obedece.</li>
+  <li><strong>Bórralo.</strong> Historia, narración del cambio que introdujo la línea, y toda medida citada que nadie pueda re-derivar — envejecen sin avisar. El árbol llegó a tener la altura del anillo de tobillo escrita en tres archivos con <strong>tres números distintos</strong>.</li>
+  <li><strong>Parte la función.</strong> Si después de lo anterior sigue sin caber, lo que es grande no es el comentario.</li>
+</ul>
+
+<div class="rule">
+  <b>Verificado por</b>
+  <p>No hay lint: script propio (§9). Hoy el árbol pasa con margen — el bloque más largo es el que fijó el cap.</p>
 </div>
 </section>
 
@@ -717,6 +748,7 @@ pub use state::{DistanceConstraints, Seams, State};</code></pre>
   <tr><td><code>unsafe</code> explícito dentro de <code>unsafe fn</code></td><td><code>unsafe_op_in_unsafe_fn</code></td><td><span class="tag-ok">en CI</span> · deny</td></tr>
   <tr><td>Comentarios en inglés</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
   <tr><td><code>//!</code> solo en <code>lib.rs</code>, ≤ 4 líneas</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td>Bloque de comentario ≤ 17 líneas</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
   <tr><td>Sin procedencia en la fuente</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
   <tr><td>Archivos ≤ 300 líneas</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
   <tr><td>El drapeado no cambia de bits</td><td><code>tests/golden.rs</code> · <code>tools/verify.sh</code></td><td><span class="tag-ok">en CI</span> · ARM + x86</td></tr>
@@ -861,6 +893,12 @@ for f in $(find crates -name '*.rs'); do
   n=$(wc -l &lt; "$f")
   [ "$n" -gt 300 ] &amp;&amp; say "$f: $n líneas (máx 300) (§4.2)"
 done
+
+# 5. A comment block that runs past this stops being a comment and becomes a
+#    document — and a document nobody can see grows a changelog. Fenced
+#    blocks inside a doc are exempt. (Walk elided here; see the script.)
+BLOCK_MAX=17
+#    ... say "$f:$start: comentario de $run líneas seguidas (máx 17) (§2.4)"
 
 [ $fail -eq 0 ] &amp;&amp; echo "✓ estilo"
 exit $fail</code></pre>

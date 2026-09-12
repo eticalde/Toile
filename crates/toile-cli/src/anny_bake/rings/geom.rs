@@ -38,9 +38,9 @@ pub(super) fn lerp(a: [f64; 3], b: [f64; 3], t: f64) -> [f64; 3] {
 /// The index of the body vertex nearest `target`.
 ///
 /// Used only where a plane cannot cut a clean ring at all (the true
-/// shoulder joint, fused into the torso — see `crate::anny_bake`'s doc):
-/// the nearest single vertex is the best surface proxy for a joint that
-/// has no cross-section of its own to measure.
+/// shoulder joint, fused into the torso): the nearest single vertex is the
+/// best surface proxy for a joint that has no cross-section of its own to
+/// measure.
 pub(super) fn nearest_vertex(positions: &[[f64; 3]], target: [f64; 3]) -> u32 {
     let mut best = 0usize;
     let mut best_d = f64::INFINITY;
@@ -57,7 +57,7 @@ pub(super) fn nearest_vertex(positions: &[[f64; 3]], target: [f64; 3]) -> u32 {
 /// The index of the highest (greatest `y`) body vertex within `radius` of
 /// `centre`.
 ///
-/// Used for the acromion (see `crate::anny_bake`'s doc): the shoulder's
+/// Used for the acromion: the shoulder's
 /// bony top has no joint of its own marking it (`joint-r-shoulder` marks
 /// the ball joint, inside the arm), but it is exactly the topmost point of
 /// the deltoid cap over that joint, findable directly on the mesh surface.

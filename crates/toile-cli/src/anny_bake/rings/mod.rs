@@ -113,8 +113,7 @@ fn limb_ring(
 ///
 /// `positions` and `joints` must already be in the mesh's own final space
 /// (centred, scaled to metres) — the same space `positions` itself is
-/// stored in. See `crate::anny_bake`'s doc on the two placements that
-/// depart from their catalogue name's literal joint.
+/// stored in.
 pub fn bake(
     positions: &[[f64; 3]],
     tris: &[[u32; 3]],

@@ -81,10 +81,6 @@ fn span(name: &str) -> (f64, f64) {
 /// thing that moves.
 pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
     section_with(ui, theme, &format!("Medidas · {}", st.name), "cm");
-    // Honest rather than mysterious: the phenotype shapes this body, and
-    // every row below says how far it actually lands from the tape —
-    // dado, medido, Δ. Writing a new dado into a row re-solves the levers
-    // that can close the gap; the two reasons one cannot are shown inline.
     footer_note(
         ui,
         theme,
@@ -147,9 +143,8 @@ fn row(ui: &mut egui::Ui, theme: &Theme, st: &mut State, entry: (&str, &str)) {
         st.measures.values.insert(name.to_owned(), value);
         ui.ctx().request_repaint();
     }
-    // A rebuild — and, for Anny, a full 20-row solve — only runs once the
-    // edit commits (the slider releases, a click lands, or the value box
-    // loses focus), never once per drag frame: see `build`'s own doc.
+    // The commit and not the drag: a rebuild here costs a full 20-row solve,
+    // which `super::build`'s own doc prices.
     if (slider.drag_stopped() || slider.lost_focus() || slider.clicked()) && value.is_finite() {
         st.dirty = true;
         ui.ctx().request_repaint();

@@ -8,17 +8,13 @@ pub use rows::{Delta, Row, RowKind};
 /// refused before any length arithmetic runs against it.
 const MAGIC: [u8; 8] = *b"TOANNY01";
 
-/// Bumped whenever the payload layout changes, so a reader never misreads a
-/// shape it was not built for. Version 2 adds the row table and delta runs
-/// that make the phenotype drive the mesh; version 3 adds the baked
-/// measurement rings (see [`RingId`]); version 4 widens each ring's table
-/// entry with the plane it was cut on (see [`RingEntry::normal`]); version 5
-/// adds a twentieth ring, the ankle landmark `largo_lateral` ends at (see
-/// [`RingId::AnkleJoint`]). An older reader (or an older asset handed to
-/// this reader) is refused outright rather than silently reading a shape it
-/// was not built for.
+/// Bumped whenever the payload layout changes. Only this exact version
+/// decodes: an asset written by any other is refused outright rather than
+/// read as a shape this reader was not built for. Nothing here reads an
+/// older layout, so the bump is the whole compatibility story and the
+/// history of what each one added belongs in `git log`.
 ///
-/// A ring count is part of that shape even though the header carries it:
+/// The ring count is part of that shape even though the header carries it:
 /// a nineteen-entry table is self-consistent enough to pass every length
 /// and hash check here and then panic in [`crate::measure`], which indexes
 /// the table by [`RingId`] and expects all twenty.
@@ -36,20 +32,20 @@ const FNV_PRIME: u64 = 0x0100_0000_01b3;
 /// The body as the baker hands it over, and as the reader hands it back.
 ///
 /// Metres, y-up, centred, CCW-outward triangles, one station tag per vertex
-/// — the template, unchanged from v1 — plus every baked target's row and
-/// delta run, in the fixed order the baker discovered them in, plus the
-/// twenty measurement rings cut once from the neutral template (see
-/// [`RingId`]). Normals are not part of the asset — they are cheap to
-/// recompute and storing them would let the two drift apart.
+/// — the template — plus every baked target's row and delta run, in the
+/// fixed order the baker discovered them in, plus the twenty measurement
+/// rings cut once from the neutral template (see [`RingId`]). Normals are
+/// not part of the asset: they are cheap to recompute, and storing them
+/// would let the two drift apart.
 ///
-/// The payload is roughly 17 MB (2,124,560 deltas at 8 bytes each, plus the
-/// template): stored raw and uncompressed, `include_bytes!`-embedded and
-/// committed rather than fetched or decompressed at load time. That is a
-/// deliberate trade (`docs/anny.html`'s decision G1), not an oversight — it
-/// costs about 9 MB of git history (git deflates the blob itself) in
-/// exchange for `toile-anny` keeping zero runtime dependencies: no
-/// decompressor, no asset fetcher, nothing between the binary and the bytes.
-/// The rings add only a few kilobytes on top.
+/// The payload is stored raw and uncompressed, `include_bytes!`-embedded
+/// and committed rather than fetched or decompressed at load time: a
+/// deliberate trade for `toile-anny` keeping zero runtime dependencies —
+/// no decompressor, no asset fetcher, nothing between the binary and the
+/// bytes. It is worth knowing what was traded away, since the whole
+/// question is the size: about 17 MB shipped, of which the deltas are
+/// nearly all, and roughly 9 MB added to the repository, git deflating the
+/// blob itself.
 pub struct Baked {
     /// Vertex positions as xyz triples.
     pub positions: Vec<f32>,

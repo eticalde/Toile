@@ -84,7 +84,10 @@ fn corner_of(outline: &[[f64; 2]]) -> [f64; 2] {
 }
 
 /// The box around a contour, in millimetres.
-fn box_of(outline: &[[f64; 2]]) -> ([f64; 2], [f64; 2]) {
+///
+/// An empty contour answers with an inverted box, which is what lets the sheet
+/// fold several of these together and still see that nothing was drawn.
+pub(super) fn box_of(outline: &[[f64; 2]]) -> ([f64; 2], [f64; 2]) {
     let mut low = [f64::INFINITY; 2];
     let mut high = [f64::NEG_INFINITY; 2];
     for at in outline {

@@ -79,13 +79,11 @@ mod tests {
 
     use super::*;
 
-    /// Every bit the seeding produced before it moved out of this module.
-    ///
     /// The drape golden starts from this state, so a rounding difference here
     /// is a different drape. A cheap rectangle stands in for the bodice: what
     /// is under test is the arithmetic, not the scene.
     #[test]
-    fn drop_state_is_unchanged_by_the_move_into_couture() {
+    fn seeding_a_drop_lands_on_fixed_bits() {
         let rectangle = [[0.0, 0.0], [0.30, 0.0], [0.30, 0.20], [0.0, 0.20]];
         let pipe = ShapePipeline::build(&rectangle, 16, 0.01).expect("the rectangle is finite");
         let state = drop_state(&pipe);

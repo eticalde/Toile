@@ -4,7 +4,7 @@ use crate::Station;
 const VERTEX_COUNT: usize = 13_380;
 const TRIANGLE_COUNT: usize = 26_756;
 
-/// No lever pulled — the phenotype-only body the second slice shipped.
+/// No lever pulled — the phenotype-only body.
 const ZERO: [f64; 20] = [0.0; 20];
 
 /// A mesh's bounding-box height along y (up), in the mesh's own metres.

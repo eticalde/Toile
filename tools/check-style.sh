@@ -43,5 +43,41 @@ for f in $(find crates -name '*.rs'); do
   [ "$n" -gt 300 ] && say "$f: $n líneas (máx 300) (§4.2)"
 done
 
+# 5. A comment block that runs past this stops being a comment and becomes a
+#    document — and a document nobody can see grows a changelog. 17 is the
+#    longest block in the tree that earns its length on the merits (the
+#    winding argument in anny_bake/rings/intersect.rs), so it is the cap.
+#    Fenced blocks inside a doc are exempt: a byte-layout table or an
+#    example is not prose, and shortening it says less.
+BLOCK_MAX=17
+for f in $(find crates -name '*.rs'); do
+  run=0; start=0; fence=0; line=0
+  while IFS= read -r l || [ -n "$l" ]; do
+    line=$((line + 1))
+    case "$l" in
+      *[!' 	']*) body=${l#"${l%%[!' 	']*}"} ;;
+      *) body= ;;
+    esac
+    case "$body" in
+      '///'*|'//!'*|'//'*)
+        [ "$run" -eq 0 ] && { start=$line; fence=0; }
+        run=$((run + 1))
+        text=${body#"${body%%[!/!]*}"}
+        text=${text# }
+        case "$text" in '```'*) fence=$((1 - fence)); run=$((run - 1)) ;;
+                        *) [ "$fence" -eq 1 ] && run=$((run - 1)) ;;
+        esac
+        ;;
+      *)
+        [ "$run" -gt "$BLOCK_MAX" ] &&
+          say "$f:$start: comentario de $run líneas seguidas (máx $BLOCK_MAX) (§2.4)"
+        run=0
+        ;;
+    esac
+  done < "$f"
+  [ "$run" -gt "$BLOCK_MAX" ] &&
+    say "$f:$start: comentario de $run líneas seguidas (máx $BLOCK_MAX) (§2.4)"
+done
+
 [ $fail -eq 0 ] && echo "✓ estilo"
 exit $fail

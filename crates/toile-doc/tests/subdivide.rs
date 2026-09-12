@@ -71,7 +71,7 @@ fn net(doc: &Doc, piece: PieceKey, node: PointKey) -> [[f64; 2]; 4] {
 
 /// The two edits that cut the tract leaving `node` in two at `t`.
 ///
-/// This is what the drawing tool will emit, in the order it emits it: the
+/// This is what the drawing tool emits, in the order it emits it: the
 /// tract that stays keeps its node and takes the first half of the split, and
 /// the new node opens the second. Both halves come from de Casteljau, so the
 /// line the two draw is the line the one drew.

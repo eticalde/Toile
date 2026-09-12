@@ -99,7 +99,7 @@ pub fn footer_note(ui: &mut Ui, theme: &Theme, text: &str) {
 }
 
 /// The hairline that closes a group at the foot of a panel.
-pub fn rule(ui: &mut Ui, theme: &Theme) {
+fn rule(ui: &mut Ui, theme: &Theme) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), 1.0), Sense::hover());
     ui.painter().rect_filled(rect, 0.0, theme.line);
 }

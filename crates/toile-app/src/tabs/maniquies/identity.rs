@@ -8,10 +8,6 @@ use crate::widgets::{PAD, list_row_icon, section};
 const VALUE_W: f32 = 78.0;
 
 /// The fields the new-mannequin dialog edits while it is open.
-///
-/// Every field starts at a sensible default so the dialog is submittable
-/// the moment it opens: the only field that is ever truly required is
-/// stature, not that the others start empty.
 pub struct NewManiqui {
     nombre: String,
     sexo: f64,
@@ -114,10 +110,11 @@ pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
 }
 
 /// One phenotype slider: a label above, then a slider filling the panel's
-/// width the same way the measures panel lays out a row. Returns whether
-/// the edit just committed — the slider released, a click landed, or the
-/// value box lost focus — which is when the caller should re-solve, not
-/// on every frame a drag merely continues (see `super::build`'s own doc).
+/// width the same way the measures panel lays out a row.
+///
+/// Answers whether the edit just committed — the slider released, a click
+/// landed, or the value box lost focus — which is the moment a re-solve is
+/// worth paying for; `super::build`'s own doc says why no drag frame is.
 fn slider(
     ui: &mut egui::Ui,
     theme: &Theme,

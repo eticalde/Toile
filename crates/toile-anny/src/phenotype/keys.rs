@@ -68,9 +68,8 @@ const KNOWN_NON_KEY_TOKENS: [&str; 1] = ["universal"];
 /// The 20 `measure-*` lever labels this tier bakes, alphabetically — the
 /// fixed order a lever's id (its index here) refers to.
 ///
-/// Each label has an `-incr` and a `-decr` target file (40 files total).
-/// Not applied to the mesh yet (see `crate::phenotype::Phenotype`'s docs);
-/// baked and exposed for the slice that reads them.
+/// Each label has an `-incr` and a `-decr` target file (40 files total),
+/// which [`crate::body_mesh`] blends by the signed lever value.
 pub const LEVERS: [&str; 20] = [
     "ankle-circ",
     "bust-circ",

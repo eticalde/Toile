@@ -51,9 +51,9 @@ fn click_the_tree(
 
 /// The row that starts a piece answers whether or not a product is under it.
 ///
-/// It was once two rows painted the same: live over a document, inert over
-/// nothing. At launch there is no document, so the row a person pressed was
-/// the inert one — pixel for pixel the live one, and unable to answer.
+/// Two rows painted the same — one live over a document, one inert over
+/// nothing — are the same row to anyone looking at the panel, and at launch
+/// there is no document, so the one a person presses is the inert one.
 #[test]
 fn the_row_that_starts_a_piece_answers_a_click_on_an_empty_table() {
     // With no pieces above it the row sits right under the "Producto" caption:

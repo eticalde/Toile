@@ -122,14 +122,13 @@ pub(crate) fn template_positions_f64(baked: &Baked) -> Vec<f64> {
 /// fixed row order.
 ///
 /// `levers` is in [`phenotype::LEVERS`] order, each in `[-1, 1]`; all zero
-/// reproduces the phenotype-only body the second slice shipped.
+/// reproduces the phenotype-only body.
 ///
 /// The accumulation runs in `f64` even though the template and the result
-/// are `f32`, widening once at the start and narrowing once at the end,
-/// so many small weighted additions round only twice rather than once per
-/// row — still nothing but `+ - * /` on the path, so the result stays
-/// bit-identical across architectures the same way the neutral template
-/// already was.
+/// are `f32`, widening once at the start and narrowing once at the end, so
+/// many small weighted additions round twice rather than once per row —
+/// still nothing but `+ - * /` on the path, so the result stays
+/// bit-identical across architectures.
 ///
 /// # Panics
 /// If the embedded bytes fail to decode. That would mean `assets/body.bin`

@@ -2,8 +2,8 @@ use super::contact;
 use super::sdf::SdfGrid;
 use super::state::{DistanceConstraints, Seams, State};
 
-/// The scalar path is the reference formulation: the goldens are defined by
-/// it, and every other path must reproduce its bits.
+// The scalar path is the reference formulation: the goldens are defined by
+// it, and every other path must reproduce its bits.
 pub(super) const GRAVITY: f32 = -9.81;
 pub(super) const DAMPING: f32 = 0.999;
 

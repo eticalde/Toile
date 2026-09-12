@@ -13,11 +13,11 @@ pub enum MeshError {
     },
 }
 
-/// A piece meshed in 2D: vertices in metres, CCW triangles.
+/// A piece meshed in 2D: vertices in metres, CCW triangles indexing them
+/// three at a time.
 #[allow(
     missing_docs,
-    reason = "SoA buffers are named by their axis; a doc
-    per field would only restate the name"
+    reason = "the two fields are the mesh the doc above describes"
 )]
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PieceMesh {

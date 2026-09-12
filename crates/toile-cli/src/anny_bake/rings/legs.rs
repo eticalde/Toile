@@ -8,7 +8,10 @@ use super::{Cut, Joints, intersect, limb_ring, select};
 const THIGH_T: f64 = 0.30;
 
 /// How far along the lower-leg axis (from the knee toward the ankle joint)
-/// `tobillo` is cut — see `crate::anny_bake`'s doc on the departure.
+/// `tobillo` is cut. Not at the ankle joint: that joint sits at the
+/// boundary into the foot, where the section is already an elongated foot
+/// shape rather than a round ankle. See [`bake`]'s doc for the scan that
+/// fixes it here.
 const ANKLE_T: f64 = 0.85;
 
 /// How far the nape search reaches from the sagittal midline: tight enough
@@ -17,20 +20,16 @@ const ANKLE_T: f64 = 0.85;
 const NAPE_MIDLINE_TOLERANCE_M: f64 = 0.03;
 
 /// The height band the nape search covers, as a margin above and below the
-/// neck joint. Chosen empirically, not merely assumed: searching lower,
-/// down toward the shoulder joint, sounds like the anatomically obvious
-/// direction for "the base of the neck," but on this mesh it lands closer
-/// to the waist and *shortens* `largo_espalda` instead of lengthening it.
-/// A margin centred on the neck joint itself is both the anatomically
-/// sound reading (this rig's own "neck" joint already sits at the base of
-/// the neck, not mid-neck — see `crate::anny_bake`'s doc) and the
-/// empirically better of the two.
+/// neck joint. Searching lower, down toward the shoulder joint, sounds like
+/// the anatomically obvious direction for "the base of the neck," but on
+/// this mesh it lands closer to the waist and *shortens* `largo_espalda`
+/// instead of lengthening it.
 const NAPE_BAND_MARGIN_M: f64 = 0.02;
 
 /// The neck and leg rings: the ones cut on a single limb's own axis with no
-/// band search, since none of them sit near a fused, ambiguous section. Plus
-/// `ankle_joint` and `nape`, single-point landmarks rather than cuts — see
-/// [`bake`]'s doc.
+/// band search, since none of them sit near a fused, ambiguous section.
+/// Plus `ankle_joint` and `nape`, which are single surface vertices found
+/// by search rather than cuts at all.
 pub(super) struct LegAndNeckRings {
     pub neck: Cut,
     pub thigh: Cut,
@@ -40,30 +39,19 @@ pub(super) struct LegAndNeckRings {
     pub nape: Cut,
 }
 
-/// `neck` is cut at the neck joint — right for `cuello`'s collar height —
-/// but a ring cut there is a full loop around the neck, so its own most
-/// posterior point still sits partway around that loop rather than
-/// squarely on the spine. `nape` is found separately: the most posterior
-/// vertex in a band centred on the neck joint's own height, near the
-/// midline — a genuine surface search rather than a point already fixed
-/// by the neck ring's own topology.
-///
-/// `ankle_joint` is the same kind of point at the other end of the body,
-/// and it is not `ankle`: the girth ring sits at the narrowest section the
-/// shin offers, 12.9 cm above the sole on this template, while the ankle
-/// bone a leg length stops at is at 6.8 cm — [`nearest_vertex`] lands on the
-/// medial malleolus there, inside the 6–8 cm band a tailor's tape ends in.
-///
-/// The gap between the two is the mesh's, not a placement mistake. Scanning
-/// the lower leg perpendicular to its own axis, the section shrinks
-/// monotonically from the knee to a 20.5 cm minimum at that 12.9 cm, then
-/// grows again all the way down: 21.1 at 11.0 cm, 23.8 at 9.1, 31.5 at 6.9.
-/// So there is no second, lower narrowing over the malleoli for a "narrowest
-/// section above the foot" rule to find, and it is the foot's own flare
-/// arriving early that swallows it — over that same descent the section's
-/// front-to-back extent runs 7.4 → 9.0 → 12.7 cm while its left-right extent
-/// only reaches 5.6 → 6.3 → 7.0, which is the heel entering the loop rather
-/// than the ankle widening.
+/// The gap between the `ankle` girth ring and the `ankle_joint` landmark is
+/// this mesh's own, not a placement mistake: the ring lands 12.9 cm above
+/// the sole on this template while the ankle bone a leg length stops at is
+/// 6.8 cm up, inside the 6–8 cm band a tailor's tape ends in. The scan that
+/// settles [`ANKLE_T`] is the evidence. Perpendicular to the lower leg's
+/// axis, the section shrinks monotonically from the knee to a 20.5 cm
+/// minimum at that same 12.9 cm, then grows again all the way down: 21.1 at
+/// 11.0, 23.8 at 9.1, 31.5 at 6.9. There is no second, lower narrowing over
+/// the malleoli for a "narrowest section above the foot" rule to find,
+/// because the foot's own flare arrives before them: over that same descent
+/// the section's front-to-back extent runs 7.4 → 9.0 → 12.7 cm while its
+/// left-right extent only reaches 5.6 → 6.3 → 7.0, which is the heel
+/// entering the loop rather than the ankle widening.
 pub(super) fn bake(positions: &[[f64; 3]], tris: &[[u32; 3]], j: &Joints) -> LegAndNeckRings {
     let neck_axis = sub(j.head, j.neck);
     let found = intersect::loops(positions, tris, j.neck, neck_axis);

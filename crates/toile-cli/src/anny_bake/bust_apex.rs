@@ -11,15 +11,14 @@ const BODY_VERTEX_COUNT: usize = 13_380;
 /// themselves say the bust apex sits at, on the neutral template.
 ///
 /// The neutral template carries no breast at all, so a "fullest section"
-/// scan over it can only ever find the ribcage — the underlying problem
-/// `RingId::Bust` had before this. But `breast-point-incr.target.gz`
-/// displaces exactly the vertices that make up the breast, by an amount
-/// that peaks at the nipple and falls off toward the chest wall; the
-/// displacement-weighted mean height of those vertices is therefore a
-/// principled estimate of the bust line, read directly off the CC0 data
-/// rather than guessed. This is the only place this bake reads that file:
-/// it locates a cutting height and is never baked as a row (breast size
-/// itself still comes from the ordinary weighted breast rows).
+/// scan over it can only ever find the ribcage. But
+/// `breast-point-incr.target.gz` displaces exactly the breast's own
+/// vertices, by an amount that peaks at the nipple and falls off toward the
+/// chest wall, so their displacement-weighted mean height is a principled
+/// estimate of the bust line read off the CC0 data rather than guessed.
+/// This is the only place the bake reads that file: it locates a cutting
+/// height and is never baked as a row, breast size still coming from the
+/// ordinary weighted breast rows.
 ///
 /// # Panics
 /// If `targets/breast/breast-point-incr.target.gz` under `root` is

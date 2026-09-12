@@ -80,13 +80,11 @@ mod tests {
         ]
     }
 
-    /// Every bit the sampler produced before the arc-length table was shared
-    /// with `length::cumulative`.
-    ///
     /// The drape golden rests on this function: a rounding difference here
-    /// moves every rest length in the piece.
+    /// moves every rest length in the piece, so the bits are pinned where a
+    /// change to the sampler is made rather than where the drape is measured.
     #[test]
-    fn sample_closed_is_unchanged_by_the_shared_cumulative() {
+    fn sampling_a_contour_lands_on_fixed_bits() {
         let expected: [[u64; 2]; 7] = [
             [0x0000_0000_0000_0000, 0x0000_0000_0000_0000],
             [0x3fd3_84d9_48ec_a3c3, 0x3fb7_3632_d342_ec42],

@@ -21,9 +21,9 @@ const MOVE: &str = "mover punto";
 /// A node of the drafted piece on its way somewhere.
 ///
 /// It carries what the node was bound to when it was grabbed, because the
-/// document is written on every frame of the drag: a coordinate written as a
-/// formula keeps its formula, and the resolved value is never written back
-/// over it.
+/// document is written on every frame of the drag: reading the binding back
+/// each frame would measure the gesture from the frame before it rather than
+/// from the grab.
 pub struct Drag {
     /// The node in hand, and the mark that says so.
     point: PointKey,
@@ -124,9 +124,6 @@ pub fn show(
         };
         painter.circle_filled(node.screen, r, color);
     }
-    // The caption promised seams in blue that this panel has never drawn, and
-    // an invitation to drag that only holds once there is something to drag.
-    // It says what is on the glass now, and nothing else.
     let caption = if nodes.is_empty() {
         "PATRÓN 2D — el contorno que se drapea"
     } else {

@@ -57,11 +57,10 @@ fn sheet(draft: &Draft, pieces: &[PieceKey]) -> Option<[f64; 4]> {
     let mut low = [f64::INFINITY; 2];
     let mut high = [f64::NEG_INFINITY; 2];
     for &piece in pieces {
-        for at in millimetres(draft, piece) {
-            for axis in 0..2 {
-                low[axis] = low[axis].min(at[axis]);
-                high[axis] = high[axis].max(at[axis]);
-            }
+        let (piece_low, piece_high) = mark::box_of(&millimetres(draft, piece));
+        for axis in 0..2 {
+            low[axis] = low[axis].min(piece_low[axis]);
+            high[axis] = high[axis].max(piece_high[axis]);
         }
     }
     if low[0] > high[0] {

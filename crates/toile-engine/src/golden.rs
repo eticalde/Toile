@@ -10,10 +10,8 @@ const FNV_PRIME: u64 = 0x0100_0000_01b3;
 
 /// Flattens the base block's front and hashes the bits of the line it draws.
 ///
-/// One level below the drape golden and far cheaper: no solver, no mesh, just
-/// the document resolved and its curves cut into points. A drift in `kurbo`, in
-/// the formula evaluator or in the platform's floating point moves this hash
-/// before it can reach a rest state, which is where it would be hard to read.
+/// No solver and no mesh: just the document resolved and its curves cut into
+/// points.
 ///
 /// # Panics
 /// If the block the crate ships stops resolving to a contour.
@@ -32,34 +30,30 @@ pub fn flatten_front_hash() -> u64 {
     h
 }
 
-/// Loads a reference adult Anny body and hashes the bits of its mesh.
+/// The body both Anny goldens below are taken against: male (`gender: 0.0`,
+/// Anny's own convention), age parameter `0.8` (Anny's raw unit, not years —
+/// a blend leaning toward `old`, between the `young` anchor at 2/3 and the
+/// `old` anchor at 1.0), every other input at Anny's neutral `0.5`.
 ///
-/// The reference phenotype is male (`gender: 0.0`, Anny's own convention),
-/// age parameter `0.8` (Anny's raw unit, not years — a blend leaning toward
-/// `old`, since it sits between the `young` anchor at 2/3 and the `old`
-/// anchor at 1.0), and every other input at Anny's neutral `0.5`. It is
-/// deliberately not the all-`0.5` default: pinning a phenotype that moves
-/// gender and age away from their symmetric midpoints means a mistake in an
-/// interpolation direction cannot hide behind symmetry the way it could at
-/// the bare template.
-///
-/// The asset is baked once and committed (`crates/toile-anny/assets/body.bin`);
-/// this only decodes it, applies the phenotype's weighted deltas and computes
-/// normals, all in the `+ - * / sqrt` regime, so the result is bit-identical
-/// on macOS ARM and Linux x86. It moves when the asset is re-baked, when the
-/// reference phenotype above changes, or when the evaluator's math changes —
-/// take the new value from the assertion and commit it in the same change,
-/// saying why.
+/// Deliberately not the all-`0.5` default: moving gender and age off their
+/// symmetric midpoints means a mistake in an interpolation direction cannot
+/// hide behind symmetry the way it could at the bare template. One constant
+/// rather than one literal per golden, because the measures golden only
+/// discriminates a ring's placement from the mesh itself while the two are
+/// read against the very same body.
+const REFERENCE: toile_anny::phenotype::Phenotype = toile_anny::phenotype::Phenotype {
+    gender: 0.0,
+    age: 0.8,
+    muscle: 0.5,
+    weight: 0.5,
+    height: 0.5,
+    proportions: 0.5,
+};
+
+/// Loads the reference adult Anny body ([`REFERENCE`]) and hashes the bits
+/// of its mesh.
 pub fn anny_mesh_hash() -> u64 {
-    let phenotype = toile_anny::phenotype::Phenotype {
-        gender: 0.0,
-        age: 0.8,
-        muscle: 0.5,
-        weight: 0.5,
-        height: 0.5,
-        proportions: 0.5,
-    };
-    let mesh = toile_anny::body_mesh(&phenotype, &[0.0; 20]);
+    let mesh = toile_anny::body_mesh(&REFERENCE, &[0.0; 20]);
     let mut h = FNV_BASIS;
     for f in mesh.positions.iter().chain(&mesh.normals) {
         h = (h ^ u64::from(f.to_bits())).wrapping_mul(FNV_PRIME);
@@ -74,30 +68,16 @@ pub fn anny_mesh_hash() -> u64 {
 /// hashes its 20 catalogue measurements together.
 ///
 /// Reads them with `crate::body::measured_anny`, in the catalogue's own
-/// fixed order (`toile_doc::MeasureSet::CATALOGUE`). One level above
-/// [`anny_mesh_hash`]: the mesh golden catches a change to the template,
-/// the phenotype math or the deltas; this one additionally catches a
-/// change to where a ring is cut — a different band, a different step, a
-/// different loop picked — without moving either of the mesh goldens,
-/// since measuring never touches a position. Only `+ - * / sqrt` reaches a
-/// measured number, so this is bit-identical on macOS ARM and Linux x86
-/// the same way the others are. Take the new value from the assertion and
-/// commit it in the same change, saying why.
+/// fixed order (`toile_doc::MeasureSet::CATALOGUE`). Only `+ - * / sqrt`
+/// reaches a measured number, so this is bit-identical on macOS ARM and
+/// Linux x86 the same way the others are.
 ///
 /// # Panics
 /// If `measured_anny` ever omits one of the catalogue's own 20 names: that
 /// would mean the two have drifted apart, which is a bug to fix rather
 /// than a shape to hash around.
 pub fn anny_measures_hash() -> u64 {
-    let phenotype = toile_anny::phenotype::Phenotype {
-        gender: 0.0,
-        age: 0.8,
-        muscle: 0.5,
-        weight: 0.5,
-        height: 0.5,
-        proportions: 0.5,
-    };
-    let mesh = crate::body::body_mesh(&phenotype, &crate::body::NO_LEVERS);
+    let mesh = crate::body::body_mesh(&REFERENCE, &crate::body::NO_LEVERS);
     let measured = crate::body::measured_anny(&mesh);
     let mut h = FNV_BASIS;
     for name in toile_doc::MeasureSet::CATALOGUE {
@@ -115,12 +95,6 @@ pub fn anny_measures_hash() -> u64 {
 /// Runs against `crate::body::default_measures` for a fixed,
 /// gender-unspecified adult phenotype, and hashes the 20 solved lever
 /// values together with the resulting mesh's positions and normals.
-///
-/// This is the fourth vertical slice's golden: it moves when the solver's
-/// own math changes (the secant step, the fixed order, the tolerance) or
-/// when a ring a lever is solved against moves, and it stays put across
-/// everything that keeps producing the same lever vector — proof the solve
-/// is deterministic, not just that today's numbers happen to match.
 ///
 /// # Panics
 /// If the shipped asset fails to decode: see `toile_anny::body_mesh`'s doc.
@@ -148,8 +122,6 @@ pub fn anny_solved_hash() -> u64 {
 ///
 /// Counted in substeps against the scalar reference solver: no wall clock, no
 /// threads, so the answer is a property of the code rather than of the machine.
-/// CI asserts it against one constant on macOS ARM and Linux x86 at once,
-/// which is also what tests cross-architecture bit-exactness.
 ///
 /// # Panics
 /// If the scene it builds itself stops being a contour the mesher accepts.

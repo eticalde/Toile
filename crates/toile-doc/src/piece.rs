@@ -225,8 +225,6 @@ mod tests {
             out: PointKey::new(4, 0),
             into: PointKey::new(5, 0),
         };
-        // One sample of a curve is its chord: a straight tract wearing
-        // handles, drawn and meshed as the line it says it is not.
         assert!(!node.takes_samples(1));
         assert!(node.takes_samples(SAMPLES.0));
         assert!(!node.takes_samples(u16::MAX));

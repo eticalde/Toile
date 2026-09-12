@@ -28,16 +28,14 @@ pub(crate) fn height_key_mask() -> u32 {
 /// free of the year/parameter unit mismatch its other priors carry.
 const AGE_TABLE: [(f64, f64); 3] = [(18.0, 0.77), (64.0, 0.83), (110.0, 1.0)];
 
-/// The six phenotype inputs this slice exposes, in Anny's own units: `0.0`
-/// to `1.0` for every field except `age`.
+/// The six phenotype inputs Toile exposes, in Anny's own units: `0.0` to
+/// `1.0` for every field except `age`.
 ///
-/// Three of Anny's nine phenotype dimensions are not exposed here — `race`,
-/// `cupsize` and `firmness` — because no control in this slice's UI would
-/// mean anything for them yet; the evaluator treats them as Anny's own
-/// neutral defaults (an equal third for race, "average" for the other two)
-/// regardless of what a caller sets. A future slice can add them without
-/// changing this struct's shape, the same way the per-part `measure-*`
-/// levers are already baked but not yet applied.
+/// Three of Anny's nine dimensions are deliberately absent — `race`,
+/// `cupsize` and `firmness`. The evaluator pins them to Anny's own neutral
+/// defaults (an equal third for race, "average" for the other two)
+/// regardless of what a caller sets, so adding one later is a new field
+/// here rather than a change to what the six below mean.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Phenotype {
     /// `0.0` is Anny's `male` anchor, `1.0` its `female` anchor; values in

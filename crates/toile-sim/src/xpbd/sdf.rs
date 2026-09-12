@@ -1,8 +1,9 @@
 /// A signed distance field on a regular grid, sampled trilinearly.
+///
+/// `dim` cells to a side, `cell` metres apart, the first of them at `origin`.
 #[allow(
     missing_docs,
-    reason = "SoA buffers are named by their axis; a doc
-    per field would only restate the name"
+    reason = "the four fields are the grid the doc above describes"
 )]
 #[derive(Debug, Clone)]
 pub struct SdfGrid {
@@ -15,9 +16,9 @@ pub struct SdfGrid {
 impl SdfGrid {
     /// A sphere, baked analytically.
     ///
-    /// Stands in for the avatar until glTF baking exists, and is deliberately
-    /// full resolution: at 128³ the grid is 8 MB and misses L2, which is the
-    /// cost the real avatar will have too.
+    /// The caller picks `dim`, and the scenes that stand in for an avatar pick
+    /// it full size rather than small: a grid that fits in cache would make
+    /// `sample` look cheaper than it is on the field a real body needs.
     pub fn sphere(dim: usize, cell: f32, origin: [f32; 3], center: [f32; 3], radius: f32) -> Self {
         let mut data = vec![0.0f32; dim * dim * dim];
         for k in 0..dim {

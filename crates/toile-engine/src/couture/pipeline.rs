@@ -4,7 +4,7 @@ use toile_mesh::cdt::MeshError;
 use toile_mesh::{cdt, interp};
 use toile_sim::xpbd::DistanceConstraints;
 
-/// Uniform stretch compliance, until fabric presets bring anisotropy.
+/// Uniform stretch compliance.
 ///
 /// It lives beside the mesh rather than beside the session because a mesh swap
 /// carries its own constraints: the compliance the solver runs on and the one
@@ -172,8 +172,7 @@ impl ShapePipeline {
         }
     }
 
-    /// Seeds the solver with uniform compliance. Warp/weft anisotropy replaces
-    /// the uniform value once fabric presets exist.
+    /// Seeds the solver with one compliance on every edge.
     pub fn constraints(&self, compliance: f32) -> DistanceConstraints {
         DistanceConstraints {
             a: self.edges.iter().map(|e| e.0).collect(),
@@ -183,12 +182,6 @@ impl ShapePipeline {
             strain_limit: 0.0,
             strain_sweeps: 0,
         }
-    }
-
-    /// Rest length per edge, in the order of `edges`: what the last build or
-    /// derive compiled.
-    pub fn rests(&self) -> &[f32] {
-        &self.rests
     }
 
     /// Number of boundary vertices.

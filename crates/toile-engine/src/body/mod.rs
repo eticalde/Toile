@@ -1,7 +1,4 @@
-/// Anny's phenotype inputs (sex, age, build, muscle, height, proportions),
-/// re-exported here rather than left for callers to reach through
-/// `toile-anny` directly — the app depends on `toile-engine` only, and this
-/// is the one type its Anny controls need.
+/// Anny's phenotype inputs: sex, age, build, muscle, height, proportions.
 pub use toile_anny::phenotype::Phenotype;
 /// Converts an age in years to the parameter [`Phenotype::age`] takes.
 pub use toile_anny::phenotype::age_param_from_years;
@@ -11,9 +8,7 @@ pub use toile_anny::{BodyMesh, Station, body_mesh};
 
 use crate::draft::MeasureSet;
 
-/// Writing a value into a measures row and solving the Anny body's levers
-/// until it agrees — one lever (or tied pair) per row, a fixed order, and
-/// an honest "tope del modelo" when the target is out of the model's reach.
+/// Solving the Anny body's levers against a measure set.
 mod solve;
 pub use solve::{AnnySolve, SolvedRow, solve_anny};
 

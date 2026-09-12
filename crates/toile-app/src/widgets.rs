@@ -1,8 +1,3 @@
-#![allow(
-    dead_code,
-    reason = "the panels that consume these helpers land tab by tab"
-)]
-
 mod canvas;
 mod control;
 mod field;

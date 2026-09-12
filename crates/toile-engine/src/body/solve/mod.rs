@@ -55,13 +55,17 @@ fn lever_id(label: &str) -> u8 {
 /// The lever (or, for `largo_lateral` and `brazo`, the tied pair of levers)
 /// a catalogue name is solved through, in [`LEVERS`] order.
 ///
-/// `None` for `tiro`, `pecho_alto` and `entrepierna` — as the plan
-/// documents, none of the 20 baked `measure-*` levers moves any of them on
-/// its own — and for `cabeza`, which the plan expected to have one
-/// (`head-scale-horiz`) but the baked asset does not carry: verified
-/// against `toile_anny::phenotype::LEVERS`'s own 20 labels, not assumed.
-/// `estatura` is handled separately, through the `height` phenotype input
-/// rather than a row lever at all.
+/// `None` for `tiro`, `pecho_alto`, `entrepierna` and `cabeza`: none of the
+/// 20 labels [`LEVERS`] carries moves any of those four on its own, the head
+/// because the baked asset holds no head-scaling lever at all. `estatura` is
+/// handled separately, through the `height` phenotype input rather than a row
+/// lever.
+///
+/// `tiro` is the near miss, and the reason it stays a miss: `waisttohip-dist`
+/// does have authority over the rise, but `altura_cadera` claims that lever
+/// first and spends it re-lengthening the span to hold its own dado. Cutting
+/// the waist ring lower shortens the rise only while that lever is pinned
+/// against its short stop, and gives it back the moment the lever comes off.
 fn lever_ids(name: &str) -> Option<Vec<u8>> {
     let one = |label: &str| Some(vec![lever_id(label)]);
     match name {
@@ -155,8 +159,7 @@ const STATURE_LENGTHS: [&str; 4] = ["largo_espalda", "altura_cadera", "largo_lat
 /// fixed cap, not an unbounded loop: past this many rounds the last
 /// round's values stand as final, and whatever the coupling could not
 /// close is reported as the length rows' own Δ rather than chased forever.
-/// This group settles within three rounds on every tape this crate's own
-/// tests exercise, so the cap is a safety margin, not the expected count.
+/// A safety margin, not the expected count.
 const STATURE_ROUNDS: u32 = 6;
 
 /// How little the `height` phenotype input may move between two rounds
@@ -172,29 +175,21 @@ const HEIGHT_SETTLED: f64 = 1.0e-4;
 
 /// Solves `estatura` (the `height` phenotype input) together with
 /// [`STATURE_LENGTHS`], since the leg-height and torso-length levers those
-/// names drive move stature after the height solve has already set it —
-/// the same reason the trunk girths below get two sweeps rather than one.
+/// names drive move stature after the height solve has already set it.
 ///
-/// Seeds `height` once against zero levers (matching what a single,
-/// unrevisited pass would do), then alternates solving the four lengths
-/// and revisiting height, stopping as soon as `height` itself has stopped
-/// moving between rounds ([`HEIGHT_SETTLED`]) or [`STATURE_ROUNDS`] extra
-/// rounds have run, whichever comes first. Both branches of that stop are
-/// exercised by this crate's own tests, and every comparison it makes is
-/// `+ - * /` over already-deterministic floats, so two calls with the
-/// same inputs still take the same path and land on the same bits — the
-/// early exit does not reopen the non-determinism the fixed-iteration
-/// secant itself avoids.
+/// Seeds `height` once against zero levers, then alternates solving the
+/// four lengths and revisiting height, stopping as soon as `height` itself
+/// has stopped moving between rounds ([`HEIGHT_SETTLED`]) or
+/// [`STATURE_ROUNDS`] extra rounds have run. Every comparison that stop
+/// makes is `+ - * /` over already-deterministic floats, so two calls with
+/// the same inputs take the same path and land on the same bits: the early
+/// exit does not reopen the non-determinism the fixed-iteration secant
+/// itself avoids.
 ///
 /// Stature wins when the two cannot both be satisfied: a length's own
-/// secant always re-targets its own catalogue value fresh every round, so
-/// it is the *lengths* that carry whatever residual the coupling leaves
-/// once this loop stops, not `estatura`. `largo_lateral`'s tied leg-height
-/// pair is the one most likely to actually saturate here, since those two
-/// levers are the only ones in this group that also move the mesh's own
-/// vertical extent — `entrepierna`, which shares that pair without a
-/// lever of its own, then inherits the same limit even though it is never
-/// itself solved.
+/// secant re-targets its own catalogue value fresh every round, so it is
+/// the *lengths* that carry whatever residual the coupling leaves once this
+/// loop stops, not `estatura`.
 fn solve_stature_group(
     current: &mut Phenotype,
     levers: &mut [f64; 20],
@@ -238,13 +233,12 @@ fn solve_stature_group(
 /// `entrepierna` and `cabeza` have no lever ([`lever_ids`]) and are only
 /// ever measured, never solved.
 ///
-/// The order is fixed and always run in full: no data-dependent branch
-/// skips a step or changes how many times the trunk sweep repeats — the
-/// stature group's own early exit is the one exception, and it is a
-/// deterministic function of deterministic floats, not a source of
-/// cross-call or cross-platform drift (see [`solve_stature_group`]'s own
-/// doc) — so two calls with the same `measures` and `phenotype` always
-/// produce the same `levers`, bit for bit.
+/// The order is fixed and always run in full: nothing skips a step or
+/// changes how many times the trunk sweep repeats, and the one
+/// data-dependent branch anywhere under here — [`solve_stature_group`]'s
+/// early exit — is itself a deterministic function of deterministic floats.
+/// So two calls with the same `measures` and `phenotype` always produce the
+/// same `levers`, bit for bit.
 pub fn solve_anny(measures: &MeasureSet, phenotype: &Phenotype) -> AnnySolve {
     let mut levers = [0.0f64; 20];
     let mut saturated: BTreeMap<String, bool> = BTreeMap::new();

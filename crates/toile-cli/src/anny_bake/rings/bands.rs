@@ -89,8 +89,7 @@ pub(super) fn widest_by_extent(
 /// joint's own height (the mesh has already fused arm and torso there) but
 /// the armpit apex below it, the highest plane that still clears both arms.
 /// The apex is where the search ends, not where the ring goes — the caller
-/// backs off from the crease itself, see `trunk::UPPER_CHEST_DROP_M` and
-/// `crate::anny_bake`'s doc.
+/// backs off from the crease itself, see `trunk::UPPER_CHEST_DROP_M`.
 ///
 /// # Panics
 /// If no offset within 60 tries (0.3 m) yields a valid trunk loop.
@@ -119,8 +118,8 @@ pub(super) fn highest_unfused_trunk_y(
 /// [`select::pick_trunk_loop`] finds nothing there; at or above it the legs
 /// have joined into one loop that does straddle. The lowest height where
 /// that still holds is, by definition, the fork — the anatomically correct
-/// anchor for `crotch`, unlike the pelvis joint (see `crate::anny_bake`'s
-/// doc), and the anatomically correct lower bound for the `cadera` band:
+/// anchor for `crotch` (the pelvis joint sits well above it), and the
+/// anatomically correct lower bound for the `cadera` band:
 /// below the fork a "fuller" reading is really both thighs still pressed
 /// together, not the seat.
 ///
@@ -148,7 +147,7 @@ pub(super) fn fork_y(positions: &[[f64; 3]], tris: &[[u32; 3]], start_y: f64) ->
 /// perpendicular to it, skipping any offset still fused with the torso (see
 /// [`select::pick_limb_loop`]). Returns the winning loop and the fraction
 /// `t` it was found at, since the shoulder landmark ring reuses that same
-/// `t` — see `crate::anny_bake`'s doc on why.
+/// `t`; see `arms::bake`'s doc on why.
 ///
 /// # Panics
 /// If no offset in `(0, 1)` yields a valid, unfused cross-section.

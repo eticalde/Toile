@@ -1,9 +1,9 @@
 /// The fraction of the whole perimeter at a node-local place on the contour.
 ///
 /// `cum` is the table `length::cumulative` builds; `node` names a tract by the
-/// node it leaves, and `t` runs from 0 at that node to 1 at the next. Called
-/// inside every derive, and its result is never persisted: the node is the
-/// address that survives an edit, the global fraction is not.
+/// node it leaves, and `t` runs from 0 at that node to 1 at the next. The
+/// fraction is read fresh and never persisted: the node is the address that
+/// survives an edit, the global fraction is not.
 pub fn global_fraction(cum: &[f64], node: usize, t: f64) -> f64 {
     let Some(tracts) = tract_count(cum) else {
         return 0.0;

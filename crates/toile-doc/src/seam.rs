@@ -21,8 +21,9 @@ pub struct Seam {
 
 /// Which way the second stretch runs against the first.
 ///
-/// Carrying the direction on the seam is what removes the old convention of
-/// passing a range backwards to mean the same thing.
+/// The direction is carried here rather than implied by writing one side's
+/// range backwards, so an `EdgeRange` always reads head to tail in contour
+/// order and a seam can be judged for length without first being untangled.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SeamOrientation {

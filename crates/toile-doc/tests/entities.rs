@@ -12,9 +12,8 @@ use toile_doc::{
 
 /// A document carrying one of every entity the model declares.
 ///
-/// Nothing draws most of these yet. The file format has to cover them all the
-/// same: a field added later is a default, and an entity added later is a
-/// migration.
+/// A document need not draw an entity for the format to have to carry it: a
+/// field added later is a default, and an entity added later is a migration.
 fn everything() -> Doc {
     let mut doc = Doc::new(MeasureSet::new("Etienne", [("cintura", 84.0)]));
     doc.mannequins

@@ -65,11 +65,9 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
                 if matches!(state.gesture, Gesture::Idle | Gesture::Drawing { .. }) =>
             {
                 begin_piece(state, draft.is_some());
-                // The bars are drawn before the tabs, so what the press just
-                // did reaches the status bar only on the frame after it, and
-                // nothing else asks for that frame: an open drawing sends
-                // nothing to the sim, so the viewer is asleep and the bar
-                // would sit silent until the pointer moved again.
+                // An open drawing has nothing to send the sim, so nothing
+                // else will ask for the frame on which the bar catches up
+                // with the press.
                 ui.ctx().request_repaint();
             }
             Some(tree::Plea::Focus(key)) => focus(state, key),

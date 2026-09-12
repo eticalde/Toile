@@ -22,17 +22,13 @@ impl Camera {
     const FOV_Y: f32 = 55.0;
 
     /// Framed for a person-height figure centred on the origin, head to feet
-    /// and the A-pose arms. Distance 2.6 sits inside the existing zoom clamp;
-    /// at FOV 55° the crown and the ankles project to about 64 % of the
-    /// half-height and the wrists (±0.38 m) to under a third of the
-    /// half-width down to an aspect of 0.8, so the whole dummy keeps a margin
-    /// in any viewport the panels leave.
+    /// and the arms out.
     ///
-    /// Re-checked for the Anny body, which is shorter (1.666 m against the
-    /// dummy's 1.71 m, so ~61 % of the half-height) but reaches wider at the
-    /// fingertips of its ~40°-out arms (±0.496 m against the dummy's ±0.38 m,
-    /// ~46 % of the half-width at the same aspect of 0.8). Both stay well
-    /// inside frame, so this framing is shared rather than given its own.
+    /// Distance 2.6 sits inside the zoom clamp, and at FOV 55° it leaves the
+    /// Anny body a margin in the narrowest viewport the panels leave: at an
+    /// aspect of 0.8 its 1.666 m of stature comes to ~61 % of the half-height
+    /// and the fingertips of its ~40°-out arms (±0.496 m) to ~46 % of the
+    /// half-width.
     pub fn for_body() -> Self {
         Self {
             yaw: 0.6,

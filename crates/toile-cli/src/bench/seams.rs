@@ -66,16 +66,30 @@ fn sew(front: &ShapePipeline, back: &ShapePipeline, ff: [f64; 4], fb: [f64; 4], 
     );
     let (ha, hb) = pair_seam(
         front,
-        (ff[0] * 0.65, ff[0]),
+        (ff[0] * 0.65, ff[0] - ff[0] * 0.65),
         back,
-        (fb[0] * 0.65, fb[0]),
+        (fb[0] * 0.65, fb[0] - fb[0] * 0.65),
         na,
         15,
     );
     a.extend(ha);
     b.extend(hb);
-    let (ra, rb) = pair_seam(front, (ff[0], ff[1]), back, (fb[0], fb[1]), na, 60);
-    let (la, lb) = pair_seam(front, (ff[2], ff[3]), back, (fb[2], fb[3]), na, 60);
+    let (ra, rb) = pair_seam(
+        front,
+        (ff[0], ff[1] - ff[0]),
+        back,
+        (fb[0], fb[1] - fb[0]),
+        na,
+        60,
+    );
+    let (la, lb) = pair_seam(
+        front,
+        (ff[2], ff[3] - ff[2]),
+        back,
+        (fb[2], fb[3] - fb[2]),
+        na,
+        60,
+    );
     a.extend(ra);
     b.extend(rb);
     a.extend(la);

@@ -8,10 +8,6 @@ use eframe::wgpu;
 /// changes. Roles follow the craft: chalk for selection, tape for measurements,
 /// marking thread for alerts, pattern paper for pieces.
 #[derive(Debug, Clone)]
-#[allow(
-    dead_code,
-    reason = "the palette is a complete contract; a role waits for the widget that needs it"
-)]
 pub struct Theme {
     /// Canvas background: the cutting mat.
     pub mat: Color32,

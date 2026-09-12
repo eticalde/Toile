@@ -13,9 +13,9 @@ use crate::viewport::BodyView;
 /// The mannequins tab: the Anny body, its phenotype controls, and an
 /// editable set of measurements solved against it live as a value changes.
 ///
-/// The measure set and the mannequin's name are tab-local for now; wiring
-/// them to a persistent persona library is a follow-up. Nothing here
-/// touches the sphere avatar or the Probador's session.
+/// Nothing here touches the Probador's session: the body is this tab's own,
+/// and the pattern on the table goes on resolving against the mannequin the
+/// document names.
 pub struct State {
     rs: RenderState,
     view: BodyView,
