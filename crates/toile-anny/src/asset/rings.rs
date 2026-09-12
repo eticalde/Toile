@@ -1,9 +1,9 @@
 /// One of the anatomical rings this asset carries.
 ///
 /// Twelve are catalogue girths; the rest are landmark-only (`Crotch`, the
-/// two `Shoulder*`, `Elbow`, `Acromion`, `WristJoint` and `NapeBase`) that
-/// no catalogue name reads directly but the length formulas in
-/// `crate::measure` need as an anchor point.
+/// two `Shoulder*`, `Elbow`, `Acromion`, `WristJoint`, `AnkleJoint` and
+/// `NapeBase`) that no catalogue name reads directly but the length formulas
+/// in `crate::measure` need as an anchor point.
 ///
 /// A ring is a fixed loop of points on the *neutral* body mesh (see
 /// `RingPoint`): baked once, from the mesh alone, and never touched again —
@@ -23,8 +23,9 @@ pub enum RingId {
     Bust,
     /// `bajo_pecho`: a fixed offset below [`RingId::Bust`].
     Underbust,
-    /// `cintura`: the narrowest horizontal section in a band around the
-    /// waist.
+    /// `cintura`: a fixed drop below the narrowest horizontal section in a
+    /// band around the waist — the waistline a garment sits on, which on
+    /// this mesh is below the natural rib-cage indentation.
     Waist,
     /// `cadera`: the fullest horizontal section in a band around the hip.
     Hip,
@@ -32,8 +33,11 @@ pub enum RingId {
     Thigh,
     /// `rodilla`: cut perpendicular to the leg's local axis, at the knee.
     Knee,
-    /// `tobillo`: cut perpendicular to the lower leg's axis, just above the
-    /// ankle joint (see `crate::asset`'s doc on why not exactly at it).
+    /// `tobillo`: cut perpendicular to the lower leg's axis, at the
+    /// narrowest section the leg still has before the foot flares into it —
+    /// which on this mesh is well up the shin rather than over the ankle
+    /// bone. See [`RingId::AnkleJoint`] for the ankle a *length* runs to,
+    /// and `crate::asset`'s doc for why the two are that far apart.
     Ankle,
     /// `brazo_contorno`: the fullest cut perpendicular to the upper arm's
     /// own axis.
@@ -73,6 +77,15 @@ pub enum RingId {
     /// forearm; see `crate::asset`'s doc on why a length's end point need
     /// not be where its girth ring sits.
     WristJoint,
+    /// Landmark only: a single point — the body vertex nearest the right
+    /// ankle joint, which on this mesh is the medial malleolus, the ankle
+    /// bone a tailor's leg tape stops at — anchoring the bottom of
+    /// `largo_lateral`. The leg's counterpart to [`RingId::WristJoint`],
+    /// and distinct from [`RingId::Ankle`] for the same reason: that girth
+    /// ring is cut at the narrowest section the shin offers, a good half a
+    /// shin above the ankle bone, so a length ending there would fall short
+    /// by that whole distance.
+    AnkleJoint,
     /// Landmark only: a single point — the most posterior body vertex in a
     /// band centred on the neck joint's own height, near the sagittal
     /// midline — anchoring the top of `largo_espalda`: the nape, the C7
@@ -85,7 +98,7 @@ pub enum RingId {
 
 impl RingId {
     /// How many rings the asset carries.
-    pub const COUNT: usize = 19;
+    pub const COUNT: usize = 20;
 
     /// Every ring, in the asset's own fixed storage order.
     pub const ALL: [RingId; RingId::COUNT] = [
@@ -107,6 +120,7 @@ impl RingId {
         RingId::Elbow,
         RingId::Acromion,
         RingId::WristJoint,
+        RingId::AnkleJoint,
         RingId::NapeBase,
     ];
 
@@ -116,7 +130,7 @@ impl RingId {
     pub fn is_single_point(self) -> bool {
         matches!(
             self,
-            RingId::Acromion | RingId::WristJoint | RingId::NapeBase
+            RingId::Acromion | RingId::WristJoint | RingId::AnkleJoint | RingId::NapeBase
         )
     }
 }
@@ -159,33 +173,54 @@ impl RingPoint {
     }
 }
 
-/// Where one ring's points sit in the asset's flat `ring_points` array.
+/// One ring's row in the asset's ring table: where its points sit in the
+/// flat `ring_points` array, and the plane the bake cut them on.
 ///
 /// Stored in [`RingId::ALL`] order, one entry per ring, so the id itself is
 /// never written to the file — the reader's own fixed order carries it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RingRange {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RingEntry {
     /// Index of this ring's first point in `Baked::ring_points`.
     pub offset: u32,
     /// How many consecutive points belong to this ring.
     pub length: u32,
+    /// The unit normal of the plane this ring was cut on.
+    ///
+    /// A ring's points are exactly coplanar on the template — they are
+    /// where that plane crossed the mesh — but a morph drags them out of
+    /// it, and a chord walk that follows them out of plane measures the
+    /// wander as if it were girth. Keeping the plane here lets
+    /// [`crate::measure`] sum the girth *in* it whatever the phenotype did;
+    /// see that module for how far the difference actually runs.
+    ///
+    /// Zero for the single-point landmarks ([`RingId::is_single_point`]),
+    /// which are surface vertices found by search rather than cuts and so
+    /// have no plane at all. Projecting against a zero normal changes
+    /// nothing, which is the right answer for a ring with no chord to walk.
+    pub normal: [f32; 3],
 }
 
-impl RingRange {
-    /// Its fixed byte footprint: an offset and a length.
-    pub(super) const LEN: usize = 8;
+impl RingEntry {
+    /// Its fixed byte footprint: an offset, a length and a plane normal.
+    pub(super) const LEN: usize = 20;
 
     pub(super) fn write(self, out: &mut Vec<u8>) {
         out.extend_from_slice(&self.offset.to_le_bytes());
         out.extend_from_slice(&self.length.to_le_bytes());
+        for c in self.normal {
+            out.extend_from_slice(&c.to_le_bytes());
+        }
     }
 
     pub(super) fn read(bytes: &[u8]) -> Self {
         let u32_at =
             |i: usize| u32::from_le_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]);
+        let f32_at =
+            |i: usize| f32::from_le_bytes([bytes[i], bytes[i + 1], bytes[i + 2], bytes[i + 3]]);
         Self {
             offset: u32_at(0),
             length: u32_at(4),
+            normal: [f32_at(8), f32_at(12), f32_at(16)],
         }
     }
 }
@@ -208,15 +243,16 @@ mod tests {
     }
 
     #[test]
-    fn a_ring_range_round_trips_through_its_bytes() {
-        let r = RingRange {
+    fn a_ring_entry_round_trips_through_its_bytes() {
+        let r = RingEntry {
             offset: 7,
             length: 88,
+            normal: [0.0, -1.0, 0.5],
         };
         let mut bytes = Vec::new();
         r.write(&mut bytes);
-        assert_eq!(bytes.len(), RingRange::LEN);
-        assert_eq!(RingRange::read(&bytes), r);
+        assert_eq!(bytes.len(), RingEntry::LEN);
+        assert_eq!(RingEntry::read(&bytes), r);
     }
 
     #[test]

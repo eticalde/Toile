@@ -24,7 +24,7 @@ const ZERO: [f64; 20] = [0.0; 20];
 /// template and against any morphed or solved mesh alike.
 fn assert_rings_are_closed(positions: &[f32]) {
     for id in RingId::ALL {
-        let points = ring_points(id);
+        let (points, _) = ring(id);
         assert!(!points.is_empty(), "{id:?} is empty");
         if id.is_single_point() {
             assert_eq!(points.len(), 1, "{id:?} is documented as a single point");
@@ -48,6 +48,38 @@ fn assert_rings_are_closed(positions: &[f32]) {
 #[test]
 fn every_ring_is_a_single_point_or_a_closed_non_empty_loop() {
     assert_rings_are_closed(&decoded().positions);
+}
+
+/// The projection in [`geom::perimeter`] is silent when it does nothing: a
+/// zero normal leaves every chord exactly as it came, so a girth ring that
+/// lost its plane would quietly go back to being walked through space —
+/// the buckling error the plane exists to remove, restored, with every
+/// other assertion in this file still passing. A normal that is merely the
+/// wrong length is worse still, since it over- or under-subtracts and
+/// shrinks or inflates the girth by a proportion nothing else reports.
+///
+/// So the pairing is pinned here rather than trusted to the baker: a cut
+/// carries the unit normal of its own plane, a landmark carries no plane at
+/// all, and which of the two a ring is follows from
+/// [`RingId::is_single_point`] alone.
+#[test]
+#[allow(
+    clippy::float_cmp,
+    reason = "a landmark's normal is a written zero literal, not a computed value"
+)]
+fn a_cut_ring_carries_a_unit_plane_and_a_landmark_carries_none() {
+    for id in RingId::ALL {
+        let (_, normal) = ring(id);
+        let length = geom::dist(normal, [0.0, 0.0, 0.0]);
+        if id.is_single_point() {
+            assert_eq!(normal, [0.0; 3], "{id:?} is a landmark, not a cut");
+        } else {
+            assert!(
+                (length - 1.0).abs() < 1.0e-6,
+                "{id:?} was cut on a plane whose normal is {length}, not 1"
+            );
+        }
+    }
 }
 
 /// The fourth slice's structural requirement: solving a lever all the way
@@ -207,12 +239,13 @@ fn the_reference_adult_measures_within_plausible_human_ranges() {
     in_range("head", m.head, 52.0, 62.0);
     in_range("rise", m.rise, 25.0, 36.0);
     in_range("hip_drop", m.hip_drop, 16.0, 24.0);
-    // Heights above the floor, not distances to the ankle ring, so both sit
-    // noticeably higher than a generic ankle-based table would suggest —
-    // see `measure`'s own doc for how much of that is the floor itself
-    // versus where the ankle ring is cut.
+    // Both are vertical drops rather than straight lines, and they stop in
+    // different places: the inseam at the floor, the outseam at the ankle
+    // landmark — see `measure`'s own doc. Even the outseam still reads high
+    // against a generic table, since it starts at this mesh's waist rather
+    // than following the outside of the leg.
     in_range("inseam", m.inseam, 88.0, 105.0);
-    in_range("outseam", m.outseam, 115.0, 145.0);
+    in_range("outseam", m.outseam, 108.0, 138.0);
     // Short of a generic anthropometric table even at the best landmark an
     // honest search finds — see `measure`'s own doc for the evidence this
     // is this mesh's own proportion, not a ring placement bug.

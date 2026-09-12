@@ -1,6 +1,5 @@
 use super::geom::{add, lerp, nearest_vertex, sub, topmost_vertex_within, unit};
-use super::intersect::Crossing;
-use super::{Joints, bands, limb_ring};
+use super::{Cut, Joints, bands, limb_ring};
 
 /// How far along the forearm axis (from the elbow toward the hand joint)
 /// `muneca` is cut. Not at the hand joint itself (`t = 1.0`): the forearm
@@ -24,13 +23,13 @@ const ACROMION_SEARCH_RADIUS_M: f64 = 0.07;
 /// shoulder landmarks, the elbow landmark, the wrist girth, and the two
 /// single-point landmarks `brazo`'s length is actually measured between.
 pub(super) struct ArmRings {
-    pub upper_arm: Vec<Crossing>,
-    pub shoulder_r: Vec<Crossing>,
-    pub shoulder_l: Vec<Crossing>,
-    pub elbow: Vec<Crossing>,
-    pub wrist: Vec<Crossing>,
-    pub acromion: Vec<Crossing>,
-    pub wrist_joint: Vec<Crossing>,
+    pub upper_arm: Cut,
+    pub shoulder_r: Cut,
+    pub shoulder_l: Cut,
+    pub elbow: Cut,
+    pub wrist: Cut,
+    pub acromion: Cut,
+    pub wrist_joint: Cut,
 }
 
 /// A girth ring's own position and a length's end point do not have to be
@@ -78,11 +77,12 @@ pub(super) fn bake(positions: &[[f64; 3]], tris: &[[u32; 3]], j: &Joints) -> Arm
         "muneca",
     );
 
-    let acromion_vertex = topmost_vertex_within(positions, j.shoulder_r, ACROMION_SEARCH_RADIUS_M);
-    let acromion = vec![(acromion_vertex, acromion_vertex, 0.0)];
-
-    let wrist_vertex = nearest_vertex(positions, j.hand_r);
-    let wrist_joint = vec![(wrist_vertex, wrist_vertex, 0.0)];
+    let acromion = Cut::landmark(topmost_vertex_within(
+        positions,
+        j.shoulder_r,
+        ACROMION_SEARCH_RADIUS_M,
+    ));
+    let wrist_joint = Cut::landmark(nearest_vertex(positions, j.hand_r));
 
     ArmRings {
         upper_arm,

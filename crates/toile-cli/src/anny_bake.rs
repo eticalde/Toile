@@ -17,19 +17,25 @@ mod quad;
 /// already fused the arm's surface into the torso's (no gap remains to cut
 /// through), so a horizontal cut traces up over the shoulder and down the
 /// arm instead of around the chest — `rings::bands::highest_unfused_trunk_y`
-/// finds the highest cut that still separates them, the honest reading of
-/// "as high as a tape can go." `tobillo` is not literally at the ankle
+/// finds the armpit apex, the highest cut that still separates them, and
+/// `rings::trunk::UPPER_CHEST_DROP_M` then backs off from it, because the
+/// apex plane grazes the armpit crease and the section there is not a girth
+/// a tape could take. `tobillo` is not literally at the ankle
 /// joint either: that joint sits at the boundary into the foot, where the
 /// cross-section is already an elongated foot shape rather than a round
-/// ankle, so `rings::legs::ANKLE_T` backs off slightly toward the knee, to
-/// the narrowest point actually on the leg. `muneca` similarly backs off
+/// ankle, so `rings::legs::ANKLE_T` backs off toward the knee, to the
+/// narrowest point actually on the leg. `muneca` similarly backs off
 /// from the hand joint (`rings::arms::WRIST_T`): the forearm tapers
 /// smoothly all the way into the hand with no distinct wrist-bone pinch on
 /// this mesh, so a cut right at the joint barely responds to the build and
 /// gender morphs at all. For the same fusion reason as `pecho_alto`, the
 /// two `Shoulder*` girth landmark rings (used only for `hombros`) reuse
 /// `rings::bands::limb_fullest`'s own discovered offset rather than sitting
-/// exactly at the shoulder joint.
+/// exactly at the shoulder joint. `cintura` is not cut at the narrowest
+/// section either: on this mesh that indentation is a rib-cage landmark, a
+/// centimetre under the thoracolumbar joint, so `rings::trunk::WAIST_DROP_M`
+/// drops off it to the waistline the catalogue's four waist-anchored lengths
+/// are actually taken from.
 ///
 /// None of that is true of a *length*'s own end points, though: `brazo`
 /// runs between `RingId::Acromion` (the highest body vertex within a small
@@ -39,7 +45,14 @@ mod quad;
 /// surface rather than cut, since no plane at either true joint can
 /// separate the limb from its neighbour. Earlier, `brazo` mistakenly
 /// reused the girth rings' own points as its ends, which is what left it
-/// short.
+/// short. `largo_lateral` ends the same way, at `RingId::AnkleJoint`: the
+/// body vertex nearest the ankle joint, which on this mesh lands on the
+/// medial malleolus. That is deliberately not `tobillo`'s ring read as a
+/// height, and the gap between the two is measured rather than assumed —
+/// this mesh has no second, lower narrowing over the ankle bone for a
+/// "narrowest section above the foot" rule to find, because the foot's
+/// flare arrives before the malleoli do. See `rings::legs`'s doc for the
+/// scan.
 ///
 /// `crotch` is not the pelvis joint: that joint sits about 10 cm above
 /// where the legs actually separate. `rings::bands::fork_y` finds the
@@ -60,7 +73,7 @@ mod quad;
 /// it measurably *shortened* `largo_espalda` instead of lengthening it —
 /// see `rings::legs`'s doc for the evidence. Even centred on the neck
 /// joint the number still falls short of a generic 47–52 cm table
-/// (currently around 32–36 cm): sweeping candidate heights all the way up
+/// (currently 33 to 43 cm): sweeping candidate heights all the way up
 /// through the head shows `largo_espalda` only reaching that range well
 /// into jaw/skull territory, so the shortfall is this mesh's own
 /// proportion — a short neck-to-waist span — rather than a landmark left
@@ -191,7 +204,7 @@ fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>, ro
         .map(|(name, v)| (name.clone(), to_body_space(*v)))
         .collect();
     let bust_apex_y = bust_apex::weighted_mean_height(root, &ring_positions);
-    let (ring_ranges, ring_points) =
+    let (ring_entries, ring_points) =
         rings::bake(&ring_positions, &ring_tris, &ring_joints, bust_apex_y);
 
     let mut rows = Vec::with_capacity(parsed_targets.len());
@@ -211,7 +224,7 @@ fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>, ro
         stations,
         rows,
         deltas,
-        ring_ranges,
+        ring_entries,
         ring_points,
     }
 }
@@ -272,15 +285,15 @@ mod tests {
         assert_eq!(baked.stations.len(), 13_380);
         assert_eq!(baked.rows.len(), 376);
         assert_eq!(baked.deltas.len(), 2_124_560);
-        assert_eq!(baked.ring_ranges.len(), toile_anny::asset::RingId::COUNT);
+        assert_eq!(baked.ring_entries.len(), toile_anny::asset::RingId::COUNT);
         assert!(
-            baked.ring_ranges.iter().all(|r| r.length > 0),
+            baked.ring_entries.iter().all(|r| r.length > 0),
             "every ring must have at least one point"
         );
         assert_eq!(
             baked.ring_points.len() as u32,
-            baked.ring_ranges.iter().map(|r| r.length).sum::<u32>(),
-            "the flat point array must hold exactly the ranges' own lengths"
+            baked.ring_entries.iter().map(|r| r.length).sum::<u32>(),
+            "the flat point array must hold exactly the entries' own lengths"
         );
     }
 }

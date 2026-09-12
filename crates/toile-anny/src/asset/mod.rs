@@ -1,7 +1,7 @@
 mod rings;
 mod rows;
 
-pub use rings::{RingId, RingPoint, RingRange};
+pub use rings::{RingEntry, RingId, RingPoint};
 pub use rows::{Delta, Row, RowKind};
 
 /// The bytes every asset opens with, so a truncated or unrelated file is
@@ -11,10 +11,18 @@ const MAGIC: [u8; 8] = *b"TOANNY01";
 /// Bumped whenever the payload layout changes, so a reader never misreads a
 /// shape it was not built for. Version 2 adds the row table and delta runs
 /// that make the phenotype drive the mesh; version 3 adds the baked
-/// measurement rings (see [`RingId`]). An older reader (or an older asset
-/// handed to this reader) is refused outright rather than silently reading
-/// a shape it was not built for.
-const VERSION: u32 = 3;
+/// measurement rings (see [`RingId`]); version 4 widens each ring's table
+/// entry with the plane it was cut on (see [`RingEntry::normal`]); version 5
+/// adds a twentieth ring, the ankle landmark `largo_lateral` ends at (see
+/// [`RingId::AnkleJoint`]). An older reader (or an older asset handed to
+/// this reader) is refused outright rather than silently reading a shape it
+/// was not built for.
+///
+/// A ring count is part of that shape even though the header carries it:
+/// a nineteen-entry table is self-consistent enough to pass every length
+/// and hash check here and then panic in [`crate::measure`], which indexes
+/// the table by [`RingId`] and expects all twenty.
+const VERSION: u32 = 5;
 
 /// The header's fixed size in bytes, ahead of the seven payload sections.
 const HEADER_LEN: usize = 8 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 8;
@@ -30,7 +38,7 @@ const FNV_PRIME: u64 = 0x0100_0000_01b3;
 /// Metres, y-up, centred, CCW-outward triangles, one station tag per vertex
 /// — the template, unchanged from v1 — plus every baked target's row and
 /// delta run, in the fixed order the baker discovered them in, plus the
-/// nineteen measurement rings cut once from the neutral template (see
+/// twenty measurement rings cut once from the neutral template (see
 /// [`RingId`]). Normals are not part of the asset — they are cheap to
 /// recompute and storing them would let the two drift apart.
 ///
@@ -54,10 +62,10 @@ pub struct Baked {
     pub rows: Vec<Row>,
     /// Every row's delta entries, concatenated in row order.
     pub deltas: Vec<Delta>,
-    /// One entry per [`RingId`], in [`RingId::ALL`] order. A range's
+    /// One entry per [`RingId`], in [`RingId::ALL`] order. An entry's
     /// `offset` and `length` point into `ring_points`.
-    pub ring_ranges: Vec<RingRange>,
-    /// Every ring's points, concatenated in `ring_ranges` order.
+    pub ring_entries: Vec<RingEntry>,
+    /// Every ring's points, concatenated in `ring_entries` order.
     pub ring_points: Vec<RingPoint>,
 }
 
@@ -92,12 +100,12 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 /// ```text
 /// offset  bytes     field
 /// 0       8         magic: b"TOANNY01"
-/// 8       4         format version, u32 LE (3)
+/// 8       4         format version, u32 LE (5)
 /// 12      4         vertex count V, u32 LE
 /// 16      4         triangle count T, u32 LE
 /// 20      4         row count R, u32 LE
 /// 24      4         delta count D, u32 LE
-/// 28      4         ring range count G, u32 LE (always RingId::COUNT)
+/// 28      4         ring entry count G, u32 LE (always RingId::COUNT)
 /// 32      4         ring point count P, u32 LE
 /// 36      8         FNV-1a hash of everything from offset 44 on, u64 LE
 /// 44      12*V      positions: V vertex xyz triples, f32 LE, metres, y-up
@@ -105,7 +113,7 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 /// ...     V         stations: one Station tag per vertex, u8
 /// ...     15*R      row table: R rows, see `Row`/`RowKind`'s byte layout
 /// ...     8*D       delta runs: D deltas, see `Delta`'s byte layout
-/// ...     8*G       ring table: G ranges, see `RingRange`'s byte layout
+/// ...     20*G      ring table: G entries, see `RingEntry`'s byte layout
 /// ...     8*P       ring points: P points, see `RingPoint`'s byte layout
 /// ```
 pub fn encode(baked: &Baked) -> Vec<u8> {
@@ -113,7 +121,7 @@ pub fn encode(baked: &Baked) -> Vec<u8> {
     let triangle_count = (baked.indices.len() / 3) as u32;
     let row_count = baked.rows.len() as u32;
     let delta_count = baked.deltas.len() as u32;
-    let ring_range_count = baked.ring_ranges.len() as u32;
+    let ring_entry_count = baked.ring_entries.len() as u32;
     let ring_point_count = baked.ring_points.len() as u32;
     debug_assert_eq!(baked.stations.len(), vertex_count as usize);
 
@@ -123,7 +131,7 @@ pub fn encode(baked: &Baked) -> Vec<u8> {
             + baked.stations.len()
             + baked.rows.len() * Row::LEN
             + baked.deltas.len() * Delta::LEN
-            + baked.ring_ranges.len() * RingRange::LEN
+            + baked.ring_entries.len() * RingEntry::LEN
             + baked.ring_points.len() * RingPoint::LEN,
     );
     for f in &baked.positions {
@@ -139,8 +147,8 @@ pub fn encode(baked: &Baked) -> Vec<u8> {
     for delta in &baked.deltas {
         delta.write(&mut payload);
     }
-    for range in &baked.ring_ranges {
-        range.write(&mut payload);
+    for entry in &baked.ring_entries {
+        entry.write(&mut payload);
     }
     for point in &baked.ring_points {
         point.write(&mut payload);
@@ -153,7 +161,7 @@ pub fn encode(baked: &Baked) -> Vec<u8> {
     out.extend_from_slice(&triangle_count.to_le_bytes());
     out.extend_from_slice(&row_count.to_le_bytes());
     out.extend_from_slice(&delta_count.to_le_bytes());
-    out.extend_from_slice(&ring_range_count.to_le_bytes());
+    out.extend_from_slice(&ring_entry_count.to_le_bytes());
     out.extend_from_slice(&ring_point_count.to_le_bytes());
     out.extend_from_slice(&fnv1a(&payload).to_le_bytes());
     out.extend_from_slice(&payload);
@@ -209,7 +217,7 @@ pub fn decode(bytes: &[u8]) -> Result<Baked, DecodeError> {
     let triangle_count = le_u32("triangle_count", &bytes[16..20]) as usize;
     let row_count = le_u32("row_count", &bytes[20..24]) as usize;
     let delta_count = le_u32("delta_count", &bytes[24..28]) as usize;
-    let ring_range_count = le_u32("ring_range_count", &bytes[28..32]) as usize;
+    let ring_entry_count = le_u32("ring_entry_count", &bytes[28..32]) as usize;
     let ring_point_count = le_u32("ring_point_count", &bytes[32..36]) as usize;
     let hash = le_u64("hash", &bytes[36..44]);
 
@@ -219,7 +227,7 @@ pub fn decode(bytes: &[u8]) -> Result<Baked, DecodeError> {
         + vertex_count
         + row_count * Row::LEN
         + delta_count * Delta::LEN
-        + ring_range_count * RingRange::LEN
+        + ring_entry_count * RingEntry::LEN
         + ring_point_count * RingPoint::LEN;
     if payload.len() != want_len {
         return Err(DecodeError::TruncatedPayload);
@@ -233,7 +241,7 @@ pub fn decode(bytes: &[u8]) -> Result<Baked, DecodeError> {
     let (station_bytes, rest) = rest.split_at(vertex_count);
     let (row_bytes, rest) = rest.split_at(row_count * Row::LEN);
     let (delta_bytes, rest) = rest.split_at(delta_count * Delta::LEN);
-    let (range_bytes, point_bytes) = rest.split_at(ring_range_count * RingRange::LEN);
+    let (entry_bytes, point_bytes) = rest.split_at(ring_entry_count * RingEntry::LEN);
 
     let positions = pos_bytes
         .as_chunks::<4>()
@@ -259,11 +267,11 @@ pub fn decode(bytes: &[u8]) -> Result<Baked, DecodeError> {
         .iter()
         .map(|c| Delta::read(c.as_slice()))
         .collect();
-    let ring_ranges = range_bytes
-        .as_chunks::<{ RingRange::LEN }>()
+    let ring_entries = entry_bytes
+        .as_chunks::<{ RingEntry::LEN }>()
         .0
         .iter()
-        .map(|c| RingRange::read(c.as_slice()))
+        .map(|c| RingEntry::read(c.as_slice()))
         .collect();
     let ring_points = point_bytes
         .as_chunks::<{ RingPoint::LEN }>()
@@ -278,7 +286,7 @@ pub fn decode(bytes: &[u8]) -> Result<Baked, DecodeError> {
         stations: station_bytes.to_vec(),
         rows,
         deltas,
-        ring_ranges,
+        ring_entries,
         ring_points,
     })
 }

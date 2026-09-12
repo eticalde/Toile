@@ -30,7 +30,38 @@
 /// to the floor — a tailor's tape runs to the ground, not the ankle
 /// (giving `0x0d36_daf4_d54b_0935`); and once more when those two became
 /// *heights above* the floor rather than straight lines to one sole, which
-/// in an A-pose folded the 20 cm stance width into both of them.
+/// in an A-pose folded the 20 cm stance width into both of them (giving
+/// `0x10b8_4bdf_754b_0935`).
+///
+/// It moved again for both halves of one defect. Every girth is now summed
+/// in the plane its ring was cut on rather than in space, so a ring the
+/// phenotype has buckled out of that plane no longer charges the buckling
+/// to the measurement — at the apex the plane grazes the armpit crease and
+/// the wander there came to 4.50 cm, more than twice any other trunk ring's;
+/// and `pecho_alto`'s ring moved two centimetres down off that apex, where
+/// the section is a girth a tape could actually take (giving
+/// `0x649d_3b4d_154b_0935`).
+///
+/// It moved again because `cintura` no longer sits on the narrowest section.
+/// That indentation is this mesh's rib-cage waist, a centimetre under the
+/// thoracolumbar joint, and the four catalogue lengths anchored on the waist
+/// are taken at the lower waistline a garment sits on; the ring now drops
+/// one template centimetre to reach it. Only the rows that touch
+/// [`toile_anny::asset::RingId::Waist`] move — `cintura` itself, `tiro`,
+/// `altura_cadera`, `largo_espalda` and `largo_lateral`; every other ring on
+/// this body keeps its exact height (giving `0xadcf_70bf_f54b_0935`).
+///
+/// It moves here for one row and one new ring. `largo_lateral` is a waist-
+/// to-ankle length again, as PLAN-002's decision 3-bis has always required,
+/// and the ankle it runs to is
+/// [`toile_anny::asset::RingId::AnkleJoint`] — a twentieth ring, the single
+/// point nearest the ankle joint, 7.0 cm above the sole on this body. It is
+/// not [`toile_anny::asset::RingId::Ankle`]: that girth ring is cut at the
+/// narrowest section the shin offers, 14.5 cm up, so reverting to it would
+/// have traded the floor reading's error for a larger one the other way.
+/// Only `largo_lateral` changes; every other row on this body reads exactly
+/// what it read before, the new ring having been appended rather than moved
+/// into anything's place.
 ///
 /// Take the new value from this assertion and update the constant in the
 /// same commit, saying why.
@@ -38,7 +69,7 @@
 fn the_anny_measures_hash_to_a_fixed_value() {
     assert_eq!(
         toile_engine::golden::anny_measures_hash(),
-        0x10b8_4bdf_754b_0935,
+        0x2bb7_4aa2_754b_0935,
         "the Anny body's measured values changed bits: a ring moved on \
          purpose, or a dependency drifted under it"
     );

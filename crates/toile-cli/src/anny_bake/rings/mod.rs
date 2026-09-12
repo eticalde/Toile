@@ -6,9 +6,47 @@ mod legs;
 mod select;
 mod trunk;
 
-use geom::joint;
+use geom::{joint, unit};
 use intersect::Crossing;
-use toile_anny::asset::{RingId, RingPoint, RingRange};
+use toile_anny::asset::{RingEntry, RingId, RingPoint};
+
+/// The normal every horizontal cut is taken with: a tape around the trunk
+/// lies level, so the trunk rings all share one plane direction.
+const UP: [f64; 3] = [0.0, 1.0, 0.0];
+
+/// The plane a landmark that is not a cut carries: none. The four
+/// single-point landmarks are surface vertices found by search, so there is
+/// no cutting plane to record and nothing to project a girth into.
+const NO_PLANE: [f64; 3] = [0.0, 0.0, 0.0];
+
+/// One baked ring: the crossings its cutting plane traced, and that plane's
+/// own unit normal. The two travel together from here into the asset,
+/// because `toile_anny::measure` sums a girth in the plane the ring was cut
+/// on rather than wherever the morph has since dragged its points.
+pub(super) struct Cut {
+    pub points: Vec<Crossing>,
+    pub normal: [f64; 3],
+}
+
+impl Cut {
+    /// A cut whose plane is `axis`, normalized the same way
+    /// [`intersect::loops`] normalizes it before cutting, so the recorded
+    /// plane is exactly the one the crossings came from.
+    fn along(points: Vec<Crossing>, axis: [f64; 3]) -> Self {
+        Self {
+            points,
+            normal: unit(axis),
+        }
+    }
+
+    /// A landmark with no plane of its own — see [`NO_PLANE`].
+    fn landmark(vertex: u32) -> Self {
+        Self {
+            points: vec![(vertex, vertex, 0.0)],
+            normal: NO_PLANE,
+        }
+    }
+}
 
 /// Every named joint this bake reads from `groups::joint_centroids`'s
 /// output, gathered once so the rest of this module reads names instead of
@@ -63,13 +101,14 @@ fn limb_ring(
     point: [f64; 3],
     axis: [f64; 3],
     label: &str,
-) -> Vec<Crossing> {
+) -> Cut {
     let found = intersect::loops(positions, tris, point, axis);
-    select::pick_limb_loop(positions, &found, point)
-        .unwrap_or_else(|| panic!("{label}: no valid, unfused limb cross-section at {point:?}"))
+    let points = select::pick_limb_loop(positions, &found, point)
+        .unwrap_or_else(|| panic!("{label}: no valid, unfused limb cross-section at {point:?}"));
+    Cut::along(points, axis)
 }
 
-/// Bakes all nineteen rings from the neutral template, in [`RingId::ALL`]
+/// Bakes all twenty rings from the neutral template, in [`RingId::ALL`]
 /// order, ready to flatten into [`toile_anny::asset::Baked`]'s ring table.
 ///
 /// `positions` and `joints` must already be in the mesh's own final space
@@ -81,7 +120,7 @@ pub fn bake(
     tris: &[[u32; 3]],
     joints: &[(String, [f64; 3])],
     bust_apex_y: f64,
-) -> (Vec<RingRange>, Vec<RingPoint>) {
+) -> (Vec<RingEntry>, Vec<RingPoint>) {
     let j = gather(joints);
     let legs = legs::bake(positions, tris, &j);
     let arms = arms::bake(positions, tris, &j);
@@ -106,36 +145,38 @@ pub fn bake(
         arms.elbow,
         arms.acromion,
         arms.wrist_joint,
+        legs.ankle_joint,
         legs.nape,
     ];
     debug_assert_eq!(rings.len(), RingId::COUNT);
     flatten(rings)
 }
 
-/// Quantizes nineteen crossing-loops into the asset's flat `(RingRange,
-/// RingPoint)` shape, in the array's own order (which is [`RingId::ALL`]).
+/// Quantizes twenty cuts into the asset's flat `(RingEntry, RingPoint)`
+/// shape, in the array's own order (which is [`RingId::ALL`]).
 ///
 /// # Panics
 /// If a body vertex index does not fit `u16`: it never should, since the
 /// body group is 13,380 vertices and every crossing names two of them.
-fn flatten(rings: [Vec<Crossing>; RingId::COUNT]) -> (Vec<RingRange>, Vec<RingPoint>) {
-    let mut ranges = Vec::with_capacity(RingId::COUNT);
+fn flatten(rings: [Cut; RingId::COUNT]) -> (Vec<RingEntry>, Vec<RingPoint>) {
+    let mut entries = Vec::with_capacity(RingId::COUNT);
     let mut points = Vec::new();
     for ring in rings {
         let offset = points.len() as u32;
-        for (a, b, t) in ring {
+        for (a, b, t) in ring.points {
             points.push(RingPoint {
                 vertex_a: u16::try_from(a).expect("body vertex index fits u16"),
                 vertex_b: u16::try_from(b).expect("body vertex index fits u16"),
                 t: t as f32,
             });
         }
-        ranges.push(RingRange {
+        entries.push(RingEntry {
             offset,
             length: (points.len() as u32) - offset,
+            normal: ring.normal.map(|c| c as f32),
         });
     }
-    (ranges, points)
+    (entries, points)
 }
 
 #[cfg(test)]

@@ -1,6 +1,7 @@
 use super::geom::{lerp, sub};
 use super::intersect::{self, Crossing};
 use super::select::{self, perimeter, x_extent};
+use super::{Cut, UP};
 
 /// Scans a horizontal band and keeps the trunk loop with the extreme
 /// perimeter: the fullest section if `want_max`, the narrowest otherwise.
@@ -10,8 +11,9 @@ use super::select::{self, perimeter, x_extent};
 ///
 /// `lo`/`hi`/`step` are the caller's own documented constants: fixing them
 /// is part of what a golden then pins. Returns the winning height alongside
-/// the ring, since `bajo_pecho` is placed at a fixed offset below wherever
-/// `pecho` actually landed.
+/// the ring, since `cintura` is not cut at the narrowest section itself but
+/// at a fixed offset below wherever that section turned out to be — see
+/// `trunk::WAIST_DROP_M`.
 ///
 /// # Panics
 /// If no offset in `[lo, hi]` yields a valid trunk loop at all.
@@ -22,12 +24,12 @@ pub(super) fn trunk_extremum(
     hi: f64,
     step: f64,
     want_max: bool,
-) -> (Vec<Crossing>, f64) {
+) -> (Cut, f64) {
     let steps = ((hi - lo) / step).round() as i64;
     let mut best: Option<(Vec<Crossing>, f64, f64)> = None;
     for i in 0..=steps {
         let y = lo + (i as f64) * step;
-        let found = intersect::loops(positions, tris, [0.0, y, 0.0], [0.0, 1.0, 0.0]);
+        let found = intersect::loops(positions, tris, [0.0, y, 0.0], UP);
         let Some(ring) = select::pick_trunk_loop(positions, &found) else {
             continue;
         };
@@ -44,7 +46,7 @@ pub(super) fn trunk_extremum(
         }
     }
     let (ring, y, _) = best.expect("no valid trunk cross-section in the scanned band");
-    (ring, y)
+    (Cut::along(ring, UP), y)
 }
 
 /// Scans a horizontal band for the widest section by left-right extent,
@@ -58,12 +60,12 @@ pub(super) fn widest_by_extent(
     lo: f64,
     hi: f64,
     step: f64,
-) -> Vec<Crossing> {
+) -> Cut {
     let steps = ((hi - lo) / step).round() as i64;
     let mut best: Option<(Vec<Crossing>, f64)> = None;
     for i in 0..=steps {
         let y = lo + (i as f64) * step;
-        let found = intersect::loops(positions, tris, [0.0, y, 0.0], [0.0, 1.0, 0.0]);
+        let found = intersect::loops(positions, tris, [0.0, y, 0.0], UP);
         let Some(ring) = select::pick_trunk_loop(positions, &found) else {
             continue;
         };
@@ -75,7 +77,7 @@ pub(super) fn widest_by_extent(
             best = Some((ring, extent));
         }
     }
-    best.map(|(ring, _)| ring)
+    best.map(|(ring, _)| Cut::along(ring, UP))
         .expect("no valid head cross-section in the scanned band")
 }
 
@@ -85,8 +87,10 @@ pub(super) fn widest_by_extent(
 ///
 /// Used for `pecho_alto`: the anatomical armpit level is not the shoulder
 /// joint's own height (the mesh has already fused arm and torso there) but
-/// the highest point below it where a horizontal tape could still travel
-/// without crossing an arm — see `crate::anny_bake`'s doc.
+/// the armpit apex below it, the highest plane that still clears both arms.
+/// The apex is where the search ends, not where the ring goes — the caller
+/// backs off from the crease itself, see `trunk::UPPER_CHEST_DROP_M` and
+/// `crate::anny_bake`'s doc.
 ///
 /// # Panics
 /// If no offset within 60 tries (0.3 m) yields a valid trunk loop.
@@ -99,7 +103,7 @@ pub(super) fn highest_unfused_trunk_y(
     const MAX_TRIES: u32 = 60;
     for i in 0..MAX_TRIES {
         let y = top_y - f64::from(i) * STEP;
-        let found = intersect::loops(positions, tris, [0.0, y, 0.0], [0.0, 1.0, 0.0]);
+        let found = intersect::loops(positions, tris, [0.0, y, 0.0], UP);
         if select::pick_trunk_loop(positions, &found).is_some() {
             return y;
         }
@@ -130,7 +134,7 @@ pub(super) fn fork_y(positions: &[[f64; 3]], tris: &[[u32; 3]], start_y: f64) ->
     let mut last_valid = None;
     for i in 0..MAX_TRIES {
         let y = start_y - f64::from(i) * STEP;
-        let found = intersect::loops(positions, tris, [0.0, y, 0.0], [0.0, 1.0, 0.0]);
+        let found = intersect::loops(positions, tris, [0.0, y, 0.0], UP);
         if select::pick_trunk_loop(positions, &found).is_some() {
             last_valid = Some(y);
         } else {
@@ -153,7 +157,7 @@ pub(super) fn limb_fullest(
     tris: &[[u32; 3]],
     a: [f64; 3],
     b: [f64; 3],
-) -> (Vec<Crossing>, f64) {
+) -> (Cut, f64) {
     const STEP: f64 = 0.02;
     const STEPS: u32 = 49;
     let axis = sub(b, a);
@@ -171,5 +175,5 @@ pub(super) fn limb_fullest(
         }
     }
     let (ring, t, _) = best.expect("no valid, unfused cross-section along this limb");
-    (ring, t)
+    (Cut::along(ring, axis), t)
 }

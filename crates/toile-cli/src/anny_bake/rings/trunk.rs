@@ -1,8 +1,24 @@
-use super::intersect::Crossing;
-use super::{Joints, bands, intersect, select};
+use super::{Cut, Joints, UP, bands, intersect, select};
 
 /// How far below `pecho`'s own found height `bajo_pecho` is cut.
 const UNDERBUST_DROP_M: f64 = 0.04;
+
+/// How far below the armpit apex — the highest horizontal plane that still
+/// clears both arms, see [`bands::highest_unfused_trunk_y`] — `pecho_alto`
+/// is cut.
+///
+/// The apex itself is where a *plane* stops meeting the arms, not where a
+/// *tape* can lie, and the difference is measurable: cut exactly there, the
+/// ring grazes the armpit crease and buckles out of its own plane by 4.20 cm
+/// on the solved default tape, against 1.74 cm for `pecho` and 0.46 cm for
+/// `cintura`. One centimetre lower it is already 2.20 cm and from there it
+/// decays smoothly, so the anomaly is confined to the crease itself. Backing
+/// off two centimetres — about the width of the tape that would be lying
+/// there — puts it at 2.09 cm, in the band the other trunk rings occupy,
+/// and still leaves it 4.7 cm clear of `pecho`'s own ring. This is the same
+/// departure `legs::ANKLE_T` and `arms::WRIST_T` make, for the same reason:
+/// the section exactly at the boundary is not a girth anyone could measure.
+const UPPER_CHEST_DROP_M: f64 = 0.02;
 
 /// The band scanned around the waist joint for `cintura`, in metres above
 /// and below it. Asymmetric on purpose: this mesh's true narrowest point
@@ -11,6 +27,31 @@ const UNDERBUST_DROP_M: f64 = 0.04;
 const WAIST_BAND_BELOW_M: f64 = 0.02;
 const WAIST_BAND_ABOVE_M: f64 = 0.11;
 const WAIST_STEP_M: f64 = 0.005;
+
+/// How far below the narrowest section — the natural indentation
+/// [`bands::trunk_extremum`] finds — the `cintura` ring is actually cut.
+///
+/// That indentation is a rib-cage landmark on this mesh, not a lumbar one:
+/// it lands 1.3 cm under `joint-spine-2`, the thoracolumbar joint, and a
+/// full 8.0 cm above `joint-spine-3`, the lumbar joint whose height the band
+/// is centred on. A tape tied there rides the bottom of the ribs. Every
+/// length the catalogue takes from the waist — up to the nape, down to the
+/// crotch and the hip — is instead a tailoring measurement, taken at the
+/// waistline a garment sits on, which is lower.
+///
+/// How much lower is not something this mesh states, so the size of the
+/// drop is settled by what the solved body does with it rather than by
+/// counting scan steps. With no drop at all, `waisttohip-dist` sits pinned
+/// against its short stop — which is how the misplacement announced itself
+/// — and `altura_cadera` still reports a model limit 0.32 cm wide. One
+/// template centimetre closes that row on its dado (to -0.01 cm) and the
+/// lever comes off the stop to do it, settling at -0.48. The ring's own
+/// fall is much smaller than the cut, 0.32 cm on the 178 cm body, because
+/// the lever spends its new freedom re-lengthening the span the cut
+/// shortened. Going further buys nothing: at 1.6 cm the lever is down to
+/// -0.10, `altura_cadera` stays closed, but the waist-to-crotch rise widens
+/// from 2.89 cm over its dado to 3.59 as the crotch falls another 0.87 cm.
+const WAIST_DROP_M: f64 = 0.010;
 
 /// The band `cadera` is scanned over, expressed as an offset above the
 /// fork (see [`bands::fork_y`]): from 12 cm above it to 14 cm above it.
@@ -36,13 +77,13 @@ const HEAD_STEP_M: f64 = 0.005;
 /// The horizontal trunk and head rings: every one placed either directly
 /// at a joint height or by scanning a band for an extremum.
 pub(super) struct TrunkRings {
-    pub upper_chest: Vec<Crossing>,
-    pub bust: Vec<Crossing>,
-    pub underbust: Vec<Crossing>,
-    pub waist: Vec<Crossing>,
-    pub hip: Vec<Crossing>,
-    pub crotch: Vec<Crossing>,
-    pub head: Vec<Crossing>,
+    pub upper_chest: Cut,
+    pub bust: Cut,
+    pub underbust: Cut,
+    pub waist: Cut,
+    pub hip: Cut,
+    pub crotch: Cut,
+    pub head: Cut,
 }
 
 /// A horizontal trunk ring at a height already known to be valid — used for
@@ -52,10 +93,11 @@ pub(super) struct TrunkRings {
 /// If no valid trunk loop is found at `y`: a placement mistake, since every
 /// caller passes a height this module already confirmed (or derived from
 /// one that was confirmed).
-fn ring_at(positions: &[[f64; 3]], tris: &[[u32; 3]], y: f64) -> Vec<Crossing> {
-    let found = intersect::loops(positions, tris, [0.0, y, 0.0], [0.0, 1.0, 0.0]);
-    select::pick_trunk_loop(positions, &found)
-        .unwrap_or_else(|| panic!("no valid trunk cross-section at y = {y}"))
+fn ring_at(positions: &[[f64; 3]], tris: &[[u32; 3]], y: f64) -> Cut {
+    let found = intersect::loops(positions, tris, [0.0, y, 0.0], UP);
+    let points = select::pick_trunk_loop(positions, &found)
+        .unwrap_or_else(|| panic!("no valid trunk cross-section at y = {y}"));
+    Cut::along(points, UP)
 }
 
 pub(super) fn bake(
@@ -68,7 +110,7 @@ pub(super) fn bake(
         positions,
         tris,
         f64::midpoint(j.scapula_r[1], j.clavicle_r[1]),
-    );
+    ) - UPPER_CHEST_DROP_M;
     let upper_chest = ring_at(positions, tris, upper_chest_y);
 
     // No band, no search: `bust_apex_y` already answers "where is the
@@ -82,7 +124,7 @@ pub(super) fn bake(
     let bust = ring_at(positions, tris, bust_apex_y);
     let underbust = ring_at(positions, tris, bust_apex_y - UNDERBUST_DROP_M);
 
-    let (waist, _) = bands::trunk_extremum(
+    let (_, indentation_y) = bands::trunk_extremum(
         positions,
         tris,
         j.spine3[1] - WAIST_BAND_BELOW_M,
@@ -90,6 +132,7 @@ pub(super) fn bake(
         WAIST_STEP_M,
         false,
     );
+    let waist = ring_at(positions, tris, indentation_y - WAIST_DROP_M);
 
     // The fork is scanned once, downward from the pelvis joint (comfortably
     // above it on every phenotype this bake sees), and used for both the

@@ -43,14 +43,16 @@ fn sample() -> Baked {
                 dz: 1,
             },
         ],
-        ring_ranges: vec![
-            RingRange {
+        ring_entries: vec![
+            RingEntry {
                 offset: 0,
                 length: 2,
+                normal: [0.0, 1.0, 0.0],
             },
-            RingRange {
+            RingEntry {
                 offset: 2,
                 length: 1,
+                normal: [0.0, 0.0, 0.0],
             },
         ],
         ring_points: vec![
@@ -83,7 +85,7 @@ fn round_trips_a_small_baked_body() {
     assert_eq!(back.stations, baked.stations);
     assert_eq!(back.rows, baked.rows);
     assert_eq!(back.deltas, baked.deltas);
-    assert_eq!(back.ring_ranges, baked.ring_ranges);
+    assert_eq!(back.ring_entries, baked.ring_entries);
     assert_eq!(back.ring_points, baked.ring_points);
 }
 
@@ -107,10 +109,13 @@ fn rejects_a_foreign_file() {
 
 #[test]
 fn rejects_an_older_version_layout() {
-    // A version-1 or version-2 file has a different header shape entirely
-    // (no row/delta counts, or no ring counts), so this reader must refuse
-    // it by version rather than misreading one section as another.
+    // Every earlier version differs in a way a length check alone would not
+    // always catch — v1 and v2 lack whole sections, v3's ring table is 8
+    // bytes an entry rather than 20, v4's has nineteen entries where
+    // `crate::measure` indexes twenty — so this reader must refuse by
+    // version rather than risk misreading one section as another, or
+    // panicking on a table that decoded perfectly well.
     let mut bytes = encode(&sample());
-    bytes[8..12].copy_from_slice(&2u32.to_le_bytes());
-    assert!(matches!(decode(&bytes), Err(DecodeError::BadVersion(2))));
+    bytes[8..12].copy_from_slice(&4u32.to_le_bytes());
+    assert!(matches!(decode(&bytes), Err(DecodeError::BadVersion(4))));
 }

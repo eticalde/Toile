@@ -22,7 +22,7 @@ pub enum Station {
     Crotch,
     /// The seat at its fullest.
     Hip,
-    /// The waist, the trunk's narrowest ring.
+    /// The waist, where a garment's waistline is tied.
     Waist,
     /// Directly under the bust.
     Underbust,
