@@ -57,7 +57,7 @@ fn sheet(draft: &Draft, pieces: &[PieceKey]) -> Option<[f64; 4]> {
     let mut low = [f64::INFINITY; 2];
     let mut high = [f64::NEG_INFINITY; 2];
     for &piece in pieces {
-        let (piece_low, piece_high) = mark::box_of(&millimetres(draft, piece));
+        let (piece_low, piece_high) = mark::box_of(millimetres(draft, piece));
         for axis in 0..2 {
             low[axis] = low[axis].min(piece_low[axis]);
             high[axis] = high[axis].max(piece_high[axis]);
@@ -123,21 +123,22 @@ fn millimetres(draft: &Draft, piece: PieceKey) -> Vec<[f64; 2]> {
         .collect()
 }
 
-/// A piece's nodes in millimetres, in contour order.
+/// A piece's nodes in millimetres, in contour order, each still carrying the
+/// key that names it.
 ///
 /// The names go beside the nodes and not beside the flattening, so a curved
-/// tract does not scatter a label over every sample it was cut into.
-fn nodes(draft: &Draft, piece: PieceKey) -> Vec<[f64; 2]> {
+/// tract does not scatter a label over every sample it was cut into. The key
+/// travels with the place because the two are made together: the flattening is
+/// the same `[f64; 2]` sequence, five times longer on the shipped trouser
+/// front, and it is in this caller's own scope — pairing them here is what
+/// stops it from being handed over instead and every label landing on a curve
+/// sample of the sheet somebody cuts cloth from.
+fn nodes(draft: &Draft, piece: PieceKey) -> Vec<(PointKey, [f64; 2])> {
     draft
         .points_cm(piece)
         .iter()
-        .map(|&(_, [x, y])| [x * MM_PER_CM, y * MM_PER_CM])
+        .map(|&(key, [x, y])| (key, [x * MM_PER_CM, y * MM_PER_CM]))
         .collect()
-}
-
-/// The nodes of a piece, in contour order, so a name can be put beside one.
-fn keys(draft: &Draft, piece: PieceKey) -> Vec<PointKey> {
-    draft.points_cm(piece).iter().map(|&(key, _)| key).collect()
 }
 
 /// A millimetre as the drawing writes it: two decimals, and never a negative

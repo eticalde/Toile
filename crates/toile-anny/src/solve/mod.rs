@@ -1,4 +1,4 @@
-use crate::asset::RowKind;
+use crate::asset::{DELTA_PER_METRE, RowKind};
 use crate::measure::{self, Measures};
 use crate::mesh::{accumulate_except, decoded, lever_weight, template_positions_f64};
 use crate::phenotype::{self, Phenotype};
@@ -129,11 +129,18 @@ pub fn solve_girth(
             }
             let start = row.offset as usize;
             let end = start + row.length as usize;
+            // Weight first, then the divisor — the trial path's own
+            // association, parenthesized so it reads as chosen rather than
+            // inherited. `crate::mesh` divides first, which lands about a
+            // tenth of the components one f64 ulp away; none of that survives
+            // the `as f32` on the way into `working`, so no golden pins which
+            // association this loop uses. The two read apart because they are
+            // two loops, not because the bits depend on it.
             for delta in &baked.deltas[start..end] {
                 let base = delta.vertex as usize * 3;
-                working[base] += (weight * f64::from(delta.dx) / 10_000.0) as f32;
-                working[base + 1] += (weight * f64::from(delta.dy) / 10_000.0) as f32;
-                working[base + 2] += (weight * f64::from(delta.dz) / 10_000.0) as f32;
+                working[base] += ((weight * f64::from(delta.dx)) / DELTA_PER_METRE) as f32;
+                working[base + 1] += ((weight * f64::from(delta.dy)) / DELTA_PER_METRE) as f32;
+                working[base + 2] += ((weight * f64::from(delta.dz)) / DELTA_PER_METRE) as f32;
             }
         }
         f64::from(extract(&measure::measure(&working)))
@@ -197,11 +204,13 @@ pub fn solve_height(phenotype: &Phenotype, levers: &[f64; 20], target_cm: f64) -
             }
             let start = row.offset as usize;
             let end = start + row.length as usize;
+            // The same association [`solve_girth`] uses, and for the same
+            // reason: it is the trial path's, not the mesh's.
             for delta in &baked.deltas[start..end] {
                 let base = delta.vertex as usize * 3;
-                working[base] += (weight * f64::from(delta.dx) / 10_000.0) as f32;
-                working[base + 1] += (weight * f64::from(delta.dy) / 10_000.0) as f32;
-                working[base + 2] += (weight * f64::from(delta.dz) / 10_000.0) as f32;
+                working[base] += ((weight * f64::from(delta.dx)) / DELTA_PER_METRE) as f32;
+                working[base + 1] += ((weight * f64::from(delta.dy)) / DELTA_PER_METRE) as f32;
+                working[base + 2] += ((weight * f64::from(delta.dz)) / DELTA_PER_METRE) as f32;
             }
         }
         f64::from(measure::measure(&working).height)

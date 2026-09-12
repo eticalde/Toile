@@ -4,6 +4,7 @@ use toile_anny::measure::Measures;
 use toile_anny::phenotype::{LEVERS, Phenotype};
 use toile_anny::solve;
 
+use super::READINGS;
 use crate::draft::MeasureSet;
 
 #[cfg(test)]
@@ -94,34 +95,22 @@ fn lever_ids(name: &str) -> Option<Vec<u8>> {
     }
 }
 
-/// Reads the one field of a fresh [`Measures`] a catalogue name names —
-/// the same mapping `measured_anny` writes into Spanish keys, kept here so
-/// the solver's target function and the final report read the identical
-/// field.
+/// Reads the one field of a fresh [`Measures`] a catalogue name names,
+/// through the same [`READINGS`] table `measured_anny` reports the *medido*
+/// column from — one mapping, so the solver's target and the final report
+/// cannot read different fields for the same name.
+///
+/// # Panics
+/// If `name` is outside [`READINGS`]. A document may carry measurement names
+/// the body cannot be read at — the catalogue guides and never governs, and
+/// `MeasureSet` is what holds those — but a name reaching here is one this
+/// crate has already claimed to measure.
 fn extract(name: &str, m: &Measures) -> f32 {
-    match name {
-        "cintura" => m.waist,
-        "cadera" => m.hip,
-        "muslo" => m.thigh,
-        "rodilla" => m.knee,
-        "tobillo" => m.ankle,
-        "cuello" => m.neck,
-        "pecho" => m.bust,
-        "bajo_pecho" => m.underbust,
-        "brazo_contorno" => m.upper_arm,
-        "muneca" => m.wrist,
-        "hombros" => m.shoulder_width,
-        "altura_cadera" => m.hip_drop,
-        "largo_espalda" => m.back_length,
-        "largo_lateral" => m.outseam,
-        "brazo" => m.arm_length,
-        "tiro" => m.rise,
-        "pecho_alto" => m.upper_chest,
-        "entrepierna" => m.inseam,
-        "cabeza" => m.head,
-        "estatura" => m.height,
-        other => panic!("`{other}` is not a catalogue name `extract` knows"),
-    }
+    let row = READINGS
+        .iter()
+        .find(|row| row.name == name)
+        .unwrap_or_else(|| panic!("`{name}` is not a catalogue name `extract` knows"));
+    (row.read)(m)
 }
 
 /// Solves one catalogue name's lever(s) toward its dado, updating `levers`

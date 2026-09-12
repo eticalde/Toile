@@ -1,3 +1,15 @@
+/// What a quantized [`Delta`] component is divided by to reach metres: ÷1000
+/// back to the decimetres the source text carries, ×0.1 from decimetres to
+/// metres, folded into one number.
+///
+/// Named rather than spelled out wherever a delta is decoded, because every
+/// site has to move together. Half a change leaves the solver optimizing a
+/// body displaced by a factor of a thousand from the one that ships, and that
+/// converges on a lever value instead of panicking — so nothing says it
+/// happened. The mesh and the solver's trial path deliberately keep their own
+/// association of the product; see [`crate::body_mesh`].
+pub(crate) const DELTA_PER_METRE: f64 = 10_000.0;
+
 /// One vertex's contribution within a row's delta run: which body vertex it
 /// moves, and by how much.
 ///
@@ -5,8 +17,7 @@
 /// source `.target.gz` text carries at most three decimal places in
 /// decimetres, so `round(value * 1000)` is exact, and the baker asserts
 /// that losslessness file by file rather than trusting it. A delta in
-/// metres is `component as f64 / 10_000.0` (÷1000 back to decimetres,
-/// ×0.1 to metres).
+/// metres is `component as f64 / DELTA_PER_METRE`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Delta {
     /// The body vertex this delta moves (see `crate` for the 13,380 count).

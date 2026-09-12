@@ -1,3 +1,4 @@
+use toile_anny::measure::Measures;
 /// Anny's phenotype inputs: sex, age, build, muscle, height, proportions.
 pub use toile_anny::phenotype::Phenotype;
 /// Converts an age in years to the parameter [`Phenotype::age`] takes.
@@ -12,6 +13,53 @@ use crate::draft::MeasureSet;
 mod solve;
 pub use solve::{AnnySolve, SolvedRow, solve_anny};
 
+/// One catalogue name and the field of a fresh [`Measures`] that answers it.
+///
+/// The reading is a bare `fn` rather than an option, so a row naming nothing
+/// on the body cannot be written down at all.
+pub(crate) struct Reading {
+    /// The catalogue's own Spanish name, as the document writes it.
+    pub name: &'static str,
+    /// Where that name is read off a measured body.
+    pub read: fn(&Measures) -> f32,
+}
+
+impl Reading {
+    /// One row, on one line, so the table below can be read as a table.
+    const fn of(name: &'static str, read: fn(&Measures) -> f32) -> Reading {
+        Reading { name, read }
+    }
+}
+
+/// The one mapping from a catalogue name to what the body measures there.
+///
+/// The *medido* column and the solver's own target function both read through
+/// this table and no other, so the two cannot come to read different fields
+/// for the same name. They were a pair of hand-written matches over the same
+/// struct, kept in step by a comment saying they had to be.
+pub(crate) const READINGS: [Reading; 20] = [
+    Reading::of("estatura", |m| m.height),
+    Reading::of("cuello", |m| m.neck),
+    Reading::of("pecho", |m| m.bust),
+    Reading::of("pecho_alto", |m| m.upper_chest),
+    Reading::of("bajo_pecho", |m| m.underbust),
+    Reading::of("cintura", |m| m.waist),
+    Reading::of("cadera", |m| m.hip),
+    Reading::of("muslo", |m| m.thigh),
+    Reading::of("rodilla", |m| m.knee),
+    Reading::of("tobillo", |m| m.ankle),
+    Reading::of("brazo_contorno", |m| m.upper_arm),
+    Reading::of("muneca", |m| m.wrist),
+    Reading::of("cabeza", |m| m.head),
+    Reading::of("tiro", |m| m.rise),
+    Reading::of("altura_cadera", |m| m.hip_drop),
+    Reading::of("entrepierna", |m| m.inseam),
+    Reading::of("largo_lateral", |m| m.outseam),
+    Reading::of("largo_espalda", |m| m.back_length),
+    Reading::of("brazo", |m| m.arm_length),
+    Reading::of("hombros", |m| m.shoulder_width),
+];
+
 /// The lever vector every row is at, with no name pulled — the state a
 /// freshly chosen phenotype starts from before anything is solved.
 pub const NO_LEVERS: [f64; 20] = [0.0; 20];
@@ -25,28 +73,7 @@ pub fn measured_anny(mesh: &BodyMesh) -> MeasureSet {
     let m = toile_anny::measure::measure(&mesh.positions);
     MeasureSet::new(
         "Medido",
-        [
-            ("estatura", f64::from(m.height)),
-            ("cuello", f64::from(m.neck)),
-            ("pecho", f64::from(m.bust)),
-            ("pecho_alto", f64::from(m.upper_chest)),
-            ("bajo_pecho", f64::from(m.underbust)),
-            ("cintura", f64::from(m.waist)),
-            ("cadera", f64::from(m.hip)),
-            ("muslo", f64::from(m.thigh)),
-            ("rodilla", f64::from(m.knee)),
-            ("tobillo", f64::from(m.ankle)),
-            ("brazo_contorno", f64::from(m.upper_arm)),
-            ("muneca", f64::from(m.wrist)),
-            ("cabeza", f64::from(m.head)),
-            ("tiro", f64::from(m.rise)),
-            ("altura_cadera", f64::from(m.hip_drop)),
-            ("entrepierna", f64::from(m.inseam)),
-            ("largo_lateral", f64::from(m.outseam)),
-            ("largo_espalda", f64::from(m.back_length)),
-            ("brazo", f64::from(m.arm_length)),
-            ("hombros", f64::from(m.shoulder_width)),
-        ],
+        READINGS.map(|row| (row.name, f64::from((row.read)(&m)))),
     )
 }
 
@@ -125,14 +152,12 @@ pub fn default_measures() -> MeasureSet {
 /// the `[0, 1]` position between `minheight` and `maxheight`), so this is
 /// the honest number to show next to the body: the stature the generated
 /// mesh actually measures.
+///
+/// The very number [`measured_anny`] reports as `estatura`, because it is the
+/// same call: the panel prints the two beside each other, and a second scan
+/// written out here could be changed on its own.
 pub fn stature_cm(mesh: &BodyMesh) -> f32 {
-    let ys = mesh.positions.iter().skip(1).step_by(3);
-    let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
-    for &y in ys {
-        lo = lo.min(y);
-        hi = hi.max(y);
-    }
-    (hi - lo) * 100.0
+    toile_anny::measure::height_cm(&mesh.positions)
 }
 
 #[cfg(test)]

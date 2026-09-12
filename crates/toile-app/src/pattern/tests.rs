@@ -20,7 +20,7 @@ const PANEL: [f32; 2] = [520.0, 520.0];
 struct Table {
     draft: Draft,
     piece: PieceKey,
-    view: View,
+    view: DrapeView,
     nodes: Vec<Node>,
 }
 
@@ -31,7 +31,7 @@ fn table() -> Table {
         .piece_named(block::FRONT)
         .expect("the block draws one piece");
     let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(PANEL[0], PANEL[1]));
-    let view = View::fit(draft.outline(piece), rect);
+    let view = DrapeView::fit(draft.outline_m(piece), rect);
     let nodes = nodes_of(&draft, piece, &view);
     Table {
         draft,
@@ -44,7 +44,7 @@ fn table() -> Table {
 impl Table {
     /// Where a point of the drawn line falls on the glass.
     fn on_glass(&self, cm: [f64; 2]) -> egui::Pos2 {
-        self.view.to_screen(draft::to_metres(cm))
+        self.view.to_screen_from_m(draft::to_metres(cm))
     }
 
     /// The point of the drawn line furthest from every dot, and how far.
@@ -78,10 +78,10 @@ fn the_dots_are_the_nodes_and_not_the_line_through_them() {
     // move, and only the first two would sit on the node of their own index.
     assert_eq!(table.nodes.len(), 9);
     assert_eq!(table.draft.flat_cm(table.piece).len(), 47);
-    for (node, &(point, at)) in table.nodes.iter().zip(table.draft.points_cm(table.piece)) {
+    for (node, &(point, at_cm)) in table.nodes.iter().zip(table.draft.points_cm(table.piece)) {
         assert_eq!(node.point, point);
-        assert_eq!(node.at, at);
-        assert_eq!(node.screen, table.on_glass(at));
+        assert_eq!(node.at_cm, at_cm);
+        assert_eq!(node.screen, table.on_glass(at_cm));
     }
 }
 
@@ -95,8 +95,8 @@ fn a_press_on_a_dot_takes_the_node_that_dot_is() {
         assert_eq!(held.point, dot.point, "the press moved another node");
         // And the place the drag measures its delta from is where the document
         // says that node is, not where some neighbour of it is.
-        assert_eq!(held.from, dot.at);
-        assert_eq!(table.draft.resolved(held.point), Some(dot.at));
+        assert_eq!(held.from_cm, dot.at_cm);
+        assert_eq!(table.draft.resolved(held.point), Some(dot.at_cm));
     }
 }
 
@@ -109,7 +109,7 @@ fn a_press_anywhere_on_the_drawn_line_moves_no_node_out_of_reach() {
             continue;
         };
         let held = grab(&table.draft, caught, caught.screen - at).expect("the node is live");
-        let moved = table.on_glass(held.from);
+        let moved = table.on_glass(held.from_cm);
         assert!(
             moved.distance(at) < GRAB_RADIUS,
             "a press at {at:?} took a node at {moved:?}"
@@ -140,9 +140,9 @@ fn a_table_with_no_document_paints_nothing_to_grab() {
     // The demo bodice draws a contour of a hundred and twenty-eight points and
     // owns no node at all: every one of them was a dot promising a drag that
     // could never be issued.
-    assert!(session.contour().len() > 100);
+    assert!(session.contour_m().len() > 100);
     let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(PANEL[0], PANEL[1]));
-    let view = View::fit(session.contour(), rect);
+    let view = DrapeView::fit(session.contour_m(), rect);
     let nodes = match (session.draft(), session.piece()) {
         (Some(draft), Some(piece)) => nodes_of(draft, piece, &view),
         _ => Vec::new(),

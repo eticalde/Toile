@@ -11,21 +11,27 @@ use super::pipeline::ShapePipeline;
 ///
 /// A negative span runs the side backwards, and one carrying the start past 1
 /// or under 0 passes the closure: `(0.9, 0.3)` runs from nine tenths round to
-/// two tenths. Ease emerges from a mismatch in the two lengths, not from a
-/// gather parameter; `b`'s indices are offset by `b_offset`. Fewer than
-/// `count` pairs come back where the nearest boundary vertex repeats.
+/// two tenths. Ease comes from a mismatch in the two lengths, not a gather
+/// parameter; each side is offset by its own, so both halves come back in the
+/// solver's one space. Fewer come back where a boundary vertex repeats.
 ///
 /// # Panics
 /// If `count` is less than two: a seam needs both endpoints.
 pub fn pair_seam(
     a: &ShapePipeline,
     run_a: (f64, f64),
+    a_offset: u32,
     b: &ShapePipeline,
     run_b: (f64, f64),
     b_offset: u32,
     count: usize,
 ) -> (Vec<u32>, Vec<u32>) {
     assert!(count >= 2, "a seam needs at least two pairs, got {count}");
+    // Each side states its own base, so a seam between the second and third
+    // pieces can be expressed at all: a side pinned to zero is only correct
+    // where its piece opens the combined state, and anywhere else it names
+    // another piece's vertices — in bounds, in silence, closing the garment
+    // on a seam that is not there.
     let mut va = Vec::with_capacity(count);
     let mut vb = Vec::with_capacity(count);
     for k in 0..count {
@@ -33,7 +39,7 @@ pub fn pair_seam(
         let fa = run_a.0 + run_a.1 * t;
         let fb = run_b.0 + run_b.1 * t;
         let (pa, pb) = (
-            a.boundary_vertex_near(fa),
+            a.boundary_vertex_near(fa) + a_offset,
             b.boundary_vertex_near(fb) + b_offset,
         );
         if va.last() == Some(&pa) || vb.last() == Some(&pb) {

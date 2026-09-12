@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use crate::asset::{self, Baked, Row, RowKind};
+use crate::asset::{self, Baked, DELTA_PER_METRE, Row, RowKind};
 use crate::normals::vertex_normals;
 use crate::phenotype::{self, Phenotype};
 
@@ -32,8 +32,13 @@ pub(crate) fn decoded() -> &'static Baked {
 
 /// A triangulated body surface in the renderer's terms.
 ///
-/// Metres, y-up, centred on the bounding-box centre of the source body,
-/// CCW-outward winding, unit outward normals.
+/// Metres, y-up, CCW-outward winding, unit outward normals, about an origin
+/// the baker put at the *template* body's bounding-box centre.
+///
+/// [`body_mesh`] centres nothing: it lays deltas onto that template, so a
+/// morphed body sits wherever they leave it. The distinction is invisible
+/// while one asset ships — the camera is framed on the template — and is the
+/// whole of the framing the moment a second body is baked.
 pub struct BodyMesh {
     /// Vertex positions as xyz triples.
     pub positions: Vec<f32>,
@@ -96,9 +101,9 @@ pub(crate) fn accumulate_except(
         let end = start + row.length as usize;
         for delta in &baked.deltas[start..end] {
             let base = delta.vertex as usize * 3;
-            positions[base] += weight * (f64::from(delta.dx) / 10_000.0);
-            positions[base + 1] += weight * (f64::from(delta.dy) / 10_000.0);
-            positions[base + 2] += weight * (f64::from(delta.dz) / 10_000.0);
+            positions[base] += weight * (f64::from(delta.dx) / DELTA_PER_METRE);
+            positions[base + 1] += weight * (f64::from(delta.dy) / DELTA_PER_METRE);
+            positions[base + 2] += weight * (f64::from(delta.dz) / DELTA_PER_METRE);
         }
     }
 }

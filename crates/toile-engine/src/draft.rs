@@ -22,7 +22,7 @@ pub use toile_doc::{
     Applied, Axis, Binding, ChangeClass, Command, ContourNode, Doc, DocError, EdgeAnchor,
     EdgeRange, Grain, Handle, Handles, History, Identity, MannequinKey, MeasureSet, NotchCount,
     Piece, PieceKey, Point, PointKey, SAMPLES, Seam, SeamKey, SeamKind, SeamOrientation, Segment,
-    SegmentEdit, Variable, VariableKey, Winding,
+    SegmentEdit, Side, Variable, VariableKey, Winding,
 };
 pub use toile_geom::curve;
 pub use toile_geom::validate::ContourFault;
@@ -101,11 +101,16 @@ impl Draft {
     /// A piece's flattened contour in metres with y upward: what the engine
     /// meshes.
     ///
-    /// Empty for a piece that has never resolved.
-    pub fn outline(&self, piece: PieceKey) -> &[[f64; 2]] {
+    /// Empty for a piece that has never resolved. The suffix is the whole
+    /// guard: this and [`Draft::flat_cm`] are the same line in two units and
+    /// the same `[f64; 2]`, a few lines apart, and the unsuffixed name is the
+    /// one a caller reaches for first — the reading that frames a panel a
+    /// hundred times too small, and, going the other way, the write that puts
+    /// metres into a document counting centimetres.
+    pub fn outline_m(&self, piece: PieceKey) -> &[[f64; 2]] {
         self.pieces
             .get(&piece)
-            .map_or(&[], |held| held.good.outline.as_slice())
+            .map_or(&[], |held| held.good.outline_m.as_slice())
     }
 
     /// The same flattened contour in centimetres with y downward: the line the
@@ -113,7 +118,7 @@ impl Draft {
     pub fn flat_cm(&self, piece: PieceKey) -> &[[f64; 2]] {
         self.pieces
             .get(&piece)
-            .map_or(&[], |held| held.good.flat.as_slice())
+            .map_or(&[], |held| held.good.flat_cm.as_slice())
     }
 
     /// A piece's nodes in centimetres with y downward: what the table selects.

@@ -63,7 +63,7 @@ impl Session {
             return Ok(());
         };
         let topology = drafted.draft.topology(piece);
-        let outline = drafted.draft.outline(piece).to_vec();
+        let outline = drafted.draft.outline_m(piece).to_vec();
         if outline.is_empty() {
             return Ok(());
         }
@@ -90,7 +90,7 @@ impl Session {
             return;
         };
         let (old_pos2d, old_tris) = (slot.pipeline().pos2d.clone(), slot.pipeline().tris.clone());
-        let contour = drafted.draft.outline(piece).to_vec();
+        let contour = drafted.draft.outline_m(piece).to_vec();
         if contour.is_empty() {
             return;
         }

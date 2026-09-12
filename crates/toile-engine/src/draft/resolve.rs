@@ -20,9 +20,16 @@ pub struct Resolved {
     pub points: Vec<(PointKey, [f64; 2])>,
     /// The whole contour flattened, in centimetres with y downward: the line
     /// the table draws, curves and all.
-    pub flat: Vec<[f64; 2]>,
+    pub flat_cm: Vec<[f64; 2]>,
     /// The same flattened contour in metres, y upward: what the mesher takes.
-    pub outline: Vec<[f64; 2]>,
+    ///
+    /// The suffix is here because these two are the same type, hold the same
+    /// contour, sit one field apart and differ by a hundred and a sign — not
+    /// because the tree carries a rule that every length is suffixed. It does
+    /// not: `points` above is centimetres and says nothing, and an unsuffixed
+    /// `[f64; 2]` elsewhere may be either unit. Read the suffix as a warning
+    /// about this neighbourhood, never as a guarantee about the rest.
+    pub outline_m: Vec<[f64; 2]>,
     /// Where each node opens in the flattening, in contour order.
     pub starts: Vec<usize>,
     /// Flattened arc length in centimetres up to each node, and round to the
@@ -86,10 +93,10 @@ pub fn piece(
 ) -> Result<Resolved, Vec<Defect>> {
     let tracts = contour::tracts(held, good, broken)?;
     let points = tracts.iter().map(|one| (one.node, one.start)).collect();
-    let (flat, starts) = contour::flatten(&tracts);
-    let outline: Vec<[f64; 2]> = flat.iter().map(|&p| to_metres(p)).collect();
-    validate::check_closed(&outline).map_err(|fault| vec![Defect::Contour(fault)])?;
-    let along = length::cumulative(&flat);
+    let (flat_cm, starts) = contour::flatten(&tracts);
+    let outline_m: Vec<[f64; 2]> = flat_cm.iter().map(|&p| to_metres(p)).collect();
+    validate::check_closed(&outline_m).map_err(|fault| vec![Defect::Contour(fault)])?;
+    let along = length::cumulative(&flat_cm);
     let cum = starts
         .iter()
         .map(|&start| along[start])
@@ -97,8 +104,8 @@ pub fn piece(
         .collect();
     Ok(Resolved {
         points,
-        flat,
-        outline,
+        flat_cm,
+        outline_m,
         starts,
         cum,
     })
@@ -143,8 +150,8 @@ mod tests {
         assert_eq!(front.points[2].1, [25.5, 20.0]);
         // The waist opens the hip curve, so it is a node and the first sample
         // of its own tract at once.
-        assert_eq!(front.flat[1], [22.0, 0.0]);
-        assert_eq!(front.outline[1], [0.22, -0.0]);
+        assert_eq!(front.flat_cm[1], [22.0, 0.0]);
+        assert_eq!(front.outline_m[1], [0.22, -0.0]);
     }
 
     #[test]
@@ -153,7 +160,7 @@ mod tests {
         // Seven straight tracts give a point each; the hip gives twenty-four
         // and the crotch sixteen.
         assert_eq!(front.points.len(), 9);
-        assert_eq!(front.flat.len(), 7 + 24 + 16);
+        assert_eq!(front.flat_cm.len(), 7 + 24 + 16);
         assert_eq!(front.cum.len(), front.points.len() + 1);
         // Each node opens its own tract, and the two bent ones are the only
         // places the flattening runs on past a single point.
@@ -201,7 +208,7 @@ mod tests {
         assert_eq!(after.points.len(), before.points.len());
         let keys = |of: &Resolved| of.points.iter().map(|&(key, _)| key).collect::<Vec<_>>();
         assert_eq!(keys(&after), keys(&before));
-        assert_ne!(after.outline, before.outline);
+        assert_ne!(after.outline_m, before.outline_m);
         assert!((run(&before, 1, 4) - 104.60).abs() < 0.01);
         assert!((run(&after, 1, 4) - 106.79).abs() < 0.01);
     }

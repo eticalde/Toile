@@ -15,7 +15,7 @@ fn front() -> Session {
 fn a_document_session_meshes_the_piece_the_draft_resolved() {
     let session = front();
     // The contour the mesher takes is the flattening, not the nine nodes.
-    assert_eq!(session.contour().len(), 47);
+    assert_eq!(session.contour_m().len(), 47);
     assert!(session.n_vertices() > 47);
     assert!(session.triangles().len().is_multiple_of(3));
     assert!(session.draft().is_some());
@@ -55,7 +55,7 @@ fn moving_a_node_writes_the_document_and_re_derives() {
         .expect("moving a node is a change of shape");
     let draft = session.draft().expect("the session has a document");
     assert_eq!(draft.resolved(node), Some([30.0, 0.0]));
-    assert_eq!(session.contour()[1], [0.30, 0.0]);
+    assert_eq!(session.contour_m()[1], [0.30, 0.0]);
 }
 
 #[test]

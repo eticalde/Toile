@@ -29,17 +29,23 @@ pub struct Drag {
     point: PointKey,
     /// What its two coordinates were bound to when it was grabbed.
     origin: [Binding; 2],
-    /// Where it resolved to then, in centimetres.
-    from: [f64; 2],
+    /// Where it resolved to then.
+    from_cm: [f64; 2],
     /// Where inside the mark the grab landed, in screen points.
     offset: egui::Vec2,
 }
 
 impl Drag {
-    /// The edit one frame of the drag makes, with the node taken to `at`.
-    fn moved_to(&self, at: [f64; 2]) -> Command {
-        let to =
-            [0, 1].map(|k| bind::placed(&self.origin[k], at[k], at[k] - self.from[k], STEP_CM));
+    /// The edit one frame of the drag makes, with the node taken to `at_cm`.
+    fn moved_to(&self, at_cm: [f64; 2]) -> Command {
+        let to = [0, 1].map(|k| {
+            bind::placed(
+                &self.origin[k],
+                at_cm[k],
+                at_cm[k] - self.from_cm[k],
+                STEP_CM,
+            )
+        });
         Command::MovePoint {
             point: self.point,
             to,
@@ -55,11 +61,15 @@ impl Drag {
 /// press moves the node it landed on. The drawn line is a different and longer
 /// sequence — every bent tract puts curve samples between two nodes — so no
 /// position in it may be used to name a node.
+///
+/// The pattern place says its unit in its name: this panel is the one place
+/// the mesher's metres and the document's centimetres meet as the same
+/// `[f64; 2]`, and only `screen` is told apart by its type.
 struct Node {
     /// The node itself.
     point: PointKey,
-    /// Where it resolved to, in centimetres.
-    at: [f64; 2],
+    /// Where it resolved to.
+    at_cm: [f64; 2],
     /// The same place in panel points.
     screen: egui::Pos2,
 }
@@ -83,9 +93,12 @@ pub fn show(
 
     // The line is the flattening, curves and all: it is what the cloth is cut
     // along. The dots below are the nodes, which are fewer.
-    let contour: Vec<[f64; 2]> = session.contour().to_vec();
-    let view = View::fit(&contour, rect);
-    let line: Vec<egui::Pos2> = contour.iter().map(|&p| view.to_screen(p)).collect();
+    let contour_m: Vec<[f64; 2]> = session.contour_m().to_vec();
+    let view = DrapeView::fit(&contour_m, rect);
+    let line: Vec<egui::Pos2> = contour_m
+        .iter()
+        .map(|&p| view.to_screen_from_m(p))
+        .collect();
     painter.add(egui::Shape::closed_line(
         line,
         egui::Stroke::new(1.6, theme.outline),
@@ -112,8 +125,8 @@ pub fn show(
     if let Some(held) = drag.as_ref()
         && let Some(pos) = resp.interact_pointer_pos()
     {
-        let at = draft::to_document(view.to_pattern(pos + held.offset));
-        let _ = session.edit(held.moved_to(at));
+        let at_cm = view.to_document(pos + held.offset);
+        let _ = session.edit(held.moved_to(at_cm));
     }
 
     for node in &nodes {
@@ -138,14 +151,14 @@ pub fn show(
 /// places on a line, not entities of the document, and there is no command
 /// that moves one; painting them as grabbable dots is what let a press on a
 /// curve write a move of some other node entirely.
-fn nodes_of(draft: &Draft, piece: PieceKey, view: &View) -> Vec<Node> {
+fn nodes_of(draft: &Draft, piece: PieceKey, view: &DrapeView) -> Vec<Node> {
     draft
         .points_cm(piece)
         .iter()
-        .map(|&(point, at)| Node {
+        .map(|&(point, at_cm)| Node {
             point,
-            at,
-            screen: view.to_screen(draft::to_metres(at)),
+            at_cm,
+            screen: view.to_screen_from_m(draft::to_metres(at_cm)),
         })
         .collect()
 }
@@ -159,7 +172,7 @@ fn grab(draft: &Draft, node: &Node, offset: egui::Vec2) -> Option<Drag> {
     Some(Drag {
         point: node.point,
         origin: [held.x.clone(), held.y.clone()],
-        from: node.at,
+        from_cm: node.at_cm,
         offset,
     })
 }
@@ -177,16 +190,21 @@ fn nearest(nodes: &[Node], pos: egui::Pos2) -> Option<&Node> {
 }
 
 /// Maps pattern metres, y up, onto panel points, y down.
-struct View {
+///
+/// Named apart from the drafting table's own `View`, which maps centimetres
+/// with y down: one crate, one word, and a `to_screen`/`to_document` pair of
+/// the same shape on both, so a reader carrying one file's habit into the
+/// other reads the wrong unit out of an identical call.
+struct DrapeView {
     centre: egui::Pos2,
     origin: (f64, f64),
     scale: f64,
 }
 
-impl View {
-    fn fit(contour: &[[f64; 2]], rect: egui::Rect) -> Self {
+impl DrapeView {
+    fn fit(contour_m: &[[f64; 2]], rect: egui::Rect) -> Self {
         let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
-        for p in contour {
+        for p in contour_m {
             for k in 0..2 {
                 lo[k] = lo[k].min(p[k]);
                 hi[k] = hi[k].max(p[k]);
@@ -200,18 +218,33 @@ impl View {
         }
     }
 
-    fn to_screen(&self, p: [f64; 2]) -> egui::Pos2 {
+    /// Where a place on the piece, in the mesher's metres, lands on the glass.
+    ///
+    /// The unit is in the method name and not only in the parameter, because
+    /// this and [`DrapeView::to_document`] read as an inverse pair and are not
+    /// one: metres go in, centimetres come out. The drafting table's own `View`
+    /// carries a `to_screen`/`to_document` pair of exactly this shape that is
+    /// centimetres on both sides, and a call site shows neither parameter name.
+    fn to_screen_from_m(&self, metres: [f64; 2]) -> egui::Pos2 {
         egui::pos2(
-            self.centre.x + ((p[0] - self.origin.0) * self.scale) as f32,
-            self.centre.y - ((p[1] - self.origin.1) * self.scale) as f32,
+            self.centre.x + ((metres[0] - self.origin.0) * self.scale) as f32,
+            self.centre.y - ((metres[1] - self.origin.1) * self.scale) as f32,
         )
     }
 
-    fn to_pattern(&self, q: egui::Pos2) -> [f64; 2] {
-        [
+    /// Where a panel point lands on the piece, in the centimetres a command is
+    /// written in.
+    ///
+    /// The unit conversion is inside the inverse rather than a step beside it.
+    /// This panel maps the pattern in the mesher's metres and writes its edits
+    /// in the document's centimetres, and both are `[f64; 2]`: a separate
+    /// `draft::to_document` here was a call that could be left out and still
+    /// compile, rewriting a node bound at 25.5 cm to 0.3 and autosaving it.
+    fn to_document(&self, q: egui::Pos2) -> [f64; 2] {
+        draft::to_document([
             self.origin.0 + f64::from(q.x - self.centre.x) / self.scale,
             self.origin.1 - f64::from(q.y - self.centre.y) / self.scale,
-        ]
+        ])
     }
 }
 

@@ -24,7 +24,7 @@ fn the_block_resolves_to_nine_nodes_in_both_units() {
     assert_eq!(draft.points_cm(piece).len(), 9);
     // Nine nodes, but forty-seven points on the line they draw: the hip is
     // flattened into twenty-four and the crotch into sixteen.
-    assert_eq!(draft.outline(piece).len(), 47);
+    assert_eq!(draft.outline_m(piece).len(), 47);
     assert!(draft.defects(piece).is_empty());
     assert_eq!(draft.topology(piece), 0);
 }
@@ -49,7 +49,7 @@ fn a_run_between_nodes_of_another_piece_measures_nothing() {
 #[test]
 fn changing_the_body_reshapes_the_piece_without_remeshing_it() {
     let (mut draft, piece) = front();
-    let before = draft.outline(piece).to_vec();
+    let before = draft.outline_m(piece).to_vec();
     let other = draft
         .doc()
         .mannequin_named("Talla 42")
@@ -58,15 +58,15 @@ fn changing_the_body_reshapes_the_piece_without_remeshing_it() {
         .edit(Command::ResolveWith { mannequin: other })
         .expect("the second body is live");
     assert_eq!(what, Recompile::Shape(vec![piece]));
-    assert_eq!(draft.outline(piece).len(), before.len());
-    assert_ne!(draft.outline(piece), before.as_slice());
+    assert_eq!(draft.outline_m(piece).len(), before.len());
+    assert_ne!(draft.outline_m(piece), before.as_slice());
     assert_eq!(draft.topology(piece), 0);
 }
 
 #[test]
 fn an_edit_that_breaks_the_formulas_is_taken_back_out() {
     let (mut draft, piece) = front();
-    let before = draft.outline(piece).to_vec();
+    let before = draft.outline_m(piece).to_vec();
     let raya = draft
         .doc()
         .variable_named("raya")
@@ -76,7 +76,7 @@ fn an_edit_that_breaks_the_formulas_is_taken_back_out() {
         to: Binding::parse("raya + 1").expect("the source parses"),
     });
     assert!(matches!(broken, Err(DraftError::Env(EnvError::Order(_)))));
-    assert_eq!(draft.outline(piece), before.as_slice());
+    assert_eq!(draft.outline_m(piece), before.as_slice());
     assert!(draft.env().value("raya").is_some());
     assert_eq!(draft.undo_depth(), 0, "a refused edit is not on the stack");
 }
@@ -84,7 +84,7 @@ fn an_edit_that_breaks_the_formulas_is_taken_back_out() {
 #[test]
 fn a_piece_that_stops_resolving_keeps_its_last_good_drawing() {
     let (mut draft, piece) = front();
-    let before = draft.outline(piece).to_vec();
+    let before = draft.outline_m(piece).to_vec();
     let node = draft.points_cm(piece)[3].0;
     draft
         .edit(Command::SetBinding {
@@ -93,7 +93,7 @@ fn a_piece_that_stops_resolving_keeps_its_last_good_drawing() {
             to: Binding::parse("largo_del_brazo").expect("the source parses"),
         })
         .expect("the document takes the binding");
-    assert_eq!(draft.outline(piece), before.as_slice());
+    assert_eq!(draft.outline_m(piece), before.as_slice());
     assert!(matches!(draft.defects(piece), [Defect::Binding { .. }]));
     assert_eq!(draft.resolved(node), None);
 }

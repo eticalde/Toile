@@ -22,7 +22,7 @@ pub(super) fn drape_piece(
             defect: defect.clone(),
         });
     }
-    let contour = draft.outline(piece).to_vec();
+    let contour = draft.outline_m(piece).to_vec();
     let (samples, max_area) = couture::for_contour(&contour);
     let pipeline = ShapePipeline::build(&contour, samples, max_area)?;
     let state = couture::drop_state(&pipeline, couture::DROP_HEIGHT);

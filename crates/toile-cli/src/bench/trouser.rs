@@ -62,7 +62,7 @@ struct Storm {
 fn storm() -> Storm {
     let no_seams = Seams::default();
     let (mut draft, piece, node) = drafted();
-    let contour = draft.outline(piece).to_vec();
+    let contour = draft.outline_m(piece).to_vec();
     let (samples, max_area) = couture::for_contour(&contour);
 
     let t0 = Instant::now();
@@ -91,7 +91,7 @@ fn storm() -> Storm {
 
         let t0 = Instant::now();
         let rests = pipe
-            .derive(draft.outline(piece))
+            .derive(draft.outline_m(piece))
             .expect("the storm moves a point, never the node count");
         cons.rest.copy_from_slice(rests);
         derive_ms.push(t0.elapsed().as_secs_f64() * 1000.0);

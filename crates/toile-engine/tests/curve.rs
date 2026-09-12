@@ -73,7 +73,7 @@ fn a_curve_flattens_into_the_contour_the_mesher_takes() {
     let expected = 3 + usize::from(SAMPLES);
     assert!(draft.defects(piece).is_empty());
     assert_eq!(draft.points_cm(piece).len(), 4, "the nodes are still four");
-    assert_eq!(draft.outline(piece).len(), expected);
+    assert_eq!(draft.outline_m(piece).len(), expected);
     assert_eq!(draft.flat_cm(piece).len(), expected);
     assert_eq!(draft.topology(piece), 2, "the curve and its sample count");
 }
@@ -111,7 +111,7 @@ fn the_run_along_a_bowed_tract_is_longer_than_its_chord() {
 fn moving_a_handle_re_derives_without_moving_the_topology_counter() {
     let (mut draft, piece, _) = bowed();
     let handle = handle(&draft, piece);
-    let before = draft.outline(piece).to_vec();
+    let before = draft.outline_m(piece).to_vec();
 
     draft.begin_gesture("mover manija");
     let what = draft
@@ -124,14 +124,14 @@ fn moving_a_handle_re_derives_without_moving_the_topology_counter() {
 
     assert_eq!(what, Recompile::Shape(vec![piece]));
     assert_eq!(draft.topology(piece), 2, "a tangent is not a topology");
-    assert_eq!(draft.outline(piece).len(), before.len());
-    assert_ne!(draft.outline(piece), before.as_slice());
+    assert_eq!(draft.outline_m(piece).len(), before.len());
+    assert_ne!(draft.outline_m(piece), before.as_slice());
 }
 
 #[test]
 fn straightening_a_tract_is_a_topology_edit_and_undo_puts_the_curve_back() {
     let (mut draft, piece, nodes) = bowed();
-    let curved = draft.outline(piece).to_vec();
+    let curved = draft.outline_m(piece).to_vec();
     let what = draft
         .edit(Command::SetSegment {
             piece,
@@ -141,16 +141,16 @@ fn straightening_a_tract_is_a_topology_edit_and_undo_puts_the_curve_back() {
         .expect("the tract straightens");
 
     assert_eq!(what, Recompile::Topology(vec![piece]));
-    assert_eq!(draft.outline(piece).len(), 4);
+    assert_eq!(draft.outline_m(piece).len(), 4);
     assert_eq!(draft.topology(piece), 3);
     assert_eq!(draft.undo(), Ok(Recompile::Topology(vec![piece])));
-    assert_eq!(draft.outline(piece), curved.as_slice());
+    assert_eq!(draft.outline_m(piece), curved.as_slice());
 }
 
 #[test]
 fn the_mesh_density_is_read_off_the_flattening() {
     let (draft, piece, _) = bowed();
-    let along = couture::for_contour(draft.outline(piece)).0;
+    let along = couture::for_contour(draft.outline_m(piece)).0;
     let across = couture::for_contour(&chords(&draft, piece)).0;
     assert!(
         along > across,

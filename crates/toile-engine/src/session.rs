@@ -145,7 +145,11 @@ impl Session {
     }
 
     /// The piece's control contour, in metres of pattern space.
-    pub fn contour(&self) -> &[[f64; 2]] {
+    ///
+    /// Suffixed for the same reason [`crate::draft::Draft::outline_m`] is: a
+    /// client holds this and the draft's centimetres as one type, and only the
+    /// name says which of the two it is holding.
+    pub fn contour_m(&self) -> &[[f64; 2]] {
         &self.contour
     }
 

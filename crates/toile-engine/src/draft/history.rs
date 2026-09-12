@@ -72,13 +72,13 @@ impl Draft {
     fn recover(&mut self, touched: Vec<PieceKey>) -> Result<Recompile, DraftError> {
         let before: Vec<usize> = touched
             .iter()
-            .map(|&piece| self.outline(piece).len())
+            .map(|&piece| self.outline_m(piece).len())
             .collect();
         self.resolve_all()?;
         let remeshed = touched
             .iter()
             .zip(&before)
-            .any(|(&piece, &was)| self.outline(piece).len() != was);
+            .any(|(&piece, &was)| self.outline_m(piece).len() != was);
         if !remeshed {
             return Ok(Recompile::Shape(touched));
         }

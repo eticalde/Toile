@@ -2,6 +2,7 @@ mod rings;
 mod rows;
 
 pub use rings::{RingEntry, RingId, RingPoint};
+pub(crate) use rows::DELTA_PER_METRE;
 pub use rows::{Delta, Row, RowKind};
 
 /// The bytes every asset opens with, so a truncated or unrelated file is

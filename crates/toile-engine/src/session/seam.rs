@@ -21,7 +21,8 @@ pub enum SeamFault {
 /// [`pair_seam`] walks. Fractions are read from the draft at call time, so an
 /// edit that changes the perimeter elsewhere cannot slide the seam along the
 /// cloth; the pair count comes from the finer side's boundary spacing, and
-/// `Opposed` hands side `b` over tail to head.
+/// `Opposed` hands side `b` over tail to head. Each side states where its own
+/// piece begins in the combined solver state — see [`pair_seam`].
 ///
 /// # Errors
 /// `Unanchored` when an anchor names a node its piece does not run through;
@@ -30,6 +31,7 @@ pub fn pair_seam_anchored(
     draft: &Draft,
     seam: &Seam,
     a: &ShapePipeline,
+    a_offset: u32,
     b: &ShapePipeline,
     b_offset: u32,
 ) -> Result<(Vec<u32>, Vec<u32>), SeamFault> {
@@ -57,5 +59,13 @@ pub fn pair_seam_anchored(
         SeamOrientation::Aligned => (head_b, span_b),
         SeamOrientation::Opposed => (tail_b, -span_b),
     };
-    Ok(pair_seam(a, (head_a, span_a), b, run_b, b_offset, pairs))
+    Ok(pair_seam(
+        a,
+        (head_a, span_a),
+        a_offset,
+        b,
+        run_b,
+        b_offset,
+        pairs,
+    ))
 }

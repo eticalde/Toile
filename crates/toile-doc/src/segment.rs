@@ -17,6 +17,21 @@ pub enum Segment {
     },
 }
 
+/// Which end of a tract a handle belongs to.
+///
+/// It sits beside [`Segment`] rather than in the interface because it is
+/// [`Segment::handle`] that has to be told which one is wanted. A cubic's two
+/// handles are the same type and lie next to each other, so asking for one by
+/// tuple position is a press taking hold of the tangent of a different node
+/// and dragging it, one binding written per frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    /// It leaves the node the tract starts at.
+    Out,
+    /// It enters the node the tract ends at.
+    Into,
+}
+
 /// What a tract is to become, with the handle points a curve brings with it.
 ///
 /// A handle is a point of the document like any other, so the edit that draws
@@ -75,6 +90,18 @@ impl Segment {
         match self {
             Segment::Line => None,
             Segment::Cubic { out, into } => Some((out, into)),
+        }
+    }
+
+    /// The handle on one side of the tract, when the tract has handles.
+    ///
+    /// For a caller that wants one of the two rather than both: it says which
+    /// in the word the variant already uses, instead of counting.
+    pub fn handle(self, side: Side) -> Option<PointKey> {
+        match (self, side) {
+            (Segment::Line, _) => None,
+            (Segment::Cubic { out, .. }, Side::Out) => Some(out),
+            (Segment::Cubic { into, .. }, Side::Into) => Some(into),
         }
     }
 }
@@ -136,6 +163,17 @@ mod tests {
         );
         assert!(curve.cites(PointKey::new(5, 0)));
         assert!(!curve.cites(PointKey::new(6, 0)));
+    }
+
+    #[test]
+    fn a_handle_is_asked_for_by_the_side_it_hangs_on() {
+        let curve = Segment::Cubic {
+            out: PointKey::new(4, 0),
+            into: PointKey::new(5, 0),
+        };
+        assert_eq!(curve.handle(Side::Out), Some(PointKey::new(4, 0)));
+        assert_eq!(curve.handle(Side::Into), Some(PointKey::new(5, 0)));
+        assert_eq!(Segment::Line.handle(Side::Out), None);
     }
 
     #[test]

@@ -103,6 +103,44 @@ pub struct Measures {
     pub shoulder_width: f32,
 }
 
+/// The floor the body stands on and the crown of its head: the lowest and
+/// highest y in the mesh, in metres.
+fn floor_and_crown(positions: &[f32]) -> (f32, f32) {
+    let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
+    for &y in positions.iter().skip(1).step_by(3) {
+        lo = lo.min(y);
+        hi = hi.max(y);
+    }
+    (lo, hi)
+}
+
+/// How far `top` stands above `bottom`, in centimetres.
+///
+/// Named so that every row of [`Measures`] converts through a helper. The
+/// girths go through `per` and the straight spans through `cm`; the three
+/// vertical readings were the only ones spelling the hundred out by hand,
+/// which makes the twenty-first row the one added with the ×100 forgotten.
+/// A centimetre figure a hundred times short is a plausible number rather
+/// than a crash, and the solver would chase it.
+///
+/// *Vertical* and not *drop*, which this module already spends on `hip_drop`:
+/// that one is the straight line between two centroids, not a difference in y.
+fn vertical_cm(top: f32, bottom: f32) -> f32 {
+    (top - bottom) * 100.0
+}
+
+/// The mesh's own bounding-box height along y, in centimetres.
+///
+/// The one implementation of the stature, so [`Measures::height`] and whatever
+/// a client shows beside the body cannot be changed apart. The identity panel
+/// prints this number and its own Δ against the tape side by side, and two
+/// hand-written scans of the same vertices is how one of them comes to
+/// contradict the other.
+pub fn height_cm(positions: &[f32]) -> f32 {
+    let (floor, crown) = floor_and_crown(positions);
+    vertical_cm(crown, floor)
+}
+
 /// The ring a [`RingId`] names: its points, as a slice of the shipped
 /// asset's flat point array, and the plane the bake cut them on.
 fn ring(id: RingId) -> (&'static [crate::asset::RingPoint], [f32; 3]) {
@@ -148,13 +186,8 @@ pub fn measure(positions: &[f32]) -> Measures {
     let cen = |id: RingId| centroid(positions, ring(id).0);
     let cm = |a: [f32; 3], b: [f32; 3]| dist(a, b) * 100.0;
 
-    let ys = positions.iter().skip(1).step_by(3);
-    let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
-    for &y in ys {
-        lo = lo.min(y);
-        hi = hi.max(y);
-    }
-    let height = (hi - lo) * 100.0;
+    let (floor, crown) = floor_and_crown(positions);
+    let height = vertical_cm(crown, floor);
 
     let waist_c = cen(RingId::Waist);
     let hip_c = cen(RingId::Hip);
@@ -183,8 +216,8 @@ pub fn measure(positions: &[f32]) -> Measures {
         head: per(RingId::Head),
         rise: cm(waist_c, crotch_c),
         hip_drop: cm(waist_c, hip_c),
-        inseam: (crotch_c[1] - lo) * 100.0,
-        outseam: (waist_c[1] - ankle_c[1]) * 100.0,
+        inseam: vertical_cm(crotch_c[1], floor),
+        outseam: vertical_cm(waist_c[1], ankle_c[1]),
         back_length: cm(nape_c, waist_c),
         arm_length: cm(acromion_c, elbow_c) + cm(elbow_c, wrist_joint_c),
         shoulder_width: cm(shoulder_l_c, shoulder_r_c),

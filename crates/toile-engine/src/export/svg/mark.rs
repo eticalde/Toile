@@ -1,7 +1,7 @@
 use std::fmt::Write;
 
-use super::{escape, keys, mm};
-use crate::draft::{Draft, PieceKey};
+use super::{escape, mm};
+use crate::draft::{Draft, PieceKey, PointKey};
 
 /// The weight of everything drawn inside a cut line, in millimetres.
 const THIN: f64 = 0.2;
@@ -44,9 +44,19 @@ pub fn grain(out: &mut String, outline: &[[f64; 2]], radians: f64) {
 
 /// The names the piece carries: its own, over its top corner, and the node
 /// names the drafter gave it, beside the nodes that hold them.
-pub fn names(out: &mut String, draft: &Draft, piece: PieceKey, nodes: &[[f64; 2]], name: &str) {
+///
+/// Each node arrives as the key and the place together, so there is no
+/// re-pairing to get wrong: the flattened cut line is the wrong length and no
+/// longer the right type, and a mismatch would have truncated in silence.
+pub fn names(
+    out: &mut String,
+    draft: &Draft,
+    piece: PieceKey,
+    nodes: &[(PointKey, [f64; 2])],
+    name: &str,
+) {
     text(out, corner_of(nodes), TITLE, &escape(name));
-    for (&at, key) in nodes.iter().zip(keys(draft, piece)) {
+    for &(key, at) in nodes {
         let Some(label) = draft.doc().label_of(piece, key) else {
             continue;
         };
@@ -69,7 +79,7 @@ fn text(out: &mut String, at: [f64; 2], size: f64, body: &str) {
 
 /// The middle of a contour and the shorter side of the box around it.
 fn middle(outline: &[[f64; 2]]) -> ([f64; 2], f64) {
-    let (low, high) = box_of(outline);
+    let (low, high) = box_of(outline.iter().copied());
     let centre = [
         f64::midpoint(low[0], high[0]),
         f64::midpoint(low[1], high[1]),
@@ -77,20 +87,23 @@ fn middle(outline: &[[f64; 2]]) -> ([f64; 2], f64) {
     (centre, (high[0] - low[0]).min(high[1] - low[1]))
 }
 
-/// Where the name of a piece goes: over the top left of the box around it.
-fn corner_of(outline: &[[f64; 2]]) -> [f64; 2] {
-    let (low, _) = box_of(outline);
+/// Where the name of a piece goes: over the top left of the box around its
+/// nodes.
+fn corner_of(nodes: &[(PointKey, [f64; 2])]) -> [f64; 2] {
+    let (low, _) = box_of(nodes.iter().map(|&(_, at)| at));
     [low[0], low[1] - TITLE / 2.0]
 }
 
-/// The box around a contour, in millimetres.
+/// The box around a run of places, in millimetres.
 ///
-/// An empty contour answers with an inverted box, which is what lets the sheet
-/// fold several of these together and still see that nothing was drawn.
-pub(super) fn box_of(outline: &[[f64; 2]]) -> ([f64; 2], [f64; 2]) {
+/// An empty run answers with an inverted box, which is what lets the sheet
+/// fold several of these together and still see that nothing was drawn. It
+/// takes the places one at a time rather than as a slice so a caller holding
+/// keys beside them need not strip the pairing apart to ask.
+pub(super) fn box_of(places: impl IntoIterator<Item = [f64; 2]>) -> ([f64; 2], [f64; 2]) {
     let mut low = [f64::INFINITY; 2];
     let mut high = [f64::NEG_INFINITY; 2];
-    for at in outline {
+    for at in places {
         for axis in 0..2 {
             low[axis] = low[axis].min(at[axis]);
             high[axis] = high[axis].max(at[axis]);
@@ -118,5 +131,45 @@ fn arrow(path: &mut String, tip: [f64; 2], back: [f64; 2]) {
         let turned = [back[0] * cos - back[1] * sin, back[0] * sin + back[1] * cos];
         let barb = [tip[0] + turned[0] * BARB, tip[1] + turned[1] * BARB];
         segment(path, tip, barb);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{MM_PER_CM, to_svg};
+    use super::{CAPTION, FONT, mm};
+    use crate::draft::{Draft, block};
+
+    /// Every node name is written at the node that carries it, and not at some
+    /// sample of the line those nodes draw.
+    ///
+    /// Asserting the name appears somewhere in the drawing is not enough: the
+    /// flattening is five times longer on this piece, and pairing the names
+    /// against it would put every one of them at a place no node is.
+    #[test]
+    fn a_node_name_is_written_beside_its_own_node() {
+        let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
+        let piece = draft
+            .doc()
+            .piece_named(block::FRONT)
+            .expect("the block draws one piece");
+        let drawing = to_svg(&draft).expect("the block draws");
+        let mut named = 0;
+        for &(key, [x, y]) in draft.points_cm(piece) {
+            let Some(label) = draft.doc().label_of(piece, key) else {
+                continue;
+            };
+            let beside = [x * MM_PER_CM + CAPTION / 2.0, y * MM_PER_CM - CAPTION / 2.0];
+            let want = format!(
+                "x=\"{}\" y=\"{}\" font-family=\"{FONT}\" font-size=\"{}\" \
+                 fill=\"#000000\">{label}</text>",
+                mm(beside[0]),
+                mm(beside[1]),
+                mm(CAPTION)
+            );
+            assert!(drawing.contains(&want), "`{label}` is not at its node");
+            named += 1;
+        }
+        assert!(named >= 2, "the block names nodes of its own");
     }
 }

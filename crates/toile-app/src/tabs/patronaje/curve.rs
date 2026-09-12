@@ -1,3 +1,6 @@
+/// Which end of a tract a handle belongs to; it lives with [`Segment`], which
+/// is what has to be told which handle a gesture is asking for.
+pub use toile_engine::draft::Side;
 use toile_engine::draft::{Command, Doc, Draft, PieceKey, Point, PointKey, Segment, SegmentEdit};
 
 use super::state::Selection;
@@ -16,15 +19,6 @@ pub const SAMPLES: u16 = 16;
 /// panel adds is the moment: it says no while the number is being typed,
 /// before the paper on the mat is clipped from the polyline it would ask for.
 pub const SAMPLE_RANGE: (u16, u16) = toile_engine::draft::SAMPLES;
-
-/// Which end of a tract a handle belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Side {
-    /// It leaves the node the tract starts at.
-    Out,
-    /// It enters the node the tract ends at.
-    Into,
-}
 
 /// A handle, said as the node it hangs from and the side it lies on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -127,7 +121,7 @@ pub fn hangs(doc: &Doc, piece: PieceKey, handle: PointKey) -> Option<Hangs> {
         .contour
         .iter()
         .position(|node| node.segment.cites(handle))?;
-    let out = held.contour[index].segment.handles()?.0 == handle;
+    let out = held.contour[index].segment.handle(Side::Out)? == handle;
     let (node, side, across) = if out {
         (
             held.contour[index].point,
@@ -141,10 +135,13 @@ pub fn hangs(doc: &Doc, piece: PieceKey, handle: PointKey) -> Option<Hangs> {
             (index + 1) % count,
         )
     };
+    // The mate hangs off the same node from the other tract, so it lies on the
+    // opposite side of it: the handle arriving at a node is mated by the one
+    // leaving it.
+    let across_side = if out { Side::Into } else { Side::Out };
     let mate = held.contour[across]
         .segment
-        .handles()
-        .map(|pair| if out { pair.1 } else { pair.0 })
+        .handle(across_side)
         .filter(|_| across != index);
     Some(Hangs { node, side, mate })
 }
@@ -158,11 +155,10 @@ pub fn hanging(doc: &Doc, piece: PieceKey, node: PointKey) -> Vec<PointKey> {
     let Some(index) = held.node_index(node) else {
         return Vec::new();
     };
-    let leaving = held.contour[index].segment.handles().map(|pair| pair.0);
+    let leaving = held.contour[index].segment.handle(Side::Out);
     let arriving = held.contour[(index + count - 1) % count]
         .segment
-        .handles()
-        .map(|pair| pair.1);
+        .handle(Side::Into);
     leaving.into_iter().chain(arriving).collect()
 }
 

@@ -114,6 +114,7 @@ fn side_seam_head_drift() -> Drift {
     let (a, _) = pair_seam(
         &front,
         (ff[0], ff[1] - ff[0]),
+        0,
         &back,
         (fb[0], fb[1] - fb[0]),
         offset,
@@ -175,13 +176,13 @@ fn a_seam_pair_stays_on_the_same_material_point() {
     let (_, seam) = draft.doc().seams.iter().next().expect("the block sews");
     let seam = *seam;
 
-    let before: Vec<[f64; 2]> = draft.outline(front).to_vec();
+    let before: Vec<[f64; 2]> = draft.outline_m(front).to_vec();
     let mut front_pipe = demo::pipeline(&before);
     let back_pipe =
-        demo::pipeline(draft.outline(draft.doc().piece_named(block::BACK).expect("drawn")));
+        demo::pipeline(draft.outline_m(draft.doc().piece_named(block::BACK).expect("drawn")));
     let offset = front_pipe.pos2d.len() as u32;
 
-    let (va, _) = pair_seam_anchored(&draft, &seam, &front_pipe, &back_pipe, offset)
+    let (va, _) = pair_seam_anchored(&draft, &seam, &front_pipe, 0, &back_pipe, offset)
         .expect("the block's seams anchor on live nodes");
     let head = va[0] as usize;
     let sewn_at = locate(&before, front_pipe.pos2d[head]);
@@ -200,12 +201,12 @@ fn a_seam_pair_stays_on_the_same_material_point() {
         })
         .expect("widening the hem is a shape edit");
 
-    let after: Vec<[f64; 2]> = draft.outline(front).to_vec();
+    let after: Vec<[f64; 2]> = draft.outline_m(front).to_vec();
     front_pipe
         .derive(&after)
         .expect("same node count, new positions");
 
-    let (va, _) = pair_seam_anchored(&draft, &seam, &front_pipe, &back_pipe, offset)
+    let (va, _) = pair_seam_anchored(&draft, &seam, &front_pipe, 0, &back_pipe, offset)
         .expect("the anchors still name live nodes");
     let head = va[0] as usize;
 
@@ -232,9 +233,9 @@ fn an_opposed_seam_pairs_the_endpoints() {
     let seam = *seam;
 
     let front_pipe =
-        demo::pipeline(draft.outline(draft.doc().piece_named(block::FRONT).expect("drawn")));
+        demo::pipeline(draft.outline_m(draft.doc().piece_named(block::FRONT).expect("drawn")));
     let back_pipe =
-        demo::pipeline(draft.outline(draft.doc().piece_named(block::BACK).expect("drawn")));
+        demo::pipeline(draft.outline_m(draft.doc().piece_named(block::BACK).expect("drawn")));
 
     let aligned = Seam {
         orientation: SeamOrientation::Aligned,
@@ -246,9 +247,9 @@ fn an_opposed_seam_pairs_the_endpoints() {
         ..aligned
     };
     let (_, vb_aligned) =
-        pair_seam_anchored(&draft, &aligned, &front_pipe, &back_pipe, 0).expect("anchors live");
+        pair_seam_anchored(&draft, &aligned, &front_pipe, 0, &back_pipe, 0).expect("anchors live");
     let (_, vb_opposed) =
-        pair_seam_anchored(&draft, &opposed, &front_pipe, &back_pipe, 0).expect("anchors live");
+        pair_seam_anchored(&draft, &opposed, &front_pipe, 0, &back_pipe, 0).expect("anchors live");
 
     assert_eq!(vb_opposed.first(), vb_aligned.last());
     assert_eq!(vb_opposed.last(), vb_aligned.first());
@@ -268,8 +269,8 @@ fn the_block_seams_pair_into_one_combined_state() {
     let draft = Draft::from_doc(block::trousers()).expect("the block resolves");
     let front = draft.doc().piece_named(block::FRONT).expect("drawn");
     let back = draft.doc().piece_named(block::BACK).expect("drawn");
-    let front_pipe = demo::pipeline(draft.outline(front));
-    let back_pipe = demo::pipeline(draft.outline(back));
+    let front_pipe = demo::pipeline(draft.outline_m(front));
+    let back_pipe = demo::pipeline(draft.outline_m(back));
     let na = front_pipe.pos2d.len() as u32;
     let nb = back_pipe.pos2d.len() as u32;
 
@@ -277,7 +278,7 @@ fn the_block_seams_pair_into_one_combined_state() {
     for (_, seam) in draft.doc().seams.iter() {
         assert_eq!(seam.a.piece(), Some(front), "side a is the front");
         assert_eq!(seam.b.piece(), Some(back), "side b is the back");
-        let (va, vb) = pair_seam_anchored(&draft, seam, &front_pipe, &back_pipe, na)
+        let (va, vb) = pair_seam_anchored(&draft, seam, &front_pipe, 0, &back_pipe, na)
             .expect("the block's seams anchor on live nodes");
         assert!(
             va.len() >= 2 && vb.len() == va.len(),

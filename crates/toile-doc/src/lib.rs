@@ -62,6 +62,6 @@ pub use piece::{ContourNode, Grain, Piece, SAMPLES, Winding};
 pub use pin::Pin;
 pub use point::{Axis, Point};
 pub use seam::{Seam, SeamKind, SeamOrientation};
-pub use segment::{Handle, Handles, Segment, SegmentEdit};
+pub use segment::{Handle, Handles, Segment, SegmentEdit, Side};
 pub use symmetry::{Symmetry, SymmetryKind};
 pub use variable::Variable;
