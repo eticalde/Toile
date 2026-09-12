@@ -88,7 +88,7 @@ pub fn show(
     session: &mut Session,
     drag: &mut Option<Drag>,
 ) {
-    let (resp, painter) = widgets::mat_canvas(ui, theme, size);
+    let (resp, painter) = widgets::mat_canvas(ui, theme, size, egui::Sense::click_and_drag());
     let rect = resp.rect;
 
     // The line is the flattening, curves and all: it is what the cloth is cut

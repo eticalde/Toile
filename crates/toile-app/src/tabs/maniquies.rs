@@ -6,7 +6,7 @@ use eframe::egui_wgpu::RenderState;
 use toile_engine::body::{self, AnnySolve, Phenotype};
 use toile_engine::draft::{BodyMesh, MeasureSet, Station};
 
-use crate::tabs::{Workspace, left_panel, right_panel};
+use crate::tabs::{Body, Workspace, left_panel, right_panel};
 use crate::theme::Theme;
 use crate::viewport::BodyView;
 
@@ -119,6 +119,17 @@ impl State {
             lit: 0,
             dirty: false,
             new_dialog: None,
+        }
+    }
+
+    /// The body on the stand, as the status bar has to name it.
+    ///
+    /// The same two things the measures panel puts at the top of itself, so
+    /// the bar cannot come to disagree with the panel above it.
+    pub fn body(&self) -> Body<'_> {
+        Body {
+            name: &self.name,
+            measures: self.measures.values.len(),
         }
     }
 }

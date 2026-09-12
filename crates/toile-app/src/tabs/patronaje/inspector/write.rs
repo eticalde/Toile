@@ -3,8 +3,9 @@ use toile_engine::draft::{Axis, Binding, Command, Draft, PieceKey, PointKey, Syn
 
 use super::super::curve;
 use super::super::state::{Field, FieldEdit, State};
+use crate::tabs::UNNAMED;
 use crate::theme::Theme;
-use crate::widgets::{Editable, Edited, PAD, formula_row, section_with, select};
+use crate::widgets::{Editable, Edited, PAD, cycle, formula_row, readout, section_with};
 
 /// One edit a panel asks for, under the name it will carry in the history.
 pub type Asked = (&'static str, Command);
@@ -30,14 +31,10 @@ pub fn coordinates(
 ) -> Option<Asked> {
     let (piece, point) = at;
     let held = draft.doc().points.get(point)?;
-    let resolved = draft.resolved(point);
     let mut asked = None;
-    for (axis, label, k) in [(Axis::X, "X", 0), (Axis::Y, "Y", 1)] {
+    for (axis, label) in [(Axis::X, "X"), (Axis::Y, "Y")] {
         let source = held.binding(axis).source().into_owned();
-        let note = match resolved {
-            Some(cm) => format!("= {:.1} cm", cm[k]),
-            None => super::why(draft, piece, point, axis),
-        };
+        let (note, fault) = super::coordinate(draft, (piece, point), axis);
         let written = row(
             ui,
             theme,
@@ -47,7 +44,7 @@ pub fn coordinates(
                 label,
                 source: &source,
                 note: &note,
-                fault: resolved.is_none(),
+                fault,
                 held: None,
             },
         );
@@ -106,6 +103,11 @@ fn counted(text: &str) -> Option<u16> {
 }
 
 /// The measurements the pattern resolves against, and the body it uses.
+///
+/// The body box steps to the next mannequin of the document, one press at a
+/// time, and says so with the cycle it carries. A document holding one body
+/// has nowhere to step, so there it is drawn as what it is — the name of the
+/// body the pattern resolves against — and senses no press at all.
 pub fn measures(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -124,8 +126,18 @@ pub fn measures(
     let mut asked = None;
     ui.horizontal(|ui| {
         ui.add_space(PAD);
-        if select(ui, theme, "resolver con", &set.name, 170.0).clicked() {
-            asked = super::next_body(doc).map(|to| (BODY, Command::ResolveWith { mannequin: to }));
+        let named = if set.name.is_empty() {
+            UNNAMED
+        } else {
+            &set.name
+        };
+        match super::next_body(doc) {
+            None => readout(ui, theme, "resolver con", named, 170.0),
+            Some(to) => {
+                if cycle(ui, theme, "resolver con", named, 170.0).clicked() {
+                    asked = Some((BODY, Command::ResolveWith { mannequin: to }));
+                }
+            }
         }
     });
     ui.add_space(6.0);

@@ -148,7 +148,14 @@ impl eframe::App for App {
         }
         let revision = self.session.revision();
         let asked = bars::top(ui, &self.theme, &mut self.tab, &self.file, revision);
-        bars::status(ui, &self.theme, self.tab, &self.session, &self.patronaje);
+        bars::status(
+            ui,
+            &self.theme,
+            self.tab,
+            &self.session,
+            &self.patronaje,
+            self.maniquies.body(),
+        );
         let mut workspace = tabs::Workspace {
             theme: &self.theme,
             session: &mut self.session,

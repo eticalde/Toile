@@ -1,24 +1,17 @@
 use eframe::egui::{
-    self, Align2, Color32, FontId, Painter, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Vec2,
-    pos2, vec2,
+    self, Color32, Painter, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Vec2, vec2,
 };
 
 use crate::tabs::{Workspace, left_panel, right_panel};
 use crate::theme::Theme;
-use crate::widgets::{
-    CORNER, PAD, canvas_label, field_row, footer_note, list_row_icon, mat_canvas, section,
-};
+use crate::widgets::{CORNER, PAD, canvas_label, footer_note, mat_canvas, section};
 
-const FABRICS: [(&str, bool); 4] = [
-    ("Algodón popelina", true),
-    ("Denim 12 oz", false),
-    ("Jersey", false),
-    ("Seda", false),
-];
-const STIFFNESS: [&str; 3] = ["Baja", "Media", "Alta"];
-const CAPTION: &str = "MUESTRA — 30 × 30 cm sobre esfera · misma física que el Probador";
-const NOTE: &str = "Peso y elasticidad son lo que el solver lee; la rigidez fija el bending. \
-                    Un preset es la tupla completa.";
+/// The library has no fabrics in it, and the panel says which instead of
+/// drawing four a press cannot pick.
+const LIBRARY: &str = "Todavía no hay biblioteca: cada drapeado usa un solo tejido.";
+/// The drape below is drawn by hand, not solved, and it is measured in nothing:
+/// the caption is the only place that can say so.
+const CAPTION: &str = "MUESTRA — ilustración";
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
@@ -29,51 +22,29 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
 
 // ── panels ────────────────────────────────────────────────────────────────
 
+/// The fabrics there are to choose between, which is none.
+///
+/// A fabric is a set of solver constants, and the solver carries exactly one
+/// set for every drape there is. Four names in a list, one of them lit, said
+/// that a choice had been made and that another was available: neither was
+/// true, and the row that answered the press with nothing was the smaller half
+/// of the lie.
 fn library(ui: &mut egui::Ui, theme: &Theme) {
     section(ui, theme, "Telas");
-    for (name, selected) in FABRICS {
-        list_row_icon(ui, theme, name, selected, swatch_icon);
-    }
-    list_row_icon(ui, theme, "Nueva tela", false, plus_icon);
+    footer_note(ui, theme, LIBRARY);
 }
 
+/// What the app really knows about the cloth it paints.
+///
+/// No fabric spec, and the omission is the point: a weight, a stretch
+/// percentage or a bending preset drawn in the box a measurement is drawn in
+/// is a number somebody copies into a cut plan, and nothing in this tab holds
+/// one or reads one. Three bending options with the first lit went further
+/// still, since a lit option is this app's mark for a choice that has been
+/// made. The colour is the single value here the viewport actually obeys.
 fn inspector(ui: &mut egui::Ui, theme: &Theme) {
-    section(ui, theme, "Propiedades · Algodón popelina");
-    field_row(ui, theme, "Peso", "120", "g/m²");
-    field_row(ui, theme, "Ancho de rollo", "150", "cm");
-    section(ui, theme, "Elasticidad");
-    field_row(ui, theme, "Urdimbre", "2", "%");
-    field_row(ui, theme, "Trama", "3", "%");
-    section(ui, theme, "Rigidez de doblado");
-    stiffness(ui, theme);
     section(ui, theme, "Color");
     colour(ui, theme);
-    ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
-        footer_note(ui, theme, NOTE);
-    });
-}
-
-/// The bending preset: three exclusive options sharing the panel width.
-fn stiffness(ui: &mut egui::Ui, theme: &Theme) {
-    let width = (ui.available_width() - 2.0 * PAD - 8.0) / 3.0;
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 4.0;
-        ui.add_space(PAD);
-        for (i, name) in STIFFNESS.iter().enumerate() {
-            let (rect, _) = ui.allocate_exact_size(vec2(width, 24.0), Sense::hover());
-            let active = i == 0;
-            let p = ui.painter();
-            if active {
-                p.rect_filled(rect, CORNER, theme.accent.gamma_multiply(0.16));
-            }
-            let edge = if active { theme.accent } else { theme.line };
-            p.rect_stroke(rect, CORNER, Stroke::new(1.0, edge), StrokeKind::Inside);
-            let ink = if active { theme.ink } else { theme.ink_soft };
-            let font = FontId::proportional(11.0);
-            p.text(rect.center(), Align2::CENTER_CENTER, *name, font, ink);
-        }
-    });
-    ui.add_space(6.0);
 }
 
 /// The cloth colour, and the hex of exactly what the swatch paints.
@@ -97,7 +68,7 @@ fn colour(ui: &mut egui::Ui, theme: &Theme) {
 fn centre(ui: &mut egui::Ui, theme: &Theme) {
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let size = ui.available_size();
-        let (resp, painter) = mat_canvas(ui, theme, size);
+        let (resp, painter) = mat_canvas(ui, theme, size, Sense::hover());
         sample(&painter, theme, resp.rect);
         canvas_label(&painter, theme, resp.rect, CAPTION);
     });
@@ -250,28 +221,4 @@ fn cubic(from: (f32, f32), s: [f32; 6], t: f32) -> (f32, f32) {
         a * from.0 + b * s[0] + c * s[2] + d * s[4],
         a * from.1 + b * s[1] + c * s[3] + d * s[5],
     )
-}
-
-// ── glyphs ────────────────────────────────────────────────────────────────
-
-/// A bolt of cloth: the square of the sample and the wave of the weave.
-fn swatch_icon(p: &Painter, r: Rect, color: Color32) {
-    let stroke = Stroke::new(1.3, color);
-    let b = r.shrink(2.0);
-    p.rect_stroke(b, 1.0, stroke, StrokeKind::Inside);
-    let wave: Vec<Pos2> = (0..=8)
-        .map(|i| {
-            let t = i as f32 / 8.0;
-            let phase = t * std::f32::consts::TAU;
-            pos2(b.left() + b.width() * t, b.center().y + 2.0 * phase.sin())
-        })
-        .collect();
-    p.add(Shape::line(wave, stroke));
-}
-
-fn plus_icon(p: &Painter, r: Rect, color: Color32) {
-    let stroke = Stroke::new(1.4, color);
-    let c = r.center();
-    p.line_segment([c - vec2(0.0, 5.0), c + vec2(0.0, 5.0)], stroke);
-    p.line_segment([c - vec2(5.0, 0.0), c + vec2(5.0, 0.0)], stroke);
 }

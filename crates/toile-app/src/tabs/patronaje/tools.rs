@@ -140,7 +140,10 @@ fn tile(
     };
     if weight == Weight::Held {
         p.rect_filled(rect, CORNER, theme.accent.gamma_multiply(0.16));
-    } else if resp.hovered() {
+    } else if weight == Weight::Ready && resp.hovered() {
+        // A tile whose phase has not arrived stays unlit under the pointer.
+        // Lighting is this panel's promise that a press lands, and a promise
+        // made where the hand is looking outweighs the border it is missing.
         p.rect_filled(rect, CORNER, theme.accent.gamma_multiply(0.07));
     }
     if weight != Weight::Absent {

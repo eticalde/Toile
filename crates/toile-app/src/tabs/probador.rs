@@ -1,3 +1,5 @@
+mod seams;
+
 use eframe::egui::{
     self, Align2, Color32, FontId, Painter, Pos2, Rect, Sense, Shape, Stroke, Vec2, pos2, vec2,
 };
@@ -5,10 +7,12 @@ use eframe::egui_wgpu::RenderState;
 use toile_engine::session::Session;
 
 use crate::pattern;
-use crate::tabs::{Workspace, right_panel};
+use crate::tabs::{UNNAMED, Workspace, right_panel};
 use crate::theme::Theme;
 use crate::viewport::Viewport;
-use crate::widgets::{PAD, button_icon, field_row, footer_note, section, section_with, select};
+use crate::widgets::{
+    PAD, button_ghost_icon, field_row, footer_note, readout, section, section_with,
+};
 
 /// Gap between the 2D and 3D halves, in points.
 const SPLIT_GAP: f32 = 12.0;
@@ -16,15 +20,11 @@ const SUBBAR_H: f32 = 44.0;
 const SEAM_H: f32 = 28.0;
 const MARK: f32 = 12.0;
 
-/// Each seam, with the length its two sides come out to and whether they meet.
-const SEAMS: [(&str, &str, &str, bool); 5] = [
-    ("Lateral izq.", "104.0", "104.0", true),
-    ("Lateral der.", "104.0", "104.0", true),
-    ("Entrepierna", "78.0", "78.0", true),
-    ("Tiro", "27.0", "29.5", false),
-    ("Pretina", "84.0", "84.0", true),
-];
-const MISMATCH: &str = "tiro: los largos difieren 2.5 cm";
+const EMPTY: &str = "El producto en la mesa no lleva costuras.";
+/// What the table answers with before any product is opened. The drafting tab
+/// calls that same table empty, and a panel here naming a product that is not
+/// there would have the two tabs disagreeing about what is on the stand.
+const BARE: &str = "No hay ningún producto en la mesa.";
 const NOTE: &str = "Editar un punto en 2D re-drapea sin resetear la simulación.";
 
 /// The tab's own state: a GPU viewport and the drag in progress.
@@ -54,8 +54,8 @@ impl State {
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
-    sub_bar(ui, theme);
-    right_panel(ui, theme, |ui| inspector(ui, theme));
+    sub_bar(ui, theme, w.session);
+    right_panel(ui, theme, |ui| inspector(ui, theme, w.session));
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let full = ui.available_size();
         ui.horizontal(|ui| {
@@ -71,7 +71,19 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
 
 // ── bars and panels ───────────────────────────────────────────────────────
 
-fn sub_bar(ui: &mut egui::Ui, theme: &Theme) {
+/// The bar over the table: the body being fitted, and the sim controls.
+///
+/// The body is the only one of the three things a fitting names that the
+/// document can answer for. It carries no product name, and the app carries no
+/// fabric at all, so a box for either would read the same two words over every
+/// pattern ever opened. It is a readout and not a picker, because the document
+/// resolves against the body the drafting table chose and this bar has no say.
+///
+/// The three sim controls are drawn dead. The sim thread takes a rest update,
+/// a swapped mesh and a shutdown, and nothing else: there is no pause to ask
+/// for, no resume, and no starting state to go back to. They keep their room
+/// so that the phase which builds them moves nothing on this bar.
+fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session) {
     egui::Panel::top("probador-subbar")
         .exact_size(SUBBAR_H)
         .frame(
@@ -81,42 +93,78 @@ fn sub_bar(ui: &mut egui::Ui, theme: &Theme) {
         )
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
-                select(ui, theme, "maniquí", "Etienne", 150.0);
-                select(ui, theme, "producto", "Pantalón base", 170.0);
-                select(ui, theme, "tela", "Algodón popelina", 170.0);
+                if let Some(body) = fitted(session) {
+                    readout(ui, theme, "maniquí", body, 150.0);
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
-                    button_icon(ui, theme, "Reiniciar", false, reset_icon);
-                    button_icon(ui, theme, "Pausar", false, pause_icon);
-                    button_icon(ui, theme, "Simular", true, play_icon);
+                    button_ghost_icon(ui, theme, "Reiniciar", reset_icon);
+                    button_ghost_icon(ui, theme, "Pausar", pause_icon);
+                    button_ghost_icon(ui, theme, "Simular", play_icon);
                 });
             });
         });
 }
 
-/// The seam table, and what the selected piece is made of.
-fn inspector(ui: &mut egui::Ui, theme: &Theme) {
-    section_with(ui, theme, "Costuras", "5");
-    for seam in SEAMS {
+/// The seam table of whatever is on the table, and the piece that drapes.
+///
+/// Every row is measured from the draft on the frame it is drawn. The table is
+/// the one place in the app that renders a verdict about someone's own pattern,
+/// so it says nothing it did not measure: a seam it cannot walk shows no
+/// lengths and carries no mark.
+fn inspector(ui: &mut egui::Ui, theme: &Theme, session: &Session) {
+    let rows = session.draft().map_or_else(Vec::new, seams::measured);
+    section_with(ui, theme, "Costuras", &rows.len().to_string());
+    if rows.is_empty() {
+        let none = if session.draft().is_some() {
+            EMPTY
+        } else {
+            BARE
+        };
+        footer_note(ui, theme, none);
+    }
+    for seam in &rows {
         seam_row(ui, theme, seam);
     }
-    mismatch(ui, theme);
-    section(ui, theme, "Pieza seleccionada");
-    field_row(ui, theme, "Delantero · tela", "Algodón", "");
+    for seam in &rows {
+        if let Some(complaint) = seam.complaint.as_deref() {
+            mismatch(ui, theme, complaint);
+        }
+    }
+    if let Some(name) = draped(session) {
+        section(ui, theme, "Pieza en la mesa");
+        field_row(ui, theme, "nombre", name, "");
+    }
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         footer_note(ui, theme, NOTE);
     });
 }
 
+/// The body the document on the table resolves against, by name.
+///
+/// A product made from scratch resolves against a body nobody has named yet,
+/// and an empty box reads as a box that failed to fill.
+fn fitted(session: &Session) -> Option<&str> {
+    let doc = session.draft()?.doc();
+    let name = &doc.mannequins.get(doc.resolve_with)?.name;
+    Some(if name.is_empty() { UNNAMED } else { name })
+}
+
+/// The piece draping right now, under the name the document gives it.
+fn draped(session: &Session) -> Option<&str> {
+    let draft = session.draft()?;
+    let held = draft.doc().pieces.get(session.piece()?)?;
+    Some(&held.name)
+}
+
 /// Seam name, the two lengths, and the mark saying whether they close.
-fn seam_row(ui: &mut egui::Ui, theme: &Theme, seam: (&str, &str, &str, bool)) {
-    let (name, left, right, ok) = seam;
+fn seam_row(ui: &mut egui::Ui, theme: &Theme, seam: &seams::Row) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), SEAM_H), Sense::hover());
     let p = ui.painter();
     p.text(
         rect.left_center() + vec2(PAD, 0.0),
         Align2::LEFT_CENTER,
-        name,
+        &seam.name,
         FontId::proportional(12.0),
         theme.ink_soft,
     );
@@ -124,20 +172,28 @@ fn seam_row(ui: &mut egui::Ui, theme: &Theme, seam: (&str, &str, &str, bool)) {
         rect.right_center() - vec2(PAD + MARK / 2.0, 0.0),
         Vec2::splat(MARK),
     );
-    let mark: fn(&Painter, Rect, Color32) = if ok { check_icon } else { warn_icon };
-    let tone = if ok { theme.accent } else { theme.alert };
-    mark(p, slot, tone);
+    let ink = match seam.meets {
+        Some(true) => {
+            check_icon(p, slot, theme.accent);
+            theme.ink
+        }
+        Some(false) => {
+            warn_icon(p, slot, theme.alert);
+            theme.alert
+        }
+        None => theme.muted,
+    };
     p.text(
         pos2(slot.left() - 8.0, rect.center().y),
         Align2::RIGHT_CENTER,
-        format!("{left} / {right}"),
+        &seam.lengths,
         FontId::monospace(11.0),
-        if ok { theme.ink } else { theme.alert },
+        ink,
     );
 }
 
 /// Says in words what the warning mark on the seam row only hints at.
-fn mismatch(ui: &mut egui::Ui, theme: &Theme) {
+fn mismatch(ui: &mut egui::Ui, theme: &Theme, complaint: &str) {
     let margin = egui::Margin {
         left: 12,
         right: 12,
@@ -145,7 +201,7 @@ fn mismatch(ui: &mut egui::Ui, theme: &Theme) {
         bottom: 10,
     };
     egui::Frame::new().inner_margin(margin).show(ui, |ui| {
-        let body = egui::RichText::new(MISMATCH).monospace().size(11.0);
+        let body = egui::RichText::new(complaint).monospace().size(11.0);
         ui.label(body.color(theme.alert));
     });
 }
@@ -206,3 +262,6 @@ fn warn_icon(p: &Painter, r: Rect, color: Color32) {
     p.add(Shape::closed_line(body, stroke));
     p.line_segment([at(6.0, 5.0), at(6.0, 8.5)], stroke);
 }
+
+#[cfg(test)]
+mod tests;

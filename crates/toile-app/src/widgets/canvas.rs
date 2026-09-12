@@ -5,8 +5,12 @@ use crate::theme::Theme;
 const GRID_STEP: f32 = 24.0;
 
 /// The cutting mat: flat fill plus the ruled grid every 24 points.
-pub fn mat_canvas(ui: &mut Ui, theme: &Theme, size: Vec2) -> (Response, Painter) {
-    let (resp, painter) = ui.allocate_painter(size, Sense::click_and_drag());
+///
+/// The caller says what the mat answers to, because that is not a property of
+/// a mat: a canvas with something to grab on it takes the drag, and one that
+/// is an illustration takes nothing rather than swallowing a gesture whole.
+pub fn mat_canvas(ui: &mut Ui, theme: &Theme, size: Vec2, sense: Sense) -> (Response, Painter) {
+    let (resp, painter) = ui.allocate_painter(size, sense);
     fill(&painter, theme, resp.rect);
     grid(&painter, theme, resp.rect, GRID_STEP, Vec2::ZERO);
     (resp, painter)

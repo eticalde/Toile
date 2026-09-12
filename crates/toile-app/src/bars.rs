@@ -77,6 +77,7 @@ pub fn status(
     tab: Tab,
     session: &Session,
     patronaje: &tabs::patronaje::State,
+    body: tabs::Body<'_>,
 ) {
     egui::Panel::bottom("status")
         .exact_size(STATUS_H)
@@ -85,7 +86,7 @@ pub fn status(
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
                 ui.spacing_mut().item_spacing.x = 0.0;
-                for (i, (cell, alert)) in tab.status(session, patronaje).iter().enumerate() {
+                for (i, (cell, alert)) in tab.status(session, patronaje, body).iter().enumerate() {
                     if i > 0 {
                         ui.label(cell_text(" · ", theme.line));
                     }

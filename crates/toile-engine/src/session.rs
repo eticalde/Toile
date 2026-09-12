@@ -188,6 +188,17 @@ impl Session {
             .map_or_else(|| Arc::new(Snapshot::default()), SimHandle::snapshot)
     }
 
+    /// Whether there is a sim thread at all.
+    ///
+    /// Nothing drapes until a piece meshes, so a blank table has no thread and
+    /// [`Session::snapshot`] answers with the empty snapshot — whose
+    /// `converged` is false, the same value a simulation still working reports.
+    /// Anything that speaks about the sim asks this first, or it speaks about a
+    /// thread that does not exist.
+    pub fn simulating(&self) -> bool {
+        self.handle.is_some()
+    }
+
     /// True when the sim has slept on the latest edit: nothing left to
     /// animate.
     ///
