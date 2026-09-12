@@ -95,25 +95,36 @@ fn ring_points(id: RingId) -> &'static [crate::asset::RingPoint] {
 /// differentiable function of the phenotype — the property the next
 /// slice's per-part solver depends on.
 ///
-/// `entrepierna` (`inseam`) and `largo_lateral` (`outseam`) are heights
+/// `entrepierna` (`inseam`) and `largo_lateral` (`outseam`) are both heights
 /// above the floor — the same `lo` the stature is measured down to, so the
 /// parts still sum to the whole — rather than distances to
-/// [`RingId::Ankle`]'s ring, for two separate reasons. The tape runs to
-/// the ground: a pattern maker writes down the floor-to-crotch length, and
-/// the drafting-book tape this crate is checked against is floor-based, so
-/// stopping at the ankle is a deliberate departure from the ankle wording
-/// the project's own plan quotes out of ISO 8559's trouser-inseam clause.
-/// The distance the change closes is about 15 cm, not the ~7 cm an
-/// ankle-to-floor estimate suggests, because [`RingId::Ankle`] is cut most
-/// of the way down the shin rather than at the ankle joint — measured on
-/// the reference adult, that ring's centroid sits 15.4 cm above the sole.
-/// And it is a *height*, not a straight line to a sole, because the feet
-/// in Anny's A-pose stand about 20 cm either side of the midline the waist
-/// and crotch centroids lie on: a straight line would fold that stance
-/// width into the measurement (2.6 cm on the inseam), making the number
-/// depend on the pose rather than on the body.
+/// [`RingId::Ankle`]'s ring. Being *heights* rather than straight lines to a
+/// sole is right for both, and unconditionally: the feet in Anny's A-pose
+/// stand about 20 cm either side of the midline the waist and crotch
+/// centroids lie on, so a straight line would fold that stance width into
+/// the measurement (2.6 cm on the inseam) and make the number depend on the
+/// pose rather than on the body.
 ///
-/// `outseam` is the waist's own height rather than the path down the
+/// The lower endpoint is a different question, and the two rows do not
+/// share an answer.
+///
+/// `entrepierna` is correct as it stands: PLAN-002's sealed decision 3 puts
+/// `crotch_z = entrepierna` with the floor at zero, so this is a crotch
+/// height, and it measures +0.90 cm against the default tape.
+///
+/// `largo_lateral` is **knowingly wrong here**. Decision 3-bis reads
+/// `ankle_z = waist_z - largo_lateral` — waist to *ankle*, not waist to
+/// floor — and gives the reason: under the floor reading `ankle_z` is zero
+/// and the loft's foot caps end up below the ground. Measuring it to the
+/// floor is a deviation this crate cannot yet correct, because the honest
+/// fix needs an ankle landmark that does not exist in the baked asset:
+/// [`RingId::Ankle`] is cut most of the way down the shin, its centroid
+/// 15.4 cm above the sole on the reference adult, so reverting to that ring
+/// would trade a +5.13 cm error for a -10.24 cm one. Cutting a true ankle
+/// ring is a bake-time change, and until it lands this row's Δ is a
+/// convention mismatch rather than a measurement of the body.
+///
+/// `outseam` is also the waist's own height rather than the path down the
 /// outside of the leg ISO 8559 specifies, which is an honest
 /// approximation the interface should state rather than claim ISO
 /// conformance for. The hip-to-waist relationship is structural rather
