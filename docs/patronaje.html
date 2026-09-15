@@ -760,6 +760,12 @@ raya           = (cadera / 4 + holgura_cadera - extension_tiro) / 2</code></pre>
   <hr>
 
   <p class="refs">Este documento es la destilación permanente del plan de trabajo de la pestaña. La arquitectura que lo sostiene está en <a href="./architecture.html">ADR-001</a>; las reglas con que se escribe su código, en <a href="./style.html">STD-001</a>.</p>
+
+  <div class="decision">
+    <b>Enmienda · 2026-09-15 · Todas las piezas, y cada una</b>
+    <p>La mesa ya no enseña sólo la pieza activa. Un producto abre en la <strong>vista general</strong>: todas sus piezas a la vez, cada una arrastrable, con su posición guardada en el documento (<a href="./maniqui.html#formato">PLAN-002 §6</a>, versión 4). Una pieza que nunca se movió se coloca sola, lado a lado, sin escribir nada. Un clic en la lista de la izquierda abre el <strong>detalle</strong> de esa pieza, aislada y con todas las herramientas; se vuelve por la fila «Todas las piezas», por el «Producto» de la ruta del rótulo o con Esc.</p>
+    <p>El panel derecho lista las 20 medidas del catálogo —las generales, no las de un cuerpo— con su valor en el cuerpo contra el que resuelve el patrón. Mientras se escribe una fórmula, un clic en un nombre lo inserta donde está el cursor, sin confirmar nada a medio escribir. Sigue pendiente el selector visual desde el maniquí 3D (<a href="https://github.com/eticalde/Toile/issues/47">#47</a>).</p>
+  </div>
 </section>
 
 </main>

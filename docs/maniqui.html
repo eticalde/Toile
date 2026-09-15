@@ -601,6 +601,11 @@ pub struct Origin {
     <p>Arriba se dice que <code>origin</code> estampa <code>toile: 2</code>. Eso se escribió cuando 2 era el primer número libre, y el fenotipo lo ocupó antes. Estampar el vínculo con 2 rompía justo la promesa de esta sección: una build que lee 2 es anterior al vínculo, abre el archivo sin quejarse y, al guardar, <strong>lo pierde en silencio</strong>; la banda no vuelve a salir para ese producto. Se comprobó contra el lector de ese commit.</p>
     <p>La regla queda así: <strong>cada campo que un lector podría perder toma el número siguiente</strong>. Un documento con vínculo lleva <code>toile: 3</code>; con fenotipo y sin vínculo, 2; sin nada nuevo, 1. El lector anterior rechaza el 3 en voz alta, también comprobado.</p>
   </div>
+
+  <div class="decision">
+    <b>Enmienda · 2026-09-15 · La posición de las piezas, versión 4</b>
+    <p>Una pieza guarda dónde está en la vista general del producto: un desplazamiento en centímetros, sólo de disposición. Nunca entra en la resolución, la malla, las costuras, el drapeado ni la exportación. Por la regla de arriba toma el número siguiente: un producto con alguna pieza colocada lleva <code>toile: 4</code>. Se comprobó contra el lector anterior: rechaza el 4, y el mismo contenido estampado 3 lo abría, perdía la posición y guardaba <code>toile: 1</code>.</p>
+  </div>
 </section>
 
 <section id="sdf">
