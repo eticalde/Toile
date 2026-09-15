@@ -84,6 +84,16 @@ pub enum Tool {
     Curve,
 }
 
+/// How much of the product the mat puts in front of the person.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Scope {
+    /// Every piece at once, each where it was placed, there to be arranged.
+    #[default]
+    Product,
+    /// The piece in front alone, in its own coordinates, with every tool.
+    Piece,
+}
+
 /// A field of the inspector somebody is writing in.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Field {
@@ -119,13 +129,19 @@ pub struct FieldEdit {
 pub struct State {
     /// Where the document lies on the glass.
     pub view: View,
-    /// The piece the mat is drafting, out of the several a product may hold.
+    /// Whether the mat shows the whole product or one piece of it.
     ///
-    /// It is the one the canvas draws and the panels edit, chosen in the
-    /// product tree and set to a piece the moment it is drawn. `None` only on a
-    /// product with no pieces yet, where the sole thing to do is draw the
-    /// first. A matter of view, never the document's: which piece is in
-    /// front of the person is not something the file remembers.
+    /// A product always opens on the whole of it: that is the one view where
+    /// every piece it holds can be seen and reached at once.
+    pub scope: Scope,
+    /// The piece in front, out of the several a product may hold.
+    ///
+    /// It is the one the panels edit: the piece a detail shows alone, and the
+    /// one lit on the whole product. Chosen in the product tree or on the mat,
+    /// and set to a piece the moment it is drawn. `None` only on a product
+    /// with no pieces yet, where the sole thing to do is draw the first. A
+    /// matter of view, never the document's: which piece is in front of the
+    /// person is not something the file remembers.
     pub active: Option<PieceKey>,
     /// The piece being renamed in the product tree, and the name typed so far,
     /// while its row is an open field. A matter of view, like the active piece.
@@ -139,7 +155,8 @@ pub struct State {
     /// Whether every tract carries its length, and not only the one the
     /// pointer is on.
     pub dimensions: bool,
-    /// Frames the piece on the next frame that has one to frame.
+    /// Frames what the mat shows on the next frame that has something to
+    /// frame.
     pub frame: bool,
     /// What the tab asks the application to do with the pattern's file.
     pub asked: Option<Action>,
@@ -165,8 +182,10 @@ impl State {
     /// Forgets everything that pointed at the last document.
     ///
     /// A new document brings new keys, so a selection, a gesture or a half
-    /// written field held over from the last one would point at nothing.
+    /// written field held over from the last one would point at nothing. The
+    /// next product opens on the whole of it, whatever the last one showed.
     pub fn reset(&mut self) {
+        self.scope = Scope::Product;
         self.active = None;
         self.renaming = None;
         self.selection = Selection::None;
@@ -177,14 +196,37 @@ impl State {
         self.refused = None;
         self.frame = true;
     }
+
+    /// Puts one piece alone on the mat, framed, with nothing of it chosen.
+    pub fn open(&mut self, piece: PieceKey) {
+        self.active = Some(piece);
+        self.scope = Scope::Piece;
+        self.selection = Selection::None;
+        self.frame = true;
+    }
+
+    /// Goes back to the whole product, framed.
+    ///
+    /// A drawing in progress is walked away from, the way Escape leaves it:
+    /// nothing of it has reached the document, so there is nothing to unwind.
+    pub fn overview(&mut self) {
+        if matches!(self.gesture, Gesture::Drawing { .. }) {
+            self.gesture = Gesture::Idle;
+            self.caught = None;
+        }
+        self.scope = Scope::Product;
+        self.selection = Selection::None;
+        self.frame = true;
+    }
 }
 
 impl Default for State {
-    /// A fresh table: nothing chosen, the label layer lit, the snap on, and
-    /// waiting to frame whatever it is handed.
+    /// A fresh table: the whole product, nothing chosen, the label layer lit,
+    /// the snap on, and waiting to frame whatever it is handed.
     fn default() -> State {
         State {
             view: View::default(),
+            scope: Scope::Product,
             active: None,
             renaming: None,
             selection: Selection::None,

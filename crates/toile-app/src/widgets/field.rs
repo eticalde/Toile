@@ -1,6 +1,6 @@
 use eframe::egui::{
-    self, Align, Align2, FontId, Id, Painter, Rect, Sense, Stroke, StrokeKind, TextEdit, Ui, pos2,
-    vec2,
+    self, Align, Align2, FontId, Id, Painter, Pos2, Rect, Sense, Stroke, StrokeKind, TextEdit, Ui,
+    pos2, vec2,
 };
 
 use super::{CORNER, PAD};
@@ -81,34 +81,35 @@ pub fn formula_row(ui: &mut Ui, theme: &Theme, id: Id, row: &Editable<'_>) -> Ed
         rect.left_top() + vec2(34.0, 4.0),
         pos2(rect.right() - PAD, rect.top() + 28.0),
     );
-    let focused = ui.memory(|m| m.has_focus(id));
-    let edge = if focused { theme.accent } else { theme.line };
-    let p = ui.painter();
-    p.rect(
-        boxed,
-        CORNER,
-        theme.raised,
-        Stroke::new(1.0, edge),
-        StrokeKind::Inside,
-    );
-    p.text(
+    ui.painter().text(
         pos2(rect.left() + PAD, boxed.center().y),
         Align2::LEFT_CENTER,
         row.label,
         FontId::proportional(12.0),
         theme.ink_soft,
     );
-    let ink = if row.fault {
-        theme.alert
-    } else {
-        theme.measure
-    };
-    p.text(
-        pos2(boxed.left() + 2.0, boxed.bottom() + 11.0),
-        Align2::LEFT_CENTER,
-        row.note,
-        FontId::monospace(11.0),
-        ink,
+    let under = pos2(boxed.left() + 2.0, boxed.bottom() + 11.0);
+    note(ui.painter(), theme, (under, Align2::LEFT_CENTER), row);
+    edit_box(ui, theme, id, boxed, row)
+}
+
+/// The mono box a row is written in, edged in the accent while it has the
+/// focus, answering what was done to it this frame.
+pub(super) fn edit_box(
+    ui: &mut Ui,
+    theme: &Theme,
+    id: Id,
+    boxed: Rect,
+    row: &Editable<'_>,
+) -> Edited {
+    let focused = ui.memory(|m| m.has_focus(id));
+    let edge = if focused { theme.accent } else { theme.line };
+    ui.painter().rect(
+        boxed,
+        CORNER,
+        theme.raised,
+        Stroke::new(1.0, edge),
+        StrokeKind::Inside,
     );
     let mut text = row.held.unwrap_or(row.source).to_owned();
     let resp = ui.put(
@@ -129,6 +130,17 @@ pub fn formula_row(ui: &mut Ui, theme: &Theme, id: Id, row: &Editable<'_>) -> Ed
         return Edited::Typing(text);
     }
     Edited::Idle
+}
+
+/// The line that says what a row comes to, in the alert ink when it is a
+/// fault, anchored where the row puts it.
+pub(super) fn note(p: &Painter, theme: &Theme, at: (Pos2, Align2), row: &Editable<'_>) {
+    let ink = if row.fault {
+        theme.alert
+    } else {
+        theme.measure
+    };
+    p.text(at.0, at.1, row.note, FontId::monospace(11.0), ink);
 }
 
 fn value_box(p: &Painter, theme: &Theme, rect: Rect, value: &str) {

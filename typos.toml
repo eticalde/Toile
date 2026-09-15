@@ -69,3 +69,6 @@ componentes = "componentes"
 # "several/various", the new-mannequin dialog's own no-library-yet notice.
 # crates/toile-app/src/tabs/maniquies/identity.rs
 varios = "varios"
+# "double", in the drafting bar's hint that a double click opens a piece.
+# crates/toile-app/src/tabs/patronaje/report.rs
+doble = "doble"

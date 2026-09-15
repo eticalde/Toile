@@ -1,8 +1,8 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
 use toile_doc::{
-    Axis, Binding, Command, Doc, Grain, History, MannequinKey, MeasureSet, PointKey, VariableKey,
-    block,
+    Axis, Binding, Command, Doc, Grain, History, MannequinKey, MeasureSet, Placement, PointKey,
+    VariableKey, block,
 };
 
 /// The seed. Fixed, so a failure names a sequence anyone can replay.
@@ -78,7 +78,7 @@ fn command(draw: &mut Draw, doc: &Doc) -> Command {
     let bodies: Vec<MannequinKey> = doc.mannequins.keys().collect();
     let point = draw.pick(&points);
     let piece = draw.pick(&doc.piece_keys());
-    match draw.below(9) {
+    match draw.below(10) {
         0 => Command::MovePoint {
             point,
             to: [draw.binding(), draw.binding()],
@@ -112,9 +112,13 @@ fn command(draw: &mut Draw, doc: &Doc) -> Command {
             point,
             to: (draw.below(4) > 0).then(|| draw.pick(&NAMES).to_owned()),
         },
-        _ => Command::ShowLabel {
+        8 => Command::ShowLabel {
             point,
             to: draw.below(2) == 0,
+        },
+        _ => Command::PlacePiece {
+            piece,
+            to: (draw.below(3) > 0).then(|| Placement::new(draw.number(), draw.number())),
         },
     }
 }

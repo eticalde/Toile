@@ -1,4 +1,4 @@
-use toile_engine::draft::{Binding, MeasureSet, block};
+use toile_engine::draft::{Binding, Doc, MeasureSet, block};
 
 use super::*;
 
@@ -67,9 +67,13 @@ fn a_point_that_resolves_reports_both_of_its_coordinates() {
 fn a_document_with_one_body_has_no_next_one() {
     let fresh = Doc::new(MeasureSet::default());
     assert_eq!(fresh.mannequins.len(), 1);
-    assert!(next_body(&fresh).is_none());
+    assert!(tape::next_body(&fresh).is_none());
 
     let doc = block::trouser_front();
-    let next = next_body(&doc).expect("the block carries two bodies");
+    let next = tape::next_body(&doc).expect("the block carries two bodies");
     assert_ne!(next, doc.resolve_with, "a step lands on the other body");
 }
+
+mod desk;
+mod insert;
+mod listing;

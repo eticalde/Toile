@@ -1,9 +1,11 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
-use toile_doc::{Doc, FormatError, MeasureSet, block};
+use toile_doc::{Doc, MeasureSet, block};
+
+mod placement;
 
 /// The base block as it ships, written before any body carried a phenotype.
-const SHIPPED: &str = include_str!("../../../assets/pantalon-base.toile");
+const SHIPPED: &str = include_str!("../../../../assets/pantalon-base.toile");
 
 /// The smallest document there is, as the writer spelled it before any body
 /// carried a phenotype.
@@ -100,11 +102,9 @@ fn header(version: u32) -> String {
 
 /// `text` with its header claiming `version` instead.
 fn restamped(text: &str, version: u32) -> String {
-    let body = text
-        .strip_prefix(&header(1))
-        .or_else(|| text.strip_prefix(&header(2)))
-        .or_else(|| text.strip_prefix(&header(3)))
-        .expect("the file opens with a header this build writes");
+    let body = (1..=5)
+        .find_map(|stamp| text.strip_prefix(&header(stamp)))
+        .expect("the file opens with a header the tests write");
     format!("{}{body}", header(version))
 }
 
@@ -179,20 +179,11 @@ fn the_version_stamp_is_2_exactly_when_a_new_field_is_present_and_1_otherwise() 
 }
 
 #[test]
-fn a_version_2_document_round_trips_and_version_4_is_rejected_loudly() {
+fn a_version_2_document_round_trips_byte_identical() {
     let file = shaped(2);
     let doc = Doc::from_json(&file).expect("this build reads version 2");
     assert_eq!(doc.to_canonical_json().as_bytes(), file.as_bytes());
     assert_eq!(Doc::from_json(&doc.to_canonical_json()), Ok(doc));
-
-    for later in [restamped(&file, 4), restamped(SHIPPED, 4)] {
-        let error = Doc::from_json(&later).expect_err("no build reads version 4 yet");
-        assert!(
-            matches!(error, FormatError::UnknownVersion { found: 4, .. }),
-            "{error}"
-        );
-        assert!(error.to_string().contains("version 4"), "{error}");
-    }
 }
 
 /// A link takes a number of its own. Builds that read version 2 predate it:

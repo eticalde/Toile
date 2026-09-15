@@ -1,3 +1,19 @@
+use eframe::egui::{Color32, Mesh, Shape};
+
+use super::view::View;
+
+/// The paper of a piece on the glass, filled in one ground colour.
+pub fn sheet(outline: &[[f64; 2]], view: View, ground: Color32) -> Shape {
+    let mut mesh = Mesh::default();
+    for &at in outline {
+        mesh.colored_vertex(view.to_screen(at), ground);
+    }
+    for [a, b, c] in triangles(outline) {
+        mesh.add_triangle(a as u32, b as u32, c as u32);
+    }
+    Shape::mesh(mesh)
+}
+
 /// The triangles that fill a simple polygon, as indices into its vertices.
 ///
 /// The painter fills a closed path only while the path is convex, and a

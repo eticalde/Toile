@@ -60,6 +60,38 @@ impl MeasureSet {
         "cabeza",
     ];
 
+    /// The catalogue's girths, top-down the body: the trunk from the neck to
+    /// the ankle, then the arm and the head, which sit off its line.
+    pub const GIRTHS: [&'static str; 12] = [
+        "cuello",
+        "pecho_alto",
+        "pecho",
+        "bajo_pecho",
+        "cintura",
+        "cadera",
+        "muslo",
+        "rodilla",
+        "tobillo",
+        "brazo_contorno",
+        "muneca",
+        "cabeza",
+    ];
+
+    /// The catalogue's lengths and its one width, top-down as well: the trunk,
+    /// the arm, then the legs.
+    pub const LENGTHS: [&'static str; 7] = [
+        "largo_espalda",
+        "brazo",
+        "hombros",
+        "tiro",
+        "largo_lateral",
+        "entrepierna",
+        "altura_cadera",
+    ];
+
+    /// The catalogue's one whole-body measurement.
+    pub const WHOLE: [&'static str; 1] = ["estatura"];
+
     /// Whether the catalogue names this measurement.
     pub fn is_catalogued(name: &str) -> bool {
         MeasureSet::CATALOGUE.contains(&name)
@@ -164,6 +196,22 @@ mod tests {
         assert!(MeasureSet::is_catalogued("altura_cadera"));
         assert!(MeasureSet::is_catalogued("muneca"));
         assert!(!MeasureSet::is_catalogued("largo_manga"));
+    }
+
+    /// A name added to the catalogue and to no kind would never be offered
+    /// where the kinds are listed, which is everywhere a person reads them.
+    #[test]
+    fn the_three_kinds_name_every_catalogue_measurement_once() {
+        let mut kinds: Vec<&str> = MeasureSet::GIRTHS
+            .iter()
+            .chain(&MeasureSet::LENGTHS)
+            .chain(&MeasureSet::WHOLE)
+            .copied()
+            .collect();
+        let mut catalogue = MeasureSet::CATALOGUE.to_vec();
+        kinds.sort_unstable();
+        catalogue.sort_unstable();
+        assert_eq!(kinds, catalogue);
     }
 
     #[test]

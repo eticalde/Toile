@@ -3,18 +3,15 @@ use toile_engine::draft::{Axis, Binding, Command, Draft, PieceKey, PointKey, Syn
 
 use super::super::curve;
 use super::super::state::{Field, FieldEdit, State};
-use crate::tabs::UNNAMED;
+use super::cite::Cite;
 use crate::theme::Theme;
-use crate::widgets::{Editable, Edited, PAD, cycle, formula_row, readout, section_with};
+use crate::widgets::{Editable, Edited, formula_row};
 
 /// One edit a panel asks for, under the name it will carry in the history.
 pub type Asked = (&'static str, Command);
 
 const BIND: &str = "escribir fórmula";
 const SAMPLES: &str = "afinar el aplanado";
-const MEASURE: &str = "editar medida";
-const VARIABLE: &str = "editar variable";
-const BODY: &str = "cambiar de cuerpo";
 
 /// The chosen node and its two bindings, each over what it comes to.
 ///
@@ -27,7 +24,7 @@ pub fn coordinates(
     theme: &Theme,
     draft: &Draft,
     at: (PieceKey, PointKey),
-    state: &mut State,
+    (state, cite): (&mut State, &Cite),
 ) -> Option<Asked> {
     let (piece, point) = at;
     let held = draft.doc().points.get(point)?;
@@ -35,18 +32,20 @@ pub fn coordinates(
     for (axis, label) in [(Axis::X, "X"), (Axis::Y, "Y")] {
         let source = held.binding(axis).source().into_owned();
         let (note, fault) = super::coordinate(draft, (piece, point), axis);
-        let written = row(
+        let shown = Editable {
+            label,
+            source: &source,
+            note: &note,
+            fault,
+            held: None,
+        };
+        let written = field(
             ui,
-            theme,
             state,
+            cite,
             Field::Coordinate(point, axis),
-            &Editable {
-                label,
-                source: &source,
-                note: &note,
-                fault,
-                held: None,
-            },
+            &shown,
+            |ui, id, row| formula_row(ui, theme, id, row),
         );
         if let Some(text) = written
             && let Ok(to) = Binding::parse(text.trim())
@@ -66,24 +65,27 @@ pub fn samples(
     theme: &Theme,
     draft: &Draft,
     at: (PieceKey, PointKey),
-    state: &mut State,
+    (state, cite): (&mut State, &Cite),
 ) -> Option<Asked> {
     let (piece, node) = at;
     let held = curve::samples_of(draft.doc(), piece, node)?;
     let source = held.to_string();
     let (low, high) = curve::SAMPLE_RANGE;
-    let written = row(
+    let note = format!("puntos del aplanado · {low} a {high}");
+    let shown = Editable {
+        label: "muestras",
+        source: &source,
+        note: &note,
+        fault: false,
+        held: None,
+    };
+    let written = field(
         ui,
-        theme,
         state,
+        cite,
         Field::Samples(node),
-        &Editable {
-            label: "muestras",
-            source: &source,
-            note: &format!("puntos del aplanado · {low} a {high}"),
-            fault: false,
-            held: None,
-        },
+        &shown,
+        |ui, id, row| formula_row(ui, theme, id, row),
     );
     let to = counted(written.as_deref()?)?;
     Some((SAMPLES, Command::SetSamples { piece, node, to }))
@@ -102,139 +104,19 @@ fn counted(text: &str) -> Option<u16> {
     })
 }
 
-/// The measurements the pattern resolves against, and the body it uses.
-///
-/// The body box steps to the next mannequin of the document, one press at a
-/// time, and says so with the cycle it carries. A document holding one body
-/// has nowhere to step, so there it is drawn as what it is — the name of the
-/// body the pattern resolves against — and senses no press at all.
-pub fn measures(
-    ui: &mut egui::Ui,
-    theme: &Theme,
-    draft: &Draft,
-    state: &mut State,
-) -> Option<Asked> {
-    let doc = draft.doc();
-    let set = doc.measures()?;
-    let mannequin = doc.resolve_with;
-    section_with(
-        ui,
-        theme,
-        "Medidas del producto",
-        &set.values.len().to_string(),
-    );
-    let mut asked = None;
-    ui.horizontal(|ui| {
-        ui.add_space(PAD);
-        let named = if set.name.is_empty() {
-            UNNAMED
-        } else {
-            &set.name
-        };
-        match super::next_body(doc) {
-            None => readout(ui, theme, "resolver con", named, 170.0),
-            Some(to) => {
-                if cycle(ui, theme, "resolver con", named, 170.0).clicked() {
-                    asked = Some((BODY, Command::ResolveWith { mannequin: to }));
-                }
-            }
-        }
-    });
-    ui.add_space(6.0);
-    let names: Vec<(String, f64)> = set
-        .values
-        .iter()
-        .map(|(name, &value)| (name.clone(), value))
-        .collect();
-    for (name, value) in names {
-        let source = format!("{value:.1}");
-        let written = row(
-            ui,
-            theme,
-            state,
-            Field::Measure(name.clone()),
-            &Editable {
-                label: &name,
-                source: &source,
-                note: "cm",
-                fault: false,
-                held: None,
-            },
-        );
-        if let Some(text) = written
-            && let Ok(to) = text.trim().parse::<f64>()
-            && to.is_finite()
-        {
-            asked = Some((
-                MEASURE,
-                Command::SetMeasure {
-                    mannequin,
-                    name,
-                    to,
-                },
-            ));
-        }
-    }
-    asked
-}
-
-/// The pattern's own quantities, at what they currently come to.
-pub fn variables(
-    ui: &mut egui::Ui,
-    theme: &Theme,
-    draft: &Draft,
-    state: &mut State,
-) -> Option<Asked> {
-    let doc = draft.doc();
-    section_with(ui, theme, "Variables", &doc.variables.len().to_string());
-    let held: Vec<_> = doc
-        .variables
-        .iter()
-        .map(|(key, variable)| {
-            let value = draft.env().value(&variable.name);
-            (
-                key,
-                variable.name.clone(),
-                variable.value.source().into_owned(),
-                value.map_or_else(|| "—".to_owned(), |value| format!("= {value:.2}")),
-            )
-        })
-        .collect();
-    let mut asked = None;
-    for (key, name, source, note) in held {
-        let written = row(
-            ui,
-            theme,
-            state,
-            Field::Variable(key),
-            &Editable {
-                label: &name,
-                source: &source,
-                note: &note,
-                fault: false,
-                held: None,
-            },
-        );
-        if let Some(text) = written
-            && let Ok(to) = Binding::parse(text.trim())
-        {
-            asked = Some((VARIABLE, Command::SetVariable { variable: key, to }));
-        }
-    }
-    asked
-}
-
-/// Draws one editable row and hands back the text it was confirmed with.
+/// Draws one editable row with `draw` and hands back the text it was
+/// confirmed with.
 ///
 /// The buffer belongs to the tab, so a row that has the focus paints whatever
 /// has been typed into it, faults and all, while the document keeps the last
 /// thing that parsed.
-fn row(
+pub fn field(
     ui: &mut egui::Ui,
-    theme: &Theme,
     state: &mut State,
+    cite: &Cite,
     of: Field,
     shown: &Editable<'_>,
+    draw: impl FnOnce(&mut egui::Ui, Id, &Editable<'_>) -> Edited,
 ) -> Option<String> {
     let buffer = state
         .editing
@@ -249,13 +131,22 @@ fn row(
         held: buffer.as_deref(),
         ..*shown
     };
-    match formula_row(ui, theme, id_of(&of), &row) {
+    let id = id_of(&of);
+    match draw(ui, id, &row) {
         Edited::Idle => None,
         Edited::Typing(text) => {
             state.editing = Some(FieldEdit { of, buffer: text });
             None
         }
         Edited::Done(text) => {
+            // The focus went to a name pressed for this very text: the name
+            // goes in and the person goes on writing, so nothing is confirmed
+            // and the box takes the focus straight back.
+            if cite.keeps(&of) {
+                state.editing = Some(FieldEdit { of, buffer: text });
+                ui.memory_mut(|m| m.request_focus(id));
+                return None;
+            }
             // Text that does not parse is kept, not thrown away, so the row
             // goes on painting the fault and the missed character can be
             // fixed. Nothing reaches the document until it parses.
@@ -295,6 +186,6 @@ fn unparsed(of: &Field, text: &str) -> Option<String> {
 ///
 /// It names the field and not the row's position, so the focus follows the
 /// coordinate rather than the place on the panel it happens to be drawn at.
-fn id_of(of: &Field) -> Id {
+pub fn id_of(of: &Field) -> Id {
     Id::new(("patronaje-field", of))
 }

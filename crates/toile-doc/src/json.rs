@@ -35,6 +35,14 @@ pub const VERSION_EXTENDED: u32 = 2;
 /// could lose takes the next number, so the reader that would lose it refuses.
 pub const VERSION_LINKED: u32 = 3;
 
+/// The format version of a document in which some piece carries a placement
+/// on the product overview.
+///
+/// Under the link's rule it takes the next number: builds that read version 3
+/// predate it, and would open an arranged product, drop every placement, and
+/// save it back with its pieces wherever the overview first laid them.
+pub const VERSION_PLACED: u32 = 4;
+
 /// A file: the version, and the pattern under it.
 #[derive(Serialize)]
 struct Written<'a> {
@@ -56,13 +64,12 @@ impl Doc {
     /// The format version this document is written in.
     ///
     /// A pure function of what the document carries, never of the file it was
-    /// read from, so one document still has exactly one text.
+    /// read from, so one document still has exactly one text: the highest
+    /// number any body or piece in it needs.
     pub fn format_version(&self) -> u32 {
-        self.mannequins
-            .iter()
-            .map(|(_, set)| set.format_version())
-            .max()
-            .unwrap_or(VERSION)
+        let bodies = self.mannequins.iter().map(|(_, set)| set.format_version());
+        let pieces = self.pieces.iter().map(|(_, piece)| piece.format_version());
+        bodies.chain(pieces).max().unwrap_or(VERSION)
     }
 
     /// The document as canonical JSON, ending in a newline.
@@ -97,10 +104,10 @@ impl Doc {
     /// could not have written.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = version(text)?;
-        if !(u64::from(VERSION)..=u64::from(VERSION_LINKED)).contains(&found) {
+        if !(u64::from(VERSION)..=u64::from(VERSION_PLACED)).contains(&found) {
             return Err(FormatError::UnknownVersion {
                 found,
-                newest: VERSION_LINKED,
+                newest: VERSION_PLACED,
             });
         }
         let loaded: Loaded =

@@ -40,7 +40,7 @@ fn click_the_tree(
         };
         let pass = ctx.run_ui(input, |ui| {
             let plea = left_panel(ui, &theme, |ui| {
-                tree::product(ui, &theme, draft, None, renaming, false)
+                tree::product(ui, &theme, draft, None, renaming, false, Scope::Product)
             });
             seen = plea.or(seen.take());
         });
@@ -65,13 +65,13 @@ fn the_row_that_starts_a_piece_answers_a_click_on_an_empty_table() {
         "the row asks for a piece with nothing on the table too"
     );
 
-    // And one piece lower down, with a product under it: the state that always
-    // worked, kept working.
+    // And two rows lower down, with a product under it — the whole product and
+    // its one piece: the state that always worked, kept working.
     let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
     assert_eq!(
-        click_the_tree(Some(&draft), &mut renaming, pos2(100.0, 79.0)),
+        click_the_tree(Some(&draft), &mut renaming, pos2(100.0, 108.0)),
         Some(tree::Plea::Draw),
-        "one piece row above it moves it down, it does not silence it"
+        "the rows above it move it down, they do not silence it"
     );
 }
 
@@ -86,7 +86,7 @@ fn the_row_that_starts_a_piece_does_not_swallow_a_rename() {
     let piece = draft.doc().piece_keys()[0];
     let mut renaming = Some((piece, "Delantero izquierdo".to_owned()));
     assert_eq!(
-        click_the_tree(Some(&draft), &mut renaming, pos2(100.0, 79.0)),
+        click_the_tree(Some(&draft), &mut renaming, pos2(100.0, 108.0)),
         Some(tree::Plea::Rename(piece, "Delantero izquierdo".to_owned())),
         "the name typed reaches the document; the press can be repeated"
     );
@@ -183,7 +183,7 @@ fn the_side_seam_cell_is_measured_not_quoted() {
         .expect("the block draws one piece");
     // Measured along the flattening: the hip is a curve, so the seam is a
     // millimetre longer than the chords through its nodes.
-    assert_eq!(side_cell(&draft, piece), "lateral 104.6 cm");
+    assert_eq!(report::side_cell(&draft, piece), "lateral 104.6 cm");
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn a_piece_that_does_not_name_its_side_reports_its_perimeter() {
         .pieces
         .insert(Piece::polygon("Cuadro", points, Winding::Cw));
     let draft = Draft::from_doc(doc).expect("a square resolves");
-    assert_eq!(side_cell(&draft, piece), "perímetro 60.0 cm");
+    assert_eq!(report::side_cell(&draft, piece), "perímetro 60.0 cm");
 }
 
 /// One product, two pieces: the mat draws the one chosen in the tree, falls
@@ -237,3 +237,7 @@ fn the_active_piece_prefers_the_chosen_then_the_draping_then_the_first() {
     );
     assert_eq!(active_piece(None, None, None), None, "no table, no piece");
 }
+
+mod bench;
+mod roads;
+mod whole;

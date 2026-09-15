@@ -2,7 +2,7 @@ use std::f64::consts::FRAC_PI_2;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{PointKey, Segment};
+use crate::{Placement, PointKey, Segment};
 
 /// A pattern piece: its ordered contour and the grain it is cut on.
 ///
@@ -18,6 +18,13 @@ pub struct Piece {
     /// The grain line the piece is cut on.
     #[serde(default)]
     pub grain: Grain,
+    /// Where the product overview draws the piece, once someone arranged it.
+    ///
+    /// Absent, the overview lays the piece out itself and nothing is written,
+    /// which is what keeps a product nobody arranged in the format version it
+    /// had.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<Placement>,
 }
 
 /// The narrowest and the widest a bending tract may be flattened to.
@@ -84,6 +91,17 @@ impl Piece {
             contour: points.into_iter().map(ContourNode::line).collect(),
             winding,
             grain: Grain::default(),
+            placement: None,
+        }
+    }
+
+    /// The oldest format version whose reader keeps everything the piece
+    /// carries: a placement needs 4, the rest 1.
+    pub(crate) fn format_version(&self) -> u32 {
+        if self.placement.is_some() {
+            crate::json::VERSION_PLACED
+        } else {
+            crate::json::VERSION
         }
     }
 
@@ -228,6 +246,15 @@ mod tests {
         assert!(!node.takes_samples(1));
         assert!(node.takes_samples(SAMPLES.0));
         assert!(!node.takes_samples(u16::MAX));
+    }
+
+    #[test]
+    fn only_an_arranged_piece_asks_for_the_placement_s_format() {
+        let mut piece = Piece::polygon("Delantero", keys(), Winding::Cw);
+        assert_eq!(piece.placement, None);
+        assert_eq!(piece.format_version(), crate::json::VERSION);
+        piece.placement = Some(Placement::new(3.0, -1.5));
+        assert_eq!(piece.format_version(), crate::json::VERSION_PLACED);
     }
 
     #[test]

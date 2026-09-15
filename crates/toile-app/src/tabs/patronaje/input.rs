@@ -130,6 +130,12 @@ fn idle(key: Key, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, 
         return node::remove(ctx);
     }
     let feedback = match (key, mods.command, mods.shift) {
+        // With nothing chosen there is nothing on the piece left to let go
+        // of, so Escape lets go of the piece: back to the whole product.
+        (Key::Escape, _, _) if ctx.selection == Selection::None => Feedback {
+            overview: true,
+            ..Feedback::default()
+        },
         (Key::Escape, _, _) => Feedback {
             select: Some(Selection::None),
             ..Feedback::default()

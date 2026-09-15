@@ -1,6 +1,6 @@
 use eframe::egui::{self, Align2, FontId, Rect, Response, Sense, Stroke, StrokeKind, Vec2, vec2};
 
-use super::state::{State, Tool};
+use super::state::{Scope, State, Tool};
 use super::wire::Verb;
 use crate::glyph;
 use crate::theme::Theme;
@@ -45,6 +45,25 @@ const HISTORY: [(&str, &str); 2] = [
     ("Rehacer", "13 7 4 7 4 12; 13 7 10 4; 13 7 10 10"),
 ];
 
+/// How a tile is drawn with the mat as it stands.
+///
+/// On the whole product a press only chooses and moves pieces, which is what
+/// choosing means there, so that tile is the one lit and every tile that works
+/// on a single piece is drawn dead until one is open.
+fn weight_of(name: &str, ready: bool, state: &State) -> Weight {
+    let held = tool_of(name);
+    let choosing = held == Some(Tool::Select);
+    if state.scope == Scope::Product {
+        return Weight::of(choosing, ready && choosing);
+    }
+    let lit = if name == MEASURE {
+        state.dimensions
+    } else {
+        held == Some(state.tool)
+    };
+    Weight::of(lit, ready)
+}
+
 /// The tool grid, three tiles to a row, with the one in hand lit.
 pub fn grid(ui: &mut egui::Ui, theme: &Theme, state: &mut State) {
     section(ui, theme, "Herramientas");
@@ -54,19 +73,13 @@ pub fn grid(ui: &mut egui::Ui, theme: &Theme, state: &mut State) {
             ui.spacing_mut().item_spacing.x = 4.0;
             ui.add_space(PAD);
             for &(name, icon, ready) in tools {
-                let held = tool_of(name);
-                let lit = if name == MEASURE {
-                    state.dimensions
-                } else {
-                    held == Some(state.tool)
-                };
-                let resp = tile(ui, theme, name, icon, Weight::of(lit, ready), width);
-                if !resp.clicked() {
+                let weight = weight_of(name, ready, state);
+                if !tile(ui, theme, name, icon, weight, width).clicked() {
                     continue;
                 }
                 if name == MEASURE {
                     state.dimensions = !state.dimensions;
-                } else if let Some(chosen) = held {
+                } else if let Some(chosen) = tool_of(name) {
                     state.tool = chosen;
                 }
             }
@@ -160,4 +173,39 @@ fn tile(
     let font = FontId::proportional(10.0);
     p.text(at, Align2::CENTER_CENTER, name, font, ink);
     resp
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every tile's weight, in the order the grid lays them out.
+    fn weights(state: &State) -> Vec<Weight> {
+        TOOLS
+            .iter()
+            .map(|&(name, _, ready)| weight_of(name, ready, state))
+            .collect()
+    }
+
+    #[test]
+    fn on_the_whole_product_only_the_tile_that_chooses_is_live() {
+        use Weight::{Absent, Held, Ready};
+        let piece = State {
+            scope: Scope::Piece,
+            tool: Tool::Curve,
+            dimensions: true,
+            ..State::default()
+        };
+        let expected = [Ready, Ready, Held, Absent, Absent, Absent, Held, Absent];
+        assert_eq!(weights(&piece), expected);
+        let whole = State {
+            scope: Scope::Product,
+            ..piece
+        };
+        assert_eq!(
+            weights(&whole),
+            [Held, Absent, Absent, Absent, Absent, Absent, Absent, Absent],
+            "a tool for one piece looks dead while every piece is on the mat"
+        );
+    }
 }

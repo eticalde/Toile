@@ -81,21 +81,7 @@ pub fn reduce(
         let held = std::mem::take(&mut state.gesture);
         let (next, commands, feedback) = input::update(held, event, &ctx);
         state.gesture = next;
-        if let Some(Stack::Open(label) | Stack::Once(label)) = feedback.stack {
-            verbs.push(Verb::Begin(label));
-        }
-        verbs.extend(
-            commands
-                .into_iter()
-                .map(|command| Verb::Edit(Box::new(command))),
-        );
-        match feedback.stack {
-            Some(Stack::Close | Stack::Once(_)) => verbs.push(Verb::End),
-            Some(Stack::Undo) => verbs.push(Verb::Undo),
-            Some(Stack::Cancel) => verbs.push(Verb::Cancel),
-            Some(Stack::Redo) => verbs.push(Verb::Redo),
-            Some(Stack::Open(_)) | None => {}
-        }
+        stacked(feedback.stack, commands, verbs);
         if let Some(select) = feedback.select {
             state.selection = select;
         }
@@ -107,19 +93,51 @@ pub fn reduce(
         // has not stopped being on the node the ring is drawn around.
         state.caught = feedback.snapped.or(state.caught);
         state.ask = feedback.ask.or(state.ask.take());
+        // The rest of the frame's events were aimed at this piece.
+        if feedback.overview {
+            state.overview();
+            break;
+        }
     }
     if state.gesture == Gesture::Idle {
         state.caught = None;
     }
 }
 
+/// Lays one event's edits out as verbs, inside whatever the stack opens or
+/// closes around them.
+///
+/// `Open` goes before the edits of its event and `Once` straddles them; the
+/// other moves come after them.
+pub fn stacked(stack: Option<Stack>, commands: Vec<Command>, verbs: &mut Vec<Verb>) {
+    if let Some(Stack::Open(label) | Stack::Once(label)) = stack {
+        verbs.push(Verb::Begin(label));
+    }
+    verbs.extend(
+        commands
+            .into_iter()
+            .map(|command| Verb::Edit(Box::new(command))),
+    );
+    match stack {
+        Some(Stack::Close | Stack::Once(_)) => verbs.push(Verb::End),
+        Some(Stack::Undo) => verbs.push(Verb::Undo),
+        Some(Stack::Cancel) => verbs.push(Verb::Cancel),
+        Some(Stack::Redo) => verbs.push(Verb::Redo),
+        Some(Stack::Open(_)) | None => {}
+    }
+}
+
+/// Where the mat remembers whether a field held the keyboard as the last frame
+/// ended.
+const TYPED: &str = "patronaje-typed";
+
 /// This frame's events, in the order they happened.
 ///
 /// The press is read off the response, so a chip lying over the mat keeps the
 /// click it was given; the moves and the release are read off the pointer, so
 /// a drag that leaves the mat is still the same drag. The keyboard is read raw
-/// and only while no field has the focus, so a gesture never steals a
-/// character from a text box.
+/// and only while no field has the focus, nor held it as the last frame ended,
+/// so a gesture never steals a key from a text box.
 pub fn events_of(ui: &egui::Ui, resp: &Response) -> Vec<Input> {
     let mods = mods(ui);
     let mut out = Vec::new();
@@ -141,7 +159,14 @@ pub fn events_of(ui: &egui::Ui, resp: &Response) -> Vec<Input> {
             out.push(Input::Up(at, mods));
         }
     }
-    if ui.memory(eframe::egui::Memory::focused).is_some() {
+    // egui lets go of a text field on Escape before the frame starts, so the
+    // key that left a formula or abandoned a rename would reach the mat too,
+    // and let go of the piece with it. The field that held the focus when the
+    // last frame ended owns this frame's keys as well.
+    let typed = egui::Id::new(TYPED);
+    let holds = ui.memory(egui::Memory::focused).is_some();
+    let held = ui.data_mut(|d| std::mem::replace(d.get_temp_mut_or(typed, false), holds));
+    if holds || held {
         return out;
     }
     ui.input(|i| {

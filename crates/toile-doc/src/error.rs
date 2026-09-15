@@ -38,8 +38,9 @@ pub enum DocError {
     /// A measurement the chosen measure set does not carry.
     #[error("the measure set has no measurement named `{0}`")]
     UnknownMeasure(String),
-    /// A measurement or a phenotype scale that is not a finite number, which
-    /// the file could not spell and would refuse on the way back in.
+    /// A measurement, a phenotype scale or a placement that is not a finite
+    /// number, which the file could not spell and would refuse on the way
+    /// back in.
     #[error("`{0}` must be a finite number")]
     NonFinite(String),
     /// A day a session or a link carries that is not written `YYYY-MM-DD`.

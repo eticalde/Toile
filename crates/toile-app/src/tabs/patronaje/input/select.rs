@@ -123,7 +123,7 @@ fn a_press_on_a_tract_selects_it_and_a_press_on_the_mat_clears_it() {
 }
 
 #[test]
-fn the_keyboard_reaches_the_undo_stack_and_the_whole_piece() {
+fn the_keyboard_reaches_the_undo_stack_the_whole_piece_and_the_product() {
     let table = table();
     let ctx = table.context(free());
     let command = Mods {
@@ -141,10 +141,16 @@ fn the_keyboard_reaches_the_undo_stack_and_the_whole_piece() {
     assert_eq!(feedback.stack, Some(Stack::Redo));
     let (_, _, feedback) = update(Gesture::Idle, Input::Key(Key::A, command), &ctx);
     assert_eq!(chosen(&feedback).len(), table.nodes.len());
-    let (_, _, feedback) = update(
-        Gesture::Idle,
-        Input::Key(Key::Escape, Mods::default()),
-        &ctx,
-    );
+
+    let escape = Input::Key(Key::Escape, Mods::default());
+    let holding = table.holding(free(), Selection::point(table.nodes[0].0));
+    let (_, _, feedback) = update(Gesture::Idle, escape.clone(), &holding);
     assert_eq!(feedback.select, Some(Selection::None));
+    assert!(!feedback.overview, "a node chosen is let go of first");
+    let (_, _, feedback) = update(Gesture::Idle, escape, &ctx);
+    assert!(
+        feedback.overview,
+        "with nothing chosen, the piece is let go of"
+    );
+    assert_eq!(feedback.select, None);
 }

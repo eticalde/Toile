@@ -35,6 +35,8 @@ mod persona;
 mod piece;
 /// A point of cloth held to a place in space.
 mod pin;
+/// Where a piece sits on the product overview.
+mod placement;
 /// A control point of the pattern.
 mod point;
 /// Two stretches of contour sewn to each other.
@@ -56,6 +58,7 @@ pub use error::DocError;
 pub use json::{
     FormatError, PERSONA_VERSION, VERSION as FORMAT_VERSION,
     VERSION_EXTENDED as FORMAT_VERSION_EXTENDED, VERSION_LINKED as FORMAT_VERSION_LINKED,
+    VERSION_PLACED as FORMAT_VERSION_PLACED,
 };
 pub use key::{
     DartKey, Identity, Key, MannequinKey, NotchKey, PieceKey, PinKey, PointKey, SeamKey,
@@ -66,6 +69,7 @@ pub use notch::{Notch, NotchCount};
 pub use persona::{Origin, Persona, PersonaError, Snapshot};
 pub use piece::{ContourNode, Grain, Piece, SAMPLES, Winding};
 pub use pin::Pin;
+pub use placement::Placement;
 pub use point::{Axis, Point};
 pub use seam::{Seam, SeamKind, SeamOrientation};
 pub use segment::{Handle, Handles, Segment, SegmentEdit, Side};

@@ -1,7 +1,7 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
 use toile_doc::{
-    Axis, Binding, Command, Doc, FORMAT_VERSION_LINKED, FormatError, Grain, MeasureSet, Point,
+    Axis, Binding, Command, Doc, FORMAT_VERSION_PLACED, FormatError, Grain, MeasureSet, Point,
     PointKey, block,
 };
 
@@ -157,16 +157,16 @@ fn a_number_reads_back_as_the_very_bits_it_was_written_from() {
 
 #[test]
 fn an_unknown_version_is_a_legible_error() {
-    let file = written(&block::trouser_front()).replace("\"toile\": 1", "\"toile\": 4");
-    let error = Doc::from_json(&file).expect_err("this build reads versions 1 to 3");
+    let file = written(&block::trouser_front()).replace("\"toile\": 1", "\"toile\": 5");
+    let error = Doc::from_json(&file).expect_err("this build reads versions 1 to 4");
     assert_eq!(
         error,
         FormatError::UnknownVersion {
-            found: 4,
-            newest: FORMAT_VERSION_LINKED,
+            found: 5,
+            newest: FORMAT_VERSION_PLACED,
         }
     );
-    assert!(error.to_string().contains("version 4"));
+    assert!(error.to_string().contains("version 5"));
 }
 
 #[test]

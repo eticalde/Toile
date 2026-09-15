@@ -1,22 +1,32 @@
 use eframe::egui::{self, Align2, FontId, Rect, Response, Sense, Vec2, pos2, vec2};
 use toile_engine::draft::{Draft, PieceKey};
 
+use super::state::Scope;
 use crate::glyph;
 use crate::theme::Theme;
 use crate::widgets::{PAD, section, tree_row};
 
+const PRODUCT_ICON: &str = "2 3 9 3 9 11 2 11 2 3; 7 6 14 6 14 14 7 14 7 6";
 const PIECE_ICON: &str = "4 2 10 2 13 6 13 14 4 14 4 2";
 const PLUS: &str = "8 3 8 13; 3 8 13 8";
 const CROSS: &str = "5 5 11 11; 5 11 11 5";
 const PENCIL: &str = "3 13 4 9 10 3 13 6 7 12 3 13; 9 5 11 7";
 const ROW_H: f32 = 26.0;
 
+/// What the row that stands for the whole product is called.
+const WHOLE: &str = "Todas las piezas";
+
+/// How far a piece row sits in from the product it belongs to.
+const INDENT: f32 = PAD;
+
 /// What the tree asks of the tab.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Plea {
     /// Start drawing a new piece on the mat.
     Draw,
-    /// Bring a piece to the front: the one the mat draws and the panels edit.
+    /// Show the whole product: every piece at once.
+    Overview,
+    /// Open one piece on its own: the one the mat draws and the panels edit.
     Focus(PieceKey),
     /// Give a piece a new name, once one has been typed.
     Rename(PieceKey, String),
@@ -27,14 +37,16 @@ pub enum Plea {
     Remove(PieceKey),
 }
 
-/// The product tree: the pieces the document draws, and the way to a new one.
+/// The product tree: the whole product, the pieces it holds, and the way to a
+/// new one.
 ///
-/// The active piece — the one the mat is drawing — is lit; a click on any other
-/// row brings it to the front, the pencil renames it in place, the cross takes
-/// it off. The "+ Pieza" row answers with a document or without one: over an
-/// empty table the tab turns the plea into the question that has to come first,
-/// which product is this. A row that leads somewhere beats a row that only
-/// looks as though it would.
+/// The first row is the product itself, lit while the mat shows every piece;
+/// a press on it goes back there from any piece. Under it the piece in front
+/// is lit, a click on a piece row opens that piece on its own, the pencil
+/// renames it in place and the cross takes it off. The "+ Pieza" row answers
+/// with a document or without one: over an empty table the tab turns the plea
+/// into the question that has to come first, which product is this. A row that
+/// leads somewhere beats a row that only looks as though it would.
 ///
 /// `drawing` is whether a piece is being drawn already, which is what keeps the
 /// row lit for as long as the drawing it opened is on the mat.
@@ -45,9 +57,18 @@ pub fn product(
     active: Option<PieceKey>,
     renaming: &mut Option<(PieceKey, String)>,
     drawing: bool,
+    scope: Scope,
 ) -> Option<Plea> {
     section(ui, theme, "Producto");
     let mut asked = None;
+    if draft.is_some() {
+        let whole = tree_row(ui, theme, WHOLE, scope == Scope::Product, 0.0, |p, r, c| {
+            glyph::paint(p, r, c, PRODUCT_ICON);
+        });
+        if whole.clicked() {
+            asked = Some(Plea::Overview);
+        }
+    }
     let pieces = draft.map(|draft| draft.doc().pieces.iter().collect::<Vec<_>>());
     for &(key, piece) in &pieces.unwrap_or_default() {
         if matches!(renaming, Some((editing, _)) if *editing == key) {
@@ -62,16 +83,10 @@ pub fn product(
             }
             continue;
         }
-        let row = tree_row(
-            ui,
-            theme,
-            &piece.name,
-            active == Some(key),
-            0.0,
-            |p, r, c| {
-                glyph::paint(p, r, c, PIECE_ICON);
-            },
-        );
+        let lit = active == Some(key);
+        let row = tree_row(ui, theme, &piece.name, lit, INDENT, |p, r, c| {
+            glyph::paint(p, r, c, PIECE_ICON);
+        });
         // Both icons paint on hover; a rename in flight wins any stray click a
         // blur may raise on another row, so it is never lost.
         let remove = removal(ui, theme, &row, key);
@@ -101,11 +116,11 @@ pub fn product(
 ///
 /// `Some(true)` commits, `Some(false)` abandons, `None` keeps the field open.
 fn editing_row(ui: &mut egui::Ui, theme: &Theme, buffer: &mut String) -> Option<bool> {
-    let row = tree_row(ui, theme, "", true, 0.0, |p, r, c| {
+    let row = tree_row(ui, theme, "", true, INDENT, |p, r, c| {
         glyph::paint(p, r, c, PIECE_ICON);
     });
     let field = Rect::from_min_max(
-        pos2(row.rect.left() + 40.0, row.rect.top() + 3.0),
+        pos2(row.rect.left() + 40.0 + INDENT, row.rect.top() + 3.0),
         pos2(row.rect.right() - PAD, row.rect.bottom() - 3.0),
     );
     let edit = ui.put(field, egui::TextEdit::singleline(buffer));

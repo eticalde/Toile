@@ -1,9 +1,11 @@
 mod canvas;
+mod cite;
 mod control;
 mod field;
 mod panel;
 
 pub use canvas::{canvas_label, fill, grid, mat_canvas};
+pub use cite::{Mention, Named, measure_row, named_formula_row};
 pub use control::{
     button_ghost, button_ghost_icon, button_icon, button_primary, button_secondary, cycle, readout,
 };

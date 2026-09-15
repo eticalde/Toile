@@ -1,7 +1,11 @@
+mod cite;
+mod tape;
+mod variables;
 mod write;
 
+use cite::Cite;
 use eframe::egui;
-use toile_engine::draft::{Axis, Defect, Doc, Draft, EvalError, MannequinKey, PieceKey, PointKey};
+use toile_engine::draft::{Axis, Defect, Draft, EvalError, PieceKey, PointKey};
 use write::Asked;
 
 use super::curve::{self, Side};
@@ -17,13 +21,14 @@ const EMPTY: &str = "Carga una pieza desde el panel Producto para inspeccionarla
 /// Room the footer keeps for itself under the scrolling body.
 const FOOT_H: f32 = 74.0;
 
-/// The right panel: the bindings of whatever is chosen, the measurements they
-/// resolve against, and the ways out of the app.
+/// The right panel: the bindings of whatever is chosen, the names they can
+/// read, and the ways out of the app.
 ///
 /// It writes nothing itself; the edit it asks for is applied by the tab, so
 /// the document is borrowed for reading only while the panel draws. One field
 /// confirmed is one named entry of the history, never a fold into whatever
-/// gesture happened to be open.
+/// gesture happened to be open. The names belong to the product and not to a
+/// piece, so a product with no piece drawn yet lists them too.
 pub fn show(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -37,13 +42,17 @@ pub fn show(
         .auto_shrink([false, false])
         .show(ui, |ui| {
             let mut asked = None;
-            if let (Some(draft), Some(piece)) = (draft, piece) {
-                asked = chosen(ui, theme, draft, piece, state);
-                asked = write::measures(ui, theme, draft, state).or(asked);
-                asked = write::variables(ui, theme, draft, state).or(asked);
+            if let Some(draft) = draft {
+                let cite = Cite::begin(ui.ctx(), draft.doc(), state);
+                if let Some(piece) = piece {
+                    asked = chosen(ui, theme, draft, piece, (state, &cite));
+                } else {
+                    unchosen(ui, theme);
+                }
+                asked = tape::measures(ui, theme, draft, state, &cite).or(asked);
+                asked = variables::variables(ui, theme, draft, state, &cite).or(asked);
             } else {
-                section(ui, theme, "Sin pieza");
-                footer_note(ui, theme, EMPTY);
+                unchosen(ui, theme);
             }
             exports(ui, theme, state);
             asked
@@ -55,23 +64,30 @@ pub fn show(
     asked
 }
 
+/// What the panel says where a piece would be inspected and there is none.
+fn unchosen(ui: &mut egui::Ui, theme: &Theme) {
+    section(ui, theme, "Sin pieza");
+    footer_note(ui, theme, EMPTY);
+}
+
 /// Whatever is chosen: a node, a group of them, a tract, or the piece.
 fn chosen(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: &Draft,
     piece: PieceKey,
-    state: &mut State,
+    writing: (&mut State, &Cite),
 ) -> Option<Asked> {
+    let state = &*writing.0;
     if let Some(from) = state.selection.edge() {
-        return tract(ui, theme, draft, (piece, from), state);
+        return tract(ui, theme, draft, (piece, from), writing);
     }
     match state.selection.count() {
         0 => {
             summary(ui, theme, draft, piece);
             None
         }
-        1 => node(ui, theme, draft, piece, state),
+        1 => node(ui, theme, draft, piece, writing),
         many => {
             group(ui, theme, draft, state, many);
             None
@@ -89,11 +105,11 @@ fn node(
     theme: &Theme,
     draft: &Draft,
     piece: PieceKey,
-    state: &mut State,
+    writing: (&mut State, &Cite),
 ) -> Option<Asked> {
-    let point = state.selection.only()?;
+    let point = writing.0.selection.only()?;
     section(ui, theme, &heading(draft, piece, point));
-    write::coordinates(ui, theme, draft, (piece, point), state)
+    write::coordinates(ui, theme, draft, (piece, point), writing)
 }
 
 /// What the panel calls the chosen point: a node by its name, a handle by the
@@ -140,7 +156,7 @@ fn tract(
     theme: &Theme,
     draft: &Draft,
     at: (PieceKey, PointKey),
-    state: &mut State,
+    writing: (&mut State, &Cite),
 ) -> Option<Asked> {
     let (piece, from) = at;
     let nodes = draft.points_cm(piece);
@@ -154,7 +170,7 @@ fn tract(
     section(ui, theme, &format!("Borde {} → {}", ends.0, ends.1));
     let length = format!("{:.1}", draft.run_length_cm(piece, from, to));
     field_row(ui, theme, "largo", &length, "cm");
-    write::samples(ui, theme, draft, (piece, from), state)
+    write::samples(ui, theme, draft, (piece, from), writing)
 }
 
 /// What the piece is, when nothing on it is chosen.
@@ -185,16 +201,6 @@ fn exports(ui: &mut egui::Ui, theme: &Theme, state: &mut State) {
             state.asked = Some(Action::Svg);
         }
     });
-}
-
-/// The next body in the document, when there is another one to try.
-fn next_body(doc: &Doc) -> Option<MannequinKey> {
-    let bodies: Vec<MannequinKey> = doc.mannequins.keys().collect();
-    if bodies.len() < 2 {
-        return None;
-    }
-    let at = bodies.iter().position(|&key| key == doc.resolve_with)?;
-    bodies.get((at + 1) % bodies.len()).copied()
 }
 
 /// What one coordinate comes to, and whether that line is a fault.

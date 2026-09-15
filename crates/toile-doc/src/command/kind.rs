@@ -2,8 +2,8 @@ use std::collections::BTreeMap;
 
 use crate::{
     Axis, Binding, BodyShape, Dart, DartKey, DartWedge, EdgeAnchor, Grain, Identity, MannequinKey,
-    MeasureSet, Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam,
-    SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
+    MeasureSet, Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey, Placement, Point, PointKey,
+    Seam, SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
 };
 
 /// A reversible edit to the document.
@@ -132,6 +132,12 @@ pub enum Command {
     RenamePiece { piece: PieceKey, to: String },
     /// Turns the grain line of a piece.
     SetGrain { piece: PieceKey, to: Grain },
+    /// Moves a piece on the product overview, or hands it back to the
+    /// overview's own layout.
+    PlacePiece {
+        piece: PieceKey,
+        to: Option<Placement>,
+    },
     /// Names a point, or takes its name away.
     LabelPoint { point: PointKey, to: Option<String> },
     /// Decides whether the drawing shows a point's name unasked.
@@ -207,6 +213,9 @@ impl Command {
             | Command::RenameMannequin { .. }
             | Command::RenamePiece { .. }
             | Command::SetGrain { .. }
+            // Where a piece sits on the overview is layout: no contour, mesh
+            // or drape is derived from it.
+            | Command::PlacePiece { .. }
             | Command::LabelPoint { .. }
             | Command::ShowLabel { .. } => ChangeClass::Metadata,
             // The phenotype shapes the body and nothing the pattern resolves.

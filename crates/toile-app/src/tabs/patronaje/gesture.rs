@@ -4,6 +4,7 @@ pub use ask::{Ask, AskRow, name};
 use eframe::egui::{Key, Pos2, Rect, Vec2};
 use toile_engine::draft::{Axis, Binding, Doc, PieceKey, PointKey};
 
+use super::arrange::Arrange;
 use super::curve::Bend;
 use super::snap::{SnapConfig, Snapped};
 use super::state::{Selection, Tool};
@@ -43,6 +44,8 @@ pub enum Gesture {
         /// Where the next vertex would land, snap and all, in centimetres.
         rubber: [f64; 2],
     },
+    /// Moving a whole piece across the product.
+    Arrange(Arrange),
 }
 
 /// The nodes taken in hand, as the gesture holds them.
@@ -187,6 +190,8 @@ pub struct Feedback {
     pub stack: Option<Stack>,
     /// The question the release leaves for the modal to put.
     pub ask: Option<Ask>,
+    /// Whether the event asks to leave the piece for the whole product.
+    pub overview: bool,
 }
 
 /// The read-only borrow a gesture is reduced against.

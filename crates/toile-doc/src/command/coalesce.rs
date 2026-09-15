@@ -27,6 +27,7 @@ enum Field<'a> {
     NotchPlace(NotchKey),
     PieceName(PieceKey),
     Grain(PieceKey),
+    Placement(PieceKey),
     Label(PointKey),
     LabelShown(PointKey),
 }
@@ -71,6 +72,7 @@ impl Command {
             Command::MoveNotch { notch, .. } => Some(Field::NotchPlace(*notch)),
             Command::RenamePiece { piece, .. } => Some(Field::PieceName(*piece)),
             Command::SetGrain { piece, .. } => Some(Field::Grain(*piece)),
+            Command::PlacePiece { piece, .. } => Some(Field::Placement(*piece)),
             Command::LabelPoint { point, .. } => Some(Field::Label(*point)),
             Command::ShowLabel { point, .. } => Some(Field::LabelShown(*point)),
             // Converting a tract creates or destroys the two handle points, so

@@ -1,15 +1,20 @@
+mod arrange;
 mod canvas;
+mod caption;
 mod curve;
 mod dimension;
 mod empty;
 mod gesture;
 mod input;
 mod inspector;
+mod layout;
 mod marks;
 mod modal;
+mod overview;
 mod paper;
 mod pick;
 mod precision;
+mod report;
 mod ruler;
 mod snap;
 mod state;
@@ -20,19 +25,16 @@ mod view;
 mod wire;
 
 use eframe::egui;
+pub use report::status;
 pub use state::State;
 use toile_engine::draft::{Command, Draft, PieceKey};
 use toile_engine::session::Session;
 
 use self::gesture::Gesture;
-use self::state::{Selection, Tool};
+use self::state::{Scope, Tool};
 use self::wire::Verb;
 use crate::file::Action;
 use crate::tabs::{Workspace, left_panel, right_panel};
-
-/// The two nodes a base block names for the side seam, so the bar can measure
-/// it instead of quoting it. A piece that names neither reports its perimeter.
-const SIDE: [&str; 2] = ["cintura_lat", "bajo_lat"];
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
@@ -46,8 +48,8 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         [w.session.can_undo(), w.session.can_redo()]
     };
     let draft = w.session.draft();
-    // The piece the mat draws this frame, and the pieces there were before an
-    // edit: a piece drawn during it becomes the active one afterwards.
+    // The piece in front this frame, and the pieces there were before an
+    // edit: what an edit adds or takes away is what the mat follows.
     let active = active_piece(draft, w.patronaje.active, w.session.piece());
     let before = draft.map(|d| d.doc().piece_keys()).unwrap_or_default();
     w.patronaje.active = active;
@@ -55,36 +57,26 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let mut verbs = Vec::new();
     let drawing = matches!(state.gesture, Gesture::Drawing { .. });
     verbs.extend(left_panel(ui, theme, |ui| {
-        let plea = tree::product(ui, theme, draft, active, &mut state.renaming, drawing);
+        let scope = state.scope;
+        let plea = tree::product(
+            ui,
+            theme,
+            draft,
+            active,
+            &mut state.renaming,
+            drawing,
+            scope,
+        );
         tools::grid(ui, theme, state);
         let mut asked: Vec<Verb> = tools::history(ui, theme, ready).into_iter().collect();
-        match plea.filter(|_| !asking) {
-            // A drawing already in progress starts over: the row was pressed
-            // to start one.
-            Some(tree::Plea::Draw)
-                if matches!(state.gesture, Gesture::Idle | Gesture::Drawing { .. }) =>
-            {
-                begin_piece(state, draft.is_some());
-                // An open drawing has nothing to send the sim, so nothing
-                // else will ask for the frame on which the bar catches up
-                // with the press.
+        if let Some(plea) = plea.filter(|_| !asking) {
+            // An open drawing has nothing to send the sim, so nothing else
+            // will ask for the frame on which the bar catches up with the
+            // press.
+            if plea == tree::Plea::Draw {
                 ui.ctx().request_repaint();
             }
-            Some(tree::Plea::Focus(key)) => focus(state, key),
-            Some(tree::Plea::Rename(key, to)) => {
-                asked.push(Verb::Begin("renombrar pieza"));
-                asked.push(Verb::Edit(Box::new(Command::RenamePiece {
-                    piece: key,
-                    to,
-                })));
-                asked.push(Verb::End);
-            }
-            Some(tree::Plea::Remove(key)) => {
-                asked.push(Verb::Begin("borrar pieza"));
-                asked.push(Verb::Edit(Box::new(Command::RemovePiece { piece: key })));
-                asked.push(Verb::End);
-            }
-            Some(tree::Plea::Draw) | None => {}
+            asked.extend(plead(state, plea, draft.is_some()));
         }
         asked
     }));
@@ -94,15 +86,11 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     // One field confirmed is one entry of its own, under its own name: an edit
     // from a panel never folds into whatever gesture the mat left open.
     if let Some((label, command)) = asked.filter(|_| !asking) {
-        verbs.push(Verb::Begin(label));
-        verbs.push(Verb::Edit(Box::new(command)));
-        verbs.push(Verb::End);
+        verbs.extend(entry(label, command));
     }
     verbs.extend(canvas::show(ui, theme, draft, active, state));
     let said = apply(w.session, verbs, &mut w.patronaje.refused);
-    // A piece just drawn becomes the active one, so the mat follows the hand
-    // onto what it drew rather than staying on what was there before.
-    let moved = adopt_new(w, &before);
+    let moved = follow(w.session, w.patronaje, &before);
     if said || moved {
         // The bars are drawn before the tabs, so what this run has to say
         // reaches the status bar on the frame after it. Nothing else asks for
@@ -112,8 +100,8 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     }
 }
 
-/// The piece the mat draws, in order of preference: the one chosen while it
-/// still exists, then the one draping, then the first the product holds.
+/// The piece in front, in order of preference: the one chosen while it still
+/// exists, then the one draping, then the first the product holds.
 ///
 /// `None` only for a product with no pieces at all — a blank mat waiting for
 /// its first piece to be drawn.
@@ -130,19 +118,56 @@ fn active_piece(
         .or_else(|| doc.piece_keys().first().copied())
 }
 
+/// What the product tree's plea does to the tab, and the edits it asks for.
+///
+/// A new drawing and the whole product wait for the mat to be free of every
+/// gesture but a drawing, which they walk away from: any other gesture may
+/// hold the undo stack open, and a view left behind would leave that entry
+/// open with it.
+fn plead(state: &mut State, plea: tree::Plea, has_document: bool) -> Vec<Verb> {
+    let free = matches!(state.gesture, Gesture::Idle | Gesture::Drawing { .. });
+    match plea {
+        // A drawing already in progress starts over: the row was pressed to
+        // start one.
+        tree::Plea::Draw if free => begin_piece(state, has_document),
+        tree::Plea::Overview if free => state.overview(),
+        tree::Plea::Focus(key) => state.open(key),
+        tree::Plea::Rename(piece, to) => {
+            return entry("renombrar pieza", Command::RenamePiece { piece, to });
+        }
+        tree::Plea::Remove(piece) => {
+            return entry("borrar pieza", Command::RemovePiece { piece });
+        }
+        tree::Plea::Draw | tree::Plea::Overview => {}
+    }
+    Vec::new()
+}
+
+/// One edit from a panel, as an undo entry of its own under its own name.
+fn entry(label: &'static str, command: Command) -> Vec<Verb> {
+    vec![Verb::Begin(label), Verb::Edit(Box::new(command)), Verb::End]
+}
+
 /// What "+ Pieza" does, which turns on whether there is a product to add the
 /// piece to.
 ///
 /// With a document on the table it opens the drawing gesture, so the very next
 /// click on the mat places the first vertex — the one deliberate way to begin a
-/// piece. With none it asks the application for a product instead, down the
-/// channel the empty mat's own splash asks along: a piece cannot exist outside
-/// a product, so naming one is what the press really wants, and it is one click
+/// piece. A contour is drawn in the document's own coordinates, which only a
+/// piece's detail shows, so from the whole product the mat first turns to the
+/// detail of the piece in front, whose nodes the new contour may catch on. With
+/// no document it asks the application for a product instead, down the channel
+/// the empty mat's own splash asks along: a piece cannot exist outside a
+/// product, so naming one is what the press really wants, and it is one click
 /// away instead of none.
 fn begin_piece(state: &mut State, has_document: bool) {
     if !has_document {
         state.asked = Some(Action::New);
         return;
+    }
+    if state.scope == Scope::Product {
+        state.scope = Scope::Piece;
+        state.frame = true;
     }
     state.tool = Tool::Select;
     state.gesture = Gesture::Drawing {
@@ -151,24 +176,25 @@ fn begin_piece(state: &mut State, has_document: bool) {
     };
 }
 
-/// Brings a piece to the front: the mat draws it, nothing of the last piece
-/// stays chosen, and the view fits it on the next frame.
-fn focus(state: &mut State, piece: PieceKey) {
-    state.active = Some(piece);
-    state.selection = Selection::None;
-    state.frame = true;
-}
-
-/// Makes a piece just added the active one, and says whether the pieces on the
+/// Keeps the mat on a piece that exists, and says whether the pieces on the
 /// table changed at all — an addition to follow, or a removal to redraw for.
-fn adopt_new(w: &mut Workspace<'_>, before: &[PieceKey]) -> bool {
-    let after = w
-        .session
+///
+/// A piece just drawn is opened, so the mat follows the hand onto what it drew.
+/// On the whole product a piece that comes back, as an undone removal brings
+/// it, is only put in front. A detail whose piece has gone falls back to the
+/// whole product rather than to some other piece nobody asked for.
+fn follow(session: &Session, state: &mut State, before: &[PieceKey]) -> bool {
+    let after = session
         .draft()
         .map(|d| d.doc().piece_keys())
         .unwrap_or_default();
     if let Some(&fresh) = after.iter().find(|key| !before.contains(key)) {
-        focus(w.patronaje, fresh);
+        match state.scope {
+            Scope::Piece => state.open(fresh),
+            Scope::Product => state.active = Some(fresh),
+        }
+    } else if state.scope == Scope::Piece && state.active.is_some_and(|key| !after.contains(&key)) {
+        state.overview();
     }
     after != before
 }
@@ -214,63 +240,6 @@ fn apply(session: &mut Session, verbs: Vec<Verb>, said: &mut Option<String>) -> 
     }
     *said = refused;
     true
-}
-
-/// The cells of the status bar, measured off the document on the table.
-///
-/// Each cell says whether it is an alert: a refused edit and a broken contour
-/// are painted to be seen, and everything else stays quiet.
-pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
-    // While a piece is being drawn the bar tells how to finish it: with no
-    // menu and no tool tile any more, this is where the two keys are named.
-    if matches!(state.gesture, Gesture::Drawing { .. }) {
-        return vec![
-            ("dibujando pieza".to_owned(), false),
-            ("Enter cierra · Esc cancela".to_owned(), false),
-            ("cm".to_owned(), false),
-        ];
-    }
-    let draft = session.draft();
-    let piece = active_piece(draft, state.active, session.piece());
-    let (Some(draft), Some(piece)) = (draft, piece) else {
-        return vec![("mesa vacía".to_owned(), false), ("cm".to_owned(), false)];
-    };
-    let name = draft
-        .doc()
-        .pieces
-        .get(piece)
-        .map_or_else(String::new, |held| held.name.clone());
-    let mut cells = vec![
-        (name, false),
-        (format!("{} puntos", draft.points_cm(piece).len()), false),
-        (side_cell(draft, piece), false),
-    ];
-    if !draft.defects(piece).is_empty() {
-        cells.push(("contorno con defectos".to_owned(), true));
-    }
-    if let Some(why) = state.refused.as_deref() {
-        cells.push((format!("rechazado: {why}"), true));
-    }
-    if let Some(label) = session.undo_label().filter(|label| !label.is_empty()) {
-        cells.push((format!("deshacer {label}"), false));
-    }
-    cells.push(("cm".to_owned(), false));
-    cells
-}
-
-/// The side seam, walked along the contour between the two nodes that name it.
-fn side_cell(draft: &Draft, piece: PieceKey) -> String {
-    let doc = draft.doc();
-    let ends = (
-        doc.shows_label(piece, SIDE[0]),
-        doc.shows_label(piece, SIDE[1]),
-    );
-    match ends {
-        (Some(from), Some(to)) => {
-            format!("lateral {:.1} cm", draft.run_length_cm(piece, from, to))
-        }
-        _ => format!("perímetro {:.1} cm", draft.perimeter_cm(piece)),
-    }
 }
 
 #[cfg(test)]

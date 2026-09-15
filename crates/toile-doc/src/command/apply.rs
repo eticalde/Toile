@@ -15,8 +15,8 @@ use name::{label_point, rename_piece, show_label};
 use topology::{add_piece, insert_node, remove_node, remove_piece};
 
 use crate::{
-    Applied, Axis, Binding, ChangeClass, Command, Doc, DocError, Grain, PieceKey, PointKey,
-    VariableKey,
+    Applied, Axis, Binding, ChangeClass, Command, Doc, DocError, Grain, PieceKey, Placement,
+    PointKey, VariableKey,
 };
 
 impl Command {
@@ -72,6 +72,7 @@ impl Command {
             }
             Command::RenamePiece { piece, to } => rename_piece(doc, piece, to, naming),
             Command::SetGrain { piece, to } => set_grain(doc, piece, to),
+            Command::PlacePiece { piece, to } => place_piece(doc, piece, to),
             Command::LabelPoint { point, to } => label_point(doc, point, to, naming),
             Command::ShowLabel { point, to } => show_label(doc, point, to),
             Command::SetSegment { piece, node, to } => set_segment(doc, piece, node, to),
@@ -166,6 +167,27 @@ fn set_grain(doc: &mut Doc, piece: PieceKey, to: Grain) -> Result<Applied, DocEr
     Ok(Applied {
         inverse: Command::SetGrain { piece, to: from },
         touched: vec![piece],
+        class: ChangeClass::Metadata,
+    })
+}
+
+/// Moves a piece on the overview, or hands it back to the overview's layout.
+///
+/// No piece is named as touched: a step through the history re-derives and
+/// re-drapes the pieces it names, and nothing is derived from where a piece
+/// sits on the overview.
+fn place_piece(doc: &mut Doc, piece: PieceKey, to: Option<Placement>) -> Result<Applied, DocError> {
+    if let Some(placement) = to {
+        placement.check()?;
+    }
+    let held = doc
+        .pieces
+        .get_mut(piece)
+        .ok_or_else(|| DocError::stale(piece))?;
+    let from = std::mem::replace(&mut held.placement, to);
+    Ok(Applied {
+        inverse: Command::PlacePiece { piece, to: from },
+        touched: Vec::new(),
         class: ChangeClass::Metadata,
     })
 }
