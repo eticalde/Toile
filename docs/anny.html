@@ -377,7 +377,7 @@ blockquote.frase b{
   <h3 id="palancas">4.1 Una palanca por parte</h3>
   <p>El mapa entre el catálogo de PLAN-002 §4 y los targets de MakeHuman. Donde hay palanca propia, el afinado es exacto salvo acople; donde no, la fila lo dice.</p>
   <div class="tscroll"><table>
-    <thead><tr><th>Catálogo</th><th>Palanca</th><th>Anillo</th><th>Nota</th></tr></thead>
+    <thead><tr><th>Catálogo</th><th>Palanca</th><th>Dónde se toma</th><th>Nota</th></tr></thead>
     <tbody>
       <tr><td><code>estatura</code></td><td class="wrap">fenotipo <code>height</code></td><td>—</td><td class="wrap">Efectivamente exacta (109 cm por unidad)</td></tr>
       <tr><td><code>cuello</code></td><td><code>measure-neck-circ</code></td><td>NeckBase</td><td class="wrap">+5,4 / −4,1 cm por unidad</td></tr>
@@ -392,13 +392,13 @@ blockquote.frase b{
       <tr><td><code>brazo_contorno</code></td><td><code>measure-upperarm-circ</code></td><td>Biceps</td><td class="wrap"></td></tr>
       <tr><td><code>muneca</code></td><td><code>measure-wrist-circ</code></td><td>Wrist</td><td class="wrap"></td></tr>
       <tr><td><code>cabeza</code></td><td><code>head-scale-horiz</code></td><td>HeadMax</td><td class="wrap"></td></tr>
-      <tr><td><code>hombros</code></td><td><code>measure-shoulder-dist</code></td><td>Shoulder</td><td class="wrap"></td></tr>
-      <tr><td><code>brazo</code></td><td class="wrap"><code>measure-upperarm-length</code> + <code>lowerarm-length</code></td><td>Wrist</td><td class="wrap">Dos palancas atadas en proporción</td></tr>
-      <tr><td><code>largo_espalda</code></td><td><code>measure-napetowaist-dist</code></td><td>Waist</td><td class="wrap">Mueve la estatura: se resuelve antes que ella</td></tr>
-      <tr><td><code>altura_cadera</code></td><td><code>measure-waisttohip-dist</code></td><td>Hip</td><td class="wrap">Ídem</td></tr>
-      <tr><td><code>largo_lateral</code></td><td class="wrap"><code>upperleg-height</code> + <code>lowerleg-height</code></td><td class="wrap">Cintura → <code>AnkleJoint</code></td><td class="wrap">Atadas. Cintura→tobillo, como pide la decisión 3-bis, contra un anillo veinte de un solo punto sobre la articulación (6,8 cm de la planta) y no contra el anillo de contorno, que está cortado a media espinilla. Cierra en −0,10</td></tr>
-      <tr><td><code>entrepierna</code></td><td class="wrap">(las mismas dos)</td><td class="wrap">Crotch → suelo</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual +2,9 cm, heredado del par de <code>largo_lateral</code></td></tr>
-      <tr><td><code>tiro</code></td><td class="wrap">— (proporciones, <code>waisttohip-dist</code>)</td><td>Crotch</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual +2,9 cm, el irreducible: <code>waisttohip-dist</code> es la única palanca con autoridad sobre él y <code>altura_cadera</code> la reclama antes</td></tr>
+      <tr><td><code>hombros</code></td><td><code>measure-shoulder-dist</code></td><td class="wrap">Por la espalda, de hombro a hombro</td><td class="wrap">Llega a su tope con la cinta por defecto</td></tr>
+      <tr><td><code>brazo</code></td><td class="wrap"><code>measure-upperarm-length</code> + <code>lowerarm-length</code></td><td class="wrap">Por fuera del brazo, del hombro por el codo a la muñeca</td><td class="wrap">Dos palancas atadas en proporción</td></tr>
+      <tr><td><code>largo_espalda</code></td><td><code>measure-napetowaist-dist</code></td><td class="wrap">Por la columna, de la nuca a la cintura</td><td class="wrap">Mueve la estatura: se resuelve antes que ella</td></tr>
+      <tr><td><code>altura_cadera</code></td><td><code>measure-waisttohip-dist</code></td><td class="wrap">Por el costado, de la cintura a la altura de la cadera</td><td class="wrap">Ídem</td></tr>
+      <tr><td><code>largo_lateral</code></td><td class="wrap"><code>upperleg-height</code> + <code>lowerleg-height</code></td><td class="wrap">Por fuera de la pierna, de la cintura al tobillo</td><td class="wrap">Atadas. Termina en el tobillo, como pide la decisión 3-bis. Cierra en −0,03</td></tr>
+      <tr><td><code>entrepierna</code></td><td class="wrap">(las mismas dos)</td><td class="wrap">Por dentro de la pierna, de la entrepierna al suelo</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual +6,0 cm: por la piel mide unos 4 cm más que la caída vertical</td></tr>
+      <tr><td><code>tiro</code></td><td class="wrap">— (proporciones, <code>waisttohip-dist</code>)</td><td class="wrap">Por el costado, de la cintura a la altura de la entrepierna</td><td class="wrap"><span class="tag-no">sin palanca propia</span> residual +2,1 cm, el irreducible: <code>waisttohip-dist</code> es la única palanca con autoridad sobre él y <code>altura_cadera</code> la reclama antes</td></tr>
     </tbody>
   </table></div>
 
@@ -408,20 +408,24 @@ blockquote.frase b{
   <p>El loft garantizaba cada contorno a ulps. El cuerpo Anny no puede: su forma es la de un artista, y dos medidas pueden pedir lo que ningún humano tiene. La regla es <strong>decirlo</strong>: cada fila muestra <em>dado · medido · Δ</em> con tres bandas — ≤ 1 cm en silencio, ≤ 3 cm en ámbar, &gt; 3 cm en rojo con la causa («tope del modelo», «acoplado al pecho»). Y la regla que no cambia: <strong>el patronaje resuelve las fórmulas contra la cinta escrita</strong>, nunca contra lo que el cuerpo alcanzó — el maniquí es para mirar y drapear, la cinta es la verdad del patrón. La derivación por proporción de las medidas omitidas (PLAN-002 M2) deja de mover al maniquí Anny —él tiene su prior— y se ofrece como «tomar del maniquí» explícito, nunca en silencio.</p>
 
   <div class="decision">
-    <b>El residual medido · 2026-09-12</b>
-    <p>Resolviendo la cinta por defecto de Toile (178 cm), <strong>once de las veinte filas cierran en 0,00 o dentro de tolerancia</strong>. Las que no, y por qué:</p>
+    <b>Largos pegados al cuerpo · 2026-09-15</b>
+    <p>Un largo ya no es la recta ni la caída vertical entre dos puntos: <strong>se mide por la piel, por donde va la cinta</strong>. La entrepierna baja por el interior de la pierna hasta el suelo; el largo lateral, por el exterior, de la cintura al tobillo; el largo de espalda, por la columna, de la nuca a la cintura. El tiro y la altura de cadera bajan por el costado, el brazo va del hombro por encima del codo a la muñeca y los hombros cruzan la espalda. La estatura sigue vertical, porque se toma contra la pared. Así lo pidió el dueño al verlos dibujados, y es como la ISO 8559 describe el largo lateral. Las decisiones 3 y 3-bis de PLAN-002 conservan sus extremos: la entrepierna llega al suelo y el largo lateral termina en el tobillo.</p>
+    <p>Cada recorrido se hornea como un anillo: un plano corta la plantilla y la línea queda sobre la piel. Al generar el cuerpo se suman sus cuerdas sobre la malla deformada, así que un largo sigue siendo función continua del fenotipo. Al manejar una medida, el cuerpo ya no tiñe una zona: dibuja esa misma línea, así que lo dibujado mide lo que dice la fila. Un contorno se dibuja por donde su anillo cruza la piel, a 3 mm de ella, y se mide aplanado en su plano.</p>
+    <p>Resolviendo la cinta por defecto de Toile (178 cm), las filas que no cierran:</p>
     <div class="tscroll"><table>
       <thead><tr><th>Fila</th><th>Δ</th><th>Causa</th></tr></thead>
       <tbody>
-        <tr><td><code>pecho_alto</code></td><td>+5,33</td><td class="wrap"><span class="tag-no">sin palanca</span> Del ápice de la axila hacia abajo la sección de esta malla mengua de forma monótona, así que <em>cualquier</em> corte por encima del anillo de <code>pecho</code> lee más que <code>pecho</code>. La cinta pide 94 contra un pecho de 96: pide menos, y ninguna altura honesta lo da. Es la proporción del modelo, no el anillo.</td></tr>
-        <tr><td><code>largo_espalda</code></td><td>−3,84</td><td class="wrap"><span class="chip">tope</span> El tramo nape→entrepierna del modelo ya coincide con el de la cinta; lo que no coincide es cómo se reparte entre esta fila y <code>tiro</code>.</td></tr>
-        <tr><td><code>tiro</code></td><td>+2,89</td><td class="wrap"><span class="tag-no">sin palanca</span> El irreducible. La razón tiro/estatura de la malla es 0,1811 contra 0,152 de la cinta, y la única palanca con autoridad real sobre él —<code>waisttohip-dist</code>— ya está reclamada por <code>altura_cadera</code>, que sí tiene la suya.</td></tr>
-        <tr><td><code>entrepierna</code></td><td>+2,85</td><td class="wrap"><span class="tag-no">sin palanca</span> Hereda el par de palancas de <code>largo_lateral</code>. Subió al cerrarse aquél, y eso es correcto: el +0,90 anterior era el par atascado contra su tope, no un acuerdo.</td></tr>
-        <tr><td><code>cabeza</code></td><td>−1,81</td><td class="wrap"><span class="tag-no">sin palanca</span> La estatura se sostiene en 178 encogiendo todo lo que no son las piernas.</td></tr>
-        <tr><td><code>brazo_contorno</code></td><td>+0,51</td><td class="wrap"><span class="chip">tope</span> <strong>No es un límite del modelo</strong>: el mismo cuerpo llega a 29,3 cm con músculo 0 y complexión 0. «Tope» aquí quiere decir «no desde este fenotipo», que es justo lo que el flujo de dos etapas espera.</td></tr>
+        <tr><td><code>pecho_alto</code></td><td>+7,03</td><td class="wrap"><span class="tag-no">sin palanca</span> La proporción del modelo: por encima del anillo de <code>pecho</code> la sección siempre lee más que <code>pecho</code>, y la cinta pide menos.</td></tr>
+        <tr><td><code>entrepierna</code></td><td>+5,98</td><td class="wrap"><span class="tag-no">sin palanca</span> Por el interior de la pierna mide unos 4 cm más que la caída vertical, y no tiene palanca propia con la que cerrar la diferencia.</td></tr>
+        <tr><td><code>largo_espalda</code></td><td>−3,44</td><td class="wrap"><span class="chip">tope</span> Por la columna mide menos que la recta de antes, que terminaba en un punto dentro del cuerpo, y su palanca llega al tope.</td></tr>
+        <tr><td><code>tiro</code></td><td>+2,05</td><td class="wrap"><span class="tag-no">sin palanca</span> <code>waisttohip-dist</code> es la única palanca con autoridad sobre él, y <code>altura_cadera</code> la reclama antes.</td></tr>
+        <tr><td><code>hombros</code></td><td>−1,48</td><td class="wrap"><span class="chip">tope</span> Por la espalda mide menos que la recta de antes, que unía puntos dentro de los brazos.</td></tr>
+        <tr><td><code>cabeza</code></td><td>−1,17</td><td class="wrap"><span class="tag-no">sin palanca</span></td></tr>
+        <tr><td><code>brazo</code></td><td>+0,92</td><td class="wrap">Por encima del codo mide más que la suma de rectas de antes.</td></tr>
+        <tr><td><code>brazo_contorno</code></td><td>+0,86</td><td class="wrap"><span class="chip">tope</span> «Tope» quiere decir «no desde este fenotipo»: con menos músculo y complexión, el mismo cuerpo llega.</td></tr>
       </tbody>
     </table></div>
-    <p>Σ|Δ| sobre las veinte filas: <strong>17,76</strong>, contra 30,36 antes de la auditoría de puntos de referencia. Subió en el último paso y eso también es correcto — al darle a <code>largo_lateral</code> su tobillo, el par de palancas de pierna se despegó de su tope y estiró. El cuerpo que queda tiene la cintura a 110,7 cm del suelo, el tobillo a 6,8 y la entrepierna a 80,9: un adulto de 178 cm normal. <strong>Σ|Δ| no es el objetivo.</strong></p>
+    <p>Σ|Δ| sobre las veinte filas: <strong>23,42</strong>, contra 17,76 con los largos rectos. Sube porque un recorrido por la piel mide más que una caída vertical y la cinta por defecto trae valores de libro de patronaje; no se retocó nada para bajarla. Una consecuencia: la derivación <code>tiro = largo_lateral − entrepierna</code> de PLAN-002 ya no vale sobre este cuerpo, porque un largo termina en el tobillo y el otro llega al suelo.</p>
   </div>
 </section>
 
