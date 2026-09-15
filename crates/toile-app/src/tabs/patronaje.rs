@@ -35,38 +35,39 @@ use self::state::{Scope, Tool};
 use self::wire::Verb;
 use crate::file::Action;
 use crate::tabs::{Workspace, left_panel, right_panel};
+use crate::theme::Theme;
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
-    let theme = w.theme;
+    table(ui, w.theme, w.session, w.patronaje);
+}
+
+/// The whole tab, out of what the workspace hands it: the product tree and
+/// the tools, the inspector, and the mat between them.
+fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mut State) {
     // A question waiting on the mat owns the open entry until it is answered.
     // The tiles that would move the stack under it go dead, and so does every
     // edit a panel offers: an entry belongs to the gesture that opened it.
-    let asking = w.patronaje.ask.is_some();
+    let asking = patronaje.ask.is_some();
     let ready = if asking {
         [false, false]
     } else {
-        [w.session.can_undo(), w.session.can_redo()]
+        [session.can_undo(), session.can_redo()]
     };
-    let draft = w.session.draft();
+    let draft = session.draft();
     // The piece in front this frame, and the pieces there were before an
     // edit: what an edit adds or takes away is what the mat follows.
-    let active = active_piece(draft, w.patronaje.active, w.session.piece());
+    let active = active_piece(draft, patronaje.active, session.piece());
     let before = draft.map(|d| d.doc().piece_keys()).unwrap_or_default();
-    w.patronaje.active = active;
-    let state = &mut *w.patronaje;
+    patronaje.active = active;
+    let state = &mut *patronaje;
     let mut verbs = Vec::new();
-    let drawing = matches!(state.gesture, Gesture::Drawing { .. });
+    let mat = tree::Mat {
+        scope: state.scope,
+        drawing: matches!(state.gesture, Gesture::Drawing { .. }),
+        live: !asking,
+    };
     verbs.extend(left_panel(ui, theme, |ui| {
-        let scope = state.scope;
-        let plea = tree::product(
-            ui,
-            theme,
-            draft,
-            active,
-            &mut state.renaming,
-            drawing,
-            scope,
-        );
+        let plea = tree::product(ui, theme, draft, active, &mut state.renaming, mat);
         tools::grid(ui, theme, state);
         let mut asked: Vec<Verb> = tools::history(ui, theme, ready).into_iter().collect();
         if let Some(plea) = plea.filter(|_| !asking) {
@@ -89,8 +90,8 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
         verbs.extend(entry(label, command));
     }
     verbs.extend(canvas::show(ui, theme, draft, active, state));
-    let said = apply(w.session, verbs, &mut w.patronaje.refused);
-    let moved = follow(w.session, w.patronaje, &before);
+    let said = apply(session, verbs, &mut patronaje.refused);
+    let moved = follow(session, patronaje, &before);
     if said || moved {
         // The bars are drawn before the tabs, so what this run has to say
         // reaches the status bar on the frame after it. Nothing else asks for
@@ -165,6 +166,11 @@ fn begin_piece(state: &mut State, has_document: bool) {
         state.asked = Some(Action::New);
         return;
     }
+    // A drawing started over keeps the scope the first one was begun from.
+    let back_to = match state.gesture {
+        Gesture::Drawing { back_to, .. } => back_to,
+        _ => state.scope,
+    };
     if state.scope == Scope::Product {
         state.scope = Scope::Piece;
         state.frame = true;
@@ -173,6 +179,7 @@ fn begin_piece(state: &mut State, has_document: bool) {
     state.gesture = Gesture::Drawing {
         pending: Vec::new(),
         rubber: [0.0, 0.0],
+        back_to,
     };
 }
 

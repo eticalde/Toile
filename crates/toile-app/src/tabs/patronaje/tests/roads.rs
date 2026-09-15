@@ -1,6 +1,7 @@
 use eframe::egui::{Key, pos2};
-use toile_engine::draft::{Draft, block};
+use toile_engine::draft::{Doc, Draft, MeasureSet, block};
 
+use super::super::gesture::Gesture;
 use super::super::state::{Scope, Selection};
 use super::super::{State, apply, follow, plead, tree};
 use super::bench::{Bench, front_and_back, two_squares};
@@ -87,6 +88,41 @@ fn a_piece_drawn_from_the_whole_product_lands_on_its_own_detail() {
     assert_eq!(bench.state.scope, Scope::Piece);
     assert_eq!(bench.state.active, Some(drawn), "the mat follows the hand");
     assert_eq!(bench.session.undo_label(), Some("dibujar pieza"));
+}
+
+/// Walking away from a drawing goes back to where it was started: begun on
+/// the whole product it only borrowed a detail to draw in, so Escape returns
+/// to every piece; begun on a piece, it stays on that piece.
+#[test]
+fn escape_from_a_drawing_goes_back_to_the_scope_it_was_begun_from() {
+    let empty = Doc::new(MeasureSet::new("Etienne", [("cintura", 84.0)]));
+    for doc in [block::trousers(), empty] {
+        let mut bench = Bench::new(doc);
+        bench.frame(Vec::new());
+        assert!(plead(&mut bench.state, tree::Plea::Draw, true).is_empty());
+        bench.frame(Vec::new());
+        assert_eq!(bench.state.scope, Scope::Piece, "drawn on a detail");
+        bench.click(pos2(600.0, 400.0));
+        bench.key(Key::Escape);
+        assert_eq!(bench.state.gesture, Gesture::Idle);
+        assert_eq!(bench.state.scope, Scope::Product, "back where it began");
+        assert_eq!(bench.session.revision(), 0);
+    }
+
+    let mut bench = Bench::new(block::trousers());
+    let (front, _) = front_and_back(bench.doc());
+    bench.state.open(front);
+    bench.frame(Vec::new());
+    assert!(plead(&mut bench.state, tree::Plea::Draw, true).is_empty());
+    bench.click(pos2(600.0, 400.0));
+    bench.key(Key::Escape);
+    assert_eq!(bench.state.gesture, Gesture::Idle);
+    assert_eq!(
+        bench.state.scope,
+        Scope::Piece,
+        "begun on a piece, kept there"
+    );
+    assert_eq!(bench.state.active, Some(front));
 }
 
 #[test]

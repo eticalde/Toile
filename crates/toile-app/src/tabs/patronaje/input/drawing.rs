@@ -6,6 +6,7 @@
 use toile_engine::draft::{Identity, PieceKey, SegmentEdit, Winding};
 
 use super::super::snap::SnapKind;
+use super::super::state::Scope;
 use super::draw::DRAW;
 use super::square::{bent, on_glass};
 use super::*;
@@ -22,6 +23,7 @@ fn placed(ctx: &EditContext<'_>, corners: &[[f64; 2]]) -> Gesture {
     let mut gesture = Gesture::Drawing {
         pending: Vec::new(),
         rubber: [0.0, 0.0],
+        back_to: Scope::Piece,
     };
     for &at in corners {
         let (next, commands, feedback) =
@@ -189,6 +191,7 @@ fn a_vertex_pressed_on_a_node_while_drawing_is_caught_by_it() {
         Gesture::Drawing {
             pending: Vec::new(),
             rubber: [0.0, 0.0],
+            back_to: Scope::Piece,
         },
         Input::Down(on_glass(at), Mods::default()),
         &ctx,

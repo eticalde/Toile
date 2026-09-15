@@ -83,7 +83,7 @@ pub fn reduce(
         state.gesture = next;
         stacked(feedback.stack, commands, verbs);
         if let Some(select) = feedback.select {
-            state.selection = select;
+            state.choose(select);
         }
         if let Some(tool) = feedback.tool {
             state.tool = tool;

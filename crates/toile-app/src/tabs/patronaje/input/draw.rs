@@ -4,7 +4,7 @@ use toile_engine::draft::{Command, Doc, Identity, Piece, PieceKey, Point, Segmen
 use super::super::gesture::{EditContext, Feedback, Gesture, Input, Mods, Stack};
 use super::super::pick::{self, NODE_PT};
 use super::super::snap::{self, SnapConfig, SnapContext, Snapped};
-use super::super::state::Selection;
+use super::super::state::{Scope, Selection};
 use super::reach;
 
 /// The name the drawn piece leaves in the undo stack.
@@ -23,22 +23,27 @@ const HUNDREDTHS: f64 = 100.0;
 ///
 /// No command goes out until the contour closes: Escape walks away from any
 /// number of placed vertices without an entry to unwind, and Backspace takes
-/// the last one back for free.
+/// the last one back for free. Walking away goes back to the scope the drawing
+/// was started from: begun on the whole product, it only borrowed a piece's
+/// detail to draw in, and leaving the person on that piece would put them
+/// somewhere they never went.
 pub(super) fn update(
     pending: Vec<[f64; 2]>,
     rubber: [f64; 2],
+    back_to: Scope,
     event: &Input,
     ctx: &EditContext<'_>,
 ) -> (Gesture, Vec<Command>, Feedback) {
     match *event {
-        Input::Down(_, mods) if mods.space => keep(pending, rubber),
-        Input::Down(at, mods) => pressed(pending, at, mods, ctx),
+        Input::Down(_, mods) if mods.space => keep(pending, rubber, back_to),
+        Input::Down(at, mods) => pressed((pending, back_to), at, mods, ctx),
         Input::Move(at, mods) => {
             let caught = vertex(&pending, at, mods, ctx);
             (
                 Gesture::Drawing {
                     pending,
                     rubber: caught.at,
+                    back_to,
                 },
                 Vec::new(),
                 Feedback {
@@ -48,20 +53,35 @@ pub(super) fn update(
             )
         }
         Input::Key(Key::Enter, _) if pending.len() >= SIDES => close(&pending, ctx),
-        Input::Key(Key::Escape, _) => (Gesture::Idle, Vec::new(), Feedback::default()),
+        Input::Key(Key::Escape, _) => (
+            Gesture::Idle,
+            Vec::new(),
+            Feedback {
+                overview: back_to == Scope::Product,
+                ..Feedback::default()
+            },
+        ),
         Input::Key(Key::Backspace | Key::Delete, _) => {
             let mut pending = pending;
             pending.pop();
-            keep(pending, rubber)
+            keep(pending, rubber, back_to)
         }
-        Input::Up(..) | Input::Key(..) | Input::Text(_) => keep(pending, rubber),
+        Input::Up(..) | Input::Key(..) | Input::Text(_) => keep(pending, rubber, back_to),
     }
 }
 
 /// The drawing as it was, with nothing to say.
-fn keep(pending: Vec<[f64; 2]>, rubber: [f64; 2]) -> (Gesture, Vec<Command>, Feedback) {
+fn keep(
+    pending: Vec<[f64; 2]>,
+    rubber: [f64; 2],
+    back_to: Scope,
+) -> (Gesture, Vec<Command>, Feedback) {
     (
-        Gesture::Drawing { pending, rubber },
+        Gesture::Drawing {
+            pending,
+            rubber,
+            back_to,
+        },
         Vec::new(),
         Feedback::default(),
     )
@@ -74,7 +94,7 @@ fn keep(pending: Vec<[f64; 2]>, rubber: [f64; 2]) -> (Gesture, Vec<Command>, Fee
 /// coming back to the first vertex closes the piece rather than landing one
 /// more vertex on the grid line beside it.
 fn pressed(
-    pending: Vec<[f64; 2]>,
+    (pending, back_to): (Vec<[f64; 2]>, Scope),
     at: Pos2,
     mods: Mods,
     ctx: &EditContext<'_>,
@@ -83,12 +103,12 @@ fn pressed(
     if pending.len() >= SIDES && pick::away(cm, pending[0]) < reach(ctx, NODE_PT) {
         return close(&pending, ctx);
     }
-    place(pending, at, mods, ctx)
+    place((pending, back_to), at, mods, ctx)
 }
 
 /// Puts the next vertex where the snap lets it land.
 fn place(
-    mut pending: Vec<[f64; 2]>,
+    (mut pending, back_to): (Vec<[f64; 2]>, Scope),
     at: Pos2,
     mods: Mods,
     ctx: &EditContext<'_>,
@@ -103,6 +123,7 @@ fn place(
         Gesture::Drawing {
             pending,
             rubber: caught.at,
+            back_to,
         },
         Vec::new(),
         Feedback {

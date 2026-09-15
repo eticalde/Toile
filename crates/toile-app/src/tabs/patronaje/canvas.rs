@@ -125,7 +125,9 @@ fn detail(
         Gesture::Marquee { from, to } => {
             marks::band(painter, theme, gesture::band(state.view, *from, *to));
         }
-        Gesture::Drawing { pending, rubber } => {
+        Gesture::Drawing {
+            pending, rubber, ..
+        } => {
             if let Some(snapped) = state.caught {
                 let anchor = pending.last().copied().unwrap_or(*rubber);
                 marks::candidate(painter, theme, state.view, snapped, anchor);

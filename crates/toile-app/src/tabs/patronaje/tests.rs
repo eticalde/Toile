@@ -40,7 +40,12 @@ fn click_the_tree(
         };
         let pass = ctx.run_ui(input, |ui| {
             let plea = left_panel(ui, &theme, |ui| {
-                tree::product(ui, &theme, draft, None, renaming, false, Scope::Product)
+                let mat = tree::Mat {
+                    scope: Scope::Product,
+                    drawing: false,
+                    live: true,
+                };
+                tree::product(ui, &theme, draft, None, renaming, mat)
             });
             seen = plea.or(seen.take());
         });
@@ -118,6 +123,7 @@ fn the_plus_row_asks_for_a_product_before_it_opens_a_drawing() {
         Gesture::Drawing {
             pending: Vec::new(),
             rubber: [0.0, 0.0],
+            back_to: Scope::Product,
         },
         "the mat is left waiting for the first vertex"
     );
@@ -238,6 +244,9 @@ fn the_active_piece_prefers_the_chosen_then_the_draping_then_the_first() {
     assert_eq!(active_piece(None, None, None), None, "no table, no piece");
 }
 
+mod asking;
 mod bench;
 mod roads;
+mod studio;
+mod typed;
 mod whole;

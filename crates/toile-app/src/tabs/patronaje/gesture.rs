@@ -7,7 +7,7 @@ use toile_engine::draft::{Axis, Binding, Doc, PieceKey, PointKey};
 use super::arrange::Arrange;
 use super::curve::Bend;
 use super::snap::{SnapConfig, Snapped};
-use super::state::{Selection, Tool};
+use super::state::{Scope, Selection, Tool};
 use super::tract::Tract;
 use super::view::View;
 use crate::bind;
@@ -43,6 +43,9 @@ pub enum Gesture {
         pending: Vec<[f64; 2]>,
         /// Where the next vertex would land, snap and all, in centimetres.
         rubber: [f64; 2],
+        /// The scope the drawing was started from, which is where walking
+        /// away from it goes back to.
+        back_to: Scope,
     },
     /// Moving a whole piece across the product.
     Arrange(Arrange),

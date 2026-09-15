@@ -44,7 +44,7 @@ pub fn list_row_icon(
     selected: bool,
     icon: impl FnOnce(&Painter, Rect, Color32),
 ) -> Response {
-    tree_row(ui, theme, label, selected, 0.0, icon)
+    tree_row(ui, theme, (label, selected), 0.0, true, icon)
 }
 
 /// One entry carrying a right-aligned mono note, such as a date, in the ink
@@ -56,19 +56,24 @@ pub fn list_row_noted(
     selected: bool,
     note: (&str, Color32),
 ) -> Response {
-    row(ui, theme, label, selected, PAD, Some(note))
+    row(ui, theme, (label, selected), PAD, true, Some(note))
 }
 
 /// The same entry pushed right by `indent`, one level down a tree.
+///
+/// A row that is not `live` cannot be pressed right now, and looks it: it
+/// senses no click, never lights under the pointer, and is written in the ink
+/// of a control that is not there to be used. The tint of a chosen row stays,
+/// because it says where the person is and not what a press would do.
 pub fn tree_row(
     ui: &mut Ui,
     theme: &Theme,
-    label: &str,
-    selected: bool,
+    (label, selected): (&str, bool),
     indent: f32,
+    live: bool,
     icon: impl FnOnce(&Painter, Rect, Color32),
 ) -> Response {
-    let resp = row(ui, theme, label, selected, ICON_X + indent, None);
+    let resp = row(ui, theme, (label, selected), ICON_X + indent, live, None);
     let slot = Rect::from_center_size(
         resp.rect.left_center() + vec2(PAD + indent + ICON / 2.0, 0.0),
         Vec2::splat(ICON),
@@ -80,15 +85,16 @@ pub fn tree_row(
 fn row(
     ui: &mut Ui,
     theme: &Theme,
-    label: &str,
-    selected: bool,
+    (label, selected): (&str, bool),
     text_x: f32,
+    live: bool,
     note: Option<(&str, Color32)>,
 ) -> Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
+    let sense = if live { Sense::click() } else { Sense::hover() };
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), sense);
     let tint = if selected {
         0.16
-    } else if resp.hovered() {
+    } else if live && resp.hovered() {
         0.07
     } else {
         0.0
@@ -116,7 +122,13 @@ fn row(
         Align2::LEFT_CENTER,
         label,
         FontId::proportional(13.0),
-        if selected { theme.ink } else { theme.ink_soft },
+        if !live {
+            theme.muted
+        } else if selected {
+            theme.ink
+        } else {
+            theme.ink_soft
+        },
     );
     resp
 }

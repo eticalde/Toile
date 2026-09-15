@@ -1,7 +1,7 @@
 mod cite;
 mod tape;
 mod variables;
-mod write;
+pub(super) mod write;
 
 use cite::Cite;
 use eframe::egui;

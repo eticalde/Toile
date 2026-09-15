@@ -37,6 +37,23 @@ pub enum Plea {
     Remove(PieceKey),
 }
 
+/// Where the mat stands, which is what the rows of the tree answer to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Mat {
+    /// Whether the mat shows every piece or one; the row of the whole product
+    /// is lit on the first.
+    pub scope: Scope,
+    /// Whether a piece is being drawn already, which keeps "+ Pieza" lit for
+    /// as long as the drawing it opened is on the mat.
+    pub drawing: bool,
+    /// Whether a press on the tree can be answered at all.
+    ///
+    /// Not while a question waits on the mat: the question owns the open
+    /// entry, so every row goes dead until it is answered, the way the trail
+    /// over the mat does, rather than staying lit and dropping the press.
+    pub live: bool,
+}
+
 /// The product tree: the whole product, the pieces it holds, and the way to a
 /// new one.
 ///
@@ -47,22 +64,19 @@ pub enum Plea {
 /// with a document or without one: over an empty table the tab turns the plea
 /// into the question that has to come first, which product is this. A row that
 /// leads somewhere beats a row that only looks as though it would.
-///
-/// `drawing` is whether a piece is being drawn already, which is what keeps the
-/// row lit for as long as the drawing it opened is on the mat.
 pub fn product(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: Option<&Draft>,
     active: Option<PieceKey>,
     renaming: &mut Option<(PieceKey, String)>,
-    drawing: bool,
-    scope: Scope,
+    mat: Mat,
 ) -> Option<Plea> {
     section(ui, theme, "Producto");
     let mut asked = None;
     if draft.is_some() {
-        let whole = tree_row(ui, theme, WHOLE, scope == Scope::Product, 0.0, |p, r, c| {
+        let lit = mat.scope == Scope::Product;
+        let whole = tree_row(ui, theme, (WHOLE, lit), 0.0, mat.live, |p, r, c| {
             glyph::paint(p, r, c, PRODUCT_ICON);
         });
         if whole.clicked() {
@@ -71,7 +85,9 @@ pub fn product(
     }
     let pieces = draft.map(|draft| draft.doc().pieces.iter().collect::<Vec<_>>());
     for &(key, piece) in &pieces.unwrap_or_default() {
-        if matches!(renaming, Some((editing, _)) if *editing == key) {
+        // A name half typed is put away while the tree is dead, and its field
+        // comes back holding it once the question is answered.
+        if mat.live && matches!(renaming, Some((editing, _)) if *editing == key) {
             let buffer = &mut renaming.as_mut().expect("a name is being typed").1;
             if let Some(commit) = editing_row(ui, theme, buffer) {
                 let name = buffer.trim().to_owned();
@@ -84,9 +100,19 @@ pub fn product(
             continue;
         }
         let lit = active == Some(key);
-        let row = tree_row(ui, theme, &piece.name, lit, INDENT, |p, r, c| {
-            glyph::paint(p, r, c, PIECE_ICON);
-        });
+        let row = tree_row(
+            ui,
+            theme,
+            (&piece.name, lit),
+            INDENT,
+            mat.live,
+            |p, r, c| {
+                glyph::paint(p, r, c, PIECE_ICON);
+            },
+        );
+        if !mat.live {
+            continue;
+        }
         // Both icons paint on hover; a rename in flight wins any stray click a
         // blur may raise on another row, so it is never lost.
         let remove = removal(ui, theme, &row, key);
@@ -105,7 +131,7 @@ pub fn product(
     // The rename wins here too: the click that leaves the field is the click
     // that lands on this row, and a name already typed is worth more than a
     // press the person can simply repeat.
-    if plus_row(ui, theme, "Pieza", drawing).clicked() && asked.is_none() {
+    if plus_row(ui, theme, "Pieza", mat).clicked() && asked.is_none() {
         asked = Some(Plea::Draw);
     }
     asked
@@ -116,7 +142,7 @@ pub fn product(
 ///
 /// `Some(true)` commits, `Some(false)` abandons, `None` keeps the field open.
 fn editing_row(ui: &mut egui::Ui, theme: &Theme, buffer: &mut String) -> Option<bool> {
-    let row = tree_row(ui, theme, "", true, INDENT, |p, r, c| {
+    let row = tree_row(ui, theme, ("", true), INDENT, true, |p, r, c| {
         glyph::paint(p, r, c, PIECE_ICON);
     });
     let field = Rect::from_min_max(
@@ -186,24 +212,34 @@ fn removal(ui: &mut egui::Ui, theme: &Theme, row: &Response, key: PieceKey) -> b
 
 /// The "add a piece" row: it asks for the drawing gesture on the mat.
 ///
-/// It rests in `ink_soft`, the ink of a control waiting to be used, and never
-/// in `muted`, which is what a tile whose phase has not arrived is drawn in.
+/// Live, it rests in `ink_soft`, the ink of a control waiting to be used. Dead,
+/// it wears `muted`, the ink of a tile whose phase has not arrived, and senses
+/// no press, because that is exactly what it is until the question is gone.
 ///
 /// It lights the way a chosen piece row does, and it lights on the press
 /// rather than after it: the drawing it opens has nothing to show until the
 /// first vertex lands and the status bar is drawn before the tabs, so for one
 /// frame this row is the only place the press can be seen at all.
-fn plus_row(ui: &mut egui::Ui, theme: &Theme, label: &str, armed: bool) -> Response {
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
-    let lit = armed || resp.clicked() || resp.is_pointer_button_down_on();
+fn plus_row(ui: &mut egui::Ui, theme: &Theme, label: &str, mat: Mat) -> Response {
+    let sense = if mat.live {
+        Sense::click()
+    } else {
+        Sense::hover()
+    };
+    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), sense);
+    let pressed = mat.live && (resp.clicked() || resp.is_pointer_button_down_on());
+    let lit = mat.drawing || pressed;
+    let hovered = mat.live && resp.hovered();
     let tint = if lit {
         0.16
-    } else if resp.hovered() {
+    } else if hovered {
         0.07
     } else {
         0.0
     };
-    let ink = if lit || resp.hovered() {
+    let ink = if !mat.live {
+        theme.muted
+    } else if lit || hovered {
         theme.ink
     } else {
         theme.ink_soft

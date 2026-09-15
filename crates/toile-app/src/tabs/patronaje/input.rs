@@ -30,7 +30,14 @@ pub fn update(
     match (gesture, event) {
         // Before the general press: while a piece is being drawn, every event
         // belongs to the drawing.
-        (Gesture::Drawing { pending, rubber }, event) => draw::update(pending, rubber, &event, ctx),
+        (
+            Gesture::Drawing {
+                pending,
+                rubber,
+                back_to,
+            },
+            event,
+        ) => draw::update(pending, rubber, back_to, &event, ctx),
         (_, Input::Down(at, mods)) => press(at, mods, ctx),
         (Gesture::Pan { from }, Input::Move(at, _)) => (
             Gesture::Pan { from: at },

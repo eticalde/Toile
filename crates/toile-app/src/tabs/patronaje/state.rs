@@ -198,10 +198,16 @@ impl State {
     }
 
     /// Puts one piece alone on the mat, framed, with nothing of it chosen.
+    ///
+    /// A drawing in progress stays on the mat, now over the piece the person
+    /// asked for, so walking away from it leaves them there.
     pub fn open(&mut self, piece: PieceKey) {
+        if let Gesture::Drawing { back_to, .. } = &mut self.gesture {
+            *back_to = Scope::Piece;
+        }
         self.active = Some(piece);
         self.scope = Scope::Piece;
-        self.selection = Selection::None;
+        self.choose(Selection::None);
         self.frame = true;
     }
 
@@ -215,8 +221,32 @@ impl State {
             self.caught = None;
         }
         self.scope = Scope::Product;
-        self.selection = Selection::None;
+        self.choose(Selection::None);
         self.frame = true;
+    }
+
+    /// Chooses `selection`, and lets go of any half-typed text whose row it
+    /// no longer shows.
+    ///
+    /// Only a box drawn on the frame the focus leaves it can confirm what it
+    /// holds, and a row whose node, tract or piece is no longer chosen is not
+    /// drawn. Kept, its text would come back in the row the next time that
+    /// row is shown, and the first click in and out of it would write
+    /// something nobody confirmed. So the text goes with the row. `open` and
+    /// `overview` choose through here, so a change of scope lets go of the
+    /// same rows. A measurement or a variable is on the panel over any scope
+    /// and any selection, so its box keeps its text and its usual contract:
+    /// whatever takes the focus off it confirms it.
+    pub fn choose(&mut self, selection: Selection) {
+        self.selection = selection;
+        let shown = match self.editing.as_ref().map(|edit| &edit.of) {
+            Some(Field::Coordinate(point, _)) => self.selection.only() == Some(*point),
+            Some(Field::Samples(node)) => self.selection.edge() == Some(*node),
+            Some(Field::Measure(_) | Field::Variable(_)) | None => true,
+        };
+        if !shown {
+            self.editing = None;
+        }
     }
 }
 
