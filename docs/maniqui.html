@@ -544,6 +544,12 @@ pub struct Origin {
     <p>Sin red en runtime, sin telemetría, y nada de PII de contacto en ningún formato de la casa.</p>
     <p>Medidas corporales = datos personales (GDPR 4(1)): todo local, y borrar a Ana es borrar un archivo. <code>notes</code> nunca sale de la biblioteca. El bloque <code>&lt;personal&gt;</code> de un <code>.vit</code> importado —fecha de nacimiento, género, email: el anti-patrón de Seamly— se descarta siempre, sin opt-in (<a href="#dueno">decisión 8</a>). Y «Archivo → Exportar copia anónima…» escribe un <code>.toile</code> con personas renombradas «Persona A/B…» y <code>origin</code> eliminado entero — la huella FNV de 10 medidas es fuerza-bruteable por quien conozca el cuerpo, así que fuera. Es seudonimización en el sentido del Art. 4(5) del GDPR: el vínculo queda sólo en la biblioteca local del autor.</p>
   </div>
+
+  <div class="decision">
+    <b>Enmienda · 2026-09-15 · Primero la mitad del documento</b>
+    <p>La pestaña Maniquíes ya edita la copia que guarda el documento, sin biblioteca: con un producto abierto, su maniquí es <code>doc.mannequins[resolve_with]</code>, y cada cambio es un comando con deshacer. Es la mitad «documento» de este diseño, y no contradice nada de lo de arriba: la copia sigue siendo del documento, y el documento sigue sin referenciar nada fuera de sí.</p>
+    <p>La biblioteca de <code>.toile-persona</code>, <code>origin</code>, la banda «Actualizar · Mantener» y «Guardar en biblioteca» son la siguiente tarjeta.</p>
+  </div>
 </section>
 
 <section id="formato">
@@ -577,6 +583,12 @@ pub struct Origin {
   </div>
 
   <p>La parte más delicada del plan es la serialización, y su seguro son tests de bytes escritos <strong>antes</strong> que los campos, sobre fixtures del corpus actual: <code>a_v1_document_without_formulas_serialises_byte_identical_to_before</code>, <code>the_version_stamp_is_2_exactly_when_new_fields_are_present_and_1_otherwise</code>, <code>a_version_2_document_round_trips_and_version_3_is_rejected_loudly</code>. Es lo primero que un revisor debe mirar en M2 y M3.</p>
+
+  <div class="decision">
+    <b>Enmienda · 2026-09-15 · El fenotipo, un tercer campo</b>
+    <p>Este plan es anterior al cuerpo Anny, así que su <code>MeasureSet</code> sólo tenía medidas. Pero el cuerpo se genera también de sexo, edad, complexión, músculo y proporciones, y sin guardarlos un producto reabierto no puede regenerar el cuerpo que su dueño formó. Entra como <code>phenotype: Option&lt;BodyShape&gt;</code>, un campo del mismo tipo que los dos de arriba y bajo la misma regla: sin fenotipo, el archivo es byte a byte el de hoy y lleva <code>toile: 1</code>; con él, <code>toile: 2</code>. Guarda las unidades de la persona —la edad en años— y no los parámetros internos de Anny, que se convierten en el motor. Los tres tests de bytes de arriba existen, y se escribieron antes que el campo.</p>
+    <p><code>formulas</code> y <code>origin</code> siguen pendientes. El formato ganó dos reglas por el camino: un comando rechaza un valor no finito antes de escribirlo, porque JSON no tiene NaN y el archivo no volvería a abrir; y dos maniquíes de un producto no pueden compartir nombre, porque se eligen por nombre.</p>
+  </div>
 </section>
 
 <section id="sdf">
