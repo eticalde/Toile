@@ -550,6 +550,12 @@ pub struct Origin {
     <p>La pestaña Maniquíes ya edita la copia que guarda el documento, sin biblioteca: con un producto abierto, su maniquí es <code>doc.mannequins[resolve_with]</code>, y cada cambio es un comando con deshacer. Es la mitad «documento» de este diseño, y no contradice nada de lo de arriba: la copia sigue siendo del documento, y el documento sigue sin referenciar nada fuera de sí.</p>
     <p>La biblioteca de <code>.toile-persona</code>, <code>origin</code>, la banda «Actualizar · Mantener» y «Guardar en biblioteca» son la siguiente tarjeta.</p>
   </div>
+
+  <div class="decision">
+    <b>Enmienda · 2026-09-15 · La biblioteca, construida</b>
+    <p>La otra mitad ya está. Maniquíes lista las personas y ofrece «Usar en el producto», que copia la medición actual con su vínculo en una sola entrada de deshacer, y «Guardar en biblioteca», que añade una medición fechada a la persona de origen o crea una nueva. La banda al abrir vive arriba de la ventana entera, bajo las pestañas, porque un producto se abre en la pestaña que esté delante. <strong>Mantener</strong> vale mientras el producto siga abierto: recordarlo exigiría escribir en el documento, y abrir jamás muta bits.</p>
+    <p>Tres cosas que el plan no fijaba. La fecha de una medición es la <strong>local</strong>, no UTC: es la que se escribe en la ficha, y a UTC−3 cada prueba después de las 21 h saldría fechada mañana. La carpeta es <code>Toile/personas</code> dentro de la de datos de la plataforma, la misma identidad que ya usan las preferencias, y no la <code>io.github.eticalde.Toile</code> de la <a href="#dueno">decisión 10</a>: el crate <code>directories</code> quedó fuera por licencia, y el resolvedor propio ya usaba «Toile». Y un guardado interrumpido podía dejar una copia oculta de la persona, notas incluidas, con lo que «un borrado completo» dejaba de serlo; por eso listar la biblioteca borra esos temporales cuando el proceso que los hizo ya no existe.</p>
+  </div>
 </section>
 
 <section id="formato">
@@ -587,7 +593,13 @@ pub struct Origin {
   <div class="decision">
     <b>Enmienda · 2026-09-15 · El fenotipo, un tercer campo</b>
     <p>Este plan es anterior al cuerpo Anny, así que su <code>MeasureSet</code> sólo tenía medidas. Pero el cuerpo se genera también de sexo, edad, complexión, músculo y proporciones, y sin guardarlos un producto reabierto no puede regenerar el cuerpo que su dueño formó. Entra como <code>phenotype: Option&lt;BodyShape&gt;</code>, un campo del mismo tipo que los dos de arriba y bajo la misma regla: sin fenotipo, el archivo es byte a byte el de hoy y lleva <code>toile: 1</code>; con él, <code>toile: 2</code>. Guarda las unidades de la persona —la edad en años— y no los parámetros internos de Anny, que se convierten en el motor. Los tres tests de bytes de arriba existen, y se escribieron antes que el campo.</p>
-    <p><code>formulas</code> y <code>origin</code> siguen pendientes. El formato ganó dos reglas por el camino: un comando rechaza un valor no finito antes de escribirlo, porque JSON no tiene NaN y el archivo no volvería a abrir; y dos maniquíes de un producto no pueden compartir nombre, porque se eligen por nombre.</p>
+    <p><code>formulas</code> sigue pendiente. El formato ganó dos reglas por el camino: un comando rechaza un valor no finito antes de escribirlo, porque JSON no tiene NaN y el archivo no volvería a abrir; y dos maniquíes de un producto no pueden compartir nombre, porque se eligen por nombre.</p>
+  </div>
+
+  <div class="decision">
+    <b>Enmienda · 2026-09-15 · El vínculo, versión 3</b>
+    <p>Arriba se dice que <code>origin</code> estampa <code>toile: 2</code>. Eso se escribió cuando 2 era el primer número libre, y el fenotipo lo ocupó antes. Estampar el vínculo con 2 rompía justo la promesa de esta sección: una build que lee 2 es anterior al vínculo, abre el archivo sin quejarse y, al guardar, <strong>lo pierde en silencio</strong>; la banda no vuelve a salir para ese producto. Se comprobó contra el lector de ese commit.</p>
+    <p>La regla queda así: <strong>cada campo que un lector podría perder toma el número siguiente</strong>. Un documento con vínculo lleva <code>toile: 3</code>; con fenotipo y sin vínculo, 2; sin nada nuevo, 1. El lector anterior rechaza el 3 en voz alta, también comprobado.</p>
   </div>
 </section>
 
