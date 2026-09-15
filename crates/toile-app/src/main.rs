@@ -1,11 +1,13 @@
 #![allow(missing_docs, reason = "a binary publishes no API surface")]
 
+mod band;
 mod bars;
 mod bind;
 mod config;
 mod document;
 mod file;
 mod glyph;
+mod library;
 mod pattern;
 mod tabs;
 mod theme;
@@ -57,6 +59,10 @@ struct App {
     patronaje: tabs::patronaje::State,
     probador: tabs::probador::State,
     maniquies: tabs::maniquies::State,
+    /// The library of people, as the app last read it.
+    shelf: library::shelf::Shelf,
+    /// The offers to bring the product's bodies up to the library.
+    band: band::Band,
     prefs: config::Prefs,
     /// The name being typed for a new product, while its dialog is open.
     new_product: Option<String>,
@@ -88,6 +94,8 @@ impl App {
             patronaje: tabs::patronaje::State::default(),
             probador,
             maniquies,
+            shelf: library::shelf::Shelf::platform(),
+            band: band::Band::default(),
             prefs,
             new_product: None,
             autosave_rev: 0,
@@ -156,12 +164,15 @@ impl eframe::App for App {
             &self.patronaje,
             self.maniquies.body(&self.session),
         );
+        band::show(ui, &self.theme, &mut self.band, &mut self.session);
         let mut workspace = tabs::Workspace {
             theme: &self.theme,
             session: &mut self.session,
             patronaje: &mut self.patronaje,
             probador: &mut self.probador,
             maniquies: &mut self.maniquies,
+            shelf: &mut self.shelf,
+            band: &mut self.band,
         };
         self.tab.show(ui, &mut workspace);
         if let Some(action) = self

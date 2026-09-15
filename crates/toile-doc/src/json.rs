@@ -3,10 +3,12 @@ mod check;
 mod error;
 mod id;
 mod number;
+mod persona;
 mod store;
 mod writer;
 
 pub use error::FormatError;
+pub use persona::VERSION as PERSONA_VERSION;
 use serde::{Deserialize, Serialize};
 use writer::Canonical;
 
@@ -20,10 +22,18 @@ pub const VERSION: u32 = 1;
 
 /// The format version of a document in which some body carries a phenotype.
 ///
-/// A version-1 reader would drop the phenotype without a word and generate a
-/// body its owner never shaped. Under this stamp it refuses the file for its
-/// version instead.
+/// A version-1 reader would drop it without a word and generate a body its
+/// owner never shaped. Under this stamp it refuses the file for its version.
 pub const VERSION_EXTENDED: u32 = 2;
+
+/// The format version of a document in which some body carries a link to the
+/// library.
+///
+/// It cannot share the phenotype's stamp: builds that read version 2 predate
+/// the link, so they would accept such a file, drop the link, and never again
+/// offer to update a copy the library has moved on from. Each field a reader
+/// could lose takes the next number, so the reader that would lose it refuses.
+pub const VERSION_LINKED: u32 = 3;
 
 /// A file: the version, and the pattern under it.
 #[derive(Serialize)]
@@ -48,11 +58,11 @@ impl Doc {
     /// A pure function of what the document carries, never of the file it was
     /// read from, so one document still has exactly one text.
     pub fn format_version(&self) -> u32 {
-        if self.mannequins.iter().any(|(_, set)| set.is_extended()) {
-            VERSION_EXTENDED
-        } else {
-            VERSION
-        }
+        self.mannequins
+            .iter()
+            .map(|(_, set)| set.format_version())
+            .max()
+            .unwrap_or(VERSION)
     }
 
     /// The document as canonical JSON, ending in a newline.
@@ -69,14 +79,10 @@ impl Doc {
     /// something that is not UTF-8. Both are invariants of the writer, so
     /// neither is anything a caller can do.
     pub fn to_canonical_json(&self) -> String {
-        let mut out = Vec::new();
-        let mut serializer = serde_json::Serializer::with_formatter(&mut out, Canonical::new());
-        Written {
+        let mut out = canonical_bytes(&Written {
             toile: self.format_version(),
             doc: self,
-        }
-        .serialize(&mut serializer)
-        .expect("a document holds no value a JSON writer can refuse");
+        });
         out.push(b'\n');
         String::from_utf8(out).expect("a JSON writer writes UTF-8")
     }
@@ -86,22 +92,37 @@ impl Doc {
     /// # Errors
     /// `FormatError`, naming what is wrong with the file: text that is not
     /// JSON, JSON that stops early, a missing or unknown version, a shape that
-    /// is not a pattern's, a key that leads nowhere, or a tract asking to be
-    /// flattened at a count no tract can carry.
+    /// is not a pattern's, a key that leads nowhere, a tract asking to be
+    /// flattened at a count no tract can carry, or a link to the library Toile
+    /// could not have written.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = version(text)?;
-        if found != u64::from(VERSION) && found != u64::from(VERSION_EXTENDED) {
+        if !(u64::from(VERSION)..=u64::from(VERSION_LINKED)).contains(&found) {
             return Err(FormatError::UnknownVersion {
                 found,
-                newest: VERSION_EXTENDED,
+                newest: VERSION_LINKED,
             });
         }
         let loaded: Loaded =
             serde_json::from_str(text).map_err(|error| FormatError::while_reading(&error))?;
         check::references(&loaded.doc)?;
         check::samplings(&loaded.doc)?;
+        check::origins(&loaded.doc)?;
         Ok(loaded.doc)
     }
+}
+
+/// `value` as the canonical writer spells it, with no newline after it.
+///
+/// A pattern, a library file and a fingerprint are all written by this one
+/// writer, so a number means the same bytes in each of them.
+pub(crate) fn canonical_bytes<T: Serialize + ?Sized>(value: &T) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut serializer = serde_json::Serializer::with_formatter(&mut out, Canonical::new());
+    value
+        .serialize(&mut serializer)
+        .expect("every map this crate writes is keyed by strings");
+    out
 }
 
 /// The format version a file declares.

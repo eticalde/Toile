@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -8,6 +9,9 @@ const VERSION: u32 = 1;
 
 /// How many recent patterns to keep.
 const RECENTS: usize = 10;
+
+/// The folder Toile keeps its own files in, under each base directory.
+const APP: &str = "Toile";
 
 /// What the app remembers between runs: window, recent files, last folder.
 ///
@@ -98,7 +102,25 @@ impl Prefs {
 
 /// The preferences file, under the platform's config directory for Toile.
 fn path() -> Option<PathBuf> {
-    Some(config_dir()?.join("Toile").join("prefs.json"))
+    Some(
+        base_dir(Base::Config, |name| std::env::var_os(name))?
+            .join(APP)
+            .join("prefs.json"),
+    )
+}
+
+/// The folder the library of people is kept in, under the platform's data
+/// directory for Toile.
+///
+/// A test build has no such function, so no test can name the real library:
+/// every test hands the library a scratch folder instead.
+#[cfg(not(test))]
+pub fn library_dir() -> Option<PathBuf> {
+    Some(
+        base_dir(Base::Data, |name| std::env::var_os(name))?
+            .join(APP)
+            .join("personas"),
+    )
 }
 
 /// The folder patterns are kept in by default, where the file dialogs open
@@ -111,23 +133,84 @@ pub fn patterns_dir() -> Option<PathBuf> {
     std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Documents").join("Toile"))
 }
 
-/// The OS config directory, resolved from the environment.
+/// Which of the platform's base directories a file belongs under.
+#[derive(Debug, Clone, Copy)]
+enum Base {
+    /// Settings, which the app can lose and start again without.
+    Config,
+    /// What the person made and would miss.
+    Data,
+}
+
+/// A base directory of the OS, resolved from the environment `var` reads.
 ///
-/// A hand-rolled resolver rather than a crate: the whole need is one path on
+/// A hand-rolled resolver rather than a crate: the whole need is two paths on
 /// macOS and Linux, and the obvious crate for it (`directories`) pulls an
 /// MPL-2.0 dependency the licence gate rejects. `None` where the environment
-/// does not say — the app then runs without remembering, which is the whole
-/// cost of a missing preference.
-fn config_dir() -> Option<PathBuf> {
+/// does not say.
+fn base_dir(base: Base, var: impl Fn(&str) -> Option<OsString>) -> Option<PathBuf> {
+    let home = var("HOME").map(PathBuf::from);
     #[cfg(target_os = "macos")]
     {
-        std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"))
+        // macOS keeps settings and data in the one place.
+        let _ = base;
+        home.map(|home| home.join("Library/Application Support"))
     }
     #[cfg(not(target_os = "macos"))]
     {
-        std::env::var_os("XDG_CONFIG_HOME")
+        let (xdg, fallback) = match base {
+            Base::Config => ("XDG_CONFIG_HOME", ".config"),
+            Base::Data => ("XDG_DATA_HOME", ".local/share"),
+        };
+        var(xdg)
             .map(PathBuf::from)
             .filter(|dir| dir.is_absolute())
-            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
+            .or_else(|| home.map(|home| home.join(fallback)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An environment holding only `pairs`.
+    fn env(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<OsString> {
+        let pairs = pairs.to_vec();
+        move |name| {
+            pairs
+                .iter()
+                .find(|(key, _)| *key == name)
+                .map(|(_, value)| OsString::from(value))
+        }
+    }
+
+    #[test]
+    fn with_no_home_there_is_no_base_directory() {
+        assert_eq!(base_dir(Base::Config, env(&[])), None);
+        assert_eq!(base_dir(Base::Data, env(&[])), None);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn on_macos_settings_and_data_share_application_support() {
+        let home = env(&[("HOME", "/Users/ana"), ("XDG_DATA_HOME", "/elsewhere")]);
+        let support = PathBuf::from("/Users/ana/Library/Application Support");
+        assert_eq!(base_dir(Base::Config, &home), Some(support.clone()));
+        assert_eq!(base_dir(Base::Data, &home), Some(support));
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn elsewhere_data_follows_xdg_and_falls_back_under_home() {
+        let bare = env(&[("HOME", "/home/ana")]);
+        let data = base_dir(Base::Data, &bare);
+        assert_eq!(data, Some(PathBuf::from("/home/ana/.local/share")));
+        let config = base_dir(Base::Config, &bare);
+        assert_eq!(config, Some(PathBuf::from("/home/ana/.config")));
+        let set = env(&[("HOME", "/home/ana"), ("XDG_DATA_HOME", "/datos")]);
+        assert_eq!(base_dir(Base::Data, &set), Some(PathBuf::from("/datos")));
+        let relative = env(&[("HOME", "/home/ana"), ("XDG_DATA_HOME", "datos")]);
+        let ignored = base_dir(Base::Data, &relative);
+        assert_eq!(ignored, Some(PathBuf::from("/home/ana/.local/share")));
     }
 }

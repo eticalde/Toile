@@ -46,7 +46,8 @@ impl Command {
 
     /// Whether any later edit can fold onto this one.
     ///
-    /// The ones that cannot are the edits that make or unmake an entity.
+    /// The ones that cannot are the edits that make or unmake an entity, and
+    /// the refresh, which rewrites at once fields other edits write one by one.
     pub(crate) fn folds(&self) -> bool {
         self.field().is_some()
     }
@@ -76,6 +77,10 @@ impl Command {
             // it belongs with the edits that never fold: a second conversion
             // would strand the keys the first one issued.
             Command::SetSegment { .. }
+            // A refresh rewrites every measurement of a body at once, so a
+            // later `SetMeasure` folded back past it would be replayed before
+            // it on redo, and the refresh would overwrite what came after.
+            | Command::RefreshMannequin { .. }
             | Command::InsertNode { .. }
             | Command::RemoveNode { .. }
             | Command::AddPiece { .. }

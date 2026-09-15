@@ -86,6 +86,14 @@ const SECOND_BODY_SHAPED: &str = "\"tobillo\": 25
           }
         }";
 
+/// A link to the library, written the way it follows a body's other fields.
+const ORIGIN: &str = ",
+          \"origin\": {
+            \"persona\": \"talla-42\",
+            \"taken\": \"2026-09-01\",
+            \"fnv\": \"0123456789abcdef\"
+          }";
+
 fn header(version: u32) -> String {
     format!("{{\n  \"toile\": {version},\n  \"doc\": {{\n")
 }
@@ -95,6 +103,7 @@ fn restamped(text: &str, version: u32) -> String {
     let body = text
         .strip_prefix(&header(1))
         .or_else(|| text.strip_prefix(&header(2)))
+        .or_else(|| text.strip_prefix(&header(3)))
         .expect("the file opens with a header this build writes");
     format!("{}{body}", header(version))
 }
@@ -109,6 +118,21 @@ fn shaped(version: u32) -> String {
         &SHIPPED.replacen(SECOND_BODY_END, SECOND_BODY_SHAPED, 1),
         version,
     )
+}
+
+/// The shipped block with its second body linked to the library, shaped as
+/// well or not, stamped `version`.
+fn linked(version: u32, shaped_too: bool) -> String {
+    let body = if shaped_too {
+        SECOND_BODY_SHAPED
+    } else {
+        SECOND_BODY_END
+    };
+    let open = body
+        .strip_suffix("\n        }")
+        .expect("a body closes its own brace");
+    let with_link = format!("{open}{ORIGIN}\n        }}");
+    restamped(&SHIPPED.replacen(SECOND_BODY_END, &with_link, 1), version)
 }
 
 fn rewritten(text: &str) -> String {
@@ -155,18 +179,60 @@ fn the_version_stamp_is_2_exactly_when_a_new_field_is_present_and_1_otherwise() 
 }
 
 #[test]
-fn a_version_2_document_round_trips_and_version_3_is_rejected_loudly() {
+fn a_version_2_document_round_trips_and_version_4_is_rejected_loudly() {
     let file = shaped(2);
     let doc = Doc::from_json(&file).expect("this build reads version 2");
     assert_eq!(doc.to_canonical_json().as_bytes(), file.as_bytes());
     assert_eq!(Doc::from_json(&doc.to_canonical_json()), Ok(doc));
 
-    for later in [restamped(&file, 3), restamped(SHIPPED, 3)] {
-        let error = Doc::from_json(&later).expect_err("no build reads version 3 yet");
+    for later in [restamped(&file, 4), restamped(SHIPPED, 4)] {
+        let error = Doc::from_json(&later).expect_err("no build reads version 4 yet");
         assert!(
-            matches!(error, FormatError::UnknownVersion { found: 3, .. }),
+            matches!(error, FormatError::UnknownVersion { found: 4, .. }),
             "{error}"
         );
-        assert!(error.to_string().contains("version 3"), "{error}");
+        assert!(error.to_string().contains("version 4"), "{error}");
+    }
+}
+
+/// A link takes a number of its own. Builds that read version 2 predate it:
+/// stamped 2, a linked file would open there with the link quietly gone, and
+/// the band would never rise again for that product.
+#[test]
+fn the_version_stamp_is_3_for_an_origin_and_2_for_a_phenotype_alone() {
+    for (file, stamp) in [
+        (restamped(SHIPPED, 2), 1),
+        (shaped(1), 2),
+        (linked(1, false), 3),
+        (linked(1, true), 3),
+    ] {
+        let doc = Doc::from_json(&file).unwrap_or_else(|error| panic!("{error}: {file}"));
+        assert_eq!(doc.format_version(), stamp, "{file}");
+        assert!(doc.to_canonical_json().starts_with(&header(stamp)));
+    }
+}
+
+#[test]
+fn a_linked_document_round_trips_byte_identical() {
+    for file in [linked(3, false), linked(3, true)] {
+        assert_eq!(rewritten(&file).as_bytes(), file.as_bytes());
+    }
+}
+
+/// The stem becomes a file name the app opens, and a fingerprint that is not
+/// one would raise the band on every open, so a link Toile never wrote is
+/// refused at the door like a key that leads nowhere.
+#[test]
+fn a_link_that_could_not_name_a_library_file_is_refused() {
+    let file = linked(3, false);
+    for (from, to) in [
+        ("\"talla-42\"", "\"../talla-42\""),
+        ("\"2026-09-01\"", "\"ayer\""),
+        ("\"0123456789abcdef\"", "\"0123\""),
+    ] {
+        assert!(file.contains(from), "the fixture moved under the test");
+        let broken = file.replacen(from, to, 1);
+        let error = Doc::from_json(&broken).expect_err("the link is refused");
+        assert!(error.to_string().contains("library"), "{to}: {error}");
     }
 }

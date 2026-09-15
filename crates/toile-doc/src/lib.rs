@@ -29,6 +29,8 @@ mod key;
 mod measure;
 /// A mark on a contour and the mark it answers to.
 mod notch;
+/// A person in the user's library, and the link a copied body keeps to them.
+mod persona;
 /// A pattern piece and its contour.
 mod piece;
 /// A point of cloth held to a place in space.
@@ -52,7 +54,8 @@ pub use dart::{Dart, DartWedge, FoldDirection, WedgeNode};
 pub use doc::Doc;
 pub use error::DocError;
 pub use json::{
-    FormatError, VERSION as FORMAT_VERSION, VERSION_EXTENDED as FORMAT_VERSION_EXTENDED,
+    FormatError, PERSONA_VERSION, VERSION as FORMAT_VERSION,
+    VERSION_EXTENDED as FORMAT_VERSION_EXTENDED, VERSION_LINKED as FORMAT_VERSION_LINKED,
 };
 pub use key::{
     DartKey, Identity, Key, MannequinKey, NotchKey, PieceKey, PinKey, PointKey, SeamKey,
@@ -60,6 +63,7 @@ pub use key::{
 };
 pub use measure::{BodyShape, MeasureSet};
 pub use notch::{Notch, NotchCount};
+pub use persona::{Origin, Persona, PersonaError, Snapshot};
 pub use piece::{ContourNode, Grain, Piece, SAMPLES, Winding};
 pub use pin::Pin;
 pub use point::{Axis, Point};

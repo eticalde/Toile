@@ -1,5 +1,6 @@
 mod identity;
 mod measures;
+mod people;
 mod stand;
 
 use eframe::egui;
@@ -8,6 +9,7 @@ use toile_engine::body;
 use toile_engine::draft::Station;
 use toile_engine::session::Session;
 
+use self::people::People;
 use self::stand::Stand;
 use crate::tabs::{Body, UNNAMED, Workspace, left_panel, right_panel};
 use crate::theme::Theme;
@@ -27,6 +29,7 @@ pub struct State {
     /// changes nothing uploads nothing.
     lit: u32,
     stand: Stand,
+    people: People,
 }
 
 impl State {
@@ -34,6 +37,7 @@ impl State {
     /// one takes the table.
     pub fn reset(&mut self) {
         self.stand.forget();
+        self.people.forget();
     }
 
     /// The tab with no mesh yet: the first frame it is shown solves one.
@@ -44,6 +48,7 @@ impl State {
             view,
             lit: 0,
             stand: Stand::default(),
+            people: People::default(),
         }
     }
 
@@ -93,9 +98,21 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     {
         st.stand.step(session, redo);
     }
-    left_panel(ui, theme, |ui| {
+    let plea = left_panel(ui, theme, |ui| {
         identity::panel(ui, theme, session, &mut st.stand);
+        people::panel(ui, theme, w.shelf, &mut st.people, Stand::kept(session))
     });
+    if let Some(plea) = plea {
+        people::act(
+            plea,
+            session,
+            &mut st.stand,
+            w.shelf,
+            w.band,
+            &mut st.people,
+        );
+        ui.ctx().request_repaint();
+    }
     right_panel(ui, theme, |ui| {
         measures::panel(ui, theme, session, &mut st.stand);
     });

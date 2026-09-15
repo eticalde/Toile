@@ -1,7 +1,9 @@
+mod person;
 mod write;
 
 use std::collections::BTreeMap;
 
+pub use person::{Saved, Wrote};
 use toile_engine::body::{self, AnnySolve};
 use toile_engine::draft::{BodyMesh, BodyShape, MeasureSet};
 use toile_engine::session::Session;

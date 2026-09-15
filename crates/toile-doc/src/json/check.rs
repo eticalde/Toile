@@ -19,6 +19,20 @@ pub(super) fn samplings(doc: &Doc) -> Result<(), FormatError> {
     Ok(())
 }
 
+/// Checks every body's link to the library by the text it carries.
+///
+/// Its stem becomes a file name when a product opens, and a fingerprint of the
+/// wrong shape would differ from every library file for good, so a link Toile
+/// never wrote is refused here, before anything goes looking for it.
+pub(super) fn origins(doc: &Doc) -> Result<(), FormatError> {
+    for (_, set) in doc.mannequins.iter() {
+        if let Some(origin) = &set.origin {
+            origin.check().map_err(FormatError::Origin)?;
+        }
+    }
+    Ok(())
+}
+
 /// Checks that every key the pattern cites names an entry the file carries.
 ///
 /// A file can be edited by hand, and a key that leads nowhere would otherwise

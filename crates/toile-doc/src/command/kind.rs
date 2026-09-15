@@ -1,7 +1,9 @@
+use std::collections::BTreeMap;
+
 use crate::{
     Axis, Binding, BodyShape, Dart, DartKey, DartWedge, EdgeAnchor, Grain, Identity, MannequinKey,
-    MeasureSet, Notch, NotchKey, Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey,
-    SegmentEdit, Symmetry, SymmetryKey, VariableKey,
+    MeasureSet, Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam,
+    SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
 };
 
 /// A reversible edit to the document.
@@ -37,6 +39,14 @@ pub enum Command {
     SetPhenotype {
         mannequin: MannequinKey,
         to: Option<BodyShape>,
+    },
+    /// Replaces what a body carries from the library: its tape, its phenotype
+    /// and its link. The name stays the one the document gave it.
+    RefreshMannequin {
+        mannequin: MannequinKey,
+        values: BTreeMap<String, f64>,
+        phenotype: Option<BodyShape>,
+        origin: Option<Origin>,
     },
     /// Adds a body the pattern can be resolved against.
     AddMannequin {
@@ -171,6 +181,9 @@ impl Command {
             | Command::SetBinding { .. }
             | Command::SetVariable { .. }
             | Command::SetMeasure { .. }
+            // A refresh carries a phenotype too, but it is priced by its tape,
+            // which is what the pattern resolves against.
+            | Command::RefreshMannequin { .. }
             | Command::ResolveWith { .. } => ChangeClass::Shape,
             Command::InsertNode { .. }
             | Command::RemoveNode { .. }

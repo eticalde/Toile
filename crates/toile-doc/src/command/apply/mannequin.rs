@@ -1,6 +1,10 @@
+use std::collections::BTreeMap;
+
 use super::Naming;
+use crate::measure::finite;
 use crate::{
     Applied, BodyShape, ChangeClass, Command, Doc, DocError, Identity, MannequinKey, MeasureSet,
+    Origin,
 };
 
 /// Writes a measurement the body already carries.
@@ -62,16 +66,7 @@ pub(crate) fn set_phenotype(
     to: Option<BodyShape>,
 ) -> Result<Applied, DocError> {
     if let Some(shape) = &to {
-        let scales = [
-            shape.sex,
-            shape.age_years,
-            shape.build,
-            shape.muscle,
-            shape.proportions,
-        ];
-        if !scales.iter().copied().all(f64::is_finite) {
-            return Err(DocError::NonFinite("phenotype".to_owned()));
-        }
+        shape.check()?;
     }
     let set = doc
         .mannequins
@@ -167,5 +162,48 @@ pub(crate) fn rename_mannequin(
         },
         touched: Vec::new(),
         class: ChangeClass::Metadata,
+    })
+}
+
+/// Replaces what a body carries from the library — its tape, its phenotype
+/// and its link — and keeps its name.
+///
+/// Every check runs before anything is written, so a refusal leaves the body
+/// as it was. The name stays the document's: a body is chosen by the name its
+/// document gave it, and an edit that never writes a name cannot give two
+/// bodies the same one.
+pub(crate) fn refresh_mannequin(
+    doc: &mut Doc,
+    mannequin: MannequinKey,
+    values: BTreeMap<String, f64>,
+    phenotype: Option<BodyShape>,
+    origin: Option<Origin>,
+) -> Result<Applied, DocError> {
+    finite(&values)?;
+    if let Some(shape) = &phenotype {
+        shape.check()?;
+    }
+    if let Some(link) = &origin {
+        link.check()?;
+    }
+    let touched = if mannequin == doc.resolve_with {
+        doc.piece_keys()
+    } else {
+        Vec::new()
+    };
+    let set = doc
+        .mannequins
+        .get_mut(mannequin)
+        .ok_or_else(|| DocError::stale(mannequin))?;
+    let inverse = Command::RefreshMannequin {
+        mannequin,
+        values: std::mem::replace(&mut set.values, values),
+        phenotype: std::mem::replace(&mut set.phenotype, phenotype),
+        origin: std::mem::replace(&mut set.origin, origin),
+    };
+    Ok(Applied {
+        inverse,
+        touched,
+        class: ChangeClass::Shape,
     })
 }

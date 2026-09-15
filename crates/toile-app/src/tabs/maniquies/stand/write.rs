@@ -62,7 +62,7 @@ impl Stand {
         true
     }
 
-    fn release(&mut self, session: &mut Session) {
+    pub(super) fn release(&mut self, session: &mut Session) {
         if self.held.take().is_some() {
             session.end_gesture();
         }
@@ -159,17 +159,22 @@ impl Stand {
     /// pattern resolves with, in one undo entry, so a single undo takes back
     /// the choice and the body together. With none it takes the loose body's
     /// place.
+    pub fn add(&mut self, session: &mut Session, set: MeasureSet) {
+        self.add_as(session, set, ADD);
+    }
+
+    /// Puts a new body on the stand as `add` does, under the entry `label`.
     ///
     /// # Panics
     /// Never: a body the document has just taken is found under its name.
-    pub fn add(&mut self, session: &mut Session, set: MeasureSet) {
+    pub(super) fn add_as(&mut self, session: &mut Session, set: MeasureSet, label: &'static str) {
         self.release(session);
         if session.draft().is_none() {
             self.loose = set;
             return;
         }
         let name = set.name.clone();
-        session.begin_gesture(ADD);
+        session.begin_gesture(label);
         let added = session.edit(Command::AddMannequin {
             identity: Identity::New,
             mannequin: set,
@@ -197,7 +202,7 @@ impl Stand {
 
     /// Keeps what the session refused, or forgets it once an edit went
     /// through.
-    fn answer(&mut self, session: &Session, answer: Result<(), SessionError>) {
+    pub(super) fn answer(&mut self, session: &Session, answer: Result<(), SessionError>) {
         self.refusal = answer
             .err()
             .map(|why| (why.to_string(), session.revision()));

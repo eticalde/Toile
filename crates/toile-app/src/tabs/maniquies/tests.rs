@@ -15,18 +15,18 @@ use crate::tabs::{Kept, left_panel, right_panel};
 use crate::theme::Theme;
 
 /// The base block Toile ships, open on the table, and the tab over it.
-fn product() -> (Session, Stand) {
+pub(super) fn product() -> (Session, Stand) {
     let session = Session::from_doc(File::example()).expect("the shipped block drapes");
     (session, Stand::default())
 }
 
 /// What the body the pattern resolves against carries for `name`.
-fn resolved(session: &Session, name: &str) -> Option<f64> {
+pub(super) fn resolved(session: &Session, name: &str) -> Option<f64> {
     session.draft()?.doc().measures()?.get(name)
 }
 
 /// The document on the table, as its file would read.
-fn written(session: &Session) -> String {
+pub(super) fn written(session: &Session) -> String {
     session
         .draft()
         .expect("a product is open")
@@ -36,7 +36,7 @@ fn written(session: &Session) -> String {
 
 /// One drag of a measurement's slider, as the panel plays it: a frame for every
 /// value with the pointer down, then the frame the pointer comes off.
-fn drag(stand: &mut Stand, session: &mut Session, name: &str, values: &[f64]) {
+pub(super) fn drag(stand: &mut Stand, session: &mut Session, name: &str, values: &[f64]) {
     let control = Control::Measure(name.to_owned());
     for &value in values {
         stand.grip(session, control.clone());

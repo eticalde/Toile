@@ -9,7 +9,7 @@ pub use control::{
 };
 use eframe::egui::CornerRadius;
 pub use field::{Editable, Edited, field_row, formula_row};
-pub use panel::{footer_note, list_row_icon, section, section_with, tree_row};
+pub use panel::{footer_note, list_row_icon, list_row_noted, section, section_with, tree_row};
 
 /// Horizontal breathing room inside a side panel, in points.
 pub(crate) const PAD: f32 = 12.0;

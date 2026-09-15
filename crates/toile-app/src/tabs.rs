@@ -144,6 +144,8 @@ pub struct Workspace<'a> {
     pub patronaje: &'a mut patronaje::State,
     pub probador: &'a mut probador::State,
     pub maniquies: &'a mut maniquies::State,
+    pub shelf: &'a mut crate::library::shelf::Shelf,
+    pub band: &'a mut crate::band::Band,
 }
 
 /// Library or tool column, on the left.

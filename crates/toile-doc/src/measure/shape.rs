@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::DocError;
+
 /// What a body is generated from besides the tape: who the person is, before
 /// how much they measure.
 ///
@@ -21,6 +23,25 @@ pub struct BodyShape {
     pub muscle: f64,
     /// `0.0` typical proportions, `1.0` atypical.
     pub proportions: f64,
+}
+
+impl BodyShape {
+    /// Refuses a scale JSON cannot spell, which a file would write as `null`
+    /// and refuse on the way back in.
+    pub(crate) fn check(&self) -> Result<(), DocError> {
+        let scales = [
+            self.sex,
+            self.age_years,
+            self.build,
+            self.muscle,
+            self.proportions,
+        ];
+        if scales.iter().copied().all(f64::is_finite) {
+            Ok(())
+        } else {
+            Err(DocError::NonFinite("phenotype".to_owned()))
+        }
+    }
 }
 
 impl Default for BodyShape {

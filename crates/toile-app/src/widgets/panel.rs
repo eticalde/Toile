@@ -47,6 +47,18 @@ pub fn list_row_icon(
     tree_row(ui, theme, label, selected, 0.0, icon)
 }
 
+/// One entry carrying a right-aligned mono note, such as a date, in the ink
+/// handed with it. A long label is cut where the note begins, not run under it.
+pub fn list_row_noted(
+    ui: &mut Ui,
+    theme: &Theme,
+    label: &str,
+    selected: bool,
+    note: (&str, Color32),
+) -> Response {
+    row(ui, theme, label, selected, PAD, Some(note))
+}
+
 /// The same entry pushed right by `indent`, one level down a tree.
 pub fn tree_row(
     ui: &mut Ui,
@@ -56,7 +68,7 @@ pub fn tree_row(
     indent: f32,
     icon: impl FnOnce(&Painter, Rect, Color32),
 ) -> Response {
-    let resp = row(ui, theme, label, selected, ICON_X + indent);
+    let resp = row(ui, theme, label, selected, ICON_X + indent, None);
     let slot = Rect::from_center_size(
         resp.rect.left_center() + vec2(PAD + indent + ICON / 2.0, 0.0),
         Vec2::splat(ICON),
@@ -65,7 +77,14 @@ pub fn tree_row(
     resp
 }
 
-fn row(ui: &mut Ui, theme: &Theme, label: &str, selected: bool, text_x: f32) -> Response {
+fn row(
+    ui: &mut Ui,
+    theme: &Theme,
+    label: &str,
+    selected: bool,
+    text_x: f32,
+    note: Option<(&str, Color32)>,
+) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), Sense::click());
     let tint = if selected {
         0.16
@@ -78,7 +97,21 @@ fn row(ui: &mut Ui, theme: &Theme, label: &str, selected: bool, text_x: f32) -> 
         ui.painter()
             .rect_filled(rect, 0.0, theme.accent.gamma_multiply(tint));
     }
-    ui.painter().text(
+    let painter = match note {
+        Some((note, ink)) => {
+            let drawn = ui.painter().text(
+                rect.right_center() - vec2(PAD, 0.0),
+                Align2::RIGHT_CENTER,
+                note,
+                FontId::monospace(11.0),
+                ink,
+            );
+            ui.painter()
+                .with_clip_rect(rect.with_max_x(drawn.min.x - PAD / 2.0))
+        }
+        None => ui.painter().clone(),
+    };
+    painter.text(
         rect.left_center() + vec2(text_x, 0.0),
         Align2::LEFT_CENTER,
         label,

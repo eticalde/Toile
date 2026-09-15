@@ -47,6 +47,7 @@ impl crate::App {
         self.probador = tabs::probador::State::new(self.rs.clone(), &self.theme, &self.session);
         self.patronaje.reset();
         self.maniquies.reset();
+        self.band = crate::band::Band::opened(&mut self.shelf, &self.session);
     }
 
     /// Does what the interface asked of the file the pattern lives in.

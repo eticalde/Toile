@@ -7,7 +7,8 @@ mod topology;
 use curve::{set_samples, set_segment};
 use join::{add_seam, remove_seam};
 use mannequin::{
-    add_mannequin, remove_mannequin, rename_mannequin, resolve_with, set_measure, set_phenotype,
+    add_mannequin, refresh_mannequin, remove_mannequin, rename_mannequin, resolve_with,
+    set_measure, set_phenotype,
 };
 pub(crate) use name::Naming;
 use name::{label_point, rename_piece, show_label};
@@ -26,6 +27,9 @@ impl Command {
     /// `DuplicatePieceName` or `DuplicateMannequinName` for a name already
     /// taken, `UnknownMeasure` for a measurement the body does not carry,
     /// `BodyInUse` for taking away the body the pattern resolves against,
+    /// `NonFinite` for a number the file could not spell, `NotAStem`,
+    /// `NotADay` or `NotAFingerprint` for a link to the library Toile could
+    /// not have written,
     /// `NoSuchNode` for a contour that does not run through the node named,
     /// `Occupied` for a key another entry still holds, `Sampling` for a
     /// flattening no tract can be asked for, `Shared` for a point another
@@ -52,6 +56,12 @@ impl Command {
             } => set_measure(doc, mannequin, name, to),
             Command::ResolveWith { mannequin } => resolve_with(doc, mannequin),
             Command::SetPhenotype { mannequin, to } => set_phenotype(doc, mannequin, to),
+            Command::RefreshMannequin {
+                mannequin,
+                values,
+                phenotype,
+                origin,
+            } => refresh_mannequin(doc, mannequin, values, phenotype, origin),
             Command::AddMannequin {
                 identity,
                 mannequin,

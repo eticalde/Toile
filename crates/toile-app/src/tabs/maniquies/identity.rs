@@ -179,7 +179,7 @@ fn slider(
 }
 
 /// A short paragraph under the name, wrapped to the panel.
-fn note(ui: &mut egui::Ui, ink: Color32, text: &str) {
+pub(super) fn note(ui: &mut egui::Ui, ink: Color32, text: &str) {
     let margin = egui::Margin::symmetric(PAD as i8, 4);
     egui::Frame::new().inner_margin(margin).show(ui, |ui| {
         ui.label(RichText::new(text).size(11.0).color(ink));

@@ -42,6 +42,15 @@ pub enum DocError {
     /// the file could not spell and would refuse on the way back in.
     #[error("`{0}` must be a finite number")]
     NonFinite(String),
+    /// A day a session or a link carries that is not written `YYYY-MM-DD`.
+    #[error("`{0}` is not a day written as YYYY-MM-DD")]
+    NotADay(String),
+    /// A stem that could name no library file.
+    #[error("`{0}` cannot name a library file: a stem is lowercase letters, digits, `_` and `-`")]
+    NotAStem(String),
+    /// A fingerprint that is not sixteen lowercase hex digits.
+    #[error("`{0}` is not a fingerprint, which is sixteen lowercase hex digits")]
+    NotAFingerprint(String),
     /// A label another point of the same piece already shows.
     #[error("the piece already shows a point named `{0}`")]
     DuplicateLabel(String),

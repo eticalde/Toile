@@ -40,6 +40,9 @@ pub enum FormatError {
     /// A tract asking to be flattened at a count no tract can carry.
     #[error("the pattern asks for a flattening no tract can carry: {0}")]
     Sampling(#[source] DocError),
+    /// A body's link to the library that Toile could not have written.
+    #[error("a body's link to the library is not one Toile writes: {0}")]
+    Origin(#[source] DocError),
 }
 
 impl FormatError {

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub use shape::BodyShape;
 
 use crate::formula::Lookup;
+use crate::{DocError, Origin};
 
 /// The measurements a pattern can be resolved against, in centimetres.
 ///
@@ -24,6 +25,11 @@ pub struct MeasureSet {
     /// format version 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub phenotype: Option<BodyShape>,
+    /// The library person this body was copied from, when it was.
+    ///
+    /// Under the phenotype's rule: a set without one writes no key for it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<Origin>,
 }
 
 impl MeasureSet {
@@ -68,6 +74,7 @@ impl MeasureSet {
                 .map(|(measure, value)| (measure.to_owned(), value))
                 .collect(),
             phenotype: None,
+            origin: None,
         }
     }
 
@@ -78,9 +85,16 @@ impl MeasureSet {
         self
     }
 
-    /// Whether the set carries anything a format-version-1 reader would drop.
-    pub(crate) fn is_extended(&self) -> bool {
-        self.phenotype.is_some()
+    /// The oldest format version whose reader keeps everything the set
+    /// carries: a link needs 3, a phenotype 2, a bare tape 1.
+    pub(crate) fn format_version(&self) -> u32 {
+        if self.origin.is_some() {
+            crate::json::VERSION_LINKED
+        } else if self.phenotype.is_some() {
+            crate::json::VERSION_EXTENDED
+        } else {
+            crate::json::VERSION
+        }
     }
 
     /// The centimetres bound to `measure`, if the set carries it.
@@ -107,6 +121,16 @@ impl Lookup for MeasureSet {
     fn value(&self, name: &str) -> Option<f64> {
         self.get(name)
     }
+}
+
+/// Refuses a measurement JSON cannot spell, naming the first in key order.
+///
+/// The writer would spell it `null`, and the next open would refuse the file.
+pub(crate) fn finite(values: &BTreeMap<String, f64>) -> Result<(), DocError> {
+    values
+        .iter()
+        .find(|(_, value)| !value.is_finite())
+        .map_or(Ok(()), |(name, _)| Err(DocError::NonFinite(name.clone())))
 }
 
 #[cfg(test)]
@@ -147,7 +171,7 @@ mod tests {
         let set = MeasureSet::default();
         assert_eq!(set.get("cintura"), None);
         assert!(set.uncatalogued().is_empty());
-        assert!(!set.is_extended());
+        assert_eq!(set.format_version(), crate::json::VERSION);
     }
 
     #[test]
@@ -155,6 +179,18 @@ mod tests {
         let set = etienne().shaped(BodyShape::default());
         assert_eq!(set.get("cintura"), Some(84.0));
         assert_eq!(set.phenotype.map(|shape| shape.age_years), Some(25.0));
-        assert!(set.is_extended());
+        assert_eq!(set.format_version(), crate::json::VERSION_EXTENDED);
+    }
+
+    #[test]
+    fn a_set_that_cannot_be_spelled_names_its_first_bad_measurement() {
+        let mut set = etienne();
+        assert_eq!(finite(&set.values), Ok(()));
+        set.values.insert("muslo".to_owned(), f64::INFINITY);
+        set.values.insert("brazo".to_owned(), f64::NAN);
+        assert_eq!(
+            finite(&set.values),
+            Err(DocError::NonFinite("brazo".to_owned()))
+        );
     }
 }
