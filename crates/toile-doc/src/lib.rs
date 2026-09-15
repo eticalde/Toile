@@ -51,12 +51,14 @@ pub use command::{Applied, ChangeClass, Coalesced, Command, History};
 pub use dart::{Dart, DartWedge, FoldDirection, WedgeNode};
 pub use doc::Doc;
 pub use error::DocError;
-pub use json::{FormatError, VERSION as FORMAT_VERSION};
+pub use json::{
+    FormatError, VERSION as FORMAT_VERSION, VERSION_EXTENDED as FORMAT_VERSION_EXTENDED,
+};
 pub use key::{
     DartKey, Identity, Key, MannequinKey, NotchKey, PieceKey, PinKey, PointKey, SeamKey,
     SymmetryKey, VariableKey,
 };
-pub use measure::MeasureSet;
+pub use measure::{BodyShape, MeasureSet};
 pub use notch::{Notch, NotchCount};
 pub use piece::{ContourNode, Grain, Piece, SAMPLES, Winding};
 pub use pin::Pin;

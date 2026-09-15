@@ -21,6 +21,8 @@ enum Field<'a> {
     Variable(VariableKey),
     Measure(MannequinKey, &'a str),
     Body,
+    Phenotype(MannequinKey),
+    MannequinName(MannequinKey),
     Samples(PieceKey, PointKey),
     NotchPlace(NotchKey),
     PieceName(PieceKey),
@@ -42,6 +44,13 @@ impl Command {
         }
     }
 
+    /// Whether any later edit can fold onto this one.
+    ///
+    /// The ones that cannot are the edits that make or unmake an entity.
+    pub(crate) fn folds(&self) -> bool {
+        self.field().is_some()
+    }
+
     /// The field this edit writes, if a later edit can stand for it.
     ///
     /// The match has no wildcard: a command added without a row here does not
@@ -55,6 +64,8 @@ impl Command {
                 mannequin, name, ..
             } => Some(Field::Measure(*mannequin, name)),
             Command::ResolveWith { .. } => Some(Field::Body),
+            Command::SetPhenotype { mannequin, .. } => Some(Field::Phenotype(*mannequin)),
+            Command::RenameMannequin { mannequin, .. } => Some(Field::MannequinName(*mannequin)),
             Command::SetSamples { piece, node, .. } => Some(Field::Samples(*piece, *node)),
             Command::MoveNotch { notch, .. } => Some(Field::NotchPlace(*notch)),
             Command::RenamePiece { piece, .. } => Some(Field::PieceName(*piece)),
@@ -69,6 +80,8 @@ impl Command {
             | Command::RemoveNode { .. }
             | Command::AddPiece { .. }
             | Command::RemovePiece { .. }
+            | Command::AddMannequin { .. }
+            | Command::RemoveMannequin { .. }
             | Command::AddSeam { .. }
             | Command::RemoveSeam { .. }
             | Command::AddNotch { .. }
@@ -86,7 +99,7 @@ impl Command {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Binding, Grain, Identity, Pin, PinKey, Point, SegmentEdit};
+    use crate::{Binding, Grain, Identity, MeasureSet, Pin, PinKey, Point, SegmentEdit};
 
     fn move_to(point: PointKey, x: f64) -> Command {
         Command::MovePoint {
@@ -149,6 +162,31 @@ mod tests {
             measure("cadera").coalesce_onto(&measure("cintura")),
             Coalesced::Separate
         );
+    }
+
+    #[test]
+    fn a_body_s_phenotype_and_its_name_fold_but_adding_a_body_does_not() {
+        let mannequin = MannequinKey::new(1, 0);
+        let shape = Command::SetPhenotype {
+            mannequin,
+            to: None,
+        };
+        let rename = |to: &str| Command::RenameMannequin {
+            mannequin,
+            to: to.to_owned(),
+        };
+        assert_eq!(shape.coalesce_onto(&shape), Coalesced::Replaces);
+        assert_eq!(
+            rename("Talla 4").coalesce_onto(&rename("Talla")),
+            Coalesced::Replaces
+        );
+        assert_eq!(rename("Talla").coalesce_onto(&shape), Coalesced::Separate);
+        let add = Command::AddMannequin {
+            identity: Identity::New,
+            mannequin: MeasureSet::default(),
+        };
+        assert!(shape.folds());
+        assert!(!add.folds());
     }
 
     #[test]

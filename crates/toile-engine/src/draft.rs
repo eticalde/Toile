@@ -19,10 +19,10 @@ pub use toile_anny::{BodyMesh, Station};
 pub use toile_doc::block;
 pub use toile_doc::formula::{EvalError, Formula, Lookup, SyntaxError};
 pub use toile_doc::{
-    Applied, Axis, Binding, ChangeClass, Command, ContourNode, Doc, DocError, EdgeAnchor,
-    EdgeRange, Grain, Handle, Handles, History, Identity, MannequinKey, MeasureSet, NotchCount,
-    Piece, PieceKey, Point, PointKey, SAMPLES, Seam, SeamKey, SeamKind, SeamOrientation, Segment,
-    SegmentEdit, Side, Variable, VariableKey, Winding,
+    Applied, Axis, Binding, BodyShape, ChangeClass, Command, ContourNode, Doc, DocError,
+    EdgeAnchor, EdgeRange, Grain, Handle, Handles, History, Identity, MannequinKey, MeasureSet,
+    NotchCount, Piece, PieceKey, Point, PointKey, SAMPLES, Seam, SeamKey, SeamKind,
+    SeamOrientation, Segment, SegmentEdit, Side, Variable, VariableKey, Winding,
 };
 pub use toile_geom::curve;
 pub use toile_geom::validate::ContourFault;

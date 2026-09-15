@@ -1,31 +1,37 @@
 mod curve;
 mod join;
+mod mannequin;
 mod name;
 mod topology;
 
 use curve::{set_samples, set_segment};
 use join::{add_seam, remove_seam};
+use mannequin::{
+    add_mannequin, remove_mannequin, rename_mannequin, resolve_with, set_measure, set_phenotype,
+};
 pub(crate) use name::Naming;
 use name::{label_point, rename_piece, show_label};
 use topology::{add_piece, insert_node, remove_node, remove_piece};
 
 use crate::{
-    Applied, Axis, Binding, ChangeClass, Command, Doc, DocError, Grain, MannequinKey, PieceKey,
-    PointKey, VariableKey,
+    Applied, Axis, Binding, ChangeClass, Command, Doc, DocError, Grain, PieceKey, PointKey,
+    VariableKey,
 };
 
 impl Command {
     /// Applies the edit and hands back the command that undoes it.
     ///
     /// # Errors
-    /// `DocError::StaleKey` for a key that names nothing, `DuplicateLabel` or
-    /// `DuplicatePieceName` for a name already taken, `UnknownMeasure` for a
-    /// measurement the body does not carry, `NoSuchNode` for a contour that
-    /// does not run through the node named, `Occupied` for a key another point
-    /// still holds, `Sampling` for a flattening no tract can be asked for,
-    /// `Shared` for a point another piece still draws itself with,
-    /// `SplitSeamSide` for a seam side whose ends disagree on their piece, and
-    /// `NotYetImplemented` for an edit whose tool has not been built yet.
+    /// `DocError::StaleKey` for a key that names nothing, `DuplicateLabel`,
+    /// `DuplicatePieceName` or `DuplicateMannequinName` for a name already
+    /// taken, `UnknownMeasure` for a measurement the body does not carry,
+    /// `BodyInUse` for taking away the body the pattern resolves against,
+    /// `NoSuchNode` for a contour that does not run through the node named,
+    /// `Occupied` for a key another entry still holds, `Sampling` for a
+    /// flattening no tract can be asked for, `Shared` for a point another
+    /// piece still draws itself with, `SplitSeamSide` for a seam side whose
+    /// ends disagree on their piece, and `NotYetImplemented` for an edit whose
+    /// tool has not been built yet.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
         self.apply_as(doc, Naming::Checked)
     }
@@ -45,6 +51,15 @@ impl Command {
                 to,
             } => set_measure(doc, mannequin, name, to),
             Command::ResolveWith { mannequin } => resolve_with(doc, mannequin),
+            Command::SetPhenotype { mannequin, to } => set_phenotype(doc, mannequin, to),
+            Command::AddMannequin {
+                identity,
+                mannequin,
+            } => add_mannequin(doc, identity, mannequin, naming),
+            Command::RemoveMannequin { mannequin } => remove_mannequin(doc, mannequin),
+            Command::RenameMannequin { mannequin, to } => {
+                rename_mannequin(doc, mannequin, to, naming)
+            }
             Command::RenamePiece { piece, to } => rename_piece(doc, piece, to, naming),
             Command::SetGrain { piece, to } => set_grain(doc, piece, to),
             Command::LabelPoint { point, to } => label_point(doc, point, to, naming),
@@ -128,53 +143,6 @@ fn set_variable(doc: &mut Doc, variable: VariableKey, to: Binding) -> Result<App
     Ok(Applied {
         inverse: Command::SetVariable { variable, to: from },
         touched,
-        class: ChangeClass::Shape,
-    })
-}
-
-/// Writes a measurement the body already carries.
-///
-/// Which measurements a body has is the mannequin's own business; an edit that
-/// could introduce one could not be undone by another edit of the same shape.
-fn set_measure(
-    doc: &mut Doc,
-    mannequin: MannequinKey,
-    name: String,
-    to: f64,
-) -> Result<Applied, DocError> {
-    let touched = if mannequin == doc.resolve_with {
-        doc.piece_keys()
-    } else {
-        Vec::new()
-    };
-    let set = doc
-        .mannequins
-        .get_mut(mannequin)
-        .ok_or_else(|| DocError::stale(mannequin))?;
-    let slot = set
-        .values
-        .get_mut(&name)
-        .ok_or_else(|| DocError::UnknownMeasure(name.clone()))?;
-    let from = std::mem::replace(slot, to);
-    Ok(Applied {
-        inverse: Command::SetMeasure {
-            mannequin,
-            name,
-            to: from,
-        },
-        touched,
-        class: ChangeClass::Shape,
-    })
-}
-
-fn resolve_with(doc: &mut Doc, mannequin: MannequinKey) -> Result<Applied, DocError> {
-    if doc.mannequins.get(mannequin).is_none() {
-        return Err(DocError::stale(mannequin));
-    }
-    let from = std::mem::replace(&mut doc.resolve_with, mannequin);
-    Ok(Applied {
-        inverse: Command::ResolveWith { mannequin: from },
-        touched: doc.piece_keys(),
         class: ChangeClass::Shape,
     })
 }

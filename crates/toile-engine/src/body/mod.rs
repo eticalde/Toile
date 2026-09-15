@@ -7,7 +7,7 @@ pub use toile_anny::phenotype::age_param_from_years;
 /// `toile_engine::draft::BodyMesh` re-exports.
 pub use toile_anny::{BodyMesh, Station, body_mesh};
 
-use crate::draft::MeasureSet;
+use crate::draft::{BodyShape, MeasureSet};
 
 /// Solving the Anny body's levers against a measure set.
 mod solve;
@@ -160,9 +160,72 @@ pub fn stature_cm(mesh: &BodyMesh) -> f32 {
     toile_anny::measure::height_cm(&mesh.positions)
 }
 
+/// The ages a body can be given, in years: the asset is baked for adults only.
+pub const ADULT_YEARS: std::ops::RangeInclusive<f64> = 18.0..=100.0;
+
+/// The phenotype Anny generates a body from, out of the shape a document
+/// stores.
+///
+/// A document does not range-check a shape, so every field is brought back
+/// inside what the controls offer, and one that is not a number takes the
+/// default body's value: a file edited by hand must not be able to ask the
+/// evaluator for a body it was never baked for.
+pub fn phenotype_of(shape: &BodyShape) -> Phenotype {
+    let adult = BodyShape::default();
+    let within = |value: f64, range: std::ops::RangeInclusive<f64>, fallback: f64| {
+        if value.is_finite() {
+            value.clamp(*range.start(), *range.end())
+        } else {
+            fallback
+        }
+    };
+    let scale = |value: f64, fallback: f64| within(value, 0.0..=1.0, fallback);
+    Phenotype {
+        gender: scale(shape.sex, adult.sex),
+        age: age_param_from_years(within(shape.age_years, ADULT_YEARS, adult.age_years)),
+        muscle: scale(shape.muscle, adult.muscle),
+        weight: scale(shape.build, adult.build),
+        // The stature solve re-derives this from `estatura` before anything
+        // reads it; only a body that carries no `estatura` keeps the midpoint.
+        height: 0.5,
+        proportions: scale(shape.proportions, adult.proportions),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A body that stores no shape is generated from the phenotype the tab
+    /// always used, and a shape written out of range by hand is brought back
+    /// inside what the asset was baked for.
+    #[test]
+    fn a_stored_shape_maps_onto_the_phenotype_inside_its_range() {
+        assert_eq!(phenotype_of(&BodyShape::default()), Phenotype::default());
+        let wild = BodyShape {
+            sex: 7.0,
+            age_years: f64::NAN,
+            build: -1.0,
+            muscle: f64::INFINITY,
+            proportions: 0.25,
+        };
+        let expected = Phenotype {
+            gender: 1.0,
+            weight: 0.0,
+            muscle: 0.5,
+            proportions: 0.25,
+            ..Phenotype::default()
+        };
+        assert_eq!(phenotype_of(&wild), expected);
+        let aged = BodyShape {
+            age_years: 140.0,
+            ..BodyShape::default()
+        };
+        assert_eq!(
+            phenotype_of(&aged).age.to_bits(),
+            age_param_from_years(*ADULT_YEARS.end()).to_bits()
+        );
+    }
 
     /// Every catalogue name lights somewhere on the body, and the stature
     /// lights all of it; a stray name lights nothing rather than something.

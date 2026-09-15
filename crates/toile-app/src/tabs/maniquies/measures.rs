@@ -1,8 +1,10 @@
 mod delta;
 
 use eframe::egui::{self, RichText, Slider, SliderClamping};
+use toile_engine::session::Session;
 
-use super::State;
+use super::stand::{Control, Stand};
+use crate::tabs::UNNAMED;
 use crate::theme::Theme;
 use crate::widgets::{PAD, footer_note, section, section_with};
 
@@ -71,16 +73,22 @@ fn span(name: &str) -> (f64, f64) {
     }
 }
 
-/// The editable inspector: every catalogue measurement as a slider with its
-/// value box. A change goes to the measure set and marks the state dirty, so
-/// the central panel rebuilds the body before the next frame; a row under the
+/// The editable inspector: every catalogue measurement the body carries as a
+/// slider with its value box, and every one it does not as what the body
+/// measures there. A value goes to the body through the stand; a row under the
 /// pointer or in hand lights its region on the body.
 ///
 /// Twenty rows outgrow any window height, so the groups scroll under a pinned
 /// title; the sections keep their order, so the scroll position is the only
 /// thing that moves.
-pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
-    section_with(ui, theme, &format!("Medidas · {}", st.name), "cm");
+pub fn panel(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, stand: &mut Stand) {
+    let set = stand.body(session);
+    let named = if set.name.is_empty() {
+        UNNAMED
+    } else {
+        &set.name
+    };
+    section_with(ui, theme, &format!("Medidas · {named}"), "cm");
     footer_note(
         ui,
         theme,
@@ -93,15 +101,15 @@ pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
         .show(ui, |ui| {
             section(ui, theme, "Contornos");
             for entry in CONTORNOS {
-                row(ui, theme, st, entry);
+                row(ui, theme, session, stand, entry);
             }
             section(ui, theme, "Largos y anchos");
             for entry in LARGOS {
-                row(ui, theme, st, entry);
+                row(ui, theme, session, stand, entry);
             }
             section(ui, theme, "Cuerpo");
             for entry in CUERPO {
-                row(ui, theme, st, entry);
+                row(ui, theme, session, stand, entry);
             }
             ui.add_space(PAD);
         });
@@ -109,13 +117,22 @@ pub fn panel(ui: &mut egui::Ui, theme: &Theme, st: &mut State) {
 
 /// One measurement: its label over a slider that fills the panel. The label
 /// takes the accent while the row is the one lighting the body.
-fn row(ui: &mut egui::Ui, theme: &Theme, st: &mut State, entry: (&str, &str)) {
+///
+/// A measurement the body does not carry gets no slider. A product's body
+/// holds the measurements it was given, and a slider that added one would
+/// write an edit its own undo could not take back.
+fn row(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    session: &mut Session,
+    stand: &mut Stand,
+    entry: (&str, &str),
+) {
     let (name, label) = entry;
-    // The state seeds every catalogue name from `default_measures`, so a row
-    // always has a value; 0.0 only guards a name deliberately cleared.
-    let mut value = st.measures.get(name).unwrap_or(0.0);
+    let carried = stand.body(session).get(name);
+    let mut value = carried.unwrap_or_default();
     let (lo, hi) = span(name);
-    let lit = st.highlight.as_deref() == Some(name);
+    let lit = stand.highlight.as_deref() == Some(name);
     let ink = if lit { theme.accent } else { theme.ink_soft };
 
     let scoped = ui.scope(|ui| {
@@ -124,35 +141,47 @@ fn row(ui: &mut egui::Ui, theme: &Theme, st: &mut State, entry: (&str, &str)) {
             ui.add_space(PAD);
             ui.label(RichText::new(label).size(12.0).color(ink));
         });
-        ui.horizontal(|ui| {
-            ui.add_space(PAD);
-            ui.spacing_mut().slider_width = (ui.available_width() - PAD - VALUE_W).max(60.0);
-            ui.add(
-                Slider::new(&mut value, lo..=hi)
-                    .suffix(" cm")
-                    .fixed_decimals(1)
-                    .trailing_fill(true)
-                    .clamping(SliderClamping::Edits),
-            )
+        carried.is_some().then(|| {
+            ui.horizontal(|ui| {
+                ui.add_space(PAD);
+                ui.spacing_mut().slider_width = (ui.available_width() - PAD - VALUE_W).max(60.0);
+                ui.add(
+                    Slider::new(&mut value, lo..=hi)
+                        .suffix(" cm")
+                        .fixed_decimals(1)
+                        .trailing_fill(true)
+                        .clamping(SliderClamping::Edits)
+                        .update_while_editing(false),
+                )
+            })
+            .inner
         })
-        .inner
     });
-    let slider = scoped.inner;
 
-    if slider.changed() && value.is_finite() {
-        st.measures.values.insert(name.to_owned(), value);
-        ui.ctx().request_repaint();
-    }
-    // The commit and not the drag: a rebuild here costs a full 20-row solve,
-    // which `super::build`'s own doc prices.
-    if (slider.drag_stopped() || slider.lost_focus() || slider.clicked()) && value.is_finite() {
-        st.dirty = true;
-        ui.ctx().request_repaint();
-    }
-    // Hovering anywhere on the row, or holding the slider, lights its region;
+    // Hovering anywhere on the row, or holding its slider, lights its region;
     // the last one lit stays so once the pointer moves on to the body.
-    if scoped.response.hovered() || slider.hovered() || slider.dragged() || slider.has_focus() {
-        st.highlight = Some(name.to_owned());
+    let mut handled = scoped.response.hovered();
+    if let Some(slider) = scoped.inner {
+        // Every frame the value moves reaches the document, inside the one
+        // gesture the grip opened; the body waits for the gesture to close.
+        if slider.changed() && value.is_finite() {
+            stand.grip(session, Control::Measure(name.to_owned()));
+            stand.set_measure(session, name, value);
+            ui.ctx().request_repaint();
+        }
+        if super::pressed(&slider) {
+            stand.keep(&Control::Measure(name.to_owned()));
+        }
+        handled |= slider.hovered() || slider.dragged() || slider.has_focus();
     }
-    delta::row(ui, theme, name, value, &st.anny_solved);
+    if handled {
+        stand.highlight = Some(name.to_owned());
+    }
+    delta::row(
+        ui,
+        theme,
+        name,
+        carried.map(|_| value),
+        stand.solved.as_ref(),
+    );
 }

@@ -62,11 +62,14 @@ impl Tab {
         body: Body<'_>,
     ) -> Vec<(String, bool)> {
         let cells = match self {
-            Self::Maniquies => vec![
-                body.name.to_owned(),
-                format!("{} medidas", body.measures),
-                "cm".to_owned(),
-            ],
+            Self::Maniquies => {
+                let mut cells = vec![body.name.to_owned(), format!("{} medidas", body.measures)];
+                if body.kept == Kept::Nowhere {
+                    cells.push("sin producto · no se guarda".to_owned());
+                }
+                cells.push("cm".to_owned());
+                cells
+            }
             Self::Patronaje => return patronaje::status(session, patronaje),
             Self::Telas => Vec::new(),
             Self::Probador => fitting(session),
@@ -108,15 +111,27 @@ fn fitting(session: &Session) -> Vec<String> {
 
 /// The body the mannequin tab holds, as the status bar has to name it.
 ///
-/// The two fields the bar reads, rather than the tab's whole state: the tab
-/// owns a GPU view and cannot be built without one, and a bar that can be
-/// handed a body is a bar whose cells can be checked.
+/// What the bar reads, rather than the tab's whole state: the tab owns a GPU
+/// view and cannot be built without one, and a bar that can be handed a body
+/// is a bar whose cells can be checked.
 #[derive(Debug, Clone, Copy)]
 pub struct Body<'a> {
     /// The name the tab's own measures panel shows in its header.
     pub name: &'a str,
-    /// How many measurements that panel lists.
+    /// How many measurements the body carries.
     pub measures: usize,
+    /// Whether anything keeps the body once the tab lets go of it.
+    pub kept: Kept,
+}
+
+/// Where the body the mannequin tab shapes is kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Kept {
+    /// In the product on the table, which saves it with the pattern.
+    InProduct,
+    /// Nowhere: no product is open, so nothing saves it and no pattern
+    /// resolves against it.
+    Nowhere,
 }
 
 /// Everything a tab may read or write while it draws.

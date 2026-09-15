@@ -25,8 +25,7 @@ fn band_color(theme: &Theme, delta_cm: f64) -> Color32 {
 /// The *medido* and Δ line under a slider: what the last solve's Anny body
 /// actually measures for `name`, how far that sits from `dado_cm` (what
 /// the slider says), and — when it matters — why a gap remains. Draws
-/// nothing when `name` names no catalogue row, which does not happen for
-/// the panel's own rows.
+/// nothing before the first solve, or when `name` names no catalogue row.
 ///
 /// A row with no lever of its own (`tiro`, `pecho_alto`, `entrepierna` and
 /// `cabeza` — see `toile_engine::body::solve_anny`'s doc) still shows a
@@ -34,30 +33,40 @@ fn band_color(theme: &Theme, delta_cm: f64) -> Color32 {
 /// the solver merely failed there. A row whose lever hit its own `±1`
 /// bound without closing Δ is marked "tope del modelo" instead: the target
 /// sits outside what this body can become, not a solver giving up early.
-pub fn row(ui: &mut egui::Ui, theme: &Theme, name: &str, dado_cm: f64, solved: &AnnySolve) {
-    let Some(r) = solved.rows.get(name) else {
+///
+/// A measurement the body does not carry has no dado, so no Δ either: the
+/// line says what the body measures there and that nobody measured it.
+pub fn row(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    name: &str,
+    dado_cm: Option<f64>,
+    solved: Option<&AnnySolve>,
+) {
+    let Some(r) = solved.and_then(|solved| solved.rows.get(name)) else {
         return;
     };
-    let delta = r.delta_cm.unwrap_or(r.medido_cm - dado_cm);
-    let color = band_color(theme, delta);
-    let note = if r.saturated {
-        " · tope del modelo"
-    } else if !r.has_lever {
-        " · sin palanca propia"
-    } else {
-        ""
+    let (text, color) = match dado_cm {
+        None => (
+            format!("medido {:.1} cm · sin medir en este producto", r.medido_cm),
+            theme.muted,
+        ),
+        Some(dado_cm) => {
+            let delta = r.delta_cm.unwrap_or(r.medido_cm - dado_cm);
+            let note = if r.saturated {
+                " · tope del modelo"
+            } else if !r.has_lever {
+                " · sin palanca propia"
+            } else {
+                ""
+            };
+            let text = format!("medido {:.1} cm · Δ {delta:+.1}{note}", r.medido_cm);
+            (text, band_color(theme, delta))
+        }
     };
     ui.horizontal(|ui| {
         ui.add_space(PAD);
-        ui.label(
-            RichText::new(format!(
-                "medido {:.1} cm · Δ {delta:+.1}{note}",
-                r.medido_cm
-            ))
-            .size(10.5)
-            .monospace()
-            .color(color),
-        );
+        ui.label(RichText::new(text).size(10.5).monospace().color(color));
     });
 }
 

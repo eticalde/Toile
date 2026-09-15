@@ -154,7 +154,7 @@ impl eframe::App for App {
             self.tab,
             &self.session,
             &self.patronaje,
-            self.maniquies.body(),
+            self.maniquies.body(&self.session),
         );
         let mut workspace = tabs::Workspace {
             theme: &self.theme,

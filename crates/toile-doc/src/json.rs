@@ -12,9 +12,18 @@ use writer::Canonical;
 
 use crate::Doc;
 
-/// The version of the file format this build writes, and the only one it
-/// reads.
+/// The format version of a document that carries nothing newer.
+///
+/// A document keeps this stamp for as long as it can, so that a pattern an
+/// older Toile wrote is written back as the very bytes it was read from.
 pub const VERSION: u32 = 1;
+
+/// The format version of a document in which some body carries a phenotype.
+///
+/// A version-1 reader would drop the phenotype without a word and generate a
+/// body its owner never shaped. Under this stamp it refuses the file for its
+/// version instead.
+pub const VERSION_EXTENDED: u32 = 2;
 
 /// A file: the version, and the pattern under it.
 #[derive(Serialize)]
@@ -34,6 +43,18 @@ struct Loaded {
 }
 
 impl Doc {
+    /// The format version this document is written in.
+    ///
+    /// A pure function of what the document carries, never of the file it was
+    /// read from, so one document still has exactly one text.
+    pub fn format_version(&self) -> u32 {
+        if self.mannequins.iter().any(|(_, set)| set.is_extended()) {
+            VERSION_EXTENDED
+        } else {
+            VERSION
+        }
+    }
+
     /// The document as canonical JSON, ending in a newline.
     ///
     /// One document has exactly one text: every collection is written in key
@@ -51,7 +72,7 @@ impl Doc {
         let mut out = Vec::new();
         let mut serializer = serde_json::Serializer::with_formatter(&mut out, Canonical::new());
         Written {
-            toile: VERSION,
+            toile: self.format_version(),
             doc: self,
         }
         .serialize(&mut serializer)
@@ -69,10 +90,10 @@ impl Doc {
     /// flattened at a count no tract can carry.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = version(text)?;
-        if found != u64::from(VERSION) {
+        if found != u64::from(VERSION) && found != u64::from(VERSION_EXTENDED) {
             return Err(FormatError::UnknownVersion {
                 found,
-                supported: VERSION,
+                newest: VERSION_EXTENDED,
             });
         }
         let loaded: Loaded =

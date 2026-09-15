@@ -38,12 +38,22 @@ pub enum DocError {
     /// A measurement the chosen measure set does not carry.
     #[error("the measure set has no measurement named `{0}`")]
     UnknownMeasure(String),
+    /// A measurement or a phenotype scale that is not a finite number, which
+    /// the file could not spell and would refuse on the way back in.
+    #[error("`{0}` must be a finite number")]
+    NonFinite(String),
     /// A label another point of the same piece already shows.
     #[error("the piece already shows a point named `{0}`")]
     DuplicateLabel(String),
     /// A name another piece already carries.
     #[error("the document already has a piece named `{0}`")]
     DuplicatePieceName(String),
+    /// A name another mannequin already carries.
+    #[error("the document already has a mannequin named `{0}`")]
+    DuplicateMannequinName(String),
+    /// The mannequin the pattern resolves against, asked to be removed.
+    #[error("the pattern resolves against `{0}`, so it cannot be removed")]
+    BodyInUse(String),
     /// A point the piece's contour does not run through.
     #[error("the piece has no node at that point")]
     NoSuchNode,

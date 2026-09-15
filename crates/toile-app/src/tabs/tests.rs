@@ -16,6 +16,7 @@ fn body() -> Body<'static> {
     Body {
         name: "Maniquí",
         measures: 20,
+        kept: Kept::InProduct,
     }
 }
 
@@ -47,11 +48,27 @@ fn the_maniquies_bar_names_the_body_the_tab_holds() {
     let renamed = Body {
         name: "Talla 38",
         measures: 21,
+        ..body()
     };
     assert_eq!(
         said(Tab::Maniquies, &session, renamed),
         "Talla 38 · 21 medidas · cm",
         "a rename reaches the bar, and so does a row added or removed"
+    );
+}
+
+/// A body no product holds goes nowhere when the tab lets go of it, and the
+/// bar says so rather than naming it like one a product keeps.
+#[test]
+fn the_maniquies_bar_says_a_body_no_product_holds_is_not_kept() {
+    let session = Session::demo_bodice();
+    let loose = Body {
+        kept: Kept::Nowhere,
+        ..body()
+    };
+    assert_eq!(
+        said(Tab::Maniquies, &session, loose),
+        "Maniquí · 20 medidas · sin producto · no se guarda · cm"
     );
 }
 

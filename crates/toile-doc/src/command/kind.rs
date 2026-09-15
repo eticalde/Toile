@@ -1,7 +1,7 @@
 use crate::{
-    Axis, Binding, Dart, DartKey, DartWedge, EdgeAnchor, Grain, Identity, MannequinKey, Notch,
-    NotchKey, Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey, SegmentEdit, Symmetry,
-    SymmetryKey, VariableKey,
+    Axis, Binding, BodyShape, Dart, DartKey, DartWedge, EdgeAnchor, Grain, Identity, MannequinKey,
+    MeasureSet, Notch, NotchKey, Piece, PieceKey, Pin, PinKey, Point, PointKey, Seam, SeamKey,
+    SegmentEdit, Symmetry, SymmetryKey, VariableKey,
 };
 
 /// A reversible edit to the document.
@@ -33,6 +33,20 @@ pub enum Command {
     },
     /// Chooses the body the pattern resolves against.
     ResolveWith { mannequin: MannequinKey },
+    /// Gives a body the phenotype it is generated from, or takes it away.
+    SetPhenotype {
+        mannequin: MannequinKey,
+        to: Option<BodyShape>,
+    },
+    /// Adds a body the pattern can be resolved against.
+    AddMannequin {
+        identity: Identity<MeasureSet>,
+        mannequin: MeasureSet,
+    },
+    /// Takes a body away, never the one the pattern resolves against.
+    RemoveMannequin { mannequin: MannequinKey },
+    /// Renames a body.
+    RenameMannequin { mannequin: MannequinKey, to: String },
     /// Adds a node to a contour, after another node or at its head.
     ///
     /// The tract travels as an edit rather than as a `Segment`, for the reason
@@ -173,11 +187,21 @@ impl Command {
             | Command::RemoveDart { .. }
             | Command::AddSymmetry { .. }
             | Command::RemoveSymmetry { .. } => ChangeClass::Topology,
-            Command::RenamePiece { .. }
+            // A body that is added, renamed or removed is never the one the
+            // pattern resolves against at that moment, so no formula moves.
+            Command::AddMannequin { .. }
+            | Command::RemoveMannequin { .. }
+            | Command::RenameMannequin { .. }
+            | Command::RenamePiece { .. }
             | Command::SetGrain { .. }
             | Command::LabelPoint { .. }
             | Command::ShowLabel { .. } => ChangeClass::Metadata,
-            Command::SetPin { .. } | Command::ClearPin { .. } => ChangeClass::Sim,
+            // The phenotype shapes the body and nothing the pattern resolves.
+            // Nothing drapes on that body yet — the cloth still falls on the
+            // sphere — so today no consumer answers this class for it.
+            Command::SetPhenotype { .. } | Command::SetPin { .. } | Command::ClearPin { .. } => {
+                ChangeClass::Sim
+            }
         }
     }
 }

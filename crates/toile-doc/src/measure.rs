@@ -1,6 +1,9 @@
+mod shape;
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
+pub use shape::BodyShape;
 
 use crate::formula::Lookup;
 
@@ -14,6 +17,13 @@ pub struct MeasureSet {
     pub name: String,
     /// The measurements, by name, in centimetres.
     pub values: BTreeMap<String, f64>,
+    /// What the body is generated from besides the tape, once someone set it.
+    ///
+    /// No formula reads it: a pattern resolves against the tape alone. A set
+    /// without one writes no key for it, which is what keeps its file in
+    /// format version 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phenotype: Option<BodyShape>,
 }
 
 impl MeasureSet {
@@ -57,7 +67,20 @@ impl MeasureSet {
                 .into_iter()
                 .map(|(measure, value)| (measure.to_owned(), value))
                 .collect(),
+            phenotype: None,
         }
+    }
+
+    /// The same set, with the body generated from `phenotype` as well.
+    #[must_use]
+    pub fn shaped(mut self, phenotype: BodyShape) -> MeasureSet {
+        self.phenotype = Some(phenotype);
+        self
+    }
+
+    /// Whether the set carries anything a format-version-1 reader would drop.
+    pub(crate) fn is_extended(&self) -> bool {
+        self.phenotype.is_some()
     }
 
     /// The centimetres bound to `measure`, if the set carries it.
@@ -124,5 +147,14 @@ mod tests {
         let set = MeasureSet::default();
         assert_eq!(set.get("cintura"), None);
         assert!(set.uncatalogued().is_empty());
+        assert!(!set.is_extended());
+    }
+
+    #[test]
+    fn a_shaped_set_keeps_its_tape_and_extends_the_format() {
+        let set = etienne().shaped(BodyShape::default());
+        assert_eq!(set.get("cintura"), Some(84.0));
+        assert_eq!(set.phenotype.map(|shape| shape.age_years), Some(25.0));
+        assert!(set.is_extended());
     }
 }

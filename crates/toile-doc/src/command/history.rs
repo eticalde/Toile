@@ -208,11 +208,21 @@ impl Entry {
     }
 
     /// Records `command`, folding it onto an earlier write of the same field.
+    ///
+    /// The search stops at the last edit that makes or unmakes an entity. A
+    /// write folded back past one would be replayed before it, and the value
+    /// it writes may name what that edit made: choosing a body the gesture
+    /// just added would name nothing on redo, and undo would take the body
+    /// away while the pattern still resolved against it.
     fn fold(&mut self, command: Command, inverse: Command) {
         let earlier = self
             .forward
             .iter()
-            .rposition(|before| command.coalesce_onto(before) == Coalesced::Replaces);
+            .enumerate()
+            .rev()
+            .take_while(|(_, before)| before.folds())
+            .find(|(_, before)| command.coalesce_onto(before) == Coalesced::Replaces)
+            .map(|(index, _)| index);
         // A fold keeps the first inverse: undo goes back to before the
         // gesture, not to the frame before the last one.
         if let Some(index) = earlier {

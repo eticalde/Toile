@@ -20,12 +20,16 @@ pub enum FormatError {
     #[error("the file carries no `toile` version number, so it is not a pattern")]
     NoHeader,
     /// A version this build does not know how to read.
-    #[error("the file is written in format version {found}; this build reads version {supported}")]
+    #[error(
+        "the file is written in format version {found}; this build reads versions {} to {newest}",
+        super::VERSION
+    )]
     UnknownVersion {
         /// The version the file declares.
         found: u64,
-        /// The version this build understands.
-        supported: u32,
+        /// The newest version this build understands. Every older one reads
+        /// too, because the format is only ever extended.
+        newest: u32,
     },
     /// JSON of the right version that is not shaped like a pattern.
     #[error("the pattern is not shaped like one: {0}")]
@@ -76,14 +80,14 @@ mod tests {
     }
 
     #[test]
-    fn an_unknown_version_names_both_versions() {
+    fn an_unknown_version_names_every_version_this_build_reads() {
         let error = FormatError::UnknownVersion {
             found: 7,
-            supported: 1,
+            newest: 2,
         };
         assert_eq!(
             error.to_string(),
-            "the file is written in format version 7; this build reads version 1"
+            "the file is written in format version 7; this build reads versions 1 to 2"
         );
     }
 }
