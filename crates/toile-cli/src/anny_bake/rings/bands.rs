@@ -117,9 +117,9 @@ pub(super) fn highest_unfused_trunk_y(
 /// the body's own x = 0 axis (each sits entirely on one side), so
 /// [`select::pick_trunk_loop`] finds nothing there; at or above it the legs
 /// have joined into one loop that does straddle. The lowest height where
-/// that still holds is, by definition, the fork — the anatomically correct
-/// anchor for `crotch` (the pelvis joint sits well above it), and the
-/// anatomically correct lower bound for the `cadera` band:
+/// that still holds is, by definition, the fork — where `tiro` stops (the
+/// pelvis joint sits well above it), and the anatomically correct lower
+/// bound for the `cadera` band:
 /// below the fork a "fuller" reading is really both thighs still pressed
 /// together, not the seat.
 ///
@@ -145,9 +145,7 @@ pub(super) fn fork_y(positions: &[[f64; 3]], tris: &[[u32; 3]], start_y: f64) ->
 
 /// Scans along the segment from `a` to `b` for the fullest cross-section
 /// perpendicular to it, skipping any offset still fused with the torso (see
-/// [`select::pick_limb_loop`]). Returns the winning loop and the fraction
-/// `t` it was found at, since the shoulder landmark ring reuses that same
-/// `t`; see `arms::bake`'s doc on why.
+/// [`select::pick_limb_loop`]).
 ///
 /// # Panics
 /// If no offset in `(0, 1)` yields a valid, unfused cross-section.
@@ -156,11 +154,11 @@ pub(super) fn limb_fullest(
     tris: &[[u32; 3]],
     a: [f64; 3],
     b: [f64; 3],
-) -> (Cut, f64) {
+) -> Cut {
     const STEP: f64 = 0.02;
     const STEPS: u32 = 49;
     let axis = sub(b, a);
-    let mut best: Option<(Vec<Crossing>, f64, f64)> = None;
+    let mut best: Option<(Vec<Crossing>, f64)> = None;
     for i in 1..=STEPS {
         let t = f64::from(i) * STEP;
         let point = lerp(a, b, t);
@@ -169,10 +167,10 @@ pub(super) fn limb_fullest(
             continue;
         };
         let per = perimeter(positions, &ring);
-        if best.as_ref().is_none_or(|(_, _, best_per)| per > *best_per) {
-            best = Some((ring, t, per));
+        if best.as_ref().is_none_or(|(_, best_per)| per > *best_per) {
+            best = Some((ring, per));
         }
     }
-    let (ring, t, _) = best.expect("no valid, unfused cross-section along this limb");
-    (Cut::along(ring, axis), t)
+    let (ring, _) = best.expect("no valid, unfused cross-section along this limb");
+    Cut::along(ring, axis)
 }

@@ -39,8 +39,8 @@ pub fn flatten_front_hash() -> u64 {
 /// symmetric midpoints means a mistake in an interpolation direction cannot
 /// hide behind symmetry the way it could at the bare template. One constant
 /// rather than one literal per golden, because the measures golden only
-/// discriminates a ring's placement from the mesh itself while the two are
-/// read against the very same body.
+/// discriminates a ring's or a path's placement from the mesh itself while
+/// the two are read against the very same body.
 const REFERENCE: toile_anny::phenotype::Phenotype = toile_anny::phenotype::Phenotype {
     gender: 0.0,
     age: 0.8,

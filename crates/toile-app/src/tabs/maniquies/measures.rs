@@ -76,7 +76,7 @@ fn span(name: &str) -> (f64, f64) {
 /// The editable inspector: every catalogue measurement the body carries as a
 /// slider with its value box, and every one it does not as what the body
 /// measures there. A value goes to the body through the stand; a row under the
-/// pointer or in hand lights its region on the body.
+/// pointer or in hand lays its tape on the body.
 ///
 /// Twenty rows outgrow any window height, so the groups scroll under a pinned
 /// title; the sections keep their order, so the scroll position is the only
@@ -116,7 +116,8 @@ pub fn panel(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, stand: &mu
 }
 
 /// One measurement: its label over a slider that fills the panel. The label
-/// takes the accent while the row is the one lighting the body.
+/// takes the accent while the row's tape is the one on the body, drawn in the
+/// same colour.
 ///
 /// A measurement the body does not carry gets no slider. A product's body
 /// holds the measurements it was given, and a slider that added one would
@@ -158,8 +159,8 @@ fn row(
         })
     });
 
-    // Hovering anywhere on the row, or holding its slider, lights its region;
-    // the last one lit stays so once the pointer moves on to the body.
+    // Hovering anywhere on the row, or holding its slider, lays its tape; the
+    // last one laid stays once the pointer moves on to the body.
     let mut handled = scoped.response.hovered();
     if let Some(slider) = scoped.inner {
         // Every frame the value moves reaches the document, inside the one

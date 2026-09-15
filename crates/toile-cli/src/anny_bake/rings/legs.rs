@@ -1,4 +1,4 @@
-use super::geom::{add, lerp, most_posterior_in_band, nearest_vertex, sub, unit};
+use super::geom::{add, lerp, sub, unit};
 use super::{Cut, Joints, intersect, limb_ring, select};
 
 /// How far along the thigh axis (from the hip joint toward the knee)
@@ -14,38 +14,21 @@ const THIGH_T: f64 = 0.30;
 /// fixes it here.
 const ANKLE_T: f64 = 0.85;
 
-/// How far the nape search reaches from the sagittal midline: tight enough
-/// that it cannot wander onto a shoulder blade, generous enough to find the
-/// C7 vertebra's own bump even though it is not perfectly centred.
-const NAPE_MIDLINE_TOLERANCE_M: f64 = 0.03;
-
-/// The height band the nape search covers, as a margin above and below the
-/// neck joint. Searching lower, down toward the shoulder joint, sounds like
-/// the anatomically obvious direction for "the base of the neck," but on
-/// this mesh it lands closer to the waist and *shortens* `largo_espalda`
-/// instead of lengthening it.
-const NAPE_BAND_MARGIN_M: f64 = 0.02;
-
 /// The neck and leg rings: the ones cut on a single limb's own axis with no
 /// band search, since none of them sit near a fused, ambiguous section.
-/// Plus `ankle_joint` and `nape`, which are single surface vertices found
-/// by search rather than cuts at all.
 pub(super) struct LegAndNeckRings {
     pub neck: Cut,
     pub thigh: Cut,
     pub knee: Cut,
     pub ankle: Cut,
-    pub ankle_joint: Cut,
-    pub nape: Cut,
 }
 
-/// The gap between the `ankle` girth ring and the `ankle_joint` landmark is
-/// this mesh's own, not a placement mistake: the ring lands 12.9 cm above
-/// the sole on this template while the ankle bone a leg length stops at is
-/// 6.8 cm up, inside the 6–8 cm band a tailor's tape ends in. The scan that
-/// settles [`ANKLE_T`] is the evidence. Perpendicular to the lower leg's
-/// axis, the section shrinks monotonically from the knee to a 20.5 cm
-/// minimum at that same 12.9 cm, then grows again all the way down: 21.1 at
+/// The `ankle` ring lands well above the ankle bone the leg lengths stop at,
+/// and that gap is this mesh's own, not a placement mistake: the ring lands
+/// 12.9 cm above the sole on this template while the ankle bone is 6.8 cm
+/// up. The scan that settles [`ANKLE_T`] is the evidence. Perpendicular to the
+/// lower leg's axis, the section shrinks monotonically from the knee to a 20.5
+/// cm minimum at that same 12.9 cm, then grows again all the way down: 21.1 at
 /// 11.0, 23.8 at 9.1, 31.5 at 6.9. There is no second, lower narrowing over
 /// the malleoli for a "narrowest section above the foot" rule to find,
 /// because the foot's own flare arrives before them: over that same descent
@@ -82,21 +65,10 @@ pub(super) fn bake(positions: &[[f64; 3]], tris: &[[u32; 3]], j: &Joints) -> Leg
         "tobillo",
     );
 
-    let ankle_joint = Cut::landmark(nearest_vertex(positions, j.ankle));
-
-    let nape = Cut::landmark(most_posterior_in_band(
-        positions,
-        j.neck[1] - NAPE_BAND_MARGIN_M,
-        j.neck[1] + NAPE_BAND_MARGIN_M,
-        NAPE_MIDLINE_TOLERANCE_M,
-    ));
-
     LegAndNeckRings {
         neck,
         thigh,
         knee,
         ankle,
-        ankle_joint,
-        nape,
     }
 }

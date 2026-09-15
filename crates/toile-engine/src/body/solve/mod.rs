@@ -64,9 +64,7 @@ fn lever_id(label: &str) -> u8 {
 ///
 /// `tiro` is the near miss, and the reason it stays a miss: `waisttohip-dist`
 /// does have authority over the rise, but `altura_cadera` claims that lever
-/// first and spends it re-lengthening the span to hold its own dado. Cutting
-/// the waist ring lower shortens the rise only while that lever is pinned
-/// against its short stop, and gives it back the moment the lever comes off.
+/// first and spends it re-lengthening the span to hold its own dado.
 fn lever_ids(name: &str) -> Option<Vec<u8>> {
     let one = |label: &str| Some(vec![lever_id(label)]);
     match name {

@@ -2,9 +2,9 @@ mod bust_apex;
 mod groups;
 mod obj;
 mod quad;
-/// Bakes the anatomical rings `toile_anny::measure` reads a generated body
-/// against: cut once here, against the neutral template, then walked
-/// (never re-cut) at runtime as the phenotype morphs the mesh.
+/// Bakes the girth rings and length paths `toile_anny::measure` reads a
+/// generated body against: cut once here, against the neutral template, then
+/// walked (never re-cut) at runtime as the phenotype morphs the mesh.
 mod rings;
 mod station;
 mod targets;
@@ -121,8 +121,7 @@ fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>, ro
         .map(|(name, v)| (name.clone(), to_body_space(*v)))
         .collect();
     let bust_apex_y = bust_apex::weighted_mean_height(root, &ring_positions);
-    let (ring_entries, ring_points) =
-        rings::bake(&ring_positions, &ring_tris, &ring_joints, bust_apex_y);
+    let cuts = rings::bake(&ring_positions, &ring_tris, &ring_joints, bust_apex_y);
 
     let mut rows = Vec::with_capacity(parsed_targets.len());
     let mut deltas: Vec<Delta> = Vec::new();
@@ -141,8 +140,10 @@ fn bake(obj_text: &str, groups_text: &str, parsed_targets: Vec<ParsedTarget>, ro
         stations,
         rows,
         deltas,
-        ring_entries,
-        ring_points,
+        ring_entries: cuts.ring_entries,
+        ring_points: cuts.ring_points,
+        path_entries: cuts.path_entries,
+        path_points: cuts.path_points,
     }
 }
 
@@ -205,12 +206,18 @@ mod tests {
         assert_eq!(baked.ring_entries.len(), toile_anny::asset::RingId::COUNT);
         assert!(
             baked.ring_entries.iter().all(|r| r.length > 0),
-            "every ring must have at least one point"
+            "every ring must have points"
         );
         assert_eq!(
             baked.ring_points.len() as u32,
             baked.ring_entries.iter().map(|r| r.length).sum::<u32>(),
             "the flat point array must hold exactly the entries' own lengths"
+        );
+        assert_eq!(baked.path_entries.len(), toile_anny::asset::PathId::COUNT);
+        assert_eq!(
+            baked.path_points.len() as u32,
+            baked.path_entries.iter().map(|p| p.length).sum::<u32>(),
+            "the flat path array must hold exactly the entries' own lengths"
         );
     }
 }

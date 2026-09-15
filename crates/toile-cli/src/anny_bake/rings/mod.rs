@@ -1,23 +1,20 @@
+mod arc;
 mod arms;
 mod bands;
 mod geom;
 mod intersect;
 mod legs;
+mod paths;
 mod select;
 mod trunk;
 
 use geom::{joint, unit};
 use intersect::Crossing;
-use toile_anny::asset::{RingEntry, RingId, RingPoint};
+use toile_anny::asset::{PathEntry, PathId, RingEntry, RingId, RingPoint};
 
 /// The normal every horizontal cut is taken with: a tape around the trunk
 /// lies level, so the trunk rings all share one plane direction.
 const UP: [f64; 3] = [0.0, 1.0, 0.0];
-
-/// The plane a landmark that is not a cut carries: none. The four
-/// single-point landmarks are surface vertices found by search, so there is
-/// no cutting plane to record and nothing to project a girth into.
-const NO_PLANE: [f64; 3] = [0.0, 0.0, 0.0];
 
 /// One baked ring: the crossings its cutting plane traced, and that plane's
 /// own unit normal. The two travel together from here into the asset,
@@ -38,14 +35,6 @@ impl Cut {
             normal: unit(axis),
         }
     }
-
-    /// A landmark with no plane of its own — see [`NO_PLANE`].
-    fn landmark(vertex: u32) -> Self {
-        Self {
-            points: vec![(vertex, vertex, 0.0)],
-            normal: NO_PLANE,
-        }
-    }
 }
 
 /// Every named joint this bake reads from `groups::joint_centroids`'s
@@ -60,7 +49,6 @@ struct Joints {
     shoulder_r: [f64; 3],
     shoulder_l: [f64; 3],
     elbow_r: [f64; 3],
-    elbow_l: [f64; 3],
     hand_r: [f64; 3],
     spine3: [f64; 3],
     pelvis: [f64; 3],
@@ -78,7 +66,6 @@ fn gather(joints: &[(String, [f64; 3])]) -> Joints {
         shoulder_r: joint(joints, "joint-r-shoulder"),
         shoulder_l: joint(joints, "joint-l-shoulder"),
         elbow_r: joint(joints, "joint-r-elbow"),
-        elbow_l: joint(joints, "joint-l-elbow"),
         hand_r: joint(joints, "joint-r-hand"),
         spine3: joint(joints, "joint-spine-3"),
         pelvis: joint(joints, "joint-pelvis"),
@@ -108,8 +95,18 @@ fn limb_ring(
     Cut::along(points, axis)
 }
 
-/// Bakes all twenty rings from the neutral template, in [`RingId::ALL`]
-/// order, ready to flatten into [`toile_anny::asset::Baked`]'s ring table.
+/// Everything this bake cuts from the template, laid out as the asset's
+/// ring and path tables.
+pub struct Cuts {
+    pub ring_entries: Vec<RingEntry>,
+    pub ring_points: Vec<RingPoint>,
+    pub path_entries: Vec<PathEntry>,
+    pub path_points: Vec<RingPoint>,
+}
+
+/// Bakes the twelve girth rings and the seven length paths from the neutral
+/// template, in [`RingId::ALL`] and [`PathId::ALL`] order, ready to flatten
+/// into [`toile_anny::asset::Baked`].
 ///
 /// `positions` and `joints` must already be in the mesh's own final space
 /// (centred, scaled to metres) — the same space `positions` itself is
@@ -119,13 +116,14 @@ pub fn bake(
     tris: &[[u32; 3]],
     joints: &[(String, [f64; 3])],
     bust_apex_y: f64,
-) -> (Vec<RingEntry>, Vec<RingPoint>) {
+) -> Cuts {
     let j = gather(joints);
     let legs = legs::bake(positions, tris, &j);
     let arms = arms::bake(positions, tris, &j);
     let trunk = trunk::bake(positions, tris, &j, bust_apex_y);
+    let paths = paths::bake(positions, tris, &j, &trunk);
 
-    let rings = [
+    let (ring_entries, ring_points) = flatten_rings([
         legs.neck,
         trunk.upper_chest,
         trunk.bust,
@@ -138,41 +136,57 @@ pub fn bake(
         arms.upper_arm,
         arms.wrist,
         trunk.head,
-        trunk.crotch,
-        arms.shoulder_r,
-        arms.shoulder_l,
-        arms.elbow,
-        arms.acromion,
-        arms.wrist_joint,
-        legs.ankle_joint,
-        legs.nape,
-    ];
-    debug_assert_eq!(rings.len(), RingId::COUNT);
-    flatten(rings)
+    ]);
+    let (path_entries, path_points) = flatten_paths(paths.in_id_order());
+    Cuts {
+        ring_entries,
+        ring_points,
+        path_entries,
+        path_points,
+    }
 }
 
-/// Quantizes twenty cuts into the asset's flat `(RingEntry, RingPoint)`
-/// shape, in the array's own order (which is [`RingId::ALL`]).
+/// One crossing as the asset stores it, `t` narrowed to `f32`.
 ///
 /// # Panics
 /// If a body vertex index does not fit `u16`: it never should, since the
 /// body group is 13,380 vertices and every crossing names two of them.
-fn flatten(rings: [Cut; RingId::COUNT]) -> (Vec<RingEntry>, Vec<RingPoint>) {
+fn quantize((a, b, t): Crossing) -> RingPoint {
+    RingPoint {
+        vertex_a: u16::try_from(a).expect("body vertex index fits u16"),
+        vertex_b: u16::try_from(b).expect("body vertex index fits u16"),
+        t: t as f32,
+    }
+}
+
+/// Quantizes the rings into the asset's flat `(RingEntry, RingPoint)` shape,
+/// in the array's own order (which is [`RingId::ALL`]).
+fn flatten_rings(rings: [Cut; RingId::COUNT]) -> (Vec<RingEntry>, Vec<RingPoint>) {
     let mut entries = Vec::with_capacity(RingId::COUNT);
     let mut points = Vec::new();
     for ring in rings {
         let offset = points.len() as u32;
-        for (a, b, t) in ring.points {
-            points.push(RingPoint {
-                vertex_a: u16::try_from(a).expect("body vertex index fits u16"),
-                vertex_b: u16::try_from(b).expect("body vertex index fits u16"),
-                t: t as f32,
-            });
-        }
+        points.extend(ring.points.into_iter().map(quantize));
         entries.push(RingEntry {
             offset,
             length: (points.len() as u32) - offset,
             normal: ring.normal.map(|c| c as f32),
+        });
+    }
+    (entries, points)
+}
+
+/// Quantizes the paths into the asset's flat `(PathEntry, RingPoint)` shape,
+/// in the array's own order (which is [`PathId::ALL`]).
+fn flatten_paths(paths: [Vec<Crossing>; PathId::COUNT]) -> (Vec<PathEntry>, Vec<RingPoint>) {
+    let mut entries = Vec::with_capacity(PathId::COUNT);
+    let mut points = Vec::new();
+    for path in paths {
+        let offset = points.len() as u32;
+        points.extend(path.into_iter().map(quantize));
+        entries.push(PathEntry {
+            offset,
+            length: (points.len() as u32) - offset,
         });
     }
     (entries, points)

@@ -2,6 +2,7 @@ use eframe::egui_wgpu::RenderState;
 use eframe::wgpu;
 
 use super::pipeline::build_pipeline;
+use super::tape::TapeLayer;
 use super::{COLOR_FORMAT, DEPTH_FORMAT, UNIFORM_BYTES};
 
 /// Renders one arbitrary triangle mesh in the 9-float vertex format to an
@@ -10,7 +11,8 @@ use super::{COLOR_FORMAT, DEPTH_FORMAT, UNIFORM_BYTES};
 /// A leaner sibling of [`super::Renderer`]: one mesh, no per-frame cloth and no
 /// avatar sphere. The whole mesh is re-uploaded when it changes, and the
 /// buffers only grow, so a measurement edit that keeps the topology writes into
-/// the buffers it already has.
+/// the buffers it already has. A tape can be laid over it, uploaded apart so
+/// laying one never touches the mesh.
 pub struct SolidRenderer {
     pipeline: wgpu::RenderPipeline,
     vbuf: wgpu::Buffer,
@@ -27,6 +29,7 @@ pub struct SolidRenderer {
     /// in place rather than reallocated.
     vcap: u64,
     icap: u64,
+    tape: TapeLayer,
 }
 
 impl SolidRenderer {
@@ -74,6 +77,7 @@ impl SolidRenderer {
             n_index: 0,
             vcap: 0,
             icap: 0,
+            tape: TapeLayer::new(device),
         }
     }
 
@@ -104,6 +108,12 @@ impl SolidRenderer {
         rs.queue
             .write_buffer(&self.ibuf, 0, bytemuck::cast_slice(indices));
         self.n_index = indices.len();
+    }
+
+    /// Replaces the tape over the mesh with a strip built by
+    /// [`super::ribbon`]; empty takes it away.
+    pub fn upload_tape(&mut self, rs: &RenderState, verts: &[f32]) {
+        self.tape.upload(rs, verts);
     }
 
     fn ensure_targets(&mut self, rs: &RenderState, w: u32, h: u32) {
@@ -145,11 +155,20 @@ impl SolidRenderer {
         self.size = (w, h);
     }
 
-    /// Draws the current mesh to the offscreen texture at the given size.
-    pub fn paint(&mut self, rs: &RenderState, w: u32, h: u32, uniforms: &[f32; 20]) {
+    /// Draws the current mesh, and the tape over it, to the offscreen texture
+    /// at the given size.
+    pub fn paint(
+        &mut self,
+        rs: &RenderState,
+        w: u32,
+        h: u32,
+        uniforms: &[f32; 20],
+        tape: &[f32; 24],
+    ) {
         self.ensure_targets(rs, w.max(8), h.max(8));
         rs.queue
             .write_buffer(&self.ubuf, 0, bytemuck::cast_slice(uniforms));
+        self.tape.set_uniforms(rs, tape);
         if self.n_index == 0 {
             return;
         }
@@ -190,6 +209,7 @@ impl SolidRenderer {
             pass.set_vertex_buffer(0, self.vbuf.slice(..));
             pass.set_index_buffer(self.ibuf.slice(..), wgpu::IndexFormat::Uint32);
             pass.draw_indexed(0..self.n_index as u32, 0, 0..1);
+            self.tape.draw(&mut pass);
         }
         rs.queue.submit([encoder.finish()]);
     }

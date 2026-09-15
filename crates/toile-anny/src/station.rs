@@ -1,8 +1,8 @@
 /// Where on the body a vertex sits: the anatomical station its ring is
 /// nearest to.
 ///
-/// Every vertex the mesh carries has one of these, so the interface can
-/// light the region a measurement is read at while the person handles it.
+/// Every vertex the mesh carries has one of these, so a client can tell the
+/// body's regions apart without reading its geometry.
 /// The tags are bookkeeping over the mesh, not geometry: the baker assigns
 /// them once from the neutral template's own joint positions, they never
 /// change with the phenotype or a lever, and they never enter a mesh

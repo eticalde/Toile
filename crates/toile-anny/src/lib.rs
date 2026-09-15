@@ -10,9 +10,9 @@
 pub mod asset;
 /// The 20 catalogue measurements, read directly off a generated mesh.
 ///
-/// Walks the rings [`asset`] bakes alongside the template — the honest half
-/// of the promise: the phenotype shapes the body, this says how far it
-/// actually lands from the tape.
+/// Walks the rings and paths [`asset`] bakes alongside the template — the
+/// honest half of the promise: the phenotype shapes the body, this says how far
+/// it actually lands from the tape.
 pub mod measure;
 mod mesh;
 mod normals;

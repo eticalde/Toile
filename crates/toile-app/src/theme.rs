@@ -117,6 +117,13 @@ impl Theme {
         linear(self.avatar)
     }
 
+    /// The accent in the renderer's linear RGB, so what the 3D view draws in
+    /// it matches the panel text lit in it.
+    pub fn accent_rgb(&self) -> [f32; 3] {
+        let lin = egui::Rgba::from(self.accent);
+        [lin.r(), lin.g(), lin.b()]
+    }
+
     /// The mat as a render-target clear colour, in the linear space wgpu
     /// expects for an sRGB target.
     pub fn clear_color(&self) -> wgpu::Color {

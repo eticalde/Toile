@@ -1,9 +1,11 @@
 use crate::asset::RingPoint;
 
-/// The 3D point a baked ring point evaluates to against `positions`: a fixed
-/// fraction along a fixed mesh edge. This is the only place a ring ever
-/// touches a mesh, so every measurement in `crate::measure` is built on it.
-pub(crate) fn at(positions: &[f32], p: RingPoint) -> [f32; 3] {
+/// The 3D point a baked ring or path point evaluates to against `positions`.
+///
+/// A fixed fraction along a fixed mesh edge. This is the only place a ring or
+/// a path ever touches a mesh, so every measurement in `crate::measure` is
+/// built on it.
+pub fn at(positions: &[f32], p: RingPoint) -> [f32; 3] {
     let a = p.vertex_a as usize * 3;
     let b = p.vertex_b as usize * 3;
     [
@@ -21,8 +23,7 @@ pub(crate) fn dist(a: [f32; 3], b: [f32; 3]) -> f32 {
 }
 
 /// A chord with its out-of-plane part removed: what is left of `d` once the
-/// component along `normal` is subtracted. A zero `normal` — the single-point
-/// landmarks, which are not cuts — leaves `d` exactly as it came.
+/// component along `normal` is subtracted.
 fn in_plane(d: [f32; 3], normal: [f32; 3]) -> [f32; 3] {
     let along = d[0] * normal[0] + d[1] * normal[1] + d[2] * normal[2];
     [
@@ -59,10 +60,22 @@ pub(crate) fn perimeter(positions: &[f32], ring: &[RingPoint], normal: [f32; 3])
         .sum()
 }
 
+/// The sum of consecutive chord lengths along an open path, in space: a
+/// length on the skin, in whatever unit `positions` carries.
+///
+/// Nothing is flattened, unlike [`perimeter`]. A tape round a girth lies flat
+/// in one plane; a tape pressed down a leg goes wherever the skin under it
+/// goes, and every chord here lies on the skin — see
+/// [`crate::asset::PathId`].
+pub(crate) fn walk(positions: &[f32], path: &[RingPoint]) -> f32 {
+    path.windows(2)
+        .map(|pair| dist(at(positions, pair[0]), at(positions, pair[1])))
+        .sum()
+}
+
 /// A ring's centroid: the mean of its points, in whatever unit `positions`
-/// carries. Used as a landmark for the length measurements — since every
-/// point it averages moves with the morphed body, so does the centroid.
-pub(crate) fn centroid(positions: &[f32], ring: &[RingPoint]) -> [f32; 3] {
+/// carries.
+pub fn centroid(positions: &[f32], ring: &[RingPoint]) -> [f32; 3] {
     let mut sum = [0.0f32; 3];
     for &p in ring {
         let q = at(positions, p);
@@ -113,6 +126,15 @@ mod tests {
         positions[4] = 0.5;
         assert!(perimeter(&positions, &ring, [0.0, 0.0, 0.0]) > 4.2);
         assert!((perimeter(&positions, &ring, [0.0, 1.0, 0.0]) - 4.0).abs() < 1.0e-6);
+    }
+
+    /// The same four corners walked as a path run three sides, not four:
+    /// nothing closes an open path back onto its start.
+    #[test]
+    fn a_walk_along_three_sides_of_the_square_is_three() {
+        let (positions, path) = square_ring();
+        assert!((walk(&positions, &path) - 3.0).abs() < 1.0e-6);
+        assert!(walk(&positions, &path[..1]).abs() < f32::EPSILON);
     }
 
     #[test]

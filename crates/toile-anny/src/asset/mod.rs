@@ -1,6 +1,8 @@
+mod paths;
 mod rings;
 mod rows;
 
+pub use paths::{PathEntry, PathId};
 pub use rings::{RingEntry, RingId, RingPoint};
 pub(crate) use rows::DELTA_PER_METRE;
 pub use rows::{Delta, Row, RowKind};
@@ -15,14 +17,14 @@ const MAGIC: [u8; 8] = *b"TOANNY01";
 /// older layout, so the bump is the whole compatibility story and the
 /// history of what each one added belongs in `git log`.
 ///
-/// The ring count is part of that shape even though the header carries it:
-/// a nineteen-entry table is self-consistent enough to pass every length
-/// and hash check here and then panic in [`crate::measure`], which indexes
-/// the table by [`RingId`] and expects all twenty.
-const VERSION: u32 = 5;
+/// The ring and path counts are part of that shape even though the header
+/// carries them: a table one entry short is self-consistent enough to pass
+/// every length and hash check here and then panic in [`crate::measure`],
+/// which indexes both tables by id and expects every entry.
+const VERSION: u32 = 6;
 
-/// The header's fixed size in bytes, ahead of the seven payload sections.
-const HEADER_LEN: usize = 8 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 8;
+/// The header's fixed size in bytes: the magic, nine `u32` fields, the hash.
+const HEADER_LEN: usize = 8 + 9 * 4 + 8;
 
 /// FNV-1a's offset basis and prime. Mirrored from `toile_engine::golden`
 /// rather than shared: this crate cannot depend on the engine, which depends
@@ -34,19 +36,16 @@ const FNV_PRIME: u64 = 0x0100_0000_01b3;
 ///
 /// Metres, y-up, centred, CCW-outward triangles, one station tag per vertex
 /// — the template — plus every baked target's row and delta run, in the
-/// fixed order the baker discovered them in, plus the twenty measurement
-/// rings cut once from the neutral template (see [`RingId`]). Normals are
-/// not part of the asset: they are cheap to recompute, and storing them
-/// would let the two drift apart.
+/// fixed order the baker discovered them in, plus the girth rings and the
+/// length paths cut once from the neutral template (see [`RingId`] and
+/// [`PathId`]). Normals are not part of the asset: they are cheap to
+/// recompute, and storing them would let the two drift apart.
 ///
 /// The payload is stored raw and uncompressed, `include_bytes!`-embedded
 /// and committed rather than fetched or decompressed at load time: a
-/// deliberate trade for `toile-anny` keeping zero runtime dependencies —
-/// no decompressor, no asset fetcher, nothing between the binary and the
-/// bytes. It is worth knowing what was traded away, since the whole
-/// question is the size: about 17 MB shipped, of which the deltas are
-/// nearly all, and roughly 9 MB added to the repository, git deflating the
-/// blob itself.
+/// deliberate trade for `toile-anny` keeping zero runtime dependencies. The
+/// size is what was traded away: about 17 MB shipped, of which the deltas
+/// are nearly all.
 pub struct Baked {
     /// Vertex positions as xyz triples.
     pub positions: Vec<f32>,
@@ -64,6 +63,11 @@ pub struct Baked {
     pub ring_entries: Vec<RingEntry>,
     /// Every ring's points, concatenated in `ring_entries` order.
     pub ring_points: Vec<RingPoint>,
+    /// One entry per [`PathId`], in [`PathId::ALL`] order. An entry's
+    /// `offset` and `length` point into `path_points`.
+    pub path_entries: Vec<PathEntry>,
+    /// Every path's points, concatenated in `path_entries` order.
+    pub path_points: Vec<RingPoint>,
 }
 
 /// Why a byte slice would not decode as an asset.
@@ -97,40 +101,40 @@ fn fnv1a(bytes: &[u8]) -> u64 {
 /// ```text
 /// offset  bytes     field
 /// 0       8         magic: b"TOANNY01"
-/// 8       4         format version, u32 LE (5)
+/// 8       4         format version, u32 LE (6)
 /// 12      4         vertex count V, u32 LE
 /// 16      4         triangle count T, u32 LE
 /// 20      4         row count R, u32 LE
 /// 24      4         delta count D, u32 LE
 /// 28      4         ring entry count G, u32 LE (always RingId::COUNT)
 /// 32      4         ring point count P, u32 LE
-/// 36      8         FNV-1a hash of everything from offset 44 on, u64 LE
-/// 44      12*V      positions: V vertex xyz triples, f32 LE, metres, y-up
+/// 36      4         path entry count H, u32 LE (always PathId::COUNT)
+/// 40      4         path point count Q, u32 LE
+/// 44      8         FNV-1a hash of everything from offset 52 on, u64 LE
+/// 52      12*V      positions: V vertex xyz triples, f32 LE, metres, y-up
 /// ...     12*T      indices: T triangle index triples, u32 LE
 /// ...     V         stations: one Station tag per vertex, u8
 /// ...     15*R      row table: R rows, see `Row`/`RowKind`'s byte layout
 /// ...     8*D       delta runs: D deltas, see `Delta`'s byte layout
 /// ...     20*G      ring table: G entries, see `RingEntry`'s byte layout
 /// ...     8*P       ring points: P points, see `RingPoint`'s byte layout
+/// ...     8*H       path table: H entries, see `PathEntry`'s byte layout
+/// ...     8*Q       path points: Q points, laid out as ring points are
 /// ```
 pub fn encode(baked: &Baked) -> Vec<u8> {
-    let vertex_count = (baked.positions.len() / 3) as u32;
-    let triangle_count = (baked.indices.len() / 3) as u32;
-    let row_count = baked.rows.len() as u32;
-    let delta_count = baked.deltas.len() as u32;
-    let ring_entry_count = baked.ring_entries.len() as u32;
-    let ring_point_count = baked.ring_points.len() as u32;
-    debug_assert_eq!(baked.stations.len(), vertex_count as usize);
+    debug_assert_eq!(baked.stations.len(), baked.positions.len() / 3);
+    let counts = [
+        baked.positions.len() / 3,
+        baked.indices.len() / 3,
+        baked.rows.len(),
+        baked.deltas.len(),
+        baked.ring_entries.len(),
+        baked.ring_points.len(),
+        baked.path_entries.len(),
+        baked.path_points.len(),
+    ];
 
-    let mut payload = Vec::with_capacity(
-        baked.positions.len() * 4
-            + baked.indices.len() * 4
-            + baked.stations.len()
-            + baked.rows.len() * Row::LEN
-            + baked.deltas.len() * Delta::LEN
-            + baked.ring_entries.len() * RingEntry::LEN
-            + baked.ring_points.len() * RingPoint::LEN,
-    );
+    let mut payload = Vec::new();
     for f in &baked.positions {
         payload.extend_from_slice(&f.to_le_bytes());
     }
@@ -138,54 +142,46 @@ pub fn encode(baked: &Baked) -> Vec<u8> {
         payload.extend_from_slice(&i.to_le_bytes());
     }
     payload.extend_from_slice(&baked.stations);
-    for row in &baked.rows {
-        row.write(&mut payload);
-    }
-    for delta in &baked.deltas {
-        delta.write(&mut payload);
-    }
-    for entry in &baked.ring_entries {
-        entry.write(&mut payload);
-    }
-    for point in &baked.ring_points {
-        point.write(&mut payload);
-    }
+    baked.rows.iter().for_each(|r| r.write(&mut payload));
+    baked.deltas.iter().for_each(|d| d.write(&mut payload));
+    baked
+        .ring_entries
+        .iter()
+        .for_each(|e| e.write(&mut payload));
+    baked.ring_points.iter().for_each(|p| p.write(&mut payload));
+    baked
+        .path_entries
+        .iter()
+        .for_each(|e| e.write(&mut payload));
+    baked.path_points.iter().for_each(|p| p.write(&mut payload));
 
     let mut out = Vec::with_capacity(HEADER_LEN + payload.len());
     out.extend_from_slice(&MAGIC);
     out.extend_from_slice(&VERSION.to_le_bytes());
-    out.extend_from_slice(&vertex_count.to_le_bytes());
-    out.extend_from_slice(&triangle_count.to_le_bytes());
-    out.extend_from_slice(&row_count.to_le_bytes());
-    out.extend_from_slice(&delta_count.to_le_bytes());
-    out.extend_from_slice(&ring_entry_count.to_le_bytes());
-    out.extend_from_slice(&ring_point_count.to_le_bytes());
+    for count in counts {
+        out.extend_from_slice(&(count as u32).to_le_bytes());
+    }
     out.extend_from_slice(&fnv1a(&payload).to_le_bytes());
     out.extend_from_slice(&payload);
     out
 }
 
-/// Reads a little-endian `u32` from the first four bytes of `field`, a name
-/// used only in the panic message a length mismatch would raise.
-fn le_u32(field: &str, bytes: &[u8]) -> u32 {
-    let chunk = bytes.first_chunk::<4>().unwrap_or_else(|| {
-        panic!(
-            "{field} needs 4 bytes, got {}: checked against HEADER_LEN above",
-            bytes.len()
-        )
-    });
-    u32::from_le_bytes(*chunk)
+/// Reads a little-endian `u32` from the four bytes at `at`, which the caller
+/// has already checked lie inside `bytes`.
+fn le_u32(bytes: &[u8], at: usize) -> u32 {
+    u32::from_le_bytes([bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]])
 }
 
-/// Reads a little-endian `u64`, the same way [`le_u32`] reads a `u32`.
-fn le_u64(field: &str, bytes: &[u8]) -> u64 {
-    let chunk = bytes.first_chunk::<8>().unwrap_or_else(|| {
-        panic!(
-            "{field} needs 8 bytes, got {}: checked against HEADER_LEN above",
-            bytes.len()
-        )
-    });
-    u64::from_le_bytes(*chunk)
+/// Splits `N`-byte records off the front of `bytes`, `count` of them, and
+/// reads each with `read`: one table of the payload.
+fn records<const N: usize, T>(
+    bytes: &mut &[u8],
+    count: usize,
+    read: impl Fn(&[u8; N]) -> T,
+) -> Vec<T> {
+    let (table, rest) = bytes.split_at(count * N);
+    *bytes = rest;
+    table.as_chunks::<N>().0.iter().map(read).collect()
 }
 
 /// Unpacks an asset's bytes back into a [`Baked`] body.
@@ -196,9 +192,9 @@ fn le_u64(field: &str, bytes: &[u8]) -> u64 {
 /// same reader.
 ///
 /// # Panics
-/// Never, in practice: the internal length checks above every fixed-size
-/// read are what the panicking accessors below would otherwise need to
-/// guard against, so they can never see a slice the wrong size.
+/// Never, in practice: the length check ahead of every split is what the
+/// slicing below would otherwise need to guard against, so it can never see a
+/// slice the wrong size.
 pub fn decode(bytes: &[u8]) -> Result<Baked, DecodeError> {
     if bytes.len() < HEADER_LEN {
         return Err(DecodeError::TooShort);
@@ -206,26 +202,23 @@ pub fn decode(bytes: &[u8]) -> Result<Baked, DecodeError> {
     if bytes[0..8] != MAGIC {
         return Err(DecodeError::BadMagic);
     }
-    let version = le_u32("version", &bytes[8..12]);
+    let version = le_u32(bytes, 8);
     if version != VERSION {
         return Err(DecodeError::BadVersion(version));
     }
-    let vertex_count = le_u32("vertex_count", &bytes[12..16]) as usize;
-    let triangle_count = le_u32("triangle_count", &bytes[16..20]) as usize;
-    let row_count = le_u32("row_count", &bytes[20..24]) as usize;
-    let delta_count = le_u32("delta_count", &bytes[24..28]) as usize;
-    let ring_entry_count = le_u32("ring_entry_count", &bytes[28..32]) as usize;
-    let ring_point_count = le_u32("ring_point_count", &bytes[32..36]) as usize;
-    let hash = le_u64("hash", &bytes[36..44]);
+    let [v, t, r, d, g, p, h, q] = std::array::from_fn(|i| le_u32(bytes, 12 + 4 * i) as usize);
+    let hash = u64::from_le_bytes(std::array::from_fn(|i| bytes[44 + i]));
 
-    let payload = &bytes[HEADER_LEN..];
-    let want_len = vertex_count * 3 * 4
-        + triangle_count * 3 * 4
-        + vertex_count
-        + row_count * Row::LEN
-        + delta_count * Delta::LEN
-        + ring_entry_count * RingEntry::LEN
-        + ring_point_count * RingPoint::LEN;
+    let mut payload = &bytes[HEADER_LEN..];
+    let want_len = v * 12
+        + t * 12
+        + v
+        + r * Row::LEN
+        + d * Delta::LEN
+        + g * RingEntry::LEN
+        + p * RingPoint::LEN
+        + h * PathEntry::LEN
+        + q * RingPoint::LEN;
     if payload.len() != want_len {
         return Err(DecodeError::TruncatedPayload);
     }
@@ -233,58 +226,16 @@ pub fn decode(bytes: &[u8]) -> Result<Baked, DecodeError> {
         return Err(DecodeError::BadHash);
     }
 
-    let (pos_bytes, rest) = payload.split_at(vertex_count * 3 * 4);
-    let (idx_bytes, rest) = rest.split_at(triangle_count * 3 * 4);
-    let (station_bytes, rest) = rest.split_at(vertex_count);
-    let (row_bytes, rest) = rest.split_at(row_count * Row::LEN);
-    let (delta_bytes, rest) = rest.split_at(delta_count * Delta::LEN);
-    let (entry_bytes, point_bytes) = rest.split_at(ring_entry_count * RingEntry::LEN);
-
-    let positions = pos_bytes
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .map(|c| f32::from_le_bytes(*c))
-        .collect();
-    let indices = idx_bytes
-        .as_chunks::<4>()
-        .0
-        .iter()
-        .map(|c| u32::from_le_bytes(*c))
-        .collect();
-    let rows = row_bytes
-        .as_chunks::<{ Row::LEN }>()
-        .0
-        .iter()
-        .map(|c| Row::read(c.as_slice()))
-        .collect();
-    let deltas = delta_bytes
-        .as_chunks::<{ Delta::LEN }>()
-        .0
-        .iter()
-        .map(|c| Delta::read(c.as_slice()))
-        .collect();
-    let ring_entries = entry_bytes
-        .as_chunks::<{ RingEntry::LEN }>()
-        .0
-        .iter()
-        .map(|c| RingEntry::read(c.as_slice()))
-        .collect();
-    let ring_points = point_bytes
-        .as_chunks::<{ RingPoint::LEN }>()
-        .0
-        .iter()
-        .map(|c| RingPoint::read(c.as_slice()))
-        .collect();
-
     Ok(Baked {
-        positions,
-        indices,
-        stations: station_bytes.to_vec(),
-        rows,
-        deltas,
-        ring_entries,
-        ring_points,
+        positions: records::<4, _>(&mut payload, v * 3, |c| f32::from_le_bytes(*c)),
+        indices: records::<4, _>(&mut payload, t * 3, |c| u32::from_le_bytes(*c)),
+        stations: records::<1, _>(&mut payload, v, |c| c[0]),
+        rows: records::<{ Row::LEN }, _>(&mut payload, r, |c| Row::read(c)),
+        deltas: records::<{ Delta::LEN }, _>(&mut payload, d, |c| Delta::read(c)),
+        ring_entries: records::<{ RingEntry::LEN }, _>(&mut payload, g, |c| RingEntry::read(c)),
+        ring_points: records::<{ RingPoint::LEN }, _>(&mut payload, p, |c| RingPoint::read(c)),
+        path_entries: records::<{ PathEntry::LEN }, _>(&mut payload, h, |c| PathEntry::read(c)),
+        path_points: records::<{ RingPoint::LEN }, _>(&mut payload, q, |c| RingPoint::read(c)),
     })
 }
 

@@ -20,6 +20,14 @@ pub(super) fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
     dot(sub(a, b), sub(a, b)).sqrt()
 }
 
+pub(super) fn cross(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
 /// A unit vector along `a`.
 ///
 /// # Panics
@@ -37,10 +45,8 @@ pub(super) fn lerp(a: [f64; 3], b: [f64; 3], t: f64) -> [f64; 3] {
 
 /// The index of the body vertex nearest `target`.
 ///
-/// Used only where a plane cannot cut a clean ring at all (the true
-/// shoulder joint, fused into the torso): the nearest single vertex is the
-/// best surface proxy for a joint that has no cross-section of its own to
-/// measure.
+/// Used for the inner ankle bone: a joint centre sits inside the body, and
+/// the skin vertex nearest the ankle's is the bump the inseam runs over.
 pub(super) fn nearest_vertex(positions: &[[f64; 3]], target: [f64; 3]) -> u32 {
     let mut best = 0usize;
     let mut best_d = f64::INFINITY;
@@ -57,10 +63,10 @@ pub(super) fn nearest_vertex(positions: &[[f64; 3]], target: [f64; 3]) -> u32 {
 /// The index of the highest (greatest `y`) body vertex within `radius` of
 /// `centre`.
 ///
-/// Used for the acromion: the shoulder's
-/// bony top has no joint of its own marking it (`joint-r-shoulder` marks
-/// the ball joint, inside the arm), but it is exactly the topmost point of
-/// the deltoid cap over that joint, findable directly on the mesh surface.
+/// Used for the shoulder point: the shoulder's bony top has no joint of its
+/// own marking it (`joint-r-shoulder` marks the ball joint, inside the arm),
+/// but it is exactly the topmost point of the deltoid cap over that joint,
+/// findable directly on the mesh surface.
 ///
 /// # Panics
 /// If no vertex lies within `radius` of `centre`: a bake-time placement

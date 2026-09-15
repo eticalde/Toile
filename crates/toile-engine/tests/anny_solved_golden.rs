@@ -6,17 +6,17 @@
 /// together.
 ///
 /// It moves when the secant step, the fixed solve order, the tolerance, or
-/// a ring a lever is solved against changes. It stays put across everything
-/// else that still produces the same lever vector, and that is the point:
-/// holding still is the proof the solve is deterministic, rather than
+/// a ring or path a lever is solved against changes. It stays put across
+/// everything else that still produces the same lever vector, and that is the
+/// point: holding still is the proof the solve is deterministic, rather than
 /// today's numbers happening to agree.
 #[test]
 fn solving_the_default_tape_hashes_to_a_fixed_value() {
     assert_eq!(
         toile_engine::golden::anny_solved_hash(),
-        0x000b_cd63_66e3_93c3,
+        0x1025_55b7_8482_0268,
         "the default tape's solved levers or mesh changed bits: the solver \
-         changed on purpose, a ring it solves against moved, or a \
+         changed on purpose, a ring or path it solves against moved, or a \
          dependency drifted under it. If on purpose, re-pin the constant \
          here in that same commit and say why there; `git log -S` on the \
          literal it replaces finds every earlier move"

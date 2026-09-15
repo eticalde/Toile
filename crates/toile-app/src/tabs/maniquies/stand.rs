@@ -4,7 +4,7 @@ mod write;
 use std::collections::BTreeMap;
 
 pub use person::{Saved, Wrote};
-use toile_engine::body::{self, AnnySolve};
+use toile_engine::body::{self, AnnySolve, Tape};
 use toile_engine::draft::{BodyMesh, BodyShape, MeasureSet};
 use toile_engine::session::Session;
 pub use write::Control;
@@ -46,10 +46,15 @@ pub struct Stand {
     /// The stature the last mesh measured, in centimetres, which Anny's own
     /// `height` input is not.
     pub stature_cm: Option<f32>,
-    /// The catalogue name whose region the body lights: the row last hovered
-    /// or handled, kept lit after the pointer leaves it so the person can look
-    /// from the slider to the body.
+    /// The catalogue name whose tape the body shows: the row last hovered or
+    /// handled, kept after the pointer leaves it so the person can look from
+    /// the slider to the body.
     pub highlight: Option<String>,
+    /// The name the tape on the view was laid for.
+    taped: Option<String>,
+    /// Whether the body was solved again since the tape was laid, which
+    /// moves the tape even when the name stayed.
+    resolved: bool,
     /// The new-mannequin dialog's own fields, while it is open.
     pub new_dialog: Option<NewManiqui>,
 }
@@ -68,6 +73,8 @@ impl Default for Stand {
             solved: None,
             stature_cm: None,
             highlight: None,
+            taped: None,
+            resolved: true,
             new_dialog: None,
         }
     }
@@ -185,6 +192,26 @@ impl Stand {
         self.built = Some(Basis { values, shape });
         self.stature_cm = Some(body::stature_cm(&mesh));
         self.solved = Some(solved);
+        self.resolved = true;
         mesh
     }
+
+    /// Whether the tape on the view is stale: the body was solved again, or
+    /// another row is the one in hand. Neither, and nothing is laid, so a
+    /// frame that changed nothing uploads nothing.
+    pub fn tape_due(&self) -> bool {
+        self.resolved || self.taped != self.highlight
+    }
+
+    /// The tape of the row in hand, laid on `mesh`, remembered as laid.
+    pub fn lay(&mut self, mesh: &BodyMesh) -> Option<Tape> {
+        self.resolved = false;
+        self.taped.clone_from(&self.highlight);
+        self.highlight
+            .as_deref()
+            .and_then(|name| body::tape(name, mesh))
+    }
 }
+
+#[cfg(test)]
+mod tests;

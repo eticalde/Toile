@@ -11,25 +11,17 @@ const MAX_RING_EDGE_M: f32 = 0.08;
 /// phenotype-only body, not the solver.
 const ZERO: [f64; 20] = [0.0; 20];
 
-/// Checks every ring is either the documented single-point landmark or a
-/// genuine closed loop over `positions`: non-empty, and every consecutive
-/// pair of points (wrapping from the last back to the first) sits close
-/// enough together to have come from one crossed triangle.
+/// Checks every ring is a genuine closed loop over `positions`: at least
+/// three points, and every consecutive pair (wrapping from the last back to
+/// the first) close enough together to have come from one crossed triangle.
 ///
-/// A ring's own vertex indices never change under any phenotype or lever
-/// (see `measuring_different_phenotypes_does_not_change_the_ring_tables`),
-/// but whether those indices still sit close enough to look like one
-/// shared triangle can, in principle, break if a lever stretched its
-/// vertices far apart — which is why this is reusable against the bare
-/// template and against any morphed or solved mesh alike.
+/// A ring's own vertex indices never change under any phenotype or lever,
+/// but whether those indices still sit close enough to look like one shared
+/// triangle could break if a lever stretched its vertices far apart — which
+/// is why this runs against the bare template and a solved mesh alike.
 fn assert_rings_are_closed(positions: &[f32]) {
     for id in RingId::ALL {
-        let (points, _) = ring(id);
-        assert!(!points.is_empty(), "{id:?} is empty");
-        if id.is_single_point() {
-            assert_eq!(points.len(), 1, "{id:?} is documented as a single point");
-            continue;
-        }
+        let points = ring(id).points;
         assert!(points.len() >= 3, "{id:?} has too few points to be a loop");
         let n = points.len();
         for i in 0..n {
@@ -46,47 +38,33 @@ fn assert_rings_are_closed(positions: &[f32]) {
 }
 
 #[test]
-fn every_ring_is_a_single_point_or_a_closed_non_empty_loop() {
+fn every_ring_is_a_closed_loop() {
     assert_rings_are_closed(&decoded().positions);
 }
 
 /// The projection in [`geom::perimeter`] is silent when it does nothing: a
-/// zero normal leaves every chord exactly as it came, so a girth ring that
-/// lost its plane would quietly go back to being walked through space —
-/// the buckling error the plane exists to remove, restored, with every
-/// other assertion in this file still passing. A normal that is merely the
-/// wrong length is worse still, since it over- or under-subtracts and
-/// shrinks or inflates the girth by a proportion nothing else reports.
-///
-/// So the pairing is pinned here rather than trusted to the baker: a cut
-/// carries the unit normal of its own plane, a landmark carries no plane at
-/// all, and which of the two a ring is follows from
-/// [`RingId::is_single_point`] alone.
+/// zero normal leaves every chord exactly as it came, so a ring that lost its
+/// plane would quietly go back to being walked through space — the buckling
+/// error the plane exists to remove, restored, with every other assertion in
+/// this file still passing. A normal that is merely the wrong length is worse
+/// still, since it over- or under-subtracts and shrinks or inflates the girth
+/// by a proportion nothing else reports. So the plane is pinned here rather
+/// than trusted to the baker.
 #[test]
-#[allow(
-    clippy::float_cmp,
-    reason = "a landmark's normal is a written zero literal, not a computed value"
-)]
-fn a_cut_ring_carries_a_unit_plane_and_a_landmark_carries_none() {
+fn every_ring_carries_the_unit_normal_of_its_plane() {
     for id in RingId::ALL {
-        let (_, normal) = ring(id);
-        let length = geom::dist(normal, [0.0, 0.0, 0.0]);
-        if id.is_single_point() {
-            assert_eq!(normal, [0.0; 3], "{id:?} is a landmark, not a cut");
-        } else {
-            assert!(
-                (length - 1.0).abs() < 1.0e-6,
-                "{id:?} was cut on a plane whose normal is {length}, not 1"
-            );
-        }
+        let length = geom::dist(ring(id).normal, [0.0, 0.0, 0.0]);
+        assert!(
+            (length - 1.0).abs() < 1.0e-6,
+            "{id:?} was cut on a plane whose normal is {length}, not 1"
+        );
     }
 }
 
-/// Solving a lever all the way to its own `±1` bound — the most a lever
-/// can ever stretch its vertices — must not tear open the loop its own ring
-/// walks. Driven through
-/// `crate::solve::solve_girth` rather than a hand-picked lever value, so
-/// this exercises the real solver path, not just an arbitrary morph.
+/// Solving a lever all the way to its own `±1` bound — the most a lever can
+/// ever stretch its vertices — must not tear open the loop its own ring
+/// walks. Driven through `crate::solve::solve_girth` rather than a
+/// hand-picked lever value, so this exercises the real solver path.
 #[test]
 fn rings_stay_closed_after_a_lever_is_solved_to_its_bound() {
     use crate::phenotype::LEVERS;
@@ -108,22 +86,15 @@ fn rings_stay_closed_after_a_lever_is_solved_to_its_bound() {
     levers[ids[0] as usize] = solved.value;
     let mesh = body_mesh(&phenotype, &levers);
     assert_rings_are_closed(&mesh.positions);
-    let m = measure(&mesh.positions);
-    assert!(
-        m.hip_drop < m.rise,
-        "altura_cadera {} is not shorter than tiro {} even at the waist's own bound",
-        m.hip_drop,
-        m.rise
-    );
 }
 
-/// The baked `(vertex, vertex, t)` rings are read-only data: measuring two
-/// wildly different bodies must never leave them changed, since a ring's
-/// whole point is to be fixed geometry that only the *positions* it is
+/// The baked `(vertex, vertex, t)` tables are read-only data: measuring two
+/// wildly different bodies must never leave them changed, since a ring's or a
+/// path's whole point is to be fixed geometry that only the *positions* it is
 /// evaluated against move under.
 #[test]
-fn measuring_different_phenotypes_does_not_change_the_ring_tables() {
-    let before = decoded().ring_points.clone();
+fn measuring_different_phenotypes_does_not_change_the_baked_tables() {
+    let before = (decoded().ring_points.clone(), decoded().path_points.clone());
     let _ = measure(&body_mesh(&Phenotype::default(), &ZERO).positions);
     let extreme = Phenotype {
         gender: 0.0,
@@ -134,16 +105,16 @@ fn measuring_different_phenotypes_does_not_change_the_ring_tables() {
         proportions: 1.0,
     };
     let _ = measure(&body_mesh(&extreme, &ZERO).positions);
-    assert_eq!(before, decoded().ring_points);
+    assert_eq!(before.0, decoded().ring_points);
+    assert_eq!(before.1, decoded().path_points);
 }
 
-/// The waist-to-hip drop must always be shorter than the waist-to-crotch
-/// rise. This is structural, not a tuning constant that happens to hold
-/// for one reference body: [`RingId::Hip`] is baked strictly above
-/// [`RingId::Crotch`] (the fork), so however the
-/// phenotype moves the waist, hip and crotch, the hip can never be as far
-/// from the waist as the crotch is. Swept across gender, build and muscle
-/// to demonstrate that, not just assert it for one body.
+/// The waist-to-hip drop is always shorter than the waist-to-crotch rise.
+/// Structural, not a tuning constant that happens to hold for one reference
+/// body: the one path is the start of the other (see
+/// `on_skin::the_rise_and_the_hip_drop_are_the_start_of_the_outseam`). Swept
+/// across gender, build and muscle to demonstrate it, not just assert it for
+/// one body.
 #[test]
 fn hip_drop_is_always_shorter_than_rise() {
     for gender in [0.0, 0.5, 1.0] {
@@ -173,8 +144,6 @@ fn hip_drop_is_always_shorter_than_rise() {
 /// The monotonicity a one-dimensional per-part solver needs to converge:
 /// sweeping `weight` (build) from thinnest to heaviest, every other
 /// phenotype field fixed, must make the waist girth increase at every step.
-/// Asserted here so that losing it fails loudly, rather than surfacing as a
-/// solver that will not settle.
 #[test]
 fn waist_girth_increases_monotonically_as_build_increases() {
     let mut previous: Option<f32> = None;
@@ -203,9 +172,9 @@ fn waist_girth_increases_monotonically_as_build_increases() {
 /// (male, age parameter 0.8, everything else Anny's neutral 0.5 — the same
 /// phenotype `toile_engine::golden::anny_mesh_hash` pins). Bounds come from
 /// the values this body actually measures, widened enough to catch a real
-/// modelling mistake — an oblique cut inflating a limb by the ~30% the
-/// module doc warns about, or a ring that caught the wrong loop — without
-/// pinning the exact figure a golden already pins more precisely.
+/// modelling mistake — an oblique cut inflating a limb, a ring that caught
+/// the wrong loop, a path that walked the long way round its section —
+/// without pinning the exact figure a golden already pins more precisely.
 #[test]
 fn the_reference_adult_measures_within_plausible_human_ranges() {
     let phenotype = Phenotype {
@@ -239,17 +208,10 @@ fn the_reference_adult_measures_within_plausible_human_ranges() {
     in_range("head", m.head, 52.0, 62.0);
     in_range("rise", m.rise, 25.0, 36.0);
     in_range("hip_drop", m.hip_drop, 16.0, 24.0);
-    // Both are vertical drops, stopping in different places: the inseam at
-    // the floor, the outseam at the ankle landmark. The outseam reads high
-    // against a generic table because it drops from this mesh's waist
-    // rather than following the outside of the leg.
     in_range("inseam", m.inseam, 88.0, 105.0);
     in_range("outseam", m.outseam, 108.0, 138.0);
-    // Deliberately short of a generic anthropometric table: this mesh's own
-    // neck-to-waist span is short, and no landmark an honest search finds
-    // reaches the table's range — see `Measures::back_length`.
     in_range("back_length", m.back_length, 28.0, 40.0);
-    in_range("arm_length", m.arm_length, 58.0, 68.0);
+    in_range("arm_length", m.arm_length, 62.0, 80.0);
     in_range("shoulder_width", m.shoulder_width, 35.0, 55.0);
 }
 

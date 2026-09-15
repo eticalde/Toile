@@ -1,14 +1,17 @@
-use crate::asset::RingId;
+use crate::asset::{PathId, RingId, RingPoint};
 use crate::mesh::decoded;
 
 mod geom;
 #[cfg(test)]
+mod on_skin;
+#[cfg(test)]
 mod tests;
 
-use geom::{centroid, dist, perimeter};
+pub use geom::{at, centroid};
+use geom::{perimeter, walk};
 
-/// The number of body vertices every baked ring indexes into: the fixed
-/// shape [`measure`] requires of its `positions` argument.
+/// The number of body vertices every baked ring and path indexes into: the
+/// fixed shape [`measure`] requires of its `positions` argument.
 const BODY_VERTEX_COUNT: usize = 13_380;
 
 /// The 20 catalogue measurements read directly off a generated Anny mesh, in
@@ -23,7 +26,8 @@ const BODY_VERTEX_COUNT: usize = 13_380;
 /// does not itself carry a tape) was written down as.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Measures {
-    /// The mesh's own bounding-box height (`estatura`).
+    /// The mesh's own bounding-box height (`estatura`): a height against a
+    /// wall, not a line on the skin.
     pub height: f32,
     /// The neck ring's perimeter (`cuello`).
     pub neck: f32,
@@ -55,57 +59,38 @@ pub struct Measures {
     pub wrist: f32,
     /// The head ring's perimeter (`cabeza`).
     pub head: f32,
-    /// Waist centroid to crotch centroid (`tiro`).
+    /// Down the side from the waist to the fork's height (`tiro`): see
+    /// [`PathId::Rise`].
     pub rise: f32,
-    /// Waist centroid to hip centroid (`altura_cadera`).
+    /// Down the side from the waist to the hip's height (`altura_cadera`):
+    /// see [`PathId::HipDrop`].
     ///
-    /// Always shorter than `rise`, structurally rather than by luck:
-    /// [`RingId::Hip`] is baked strictly above [`RingId::Crotch`], so
-    /// however a phenotype moves the three, the hip can never be as far
-    /// from the waist as the crotch is.
+    /// Always shorter than `rise`, structurally rather than by luck: its path
+    /// is the start of `rise`'s own, point for point, so it sums the first
+    /// few of the very same chords.
     pub hip_drop: f32,
-    /// The crotch centroid's height above the floor (`entrepierna`).
-    ///
-    /// A height rather than a straight line: the feet in Anny's A-pose
-    /// stand well to either side of the midline the waist and crotch
-    /// centroids lie on, so a straight line would fold the stance width
-    /// into the reading and make it depend on the pose rather than on the
-    /// body. Measured down to the same floor the stature is, so the parts
-    /// still sum to the whole.
+    /// Down the inside of the leg from the fork to the floor
+    /// (`entrepierna`): see [`PathId::Inseam`] and
+    /// [`PathId::ends_on_floor`]. The floor is the one the stature stands
+    /// on.
     pub inseam: f32,
-    /// The waist centroid's height above the ankle landmark
-    /// ([`RingId::AnkleJoint`], not the [`RingId::Ankle`] girth ring, which
-    /// cannot sit at the ankle bone) — `largo_lateral`.
-    ///
-    /// A vertical drop for the same pose reason as `inseam`, but it stops
-    /// at the ankle rather than the floor because the loft reads the ankle
-    /// back out of it as `waist − largo_lateral`: measured to the floor
-    /// that would put the ankle at zero and sink the foot caps below the
-    /// ground. Still the waist's own drop rather than the path down the
-    /// outside of the leg ISO 8559 specifies — an approximation the
-    /// interface should state rather than claim conformance for.
+    /// Down the outside of the leg from the waist to the ankle
+    /// (`largo_lateral`): see [`PathId::Outseam`].
     pub outseam: f32,
-    /// The nape landmark ([`RingId::NapeBase`], below the neck ring rather
-    /// than on it) to waist centroid (`largo_espalda`).
-    ///
-    /// Reads short of a generic anthropometric table on every reference
-    /// body, and stays short at the best landmark a direct surface search
-    /// finds: it is this mesh's own neck-to-waist proportion, not a
-    /// landmark left in the wrong place.
+    /// Down the spine from the nape to the waist (`largo_espalda`): see
+    /// [`PathId::Back`].
     pub back_length: f32,
-    /// The acromion ([`RingId::Acromion`], not the [`RingId::ShoulderRight`]
-    /// girth ring, which cannot sit at the true shoulder) to elbow, plus
-    /// elbow to the wrist joint ([`RingId::WristJoint`], not the
-    /// [`RingId::Wrist`] girth ring), summed along the two segments rather
-    /// than measured straight (`brazo`).
+    /// From the shoulder point over the elbow's point to the wrist (`brazo`):
+    /// see [`PathId::Arm`].
     pub arm_length: f32,
-    /// Left shoulder centroid to right shoulder centroid (`hombros`).
+    /// Across the back from shoulder point to shoulder point (`hombros`):
+    /// see [`PathId::Shoulders`].
     pub shoulder_width: f32,
 }
 
 /// The floor the body stands on and the crown of its head: the lowest and
 /// highest y in the mesh, in metres.
-fn floor_and_crown(positions: &[f32]) -> (f32, f32) {
+pub fn floor_and_crown(positions: &[f32]) -> (f32, f32) {
     let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
     for &y in positions.iter().skip(1).step_by(3) {
         lo = lo.min(y);
@@ -116,15 +101,9 @@ fn floor_and_crown(positions: &[f32]) -> (f32, f32) {
 
 /// How far `top` stands above `bottom`, in centimetres.
 ///
-/// Named so that every row of [`Measures`] converts through a helper. The
-/// girths go through `per` and the straight spans through `cm`; the three
-/// vertical readings were the only ones spelling the hundred out by hand,
-/// which makes the twenty-first row the one added with the ×100 forgotten.
-/// A centimetre figure a hundred times short is a plausible number rather
-/// than a crash, and the solver would chase it.
-///
-/// *Vertical* and not *drop*, which this module already spends on `hip_drop`:
-/// that one is the straight line between two centroids, not a difference in y.
+/// Named so that every row of [`Measures`] converts through a helper, the
+/// hundred written once: a centimetre figure a hundred times short is a
+/// plausible number rather than a crash, and the solver would chase it.
 fn vertical_cm(top: f32, bottom: f32) -> f32 {
     (top - bottom) * 100.0
 }
@@ -141,35 +120,69 @@ pub fn height_cm(positions: &[f32]) -> f32 {
     vertical_cm(crown, floor)
 }
 
-/// The ring a [`RingId`] names: its points, as a slice of the shipped
-/// asset's flat point array, and the plane the bake cut them on.
-fn ring(id: RingId) -> (&'static [crate::asset::RingPoint], [f32; 3]) {
+/// One baked ring, as the shipped asset stores it.
+///
+/// Public so a client can draw exactly the loop [`measure`] reads: its points
+/// go through [`at`], the function every measurement here is built on.
+#[derive(Debug, Clone, Copy)]
+pub struct Ring {
+    /// The ring's points, still to be evaluated against a body's positions.
+    pub points: &'static [RingPoint],
+    /// The unit normal of the plane the girth is summed in. See
+    /// [`crate::asset::RingEntry::normal`].
+    pub normal: [f32; 3],
+}
+
+/// The ring a [`RingId`] names, sliced out of the shipped asset.
+pub fn ring(id: RingId) -> Ring {
     let baked = decoded();
     let e = baked.ring_entries[id as usize];
     let start = e.offset as usize;
-    (
-        &baked.ring_points[start..start + e.length as usize],
-        e.normal,
-    )
+    Ring {
+        points: &baked.ring_points[start..start + e.length as usize],
+        normal: e.normal,
+    }
+}
+
+/// The points of the path a [`PathId`] names, sliced out of the shipped
+/// asset, still to be evaluated against a body's positions with [`at`].
+///
+/// Public so a client can draw exactly the line [`measure`] reads.
+pub fn path(id: PathId) -> &'static [RingPoint] {
+    let baked = decoded();
+    let e = baked.path_entries[id as usize];
+    let start = e.offset as usize;
+    &baked.path_points[start..start + e.length as usize]
+}
+
+/// A path's length on `positions`, in centimetres: its chords, then the drop
+/// from its last point to `floor` when [`PathId::ends_on_floor`] says so.
+fn length_cm(positions: &[f32], id: PathId, floor: f32) -> f32 {
+    let points = path(id);
+    let on_skin = walk(positions, points) * 100.0;
+    match points.last() {
+        Some(&end) if id.ends_on_floor() => on_skin + vertical_cm(at(positions, end)[1], floor),
+        _ => on_skin,
+    }
 }
 
 /// Measures every catalogue value off `positions` (already morphed by a
-/// phenotype), by walking the twenty rings baked into the shipped asset.
+/// phenotype), by walking the rings and paths baked into the shipped asset.
 ///
-/// The rings are cut once at bake time and only ever walked here. Every
-/// step is `+ - * / sqrt` over their fixed `(vertex, vertex, t)` data, in
-/// the fixed order below — the same regime [`crate::body_mesh`] runs in, so
-/// a girth is a continuous, differentiable function of the phenotype rather
-/// than a step function of which triangle a plane happened to cross.
+/// Both are cut once at bake time and only ever walked here. Every step is
+/// `+ - * / sqrt` over their fixed `(vertex, vertex, t)` data, in the fixed
+/// order below — the same regime [`crate::body_mesh`] runs in, so a
+/// measurement is a continuous function of the phenotype rather than a step
+/// function of which triangle a plane happened to cross.
 ///
-/// Every girth is summed in the plane its ring was cut on rather than in
-/// space: see [`geom::perimeter`] and [`crate::asset::RingEntry::normal`].
+/// A girth is summed in the plane its ring was cut on ([`geom::perimeter`]),
+/// a length in space along the skin ([`geom::walk`]).
 ///
 /// # Panics
 /// If `positions` does not hold exactly [`BODY_VERTEX_COUNT`] xyz triples.
-/// The baked rings index into that exact vertex layout — the Anny body's,
-/// never the tailor's dummy's — so a mismatched slice would otherwise read
-/// out of bounds or silently measure the wrong vertices.
+/// The baked rings and paths index into that exact vertex layout, so a
+/// mismatched slice would otherwise read out of bounds or silently measure
+/// the wrong vertices.
 pub fn measure(positions: &[f32]) -> Measures {
     assert_eq!(
         positions.len(),
@@ -180,28 +193,14 @@ pub fn measure(positions: &[f32]) -> Measures {
     );
 
     let per = |id: RingId| {
-        let (points, normal) = ring(id);
+        let Ring { points, normal } = ring(id);
         perimeter(positions, points, normal) * 100.0
     };
-    let cen = |id: RingId| centroid(positions, ring(id).0);
-    let cm = |a: [f32; 3], b: [f32; 3]| dist(a, b) * 100.0;
-
     let (floor, crown) = floor_and_crown(positions);
-    let height = vertical_cm(crown, floor);
-
-    let waist_c = cen(RingId::Waist);
-    let hip_c = cen(RingId::Hip);
-    let crotch_c = cen(RingId::Crotch);
-    let ankle_c = cen(RingId::AnkleJoint);
-    let nape_c = cen(RingId::NapeBase);
-    let shoulder_l_c = cen(RingId::ShoulderLeft);
-    let shoulder_r_c = cen(RingId::ShoulderRight);
-    let acromion_c = cen(RingId::Acromion);
-    let elbow_c = cen(RingId::Elbow);
-    let wrist_joint_c = cen(RingId::WristJoint);
+    let len = |id: PathId| length_cm(positions, id, floor);
 
     Measures {
-        height,
+        height: vertical_cm(crown, floor),
         neck: per(RingId::Neck),
         bust: per(RingId::Bust),
         upper_chest: per(RingId::UpperChest),
@@ -214,12 +213,12 @@ pub fn measure(positions: &[f32]) -> Measures {
         upper_arm: per(RingId::UpperArm),
         wrist: per(RingId::Wrist),
         head: per(RingId::Head),
-        rise: cm(waist_c, crotch_c),
-        hip_drop: cm(waist_c, hip_c),
-        inseam: vertical_cm(crotch_c[1], floor),
-        outseam: vertical_cm(waist_c[1], ankle_c[1]),
-        back_length: cm(nape_c, waist_c),
-        arm_length: cm(acromion_c, elbow_c) + cm(elbow_c, wrist_joint_c),
-        shoulder_width: cm(shoulder_l_c, shoulder_r_c),
+        rise: len(PathId::Rise),
+        hip_drop: len(PathId::HipDrop),
+        inseam: len(PathId::Inseam),
+        outseam: len(PathId::Outseam),
+        back_length: len(PathId::Back),
+        arm_length: len(PathId::Arm),
+        shoulder_width: len(PathId::Shoulders),
     }
 }

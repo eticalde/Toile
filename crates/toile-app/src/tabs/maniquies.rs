@@ -5,8 +5,7 @@ mod stand;
 
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
-use toile_engine::body;
-use toile_engine::draft::Station;
+use toile_engine::draft::BodyMesh;
 use toile_engine::session::Session;
 
 use self::people::People;
@@ -25,9 +24,9 @@ use crate::viewport::BodyView;
 pub struct State {
     rs: RenderState,
     view: BodyView,
-    /// The station mask the body was last coloured with, so a frame that
-    /// changes nothing uploads nothing.
-    lit: u32,
+    /// The body last solved, kept so another row's tape can be laid on it
+    /// without solving it again.
+    mesh: Option<BodyMesh>,
     stand: Stand,
     people: People,
 }
@@ -46,7 +45,7 @@ impl State {
         Self {
             rs,
             view,
-            lit: 0,
+            mesh: None,
             stand: Stand::default(),
             people: People::default(),
         }
@@ -68,14 +67,6 @@ impl State {
             kept: Stand::kept(session),
         }
     }
-}
-
-/// The bit mask of a set of stations, one bit per tag: what the body view
-/// colours by.
-fn mask_of(stations: &[Station]) -> u32 {
-    stations
-        .iter()
-        .fold(0, |mask, s| mask | (1 << u32::from(s.tag())))
 }
 
 /// Whether a pointer is still down on a control, which is what keeps the
@@ -123,20 +114,18 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     }
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let size = ui.available_size();
-        let mask = st
-            .stand
-            .highlight
-            .as_deref()
-            .map_or(0, |name| mask_of(body::stations_for(name)));
         if st.stand.due(session) {
             let mesh = st.stand.rebuild(session);
-            st.view.set_mesh(&st.rs, &mesh, mask);
-            st.lit = mask;
+            st.view.set_mesh(&st.rs, &mesh);
+            st.mesh = Some(mesh);
             // The panels were drawn from the solve before this one.
             ui.ctx().request_repaint();
-        } else if mask != st.lit {
-            st.view.set_highlight(&st.rs, mask);
-            st.lit = mask;
+        }
+        if let Some(mesh) = &st.mesh
+            && st.stand.tape_due()
+        {
+            let tape = st.stand.lay(mesh);
+            st.view.set_tape(&st.rs, tape.as_ref());
         }
         st.view.show(ui, size, &st.rs, theme);
     });

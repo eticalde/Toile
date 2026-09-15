@@ -46,9 +46,9 @@ pub struct BodyMesh {
     pub normals: Vec<f32>,
     /// CCW triangle indices into `positions`.
     pub indices: Vec<u32>,
-    /// The [`crate::Station`] tag of every vertex, so a client can light the
-    /// region a measurement is read at while the person handles it. The
-    /// baker writes it once from that same enum, at bake time.
+    /// The [`crate::Station`] tag of every vertex, so a client can tell the
+    /// body's regions apart, the arm from the trunk beside it. The baker
+    /// writes it once from that same enum, at bake time.
     pub stations: Vec<u8>,
 }
 

@@ -39,12 +39,9 @@ const WAIST_STEP_M: f64 = 0.005;
 /// crotch and the hip — is instead a tailoring measurement, taken at the
 /// waistline a garment sits on, which is lower.
 ///
-/// How much lower is not something this mesh states, so the size of the
-/// drop is settled by what the solved body does with it rather than by
-/// counting scan steps: one template centimetre is the smallest drop that
-/// brings `altura_cadera` inside tolerance of its dado. Going further buys
-/// nothing — a larger drop keeps `altura_cadera` closed but widens the
-/// waist-to-crotch rise as the crotch falls with it.
+/// How much lower is not something this mesh states, so the drop is a
+/// choice rather than a finding: one template centimetre, about the width of
+/// the tape that would be tied there.
 const WAIST_DROP_M: f64 = 0.010;
 
 /// The band `cadera` is scanned over, expressed as an offset above the
@@ -54,8 +51,8 @@ const WAIST_DROP_M: f64 = 0.010;
 /// bulge to find — so any band here really just fixes the *lowest* point
 /// still strictly above the fork as the answer; 12 cm is chosen because it
 /// lands `altura_cadera` (waist to hip) in the same 18–22 cm neighbourhood
-/// ISO size charts use for the waist-to-hip drop, comfortably under `tiro`
-/// (waist to crotch) as the fork/crotch relationship requires structurally.
+/// ISO size charts use for the waist-to-hip drop, and well above the fork
+/// `tiro` stops at.
 const HIP_BAND_LOW_ABOVE_FORK_M: f64 = 0.12;
 const HIP_BAND_HIGH_ABOVE_FORK_M: f64 = 0.14;
 const HIP_STEP_M: f64 = 0.005;
@@ -69,15 +66,21 @@ const HEAD_BAND_HIGH_M: f64 = 0.10;
 const HEAD_STEP_M: f64 = 0.005;
 
 /// The horizontal trunk and head rings: every one placed either directly
-/// at a joint height or by scanning a band for an extremum.
+/// at a joint height or by scanning a band for an extremum. Plus the heights
+/// the side paths stop at, so a length and the girth it runs to agree.
 pub(super) struct TrunkRings {
     pub upper_chest: Cut,
     pub bust: Cut,
     pub underbust: Cut,
     pub waist: Cut,
     pub hip: Cut,
-    pub crotch: Cut,
     pub head: Cut,
+    /// The height the waist ring is cut at.
+    pub waist_y: f64,
+    /// The height the hip ring is cut at.
+    pub hip_y: f64,
+    /// The fork: the lowest height at which the trunk is still one loop.
+    pub fork_y: f64,
 }
 
 /// A horizontal trunk ring at a height already known to be valid — used for
@@ -121,15 +124,15 @@ pub(super) fn bake(
         WAIST_STEP_M,
         false,
     );
-    let waist = ring_at(positions, tris, indentation_y - WAIST_DROP_M);
+    let waist_y = indentation_y - WAIST_DROP_M;
+    let waist = ring_at(positions, tris, waist_y);
 
     // The fork is scanned once, downward from the pelvis joint (comfortably
-    // above it on every phenotype this bake sees), and used for both the
-    // crotch landmark and the hip band's lower bound.
+    // above it on every phenotype this bake sees), and used for both the hip
+    // band's lower bound and the height `tiro` runs down to.
     let fork_y = bands::fork_y(positions, tris, j.pelvis[1]);
-    let crotch = ring_at(positions, tris, fork_y);
 
-    let (hip, _) = bands::trunk_extremum(
+    let (hip, hip_y) = bands::trunk_extremum(
         positions,
         tris,
         fork_y + HIP_BAND_LOW_ABOVE_FORK_M,
@@ -152,7 +155,9 @@ pub(super) fn bake(
         underbust,
         waist,
         hip,
-        crotch,
         head,
+        waist_y,
+        hip_y,
+        fork_y,
     }
 }

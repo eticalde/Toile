@@ -4,6 +4,11 @@ fn sample() -> Baked {
     // One degenerate triangle and two rows are enough to exercise every
     // field's byte layout without pulling in the real 13,380-vertex body or
     // its 2.1M deltas.
+    let point = |vertex_a, vertex_b, t| RingPoint {
+        vertex_a,
+        vertex_b,
+        t,
+    };
     Baked {
         positions: vec![0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
         indices: vec![0, 1, 2],
@@ -43,34 +48,27 @@ fn sample() -> Baked {
                 dz: 1,
             },
         ],
-        ring_entries: vec![
-            RingEntry {
+        ring_entries: vec![RingEntry {
+            offset: 0,
+            length: 3,
+            normal: [0.0, 1.0, 0.0],
+        }],
+        ring_points: vec![point(0, 1, 0.5), point(1, 2, 0.25), point(2, 0, 0.75)],
+        path_entries: vec![
+            PathEntry {
                 offset: 0,
                 length: 2,
-                normal: [0.0, 1.0, 0.0],
             },
-            RingEntry {
+            PathEntry {
                 offset: 2,
-                length: 1,
-                normal: [0.0, 0.0, 0.0],
+                length: 2,
             },
         ],
-        ring_points: vec![
-            RingPoint {
-                vertex_a: 0,
-                vertex_b: 1,
-                t: 0.5,
-            },
-            RingPoint {
-                vertex_a: 1,
-                vertex_b: 2,
-                t: 0.25,
-            },
-            RingPoint {
-                vertex_a: 2,
-                vertex_b: 0,
-                t: 0.75,
-            },
+        path_points: vec![
+            point(0, 1, 0.125),
+            point(1, 2, 0.5),
+            point(2, 0, 0.0),
+            point(0, 2, 1.0),
         ],
     }
 }
@@ -87,6 +85,8 @@ fn round_trips_a_small_baked_body() {
     assert_eq!(back.deltas, baked.deltas);
     assert_eq!(back.ring_entries, baked.ring_entries);
     assert_eq!(back.ring_points, baked.ring_points);
+    assert_eq!(back.path_entries, baked.path_entries);
+    assert_eq!(back.path_points, baked.path_points);
 }
 
 #[test]
@@ -95,6 +95,13 @@ fn rejects_a_flipped_payload_byte() {
     let last = bytes.len() - 1;
     bytes[last] ^= 0xFF;
     assert!(matches!(decode(&bytes), Err(DecodeError::BadHash)));
+}
+
+#[test]
+fn rejects_a_payload_one_byte_short() {
+    let mut bytes = encode(&sample());
+    bytes.pop();
+    assert!(matches!(decode(&bytes), Err(DecodeError::TruncatedPayload)));
 }
 
 #[test]
@@ -107,15 +114,14 @@ fn rejects_a_foreign_file() {
     assert!(matches!(decode(&[]), Err(DecodeError::TooShort)));
 }
 
+/// An older layout can be self-consistent enough to pass the length check —
+/// a header one field shorter reads its hash as a count, a table with fewer
+/// entries than an id indexes decodes perfectly well — so the reader refuses
+/// by version rather than risk misreading one section as another, or
+/// panicking later on a table it accepted.
 #[test]
-fn rejects_an_older_version_layout() {
-    // Every earlier version differs in a way a length check alone would not
-    // always catch — v1 and v2 lack whole sections, v3's ring table is 8
-    // bytes an entry rather than 20, v4's has nineteen entries where
-    // `crate::measure` indexes twenty — so this reader must refuse by
-    // version rather than risk misreading one section as another, or
-    // panicking on a table that decoded perfectly well.
+fn rejects_the_layout_before_paths() {
     let mut bytes = encode(&sample());
-    bytes[8..12].copy_from_slice(&4u32.to_le_bytes());
-    assert!(matches!(decode(&bytes), Err(DecodeError::BadVersion(4))));
+    bytes[8..12].copy_from_slice(&5u32.to_le_bytes());
+    assert!(matches!(decode(&bytes), Err(DecodeError::BadVersion(5))));
 }

@@ -1,4 +1,4 @@
-use super::geom::{add, lerp, nearest_vertex, sub, topmost_vertex_within, unit};
+use super::geom::lerp;
 use super::{Cut, Joints, bands, limb_ring};
 
 /// How far along the forearm axis (from the elbow toward the hand joint)
@@ -9,88 +9,29 @@ use super::{Cut, Joints, bands, limb_ring};
 /// morphs at all (male and female landed within 3 mm of each other there).
 /// Backing off to three-quarters of the way down the forearm still reads
 /// as "the wrist," not "the forearm," and recovers a normal-sized,
-/// gender-differentiated girth. `RingId::WristJoint` — a different
-/// landmark, at the literal hand joint — is what `brazo`'s length actually
-/// ends at; see this module's `bake` doc.
+/// gender-differentiated girth. `brazo`, a length, is free to run to the
+/// hand joint itself; see `paths::arm`.
 const WRIST_T: f64 = 0.75;
 
-/// How far from `joint-r-shoulder` the acromion search looks: generous
-/// enough to cover the deltoid cap over the joint, tight enough that it
-/// cannot wander onto the chest or the neck.
-const ACROMION_SEARCH_RADIUS_M: f64 = 0.07;
-
-/// The arm rings: the upper-arm girth and its shared offset, the two
-/// shoulder landmarks, the elbow landmark, the wrist girth, and the two
-/// single-point landmarks `brazo`'s length is actually measured between.
+/// The arm's two girth rings.
 pub(super) struct ArmRings {
     pub upper_arm: Cut,
-    pub shoulder_r: Cut,
-    pub shoulder_l: Cut,
-    pub elbow: Cut,
     pub wrist: Cut,
-    pub acromion: Cut,
-    pub wrist_joint: Cut,
 }
 
-/// A girth ring's own position and a length's end point do not have to be
-/// the same vertex. `upper_arm`, `shoulder_r` and `shoulder_l` sit at the
-/// offset [`bands::limb_fullest`] discovers, where the plane can actually
-/// separate arm from torso (well below the true shoulder joint); `wrist`
-/// sits three-quarters down the forearm, where the girth actually responds
-/// to the morphs. But `brazo` — a *length* — is free to run between the
-/// real joints: the acromion (the shoulder's own bony top, found on the
-/// mesh surface rather than at the ball joint `joint-r-shoulder` marks) and
-/// the wrist joint (the nearest vertex to `joint-r-hand`, not the girth
-/// ring's own offset point).
+/// `brazo_contorno` at the fullest section [`bands::limb_fullest`] finds
+/// where a plane can still separate arm from torso, well below the true
+/// shoulder joint; `muneca` three-quarters down the forearm, where the girth
+/// responds to the morphs.
 pub(super) fn bake(positions: &[[f64; 3]], tris: &[[u32; 3]], j: &Joints) -> ArmRings {
-    let (upper_arm, shoulder_t) = bands::limb_fullest(positions, tris, j.shoulder_r, j.elbow_r);
-
-    let shoulder_r_point = lerp(j.shoulder_r, j.elbow_r, shoulder_t);
-    let shoulder_r = limb_ring(
-        positions,
-        tris,
-        shoulder_r_point,
-        sub(j.elbow_r, j.shoulder_r),
-        "shoulder (right)",
-    );
-    let shoulder_l_point = lerp(j.shoulder_l, j.elbow_l, shoulder_t);
-    let shoulder_l = limb_ring(
-        positions,
-        tris,
-        shoulder_l_point,
-        sub(j.elbow_l, j.shoulder_l),
-        "shoulder (left)",
-    );
-
-    let elbow_axis = add(
-        unit(sub(j.elbow_r, j.shoulder_r)),
-        unit(sub(j.hand_r, j.elbow_r)),
-    );
-    let elbow = limb_ring(positions, tris, j.elbow_r, elbow_axis, "elbow");
-
+    let upper_arm = bands::limb_fullest(positions, tris, j.shoulder_r, j.elbow_r);
     let wrist_point = lerp(j.elbow_r, j.hand_r, WRIST_T);
     let wrist = limb_ring(
         positions,
         tris,
         wrist_point,
-        sub(j.hand_r, j.elbow_r),
+        super::geom::sub(j.hand_r, j.elbow_r),
         "muneca",
     );
-
-    let acromion = Cut::landmark(topmost_vertex_within(
-        positions,
-        j.shoulder_r,
-        ACROMION_SEARCH_RADIUS_M,
-    ));
-    let wrist_joint = Cut::landmark(nearest_vertex(positions, j.hand_r));
-
-    ArmRings {
-        upper_arm,
-        shoulder_r,
-        shoulder_l,
-        elbow,
-        wrist,
-        acromion,
-        wrist_joint,
-    }
+    ArmRings { upper_arm, wrist }
 }
