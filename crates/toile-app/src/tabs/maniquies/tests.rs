@@ -3,6 +3,8 @@
     reason = "a measurement reads back as the very number written into it"
 )]
 
+mod hover;
+
 use eframe::egui::{self, Rect, pos2, vec2};
 use toile_engine::body;
 use toile_engine::draft::{BodyShape, Command, Doc, MeasureSet};

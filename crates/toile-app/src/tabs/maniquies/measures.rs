@@ -96,23 +96,30 @@ pub fn panel(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, stand: &mu
          distancia queda de tu cinta. Escribir un valor mueve las palancas que pueden \
          alcanzarlo.",
     );
-    egui::ScrollArea::vertical()
+    let lit = egui::ScrollArea::vertical()
         .auto_shrink([false, false])
         .show(ui, |ui| {
+            let mut lit = None;
             section(ui, theme, "Contornos");
             for entry in CONTORNOS {
-                row(ui, theme, session, stand, entry);
+                lit = row(ui, theme, session, stand, entry).or(lit);
             }
             section(ui, theme, "Largos y anchos");
             for entry in LARGOS {
-                row(ui, theme, session, stand, entry);
+                lit = row(ui, theme, session, stand, entry).or(lit);
             }
             section(ui, theme, "Cuerpo");
             for entry in CUERPO {
-                row(ui, theme, session, stand, entry);
+                lit = row(ui, theme, session, stand, entry).or(lit);
             }
             ui.add_space(PAD);
-        });
+            lit
+        })
+        .inner;
+    // The tape belongs to the hand. No row answering means the pointer has
+    // left the panel, and the body goes bare rather than wearing the last tape
+    // laid on it: a mark nobody is pointing at reads as a mark that is stuck.
+    stand.highlight = lit;
 }
 
 /// One measurement: its label over a slider that fills the panel. The label
@@ -128,7 +135,7 @@ fn row(
     session: &mut Session,
     stand: &mut Stand,
     entry: (&str, &str),
-) {
+) -> Option<String> {
     let (name, label) = entry;
     let carried = stand.body(session).get(name);
     let mut value = carried.unwrap_or_default();
@@ -159,8 +166,9 @@ fn row(
         })
     });
 
-    // Hovering anywhere on the row, or holding its slider, lays its tape; the
-    // last one laid stays once the pointer moves on to the body.
+    // The row under the pointer, the slider in hand, or the box with the
+    // focus: that is the one whose tape lies on the body, and it answers so
+    // the panel can put the light out when none of them does.
     let mut handled = scoped.response.hovered();
     if let Some(slider) = scoped.inner {
         // Every frame the value moves reaches the document, inside the one
@@ -175,9 +183,6 @@ fn row(
         }
         handled |= slider.hovered() || slider.dragged() || slider.has_focus();
     }
-    if handled {
-        stand.highlight = Some(name.to_owned());
-    }
     delta::row(
         ui,
         theme,
@@ -185,4 +190,5 @@ fn row(
         carried.map(|_| value),
         stand.solved.as_ref(),
     );
+    handled.then(|| name.to_owned())
 }

@@ -46,9 +46,12 @@ pub struct Stand {
     /// The stature the last mesh measured, in centimetres, which Anny's own
     /// `height` input is not.
     pub stature_cm: Option<f32>,
-    /// The catalogue name whose tape the body shows: the row last hovered or
-    /// handled, kept after the pointer leaves it so the person can look from
-    /// the slider to the body.
+    /// The catalogue name whose tape lies on the body: the row under the
+    /// pointer, the slider in hand or the box with the focus.
+    ///
+    /// Nothing outlives the hand that pointed at it. The measures panel
+    /// writes this every frame from the row that answered, so a pointer
+    /// leaving the panel takes the tape off the body with it.
     pub highlight: Option<String>,
     /// The name the tape on the view was laid for.
     taped: Option<String>,
