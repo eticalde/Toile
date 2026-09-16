@@ -90,7 +90,12 @@ pub fn formula_row(ui: &mut Ui, theme: &Theme, id: Id, row: &Editable<'_>) -> Ed
     );
     let under = pos2(boxed.left() + 2.0, boxed.bottom() + 11.0);
     note(ui.painter(), theme, (under, Align2::LEFT_CENTER), row);
-    edit_box(ui, theme, id, boxed, row)
+    let written = edit_box(ui, theme, id, boxed, row);
+    // `ui.put` rewinds the cursor to the bottom of the box it placed, which
+    // gives back the room this row kept for the line under it; taking the
+    // whole row again leaves the next one below that line, not on top of it.
+    ui.allocate_rect(rect, Sense::hover());
+    written
 }
 
 /// The mono box a row is written in, edged in the accent while it has the

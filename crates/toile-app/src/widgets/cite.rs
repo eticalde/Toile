@@ -81,7 +81,12 @@ pub fn measure_row(
         let under = pos2(rect.right() - PAD, boxed.bottom() + 8.0);
         note(ui.painter(), theme, (under, Align2::RIGHT_CENTER), row);
     }
-    (chip, edit_box(ui, theme, id, boxed, row))
+    let written = edit_box(ui, theme, id, boxed, row);
+    // `ui.put` rewinds the cursor to the bottom of the box it placed, which
+    // gives back the room this row kept for the line under it; taking the
+    // whole row again leaves the next one below that line, not on top of it.
+    ui.allocate_rect(rect, Sense::hover());
+    (chip, written)
 }
 
 /// A named formula: its name over a box as wide as the panel, and under the
@@ -104,7 +109,12 @@ pub fn named_formula_row(
     );
     let under = pos2(boxed.left() + 2.0, boxed.bottom() + 8.0);
     note(ui.painter(), theme, (under, Align2::LEFT_CENTER), row);
-    (chip, edit_box(ui, theme, id, boxed, row))
+    let written = edit_box(ui, theme, id, boxed, row);
+    // `ui.put` rewinds the cursor to the bottom of the box it placed, which
+    // gives back the room this row kept for the line under it; taking the
+    // whole row again leaves the next one below that line, not on top of it.
+    ui.allocate_rect(rect, Sense::hover());
+    (chip, written)
 }
 
 /// A name whose text starts at `at`, vertically centred on it: a chip while a

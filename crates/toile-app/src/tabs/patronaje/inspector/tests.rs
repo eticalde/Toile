@@ -77,3 +77,4 @@ fn a_document_with_one_body_has_no_next_one() {
 mod desk;
 mod insert;
 mod listing;
+mod stacked;
