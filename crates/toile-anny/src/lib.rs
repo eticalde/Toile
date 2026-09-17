@@ -27,3 +27,19 @@ mod station;
 
 pub use mesh::{BodyMesh, body_mesh};
 pub use station::Station;
+
+/// The shape data this build generates bodies from: the embedded asset's
+/// format version, and the fingerprint of its payload.
+///
+/// What a cache of anything derived from a body has to be keyed by besides
+/// the phenotype and the levers. The version moves when the layout changes
+/// and the fingerprint when the CC0 source or the baker does, so a re-baked
+/// asset cannot be mistaken for the one an old entry was computed from.
+///
+/// # Panics
+/// If the embedded bytes carry no readable header, which would mean
+/// `assets/body.bin` was hand-edited: the shipped file is written by the
+/// baker and read back by this crate's own tests.
+pub fn asset_stamp() -> (u32, u64) {
+    asset::stamp(mesh::ASSET).expect("the shipped asset carries its header")
+}

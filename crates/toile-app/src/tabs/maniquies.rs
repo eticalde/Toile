@@ -5,11 +5,12 @@ mod stand;
 
 use eframe::egui;
 use eframe::egui_wgpu::RenderState;
-use toile_engine::draft::BodyMesh;
+use toile_engine::draft::{BodyMesh, MeasureSet};
 use toile_engine::session::Session;
 
 use self::people::People;
 use self::stand::Stand;
+use crate::fitting::Hand;
 use crate::tabs::{Body, UNNAMED, Workspace, left_panel, right_panel};
 use crate::theme::Theme;
 use crate::viewport::BodyView;
@@ -48,6 +49,28 @@ impl State {
             mesh: None,
             stand: Stand::default(),
             people: People::default(),
+        }
+    }
+
+    /// The body shaped here while no product is open.
+    ///
+    /// Handed out rather than kept to itself: with nothing on the table this
+    /// is the only body there is, and the cloth has to fall on the very one
+    /// these sliders write into.
+    pub fn loose(&self) -> &MeasureSet {
+        self.stand.loose()
+    }
+
+    /// Whether a control in this tab is in hand.
+    ///
+    /// The program asks before it re-solves the body the cloth falls on: a
+    /// value a hand is still moving is not one worth baking, and this tab
+    /// already holds its own view back on the same rule.
+    pub fn hand(&self) -> Hand {
+        if self.stand.held() {
+            Hand::Holding
+        } else {
+            Hand::Free
         }
     }
 

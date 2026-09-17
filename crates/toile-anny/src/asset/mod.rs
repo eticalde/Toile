@@ -166,6 +166,20 @@ pub fn encode(baked: &Baked) -> Vec<u8> {
     out
 }
 
+/// The format version an asset declares, and the fingerprint of its payload.
+///
+/// Read straight off the header rather than by decoding: a caller filing
+/// something under "the body data this build generates meshes from" wants the
+/// two numbers, not the seventeen megabytes behind them. `None` for bytes too
+/// short to carry a header or not opening with [`MAGIC`].
+pub fn stamp(bytes: &[u8]) -> Option<(u32, u64)> {
+    if bytes.len() < HEADER_LEN || bytes[0..8] != MAGIC {
+        return None;
+    }
+    let hash = u64::from_le_bytes(std::array::from_fn(|i| bytes[44 + i]));
+    Some((le_u32(bytes, 8), hash))
+}
+
 /// Reads a little-endian `u32` from the four bytes at `at`, which the caller
 /// has already checked lie inside `bytes`.
 fn le_u32(bytes: &[u8], at: usize) -> u32 {

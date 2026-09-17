@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use toile_engine::body::Collider;
 use toile_engine::couture::{ShapePipeline, transfer_state};
 use toile_engine::demo;
 use toile_engine::draft::{Command, Draft, Identity, PieceKey, Point, SegmentEdit, block};
@@ -155,7 +156,8 @@ fn seat(draft: &Draft, piece: PieceKey) -> usize {
 /// rebuilds off the interface thread, and the swap reaches the solver, which
 /// went on integrating the old mesh the entire time.
 fn front() -> Front {
-    let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
+    let mut session =
+        Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes");
     let verts_before = session.n_vertices();
     let nodes_before = session.contour_m().len();
     // A swap that carries nothing is not the case under test: the panel has to

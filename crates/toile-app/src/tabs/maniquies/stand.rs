@@ -114,6 +114,12 @@ impl Stand {
         }
     }
 
+    /// The body shaped while no product is open, which is written here and
+    /// nowhere else.
+    pub fn loose(&self) -> &MeasureSet {
+        &self.loose
+    }
+
     /// The shape the body is generated from. A body that never stored one
     /// stands at the adult default, and reading it writes nothing.
     pub fn shape(&self, session: &Session) -> BodyShape {

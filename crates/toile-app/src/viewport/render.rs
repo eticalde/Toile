@@ -1,9 +1,10 @@
+mod avatar;
 mod layout;
 mod pipeline;
 mod solid;
-mod sphere;
 mod tape;
 
+pub use avatar::Avatar;
 use eframe::egui_wgpu::RenderState;
 use eframe::wgpu;
 use layout::BufferPlan;
@@ -23,7 +24,8 @@ const UNIFORM_BYTES: u64 = 80;
 /// Renders the drape to an offscreen texture that egui shows as an image.
 ///
 /// One pipeline and two meshes in one pair of buffers: the cloth, re-uploaded
-/// each frame, and the avatar, written on every (re)allocation.
+/// each frame, and the body it falls on, written on every (re)allocation and
+/// whenever another body is solved.
 pub struct Renderer {
     pipeline: wgpu::RenderPipeline,
     vbuf: wgpu::Buffer,
@@ -40,31 +42,26 @@ pub struct Renderer {
     /// content: after a swap that happens to keep the counts, only the
     /// triangles themselves say the buffers are stale.
     indices: Vec<u32>,
-    /// The avatar's mesh, kept so a resize can re-upload it at its new offset.
-    sphere_verts: Vec<f32>,
-    sphere_idx: Vec<u32>,
+    /// The body the cloth falls on, kept so a resize can re-upload it at its
+    /// new offset.
+    avatar: Avatar,
 }
 
 impl Renderer {
-    /// `cloth_tris` indexes the cloth vertices; the avatar sphere is generated
-    /// here and lives behind the cloth in the same buffers.
+    /// `cloth_tris` indexes the cloth vertices; `avatar` is the body they fall
+    /// on, which lives behind the cloth in the same buffers.
     pub fn new(
         rs: &RenderState,
         theme: &Theme,
         n_cloth_verts: usize,
         cloth_tris: &[u32],
-        avatar_radius: f32,
+        avatar: Avatar,
     ) -> Self {
         let device = &rs.device;
         let (pipeline, bgl) = build_pipeline(device);
 
-        // Just inside the real radius, so the avatar does not fight the cloth
-        // resting on it for the depth buffer.
-        let (sphere_verts, sphere_idx) =
-            sphere::uv_sphere(avatar_radius * 0.995, 40, 20, theme.avatar);
-
-        let plan = layout::plan(n_cloth_verts, cloth_tris, &sphere_verts, &sphere_idx);
-        let (vbuf, ibuf) = alloc_buffers(rs, &plan, &sphere_verts);
+        let plan = layout::plan(n_cloth_verts, cloth_tris, &avatar);
+        let (vbuf, ibuf) = alloc_buffers(rs, &plan, &avatar);
 
         let ubuf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("toile-ubuf"),
@@ -94,8 +91,7 @@ impl Renderer {
             clear: theme.clear_color(),
             n_cloth_verts,
             indices: plan.indices,
-            sphere_verts,
-            sphere_idx,
+            avatar,
         }
     }
 
@@ -106,7 +102,7 @@ impl Renderer {
 
     /// Whether the buffers on hand were built for exactly this cloth.
     pub fn fits(&self, n_verts: usize, cloth_tris: &[u32]) -> bool {
-        let n_cloth_idx = self.indices.len() - self.sphere_idx.len();
+        let n_cloth_idx = self.indices.len() - self.avatar.idx.len();
         n_verts == self.n_cloth_verts && *cloth_tris == self.indices[..n_cloth_idx]
     }
 
@@ -118,11 +114,30 @@ impl Renderer {
     /// topology, which is what a mesh swap looks like when it does not
     /// flicker.
     pub fn resize(&mut self, rs: &RenderState, n_verts: usize, cloth_tris: &[u32]) {
-        let plan = layout::plan(n_verts, cloth_tris, &self.sphere_verts, &self.sphere_idx);
-        let (vbuf, ibuf) = alloc_buffers(rs, &plan, &self.sphere_verts);
+        let plan = layout::plan(n_verts, cloth_tris, &self.avatar);
+        let (vbuf, ibuf) = alloc_buffers(rs, &plan, &self.avatar);
         self.vbuf = vbuf;
         self.ibuf = ibuf;
         self.n_cloth_verts = n_verts;
+        self.indices = plan.indices;
+    }
+
+    /// Puts another body behind the cloth.
+    ///
+    /// A body is re-solved whenever a measurement moves, and the new one need
+    /// not carry the old one's vertex count, so both buffers are laid out
+    /// again and the cloth's triangles rebased over it. The cloth's own path
+    /// is untouched: it goes on writing into the same vertex buffer at the
+    /// same offset, which is why a body arriving does not interrupt the drape
+    /// drawn over it.
+    pub fn set_avatar(&mut self, rs: &RenderState, avatar: Avatar) {
+        let n_cloth_idx = self.indices.len() - self.avatar.idx.len();
+        let cloth_tris = self.indices[..n_cloth_idx].to_vec();
+        self.avatar = avatar;
+        let plan = layout::plan(self.n_cloth_verts, &cloth_tris, &self.avatar);
+        let (vbuf, ibuf) = alloc_buffers(rs, &plan, &self.avatar);
+        self.vbuf = vbuf;
+        self.ibuf = ibuf;
         self.indices = plan.indices;
     }
 
@@ -227,11 +242,15 @@ impl Renderer {
 }
 
 /// Creates the vertex and index buffers for a plan and uploads what only
-/// changes with the topology: the avatar's vertices and the index list.
+/// changes with the topology: the body's vertices and the index list.
+///
+/// Both writes are skipped when there is nothing to write. Before the first
+/// body is solved, and over a table with nothing draping, the buffers are
+/// empty and the queue has no business being handed a zero-length slice.
 fn alloc_buffers(
     rs: &RenderState,
     plan: &BufferPlan,
-    sphere_verts: &[f32],
+    avatar: &Avatar,
 ) -> (wgpu::Buffer, wgpu::Buffer) {
     let vbuf = rs.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("toile-vbuf"),
@@ -239,18 +258,22 @@ fn alloc_buffers(
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    rs.queue.write_buffer(
-        &vbuf,
-        plan.sphere_offset,
-        bytemuck::cast_slice(sphere_verts),
-    );
+    if !avatar.verts.is_empty() {
+        rs.queue.write_buffer(
+            &vbuf,
+            plan.avatar_offset,
+            bytemuck::cast_slice(&avatar.verts),
+        );
+    }
     let ibuf = rs.device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("toile-ibuf"),
         size: (plan.indices.len() * 4) as u64,
         usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
     });
-    rs.queue
-        .write_buffer(&ibuf, 0, bytemuck::cast_slice(&plan.indices));
+    if !plan.indices.is_empty() {
+        rs.queue
+            .write_buffer(&ibuf, 0, bytemuck::cast_slice(&plan.indices));
+    }
     (vbuf, ibuf)
 }

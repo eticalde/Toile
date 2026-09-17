@@ -1,3 +1,4 @@
+use toile_engine::body::Collider;
 use toile_engine::session::Session;
 
 use super::*;
@@ -27,7 +28,7 @@ fn body() -> Body<'static> {
 /// is false: the same value a simulation still working reports.
 #[test]
 fn a_table_with_no_sim_does_not_say_the_sim_is_running() {
-    let session = Session::blank();
+    let session = Session::blank(Collider::demo());
     let said = said(Tab::Probador, &session, body());
 
     assert_eq!(said, "sin simulación");
@@ -39,7 +40,7 @@ fn a_table_with_no_sim_does_not_say_the_sim_is_running() {
 /// The mannequin bar names the body the tab holds and counts its rows.
 #[test]
 fn the_maniquies_bar_names_the_body_the_tab_holds() {
-    let session = Session::blank();
+    let session = Session::blank(Collider::demo());
     assert_eq!(
         said(Tab::Maniquies, &session, body()),
         "Maniquí · 20 medidas · cm"
@@ -75,6 +76,6 @@ fn the_maniquies_bar_says_a_body_no_product_holds_is_not_kept() {
 /// The fabric bar reports nothing, because the tab holds nothing to report.
 #[test]
 fn the_telas_bar_names_no_fabric_the_app_does_not_have() {
-    let session = Session::blank();
+    let session = Session::blank(Collider::demo());
     assert_eq!(said(Tab::Telas, &session, body()), "");
 }

@@ -61,7 +61,7 @@ pub(super) struct Sim {
     state: State,
     cons: DistanceConstraints,
     seams: Seams,
-    sdf: SdfGrid,
+    sdf: Arc<SdfGrid>,
     tris: Vec<u32>,
     dt: f32,
     substeps_per_tick: u32,
@@ -77,7 +77,7 @@ impl Sim {
     pub(super) fn new(
         state: State,
         cons: DistanceConstraints,
-        sdf: SdfGrid,
+        sdf: Arc<SdfGrid>,
         tris: Vec<u32>,
         dt: f32,
         substeps_per_tick: u32,
@@ -144,6 +144,34 @@ impl Sim {
         let MeshSwap { tris, cons, .. } = *swap;
         self.cons = cons;
         self.tris = tris;
+        self.wake(generation);
+        Ok(())
+    }
+
+    /// Puts the drape on another body, carrying it out of one that has
+    /// swallowed it.
+    ///
+    /// A body that grew leaves cloth under its skin. Left for the ordinary
+    /// contact solve, every such particle would be pushed the whole way out
+    /// inside one substep and the velocity derived from that jump would fling
+    /// the garment off. `lift_out_of` moves it onto the new skin without
+    /// giving it that speed, so a measurement moved mid-drape re-drapes the
+    /// garment rather than throwing it.
+    ///
+    /// Nothing is re-dropped: the position and the motion the cloth already
+    /// had are the whole of what the person is looking at.
+    ///
+    /// # Errors
+    /// `StaleMessage::Generation` when a later message has already been
+    /// applied, which means this body was superseded before it landed.
+    pub(super) fn apply_collider(
+        &mut self,
+        generation: u64,
+        sdf: Arc<SdfGrid>,
+    ) -> Result<(), StaleMessage> {
+        self.fresh(generation)?;
+        self.sdf = sdf;
+        xpbd::lift_out_of(&self.sdf, &mut self.state);
         self.wake(generation);
         Ok(())
     }

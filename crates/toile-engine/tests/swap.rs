@@ -6,6 +6,7 @@
 
 use std::time::{Duration, Instant};
 
+use toile_engine::body::Collider;
 use toile_engine::couture::{self, COMPLIANCE, MeshSwap, ShapePipeline};
 use toile_engine::draft::{
     Binding, Command, Draft, Identity, PieceKey, Point, PointKey, SegmentEdit, block,
@@ -187,7 +188,8 @@ fn substeps_past(session: &Session, mark: u64) -> u64 {
 /// The whole point of the shadow rebuild: the solver never waits for it.
 #[test]
 fn the_solver_keeps_integrating_while_the_worker_meshes() {
-    let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
+    let mut session =
+        Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes");
     let before = substeps_past(&session, 0);
     assert!(before > 0, "the sim thread is running");
     let nodes = session.contour_m().len();
@@ -223,7 +225,8 @@ fn the_solver_keeps_integrating_while_the_worker_meshes() {
 /// the mesh it belongs to and reaches the solver with it.
 #[test]
 fn a_drag_during_the_rebuild_reaches_the_new_mesh() {
-    let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
+    let mut session =
+        Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes");
     let command = insert(&mut session);
     session.edit(command).expect("a node goes into the contour");
 
@@ -258,7 +261,8 @@ fn shift(session: &Session) -> Command {
 /// piece comes back with the mesh it had before the insertion.
 #[test]
 fn undoing_an_insertion_meshes_the_piece_back() {
-    let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
+    let mut session =
+        Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes");
     let vertices = session.n_vertices();
     let command = insert(&mut session);
     session.edit(command).expect("a node goes into the contour");
@@ -277,7 +281,8 @@ fn undoing_an_insertion_meshes_the_piece_back() {
 /// swap can be told from one of the mesh now on the table.
 #[test]
 fn the_mesh_generation_moves_with_the_swap_alone() {
-    let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
+    let mut session =
+        Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes");
     assert_eq!(session.mesh_generation(), 0);
     let moved = shift(&session);
     session.edit(moved).expect("a shape edit derives");

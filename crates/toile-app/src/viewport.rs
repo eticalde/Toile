@@ -9,6 +9,7 @@ mod render;
 
 pub use body::BodyView;
 use camera::{Camera, norm3};
+pub use render::Avatar;
 
 use crate::theme::Theme;
 use crate::widgets::canvas_label;
@@ -67,14 +68,21 @@ impl Viewport {
         theme: &Theme,
         n_verts: usize,
         tris: &[u32],
-        avatar_radius: f32,
+        avatar: Avatar,
     ) -> Self {
         Self {
-            renderer: render::Renderer::new(rs, theme, n_verts, tris, avatar_radius),
-            camera: Camera::default(),
+            renderer: render::Renderer::new(rs, theme, n_verts, tris, avatar),
+            // The framing the mannequin tab already uses, because it is the
+            // same body: a person head to feet, not a ball 30 cm across.
+            camera: Camera::for_body(),
             vertices: vec![0.0; n_verts * VERTEX_FLOATS],
             cloth: theme.cloth,
         }
+    }
+
+    /// Puts another body behind the cloth, leaving the drape alone.
+    pub fn set_avatar(&mut self, rs: &RenderState, avatar: Avatar) {
+        self.renderer.set_avatar(rs, avatar);
     }
 
     pub fn show(

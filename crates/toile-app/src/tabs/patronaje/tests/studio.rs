@@ -1,5 +1,6 @@
 use eframe::egui::epaint::ClippedShape;
 use eframe::egui::{self, Event, Id, Key, Modifiers, Pos2, RawInput, Rect, pos2, vec2};
+use toile_engine::body::Collider;
 use toile_engine::draft::{Doc, PointKey};
 use toile_engine::session::Session;
 
@@ -37,7 +38,7 @@ impl Studio {
         let theme = Theme::sastreria();
         theme.apply(&ctx);
         Studio {
-            session: Session::from_doc(doc).expect("the product opens"),
+            session: Session::from_doc(doc, Collider::demo()).expect("the product opens"),
             state: State::default(),
             ctx,
             theme,

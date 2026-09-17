@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::couture::{COMPLIANCE, ShapePipeline};
 
@@ -16,11 +18,22 @@ fn sim(pipe: &ShapePipeline) -> Sim {
     Sim::new(
         State::new(pipe.pos2d.len()),
         pipe.constraints(COMPLIANCE),
-        SdfGrid::sphere(8, 0.25, [-1.0, -1.0, -1.0], [0.0, 0.0, 0.0], 0.15),
+        ball(0.15),
         pipe.tris.clone(),
         1.0 / 600.0,
         10,
     )
+}
+
+/// A sphere at the origin, as the sim thread takes one.
+fn ball(radius: f32) -> Arc<SdfGrid> {
+    Arc::new(SdfGrid::sphere(
+        8,
+        0.25,
+        [-1.0, -1.0, -1.0],
+        [0.0, 0.0, 0.0],
+        radius,
+    ))
 }
 
 /// The rest lengths of one mesh must never be copied onto another. The

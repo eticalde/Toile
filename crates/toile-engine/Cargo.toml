@@ -9,6 +9,11 @@ publish = false
 [dependencies]
 arc-swap = "1"
 crossbeam-channel = "0.5"
+# Pinned, not caret, like kurbo: the SDF bake's sign comes from an angle, the
+# angle from this crate's `acos`, and its determinism is that it is the same
+# code on every platform rather than that it is correctly rounded. A bump is
+# a new bake version and regenerated SDF goldens in the same commit.
+libm = "=0.2.16"
 thiserror = "2"
 toile-anny = { path = "../toile-anny" }
 toile-doc = { path = "../toile-doc" }

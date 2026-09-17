@@ -1,4 +1,5 @@
 use eframe::egui::{self, Event, Key, Modifiers, Pos2, RawInput, Rect, vec2};
+use toile_engine::body::Collider;
 use toile_engine::draft::{Doc, MeasureSet, Piece, PieceKey, Point, Winding, block};
 use toile_engine::session::Session;
 
@@ -21,7 +22,7 @@ impl Bench {
         let theme = Theme::sastreria();
         theme.apply(&ctx);
         Bench {
-            session: Session::from_doc(doc).expect("the product opens"),
+            session: Session::from_doc(doc, Collider::demo()).expect("the product opens"),
             state: State::default(),
             ctx,
             theme,

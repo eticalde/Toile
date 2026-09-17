@@ -1,5 +1,6 @@
+mod autosave;
+
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
 
 use eframe::egui;
 use toile_engine::draft::Doc;
@@ -8,10 +9,6 @@ use toile_engine::session::{Session, SessionError};
 
 use crate::file::{self, Action, File};
 use crate::{config, tabs};
-
-/// How long the document sits still before an autosave writes it: long enough
-/// that a burst of edits coalesces into one write, short enough to keep work.
-const AUTOSAVE_IDLE: Duration = Duration::from_millis(800);
 
 impl crate::App {
     /// Where a file dialog should open: the last folder used, else the default
@@ -26,15 +23,31 @@ impl crate::App {
         Some(dir)
     }
 
-    /// Puts a document on the table.
+    /// Puts a document on the table, over the body it resolves against.
+    ///
+    /// The body is fetched before the session is built, because building one
+    /// seeds its drape at the height that body decides. Handing it over a
+    /// frame later would be too late: the garment would already have been let
+    /// go inside this body, at the height of whatever stood here before.
     ///
     /// # Errors
     /// `SessionError` when the document does not drape, in which case the
     /// table is left exactly as it was.
     fn open(&mut self, doc: Doc) -> Result<(), SessionError> {
-        let session = Session::from_doc(doc)?;
+        let body = self.fitting.body_for(Some(&doc), self.maniquies.loose());
+        let session = Session::from_doc(doc, body)?;
         self.install(session);
         Ok(())
+    }
+
+    /// Puts a blank table on, over the body the fitting has in hand.
+    ///
+    /// A product with no document of its own is still fitted to a body: the
+    /// first piece drawn on it is let go at that body's height, and the table
+    /// has to be holding the body by then.
+    fn install_blank(&mut self) {
+        let blank = Session::blank(self.fitting.body_for(None, self.maniquies.loose()));
+        self.install(blank);
     }
 
     /// Puts a session on the table.
@@ -72,7 +85,7 @@ impl crate::App {
     /// written, it opens under its name in memory until saved by hand, and
     /// the bar says so.
     fn create_named(&mut self, title: String) {
-        self.install(Session::blank());
+        self.install_blank();
         let now = self.session.revision();
         if let Some(path) = self.place_new(&title) {
             self.prefs.remember(&path);
@@ -95,51 +108,6 @@ impl crate::App {
         let text = self.session.draft()?.doc().to_canonical_json();
         file::write(&path, &text).ok()?;
         Some(path)
-    }
-
-    /// Writes the document back to its file once it has sat still long enough,
-    /// so a placed product keeps itself. Every edit restarts the clock and asks
-    /// for a frame, so a burst coalesces into one write that lands even when
-    /// the app is otherwise idle; only a product with a home autosaves.
-    pub(crate) fn autosave(&mut self, ctx: &egui::Context) {
-        let revision = self.session.revision();
-        if self.file.path().is_none() || !self.file.dirty(revision) {
-            self.autosave_due = None;
-            return;
-        }
-        if revision != self.autosave_rev {
-            self.autosave_rev = revision;
-            self.autosave_due = Some(Instant::now() + AUTOSAVE_IDLE);
-        }
-        let Some(due) = self.autosave_due else {
-            return;
-        };
-        if let Some(left) = due.checked_duration_since(Instant::now()) {
-            ctx.request_repaint_after(left);
-        } else {
-            self.autosave_due = None;
-            self.autosave_now();
-        }
-    }
-
-    /// Writes the document back where it lives, quietly: the dirty marker
-    /// clearing is the whole of the report, and a fault raises a notice.
-    fn autosave_now(&mut self) {
-        let revision = self.session.revision();
-        let Some(path) = self.file.path().map(Path::to_path_buf) else {
-            return;
-        };
-        let Some(text) = self
-            .session
-            .draft()
-            .map(|held| held.doc().to_canonical_json())
-        else {
-            return;
-        };
-        match file::write(&path, &text) {
-            Ok(()) => self.file.settle(Some(path), revision),
-            Err(why) => self.file.warn(why, revision),
-        }
     }
 
     /// The dialog that names a new product, shown while `new_product` is set.
@@ -195,7 +163,7 @@ impl crate::App {
                     return;
                 }
             }
-            None => self.install(Session::blank()),
+            None => self.install_blank(),
         }
         let now = self.session.revision();
         self.file.settle(None, now);

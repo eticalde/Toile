@@ -1,4 +1,5 @@
 use eframe::egui::{Pos2, Rect, pos2, vec2};
+use toile_engine::body::Collider;
 use toile_engine::draft::{Axis, Binding, Command, Doc, MeasureSet, Piece, Point, Winding, block};
 
 use super::*;
@@ -135,7 +136,8 @@ fn the_plus_row_asks_for_a_product_before_it_opens_a_drawing() {
 /// edited either way.
 #[test]
 fn an_edit_the_session_refuses_is_said_in_the_status_bar() {
-    let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
+    let mut session =
+        Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes");
     let piece = session.piece().expect("the session has a document");
     let node = session
         .draft()

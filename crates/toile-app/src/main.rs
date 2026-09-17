@@ -6,6 +6,7 @@ mod bind;
 mod config;
 mod document;
 mod file;
+mod fitting;
 mod glyph;
 mod library;
 mod pattern;
@@ -56,6 +57,9 @@ struct App {
     session: Session,
     rs: RenderState,
     file: File,
+    /// The body the product is fitted to: solved here, baked off this thread,
+    /// and handed to the solver and the fitting room.
+    fitting: fitting::Fitting,
     patronaje: tabs::patronaje::State,
     probador: tabs::probador::State,
     maniquies: tabs::maniquies::State,
@@ -78,19 +82,27 @@ impl App {
     fn new(cc: &eframe::CreationContext<'_>, prefs: config::Prefs) -> Self {
         let theme = Theme::sastreria();
         theme.apply(&cc.egui_ctx);
-        let session = Session::demo_bodice();
         let rs = cc
             .wgpu_render_state
             .clone()
             .expect("eframe was configured with the wgpu renderer");
-        let probador = tabs::probador::State::new(rs.clone(), &theme, &session);
         let maniquies = tabs::maniquies::State::new(rs.clone(), &theme);
+        // The body before the scene: a garment is let go at a height the body
+        // it falls on decides and nothing ever re-drops it, so the first one
+        // is waited for rather than swapped in late. The window is built by
+        // now, but stays hidden until the first frame is painted, so the wait
+        // shows as a later launch and not as a freeze; the second run reads
+        // the field off the disk instead.
+        let fitting = fitting::Fitting::open(maniquies.loose());
+        let session = Session::demo_bodice_over(fitting.body());
+        let probador = tabs::probador::State::new(rs.clone(), &theme, &session);
         Self {
             theme,
             tab: Tab::Patronaje,
             session,
             rs,
             file: File::default(),
+            fitting,
             patronaje: tabs::patronaje::State::default(),
             probador,
             maniquies,
@@ -154,6 +166,25 @@ impl eframe::App for App {
         if let Err(why) = self.session.poll_remesh() {
             self.patronaje.refused = Some(why.to_string());
         }
+        // The body the drape falls on, brought in line with the product before
+        // anything draws it. The solve costs milliseconds; the bake it may
+        // start runs on its own thread and lands on some later frame.
+        // Only the tab that took a control in hand ever lets go of it, so a
+        // gesture still open when another tab takes the front would hold the
+        // gate shut for the rest of the run and the body would never catch up
+        // again. The tab read here is last frame's, which is the one whose
+        // drawing had the chance to release it.
+        let hand = if self.tab == tabs::Tab::Maniquies {
+            self.maniquies.hand()
+        } else {
+            fitting::Hand::Free
+        };
+        if self
+            .fitting
+            .settle(&mut self.session, self.maniquies.loose(), hand)
+        {
+            ui.ctx().request_repaint();
+        }
         let revision = self.session.revision();
         let asked = bars::top(ui, &self.theme, &mut self.tab, &self.file, revision);
         bars::status(
@@ -173,6 +204,7 @@ impl eframe::App for App {
             maniquies: &mut self.maniquies,
             shelf: &mut self.shelf,
             band: &mut self.band,
+            fitting: &mut self.fitting,
         };
         self.tab.show(ui, &mut workspace);
         if let Some(action) = self

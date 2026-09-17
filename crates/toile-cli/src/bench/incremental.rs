@@ -162,7 +162,7 @@ pub fn run_async() {
     let handle = sync::spawn(
         demo::drop_state(&pipe),
         cons,
-        demo::avatar_sdf(),
+        std::sync::Arc::new(demo::avatar_sdf()),
         pipe.tris.clone(),
         DT,
         10,

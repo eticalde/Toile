@@ -7,6 +7,7 @@ mod hover;
 
 use eframe::egui::{self, Rect, pos2, vec2};
 use toile_engine::body;
+use toile_engine::body::Collider;
 use toile_engine::draft::{BodyShape, Command, Doc, MeasureSet};
 use toile_engine::session::Session;
 
@@ -18,7 +19,8 @@ use crate::theme::Theme;
 
 /// The base block Toile ships, open on the table, and the tab over it.
 pub(super) fn product() -> (Session, Stand) {
-    let session = Session::from_doc(File::example()).expect("the shipped block drapes");
+    let session =
+        Session::from_doc(File::example(), Collider::demo()).expect("the shipped block drapes");
     (session, Stand::default())
 }
 
@@ -116,7 +118,7 @@ fn a_shape_given_in_the_tab_survives_saving_and_reopening() {
         "a shaped body is version 2"
     );
     let doc = Doc::from_json(&file).expect("what the product writes it reads back");
-    let reopened = Session::from_doc(doc).expect("the shaped block drapes");
+    let reopened = Session::from_doc(doc, Collider::demo()).expect("the shaped block drapes");
     assert_eq!(Stand::default().shape(&reopened), shape);
 
     session.undo().expect("the shape undoes");
@@ -257,9 +259,10 @@ fn the_body_is_solved_again_only_when_its_tape_or_shape_changed() {
     stand.settle(&mut session);
     assert!(stand.due(&session), "another body chosen");
 
-    session = Session::blank();
+    session = Session::blank(Collider::demo());
     let _ = stand.rebuild(&session);
-    session = Session::from_doc(File::example()).expect("the shipped block drapes");
+    session =
+        Session::from_doc(File::example(), Collider::demo()).expect("the shipped block drapes");
     assert!(stand.due(&session), "another product opened at revision 0");
 }
 

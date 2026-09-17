@@ -11,6 +11,7 @@ mod solver;
 mod state;
 
 pub use color::{ColoredConstraints, color_constraints};
+pub use contact::lift_out_of;
 pub use damping::{KineticDamper, zero_velocities};
 pub use metrics::{kinetic_energy, max_speed, position_hash};
 pub use normals::vertex_normals;

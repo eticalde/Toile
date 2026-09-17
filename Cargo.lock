@@ -3210,6 +3210,7 @@ version = "0.1.0"
 dependencies = [
  "arc-swap",
  "crossbeam-channel",
+ "libm",
  "thiserror 2.0.20",
  "toile-anny",
  "toile-doc",

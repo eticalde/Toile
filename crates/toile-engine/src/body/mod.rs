@@ -9,6 +9,16 @@ pub use toile_anny::{BodyMesh, body_mesh};
 
 use crate::draft::{BodyShape, MeasureSet};
 
+/// Turning a body mesh into the signed distance field the solver collides
+/// against.
+pub mod bake;
+/// Baked fields kept between runs, so a body is baked once and not once a run.
+pub mod cache;
+/// The body a drape falls on, and where a garment is let go over it.
+mod collider;
+pub use collider::{CLEARANCE, Collider};
+/// The bake, on a thread of its own.
+pub mod oven;
 /// Solving the Anny body's levers against a measure set.
 mod solve;
 pub use solve::{AnnySolve, SolvedRow, solve_anny};

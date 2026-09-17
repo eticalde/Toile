@@ -39,6 +39,7 @@ pub(crate) fn decoded() -> &'static Baked {
 /// morphed body sits wherever they leave it. The distinction is invisible
 /// while one asset ships — the camera is framed on the template — and is the
 /// whole of the framing the moment a second body is baked.
+#[derive(Clone)]
 pub struct BodyMesh {
     /// Vertex positions as xyz triples.
     pub positions: Vec<f32>,

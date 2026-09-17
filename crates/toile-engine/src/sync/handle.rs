@@ -22,6 +22,17 @@ enum Msg {
         generation: u64,
         swap: Box<MeshSwap>,
     },
+    /// A body re-solved elsewhere, for the drape to carry on against.
+    ///
+    /// Shared rather than boxed, for the same reason `MeshSwap` is boxed: a
+    /// baked body is tens of megabytes of voxels, and they must not widen
+    /// every message the thread receives. An `Arc` is one pointer either way,
+    /// and it lets the session keep the very field it handed over, so seeding
+    /// a newly drawn piece against this body copies nothing at all.
+    Collider {
+        generation: u64,
+        sdf: Arc<SdfGrid>,
+    },
     Stop,
 }
 
@@ -45,6 +56,15 @@ impl SimHandle {
     /// the interface thread and out of the drape.
     pub fn send_swap(&self, generation: u64, swap: Box<MeshSwap>) {
         let _ = self.tx.send(Msg::MeshSwap { generation, swap });
+    }
+
+    /// Hands the sim the body to collide against from now on. Does not block.
+    ///
+    /// The drape carries on against the body it has until the message reaches
+    /// the top of the mailbox, which is what keeps a re-solved body off the
+    /// interface thread.
+    pub fn send_collider(&self, generation: u64, sdf: Arc<SdfGrid>) {
+        let _ = self.tx.send(Msg::Collider { generation, sdf });
     }
 
     /// The most recent published snapshot. Does not block.
@@ -80,7 +100,7 @@ impl Drop for SimHandle {
 pub fn spawn(
     state: State,
     cons: DistanceConstraints,
-    sdf: SdfGrid,
+    sdf: Arc<SdfGrid>,
     tris: Vec<u32>,
     dt: f32,
     substeps_per_tick: u32,
@@ -176,6 +196,7 @@ fn drain(rx: &crossbeam_channel::Receiver<Msg>, first: Option<Msg>, sim: &mut Si
             Msg::Stop => return Drained::Stop,
             Msg::RestUpdate { generation, rests } => sim.apply_rests(generation, &rests),
             Msg::MeshSwap { generation, swap } => sim.apply_swap(generation, swap),
+            Msg::Collider { generation, sdf } => sim.apply_collider(generation, sdf),
         };
         if let Err(why) = taken {
             sim.refuse(why);

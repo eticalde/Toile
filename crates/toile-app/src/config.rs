@@ -123,6 +123,25 @@ pub fn library_dir() -> Option<PathBuf> {
     )
 }
 
+/// The folder baked body fields are kept in, beside the library of people.
+///
+/// Under the data directory and not the cache one: a body field is tens of
+/// megabytes and costs half a second to make again, and the platform is free
+/// to empty a cache folder whenever it likes. It holds voxels and a hash and
+/// never a name or a tape, but it is derived from body measurements, so it
+/// stays on the machine beside the people it was derived from.
+///
+/// A test build has no such function, so no test can name the real cache:
+/// every test hands the cache a scratch folder instead.
+#[cfg(not(test))]
+pub fn cache_dir() -> Option<PathBuf> {
+    Some(
+        base_dir(Base::Data, |name| std::env::var_os(name))?
+            .join(APP)
+            .join("sdf"),
+    )
+}
+
 /// The folder patterns are kept in by default, where the file dialogs open
 /// until the person has saved somewhere else.
 ///

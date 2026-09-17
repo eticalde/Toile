@@ -18,10 +18,16 @@ fn main() {
             eprintln!("drape golden en {:.2} s", t.elapsed().as_secs_f64());
             println!("{hash:#018x}");
         }
+        Some("drape-anny") => {
+            let t = std::time::Instant::now();
+            let hash = toile_engine::golden::drape_on_anny_hash();
+            eprintln!("drape sobre Anny en {:.2} s", t.elapsed().as_secs_f64());
+            println!("{hash:#018x}");
+        }
         _ => {
             println!("toile {}", env!("CARGO_PKG_VERSION"));
             println!(
-                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · doc [RUTA] [--resolve-with NOMBRE]"
+                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · doc [RUTA] [--resolve-with NOMBRE]"
             );
         }
     }

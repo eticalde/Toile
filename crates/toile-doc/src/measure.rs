@@ -139,6 +139,16 @@ impl MeasureSet {
         self.values.contains_key(measure)
     }
 
+    /// The fingerprint of the tape and the shape this body is generated from.
+    ///
+    /// The very hash a library link is stamped with, so the two cannot come to
+    /// disagree about when two bodies are the same body: the name, and where
+    /// the values were copied from, are deliberately not in it. Anything
+    /// derived from a body and kept between runs is filed under this.
+    pub fn fingerprint(&self) -> String {
+        crate::persona::fingerprint::of(&self.values, self.phenotype.as_ref())
+    }
+
     /// Every name the set carries that the catalogue does not name.
     pub fn uncatalogued(&self) -> Vec<&str> {
         self.values

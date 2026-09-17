@@ -6,10 +6,11 @@ use eframe::egui::{
 use eframe::egui_wgpu::RenderState;
 use toile_engine::session::Session;
 
+use crate::fitting::Fitting;
 use crate::pattern;
 use crate::tabs::{UNNAMED, Workspace, right_panel};
 use crate::theme::Theme;
-use crate::viewport::Viewport;
+use crate::viewport::{Avatar, Viewport};
 use crate::widgets::{
     PAD, button_ghost_icon, field_row, footer_note, readout, section, section_with,
 };
@@ -33,28 +34,35 @@ pub struct State {
     viewport: Viewport,
     /// The node being dragged on the 2D half, while one is.
     drag: Option<pattern::Drag>,
+    /// Which solve the body on the view came from, so a frame that changed
+    /// nothing uploads nothing.
+    body_at: Option<u64>,
 }
 
 impl State {
     pub fn new(rs: RenderState, theme: &Theme, session: &Session) -> Self {
+        // No body until the fitting has solved one. The first frame that finds
+        // one puts it behind the cloth.
         let viewport = Viewport::new(
             &rs,
             theme,
             session.n_vertices(),
             session.triangles(),
-            session.avatar_radius(),
+            Avatar::none(),
         );
         Self {
             rs,
             viewport,
             drag: None,
+            body_at: None,
         }
     }
 }
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
-    sub_bar(ui, theme, w.session);
+    let body = body_note(w.fitting);
+    sub_bar(ui, theme, w.session, &body);
     right_panel(ui, theme, |ui| inspector(ui, theme, w.session));
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let full = ui.available_size();
@@ -64,6 +72,13 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
             let st = &mut *w.probador;
             pattern::show(ui, half, theme, w.session, &mut st.drag);
             gutter(ui, theme, full.y);
+            if st.body_at != Some(w.fitting.solves())
+                && let Some(mesh) = w.fitting.mesh()
+            {
+                st.viewport
+                    .set_avatar(&st.rs, Avatar::body(mesh, theme.avatar));
+                st.body_at = Some(w.fitting.solves());
+            }
             st.viewport.show(ui, half, &st.rs, theme, w.session);
         });
     });
@@ -83,7 +98,7 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
 /// a swapped mesh and a shutdown, and nothing else: there is no pause to ask
 /// for, no resume, and no starting state to go back to. They keep their room
 /// so that the phase which builds them moves nothing on this bar.
-fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session) {
+fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session, body: &str) {
     egui::Panel::top("probador-subbar")
         .exact_size(SUBBAR_H)
         .frame(
@@ -93,9 +108,10 @@ fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session) {
         )
         .show(ui, |ui| {
             ui.horizontal_centered(|ui| {
-                if let Some(body) = fitted(session) {
-                    readout(ui, theme, "maniquí", body, 150.0);
+                if let Some(named) = fitted(session) {
+                    readout(ui, theme, "maniquí", named, 150.0);
                 }
+                readout(ui, theme, "cuerpo", body, 170.0);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     button_ghost_icon(ui, theme, "Reiniciar", reset_icon);
@@ -138,6 +154,23 @@ fn inspector(ui: &mut egui::Ui, theme: &Theme, session: &Session) {
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         footer_note(ui, theme, NOTE);
     });
+}
+
+/// What the body on the stand cost, and where it came from.
+///
+/// The bake runs on its own thread and the drape is never held up waiting for
+/// it, so a person who moves a measurement sees the body change before the
+/// field behind it does. This is the whole of the report, and it belongs on
+/// the bar that names the body rather than in a dialog nobody asked for.
+fn body_note(fitting: &Fitting) -> String {
+    if let Some(why) = fitting.refused.as_deref() {
+        return why.to_owned();
+    }
+    match &fitting.cost {
+        Some(cost) if cost.cached => "en caché".to_owned(),
+        Some(cost) => format!("horneado en {:.0} ms", cost.ms),
+        None => "horneando…".to_owned(),
+    }
 }
 
 /// The body the document on the table resolves against, by name.

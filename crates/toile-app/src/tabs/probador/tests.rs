@@ -1,4 +1,5 @@
 use eframe::egui::{Rect, pos2, vec2};
+use toile_engine::body::Collider;
 use toile_engine::draft::block;
 
 use super::*;
@@ -33,8 +34,8 @@ fn panel(session: &Session) {
 /// document that has no seams as readily as one that has two.
 #[test]
 fn the_seam_table_paints_with_and_without_a_document() {
-    panel(&Session::blank());
-    let session = Session::from_doc(block::trousers()).expect("the block opens");
+    panel(&Session::blank(Collider::demo()));
+    let session = Session::from_doc(block::trousers(), Collider::demo()).expect("the block opens");
     assert_eq!(
         seams::measured(session.draft().expect("a document")).len(),
         2
@@ -46,11 +47,11 @@ fn the_seam_table_paints_with_and_without_a_document() {
 /// box: a product made from scratch carries a mannequin nobody has named.
 #[test]
 fn the_bar_names_the_body_even_when_the_document_has_not() {
-    let blank = Session::blank();
+    let blank = Session::blank(Collider::demo());
     assert_eq!(fitted(&blank), Some(UNNAMED));
-    let session = Session::from_doc(block::trousers()).expect("the block opens");
+    let session = Session::from_doc(block::trousers(), Collider::demo()).expect("the block opens");
     assert_eq!(fitted(&session), Some("Etienne"));
 
-    paint(|ui, theme| sub_bar(ui, theme, &session));
-    paint(|ui, theme| sub_bar(ui, theme, &blank));
+    paint(|ui, theme| sub_bar(ui, theme, &session, "en caché"));
+    paint(|ui, theme| sub_bar(ui, theme, &blank, "horneando…"));
 }

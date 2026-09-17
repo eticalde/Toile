@@ -25,7 +25,7 @@ const PRIME: u64 = 0x0100_0000_01b3;
 
 /// The fingerprint of a tape and a phenotype, as `Snapshot::fingerprint`
 /// defines it.
-pub(super) fn of(values: &BTreeMap<String, f64>, phenotype: Option<&BodyShape>) -> String {
+pub(crate) fn of(values: &BTreeMap<String, f64>, phenotype: Option<&BodyShape>) -> String {
     let text = canonical_bytes(&Copied { values, phenotype });
     format!("{:016x}", fnv1a(&text))
 }

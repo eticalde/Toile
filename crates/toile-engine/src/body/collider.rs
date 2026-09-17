@@ -1,0 +1,139 @@
+use std::sync::{Arc, OnceLock};
+
+use toile_anny::BodyMesh;
+use toile_sim::xpbd::SdfGrid;
+
+use super::bake::{self, BakeError};
+use crate::{couture, demo};
+
+/// How far above a body a garment is let go, in metres.
+///
+/// The demo scene's own gap, read back off it: its sphere reaches 0.15 m and
+/// the bodice is released at 0.35. Deriving every other body's release from
+/// that same gap is what puts one rule behind both, instead of a literal for
+/// the sphere and a guess for a person.
+pub const CLEARANCE: f32 = 0.20;
+
+/// The body a drape falls on: the field the solver collides against, and
+/// where a garment is let go over it.
+///
+/// The field's own box answers neither question. The demo sphere bakes a
+/// 1.4 m cube around a ball 30 cm across, so a height taken off the grid
+/// would release the bodice most of a metre above a body that is not there.
+/// What travels here is the body's own extent.
+///
+/// Cloning is cheap and shares the voxels: the field is written once by the
+/// bake and read for the rest of its life.
+#[derive(Clone)]
+pub struct Collider {
+    field: Arc<SdfGrid>,
+    release: f32,
+    lo: [f32; 3],
+    hi: [f32; 3],
+}
+
+impl Collider {
+    /// The eternal fixture: the demo sphere, released from the height the
+    /// goldens were taken at.
+    ///
+    /// The release is [`couture::DROP_HEIGHT`] itself rather than the sphere's
+    /// top plus [`CLEARANCE`]. The two agree to the centimetre and not to the
+    /// bit, and this one is the number the drape golden stands on.
+    pub fn demo() -> Collider {
+        let r = demo::AVATAR_RADIUS;
+        Collider {
+            field: demo_field(),
+            release: couture::DROP_HEIGHT,
+            lo: [-r; 3],
+            hi: [r; 3],
+        }
+    }
+
+    /// Bakes a body mesh into the field a garment will fall on.
+    ///
+    /// Half a second and tens of megabytes for an adult, so this belongs off
+    /// whatever thread is drawing — see [`super::oven`].
+    ///
+    /// # Errors
+    /// `BakeError` when the mesh is not the closed, orientable surface the
+    /// sign needs; see [`bake::sdf`].
+    pub fn bake(mesh: &BodyMesh) -> Result<Collider, BakeError> {
+        Ok(Collider::over(bake::sdf(mesh)?, mesh))
+    }
+
+    /// A field already baked, put back over the body it was baked from.
+    ///
+    /// The cache stores the voxels and not the body, so the extent is measured
+    /// from the mesh again rather than written down twice and trusted.
+    pub(crate) fn over(field: SdfGrid, mesh: &BodyMesh) -> Collider {
+        let (lo, hi) = extent(&mesh.positions);
+        Collider {
+            field: Arc::new(field),
+            release: hi[1] + CLEARANCE,
+            lo,
+            hi,
+        }
+    }
+
+    /// Where a garment is let go over this body, in metres.
+    pub fn release_height(&self) -> f32 {
+        self.release
+    }
+
+    /// The body's lowest and highest corner, in metres.
+    pub fn extent(&self) -> ([f32; 3], [f32; 3]) {
+        (self.lo, self.hi)
+    }
+
+    /// Whether a point is under this body's skin.
+    ///
+    /// The field's own sign, read exactly where and how the solver reads it,
+    /// so that "inside the body" cannot come to mean one thing to a caller
+    /// asking and another to the drape being asked about.
+    pub fn contains(&self, p: [f32; 3]) -> bool {
+        self.field.sample(p[0], p[1], p[2]) < 0.0
+    }
+
+    /// Samples along x, y and z.
+    pub fn dims(&self) -> [usize; 3] {
+        self.field.dims
+    }
+
+    /// The field itself, for a caller inside the engine that collides against
+    /// it directly rather than through the sim thread.
+    pub(crate) fn field(&self) -> &SdfGrid {
+        &self.field
+    }
+
+    /// The field as the sim thread takes it: a second owner of the same
+    /// voxels, so handing a body to the solver copies a pointer and not forty
+    /// megabytes.
+    pub(crate) fn shared(&self) -> Arc<SdfGrid> {
+        self.field.clone()
+    }
+}
+
+/// The demo sphere's field, baked once per process and shared from there.
+///
+/// Every session that has not been handed a body falls back to it, including
+/// a blank table that never drapes anything, and 16.7 million samples of a
+/// field that cannot change is not a cost worth paying per session.
+/// [`demo::avatar_sdf`] itself is untouched: the goldens go on building their
+/// own through it, exactly as they always have.
+fn demo_field() -> Arc<SdfGrid> {
+    static ONCE: OnceLock<Arc<SdfGrid>> = OnceLock::new();
+    ONCE.get_or_init(|| Arc::new(demo::avatar_sdf())).clone()
+}
+
+/// The lowest and highest corner of a run of xyz positions.
+fn extent(positions: &[f32]) -> ([f32; 3], [f32; 3]) {
+    let mut lo = [f32::INFINITY; 3];
+    let mut hi = [f32::NEG_INFINITY; 3];
+    for p in positions.as_chunks::<3>().0 {
+        for c in 0..3 {
+            lo[c] = lo[c].min(p[c]);
+            hi[c] = hi[c].max(p[c]);
+        }
+    }
+    (lo, hi)
+}

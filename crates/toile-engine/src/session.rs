@@ -1,5 +1,7 @@
+mod collider;
 mod edit;
 mod error;
+mod open;
 mod pieces;
 mod remesh;
 mod seam;
@@ -14,9 +16,9 @@ pub use seam::{SeamFault, pair_seam_anchored};
 pub use slot::PieceSlot;
 use spawn::{drape_piece, spawn_sim};
 
+use crate::body::Collider;
 use crate::couture::COMPLIANCE;
-use crate::demo;
-use crate::draft::{Doc, Draft, MeasureSet, PieceKey};
+use crate::draft::{Draft, PieceKey};
 use crate::sync::{SimHandle, Snapshot};
 
 /// Simulated seconds per substep.
@@ -44,6 +46,10 @@ pub struct Session {
     drafted: Option<Drafted>,
     /// The sim thread, spawned only once a piece drapes.
     handle: Option<SimHandle>,
+    /// The body the drape falls on. Held here and not only on the sim thread
+    /// because a piece drawn later has to be let go over this body rather
+    /// than over the one the demo scene ships with.
+    collider: Collider,
     /// The mesher, started the first time a topology edit needs it: a session
     /// that only ever moves points never pays for a thread.
     remesher: Option<Remesher>,
@@ -62,69 +68,6 @@ pub struct Session {
 }
 
 impl Session {
-    /// The demo bodice, draping over the avatar on its own thread.
-    pub fn demo_bodice() -> Session {
-        let contour = demo::bodice_contour();
-        let pipeline = demo::pipeline(&contour);
-        let state = demo::drop_state(&pipeline);
-        let slot = PieceSlot::new(pipeline, 0);
-        let handle = spawn_sim(&slot, state);
-        Session::build(Some(slot), contour, None, Some(handle))
-    }
-
-    /// A blank document: a table with nothing drawn, ready for the first piece.
-    ///
-    /// The document still carries a mannequin, since every coordinate resolves
-    /// against one; it simply has no pieces yet. Nothing drapes until one is
-    /// drawn, so there is no mesh and no sim thread until then.
-    ///
-    /// # Panics
-    /// Never in practice: a document with no pieces has nothing to resolve, so
-    /// the draft cannot fail to build.
-    pub fn blank() -> Session {
-        let doc = Doc::new(MeasureSet::default());
-        let draft = Draft::from_doc(doc).expect("an empty document resolves");
-        Session::blank_with(draft)
-    }
-
-    /// A document on the table, draping its first piece if one can be draped.
-    ///
-    /// A document with no pieces — or one whose first piece is still too
-    /// partial to mesh, as an autosave taken mid-drawing leaves it — opens as a
-    /// blank table wrapping it, the same state a fresh product starts in, so
-    /// every saved product reopens rather than being refused. Drawing on takes
-    /// the piece up again once its contour can be meshed.
-    ///
-    /// # Errors
-    /// `SessionError` when the document itself does not resolve into a draft.
-    pub fn from_doc(doc: Doc) -> Result<Session, SessionError> {
-        let draft = Draft::from_doc(doc)?;
-        let Some(piece) = draft.doc().piece_keys().first().copied() else {
-            return Ok(Session::blank_with(draft));
-        };
-        let Ok((slot, contour, state)) = drape_piece(&draft, piece) else {
-            return Ok(Session::blank_with(draft));
-        };
-        let handle = spawn_sim(&slot, state);
-        let drafted = Drafted {
-            draft,
-            piece: Some(piece),
-        };
-        Ok(Session::build(
-            Some(slot),
-            contour,
-            Some(drafted),
-            Some(handle),
-        ))
-    }
-
-    /// A blank table wrapping a document already resolved into a draft: no
-    /// piece drapes, no mesh, no sim thread, until one is drawn or taken up.
-    fn blank_with(draft: Draft) -> Session {
-        let drafted = Drafted { draft, piece: None };
-        Session::build(None, Vec::new(), Some(drafted), None)
-    }
-
     /// The document this session edits, when it was opened from one.
     pub fn draft(&self) -> Option<&Draft> {
         self.drafted.as_ref().map(|held| &held.draft)
@@ -175,11 +118,6 @@ impl Session {
         self.mesh_generation
     }
 
-    /// Radius of the sphere standing in for the avatar.
-    pub fn avatar_radius(&self) -> f32 {
-        demo::AVATAR_RADIUS
-    }
-
     /// The latest snapshot from the sim thread; an empty one while nothing
     /// drapes or before the first tick.
     pub fn snapshot(&self) -> Arc<Snapshot> {
@@ -212,28 +150,6 @@ impl Session {
         snap.converged && snap.generation == self.generation
     }
 
-    /// Fills the session's fields; the caller decides whether a piece drapes.
-    fn build(
-        slot: Option<PieceSlot>,
-        contour: Vec<[f64; 2]>,
-        drafted: Option<Drafted>,
-        handle: Option<SimHandle>,
-    ) -> Session {
-        Session {
-            slot,
-            contour,
-            drafted,
-            handle,
-            remesher: None,
-            moved_while_meshing: false,
-            generation: 0,
-            mesh_generation: 0,
-            revision: 0,
-            last_derive_ms: 0.0,
-            last_remesh_ms: 0.0,
-        }
-    }
-
     /// Adopts a piece drawn into a blank document as the one that drapes,
     /// meshing it and starting the sim thread around it.
     ///
@@ -244,9 +160,10 @@ impl Session {
         let Some(drafted) = self.drafted.as_mut() else {
             return Ok(());
         };
-        let (slot, contour, state) = drape_piece(&drafted.draft, piece)?;
+        let (slot, contour, state) =
+            drape_piece(&drafted.draft, piece, self.collider.release_height())?;
         drafted.piece = Some(piece);
-        self.handle = Some(spawn_sim(&slot, state));
+        self.handle = Some(spawn_sim(&slot, state, &self.collider));
         self.slot = Some(slot);
         self.contour = contour;
         self.generation = 0;

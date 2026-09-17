@@ -6,6 +6,7 @@
 mod band;
 mod listing;
 
+use toile_engine::body::Collider;
 use toile_engine::draft::{Doc, Persona, Snapshot};
 use toile_engine::session::Session;
 
@@ -95,7 +96,7 @@ impl Table {
     /// the band the app works out for a product it opens.
     fn reopen(&mut self) {
         let doc = Doc::from_json(&written(&self.session)).expect("the product reads back");
-        self.session = Session::from_doc(doc).expect("the product drapes");
+        self.session = Session::from_doc(doc, Collider::demo()).expect("the product drapes");
         self.stand = Stand::default();
         self.band = Band::opened(&mut self.shelf, &self.session);
     }

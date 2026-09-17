@@ -4,11 +4,12 @@
     reason = "a move to a round number of centimetres lands on it exactly"
 )]
 
+use toile_engine::body::Collider;
 use toile_engine::draft::{Binding, Command, Doc, MannequinKey, MeasureSet, block};
 use toile_engine::session::{Session, SessionError};
 
 fn front() -> Session {
-    Session::from_doc(block::trouser_front()).expect("the block drapes")
+    Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes")
 }
 
 #[test]
@@ -71,7 +72,7 @@ fn an_edit_on_a_demo_session_is_refused_rather_than_ignored() {
 #[test]
 fn a_document_that_draws_nothing_opens_as_a_blank_table() {
     let doc = Doc::new(MeasureSet::default());
-    let session = Session::from_doc(doc).expect("an empty document opens blank");
+    let session = Session::from_doc(doc, Collider::demo()).expect("an empty document opens blank");
     assert!(session.draft().is_some(), "it carries the document");
     assert!(session.piece().is_none(), "with nothing draping yet");
     assert_eq!(session.n_vertices(), 0);

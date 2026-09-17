@@ -1,6 +1,7 @@
 use eframe::egui::{
     self, CursorIcon, Event, Id, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, vec2,
 };
+use toile_engine::body::Collider;
 use toile_engine::draft::{Doc, PieceKey, PointKey, block};
 use toile_engine::session::Session;
 
@@ -31,7 +32,7 @@ impl Desk {
         let theme = Theme::sastreria();
         theme.apply(&ctx);
         Desk {
-            session: Session::from_doc(doc).expect("the product opens"),
+            session: Session::from_doc(doc, Collider::demo()).expect("the product opens"),
             state: State::default(),
             ctx,
             cursor: CursorIcon::Default,

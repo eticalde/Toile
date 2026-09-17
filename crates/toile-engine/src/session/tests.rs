@@ -1,12 +1,14 @@
 use super::*;
-use crate::draft::{Axis, Binding, Command, Identity, Piece, Point, SegmentEdit, Winding, block};
+use crate::draft::{
+    Axis, Binding, Command, Doc, Identity, Piece, Point, SegmentEdit, Winding, block,
+};
 
 /// A blank table adopts the first drawn piece: an empty piece lands, its
 /// vertices follow one command at a time, and the drape starts once the
 /// contour can be meshed — the whole point of the "Nuevo producto" button.
 #[test]
 fn a_blank_document_adopts_the_first_drawn_piece() {
-    let mut session = Session::blank();
+    let mut session = Session::blank(Collider::demo());
     assert!(session.piece().is_none(), "nothing drapes on a blank table");
 
     let piece = PieceKey::new(
@@ -51,7 +53,7 @@ fn a_blank_document_adopts_the_first_drawn_piece() {
 /// mid-gesture.
 #[test]
 fn a_partial_first_piece_reopens_as_a_blank_table() {
-    let mut drawing = Session::blank();
+    let mut drawing = Session::blank(Collider::demo());
     let piece = PieceKey::new(
         drawing
             .draft()
@@ -89,7 +91,7 @@ fn a_partial_first_piece_reopens_as_a_blank_table() {
         .to_canonical_json();
     let doc = Doc::from_json(&json).expect("what an autosave writes it reads back");
 
-    let reopened = Session::from_doc(doc).expect("a partial product still opens");
+    let reopened = Session::from_doc(doc, Collider::demo()).expect("a partial product still opens");
     assert!(reopened.draft().is_some(), "it carries the document");
     assert!(
         reopened.piece().is_none(),
@@ -101,7 +103,8 @@ fn a_partial_first_piece_reopens_as_a_blank_table() {
 /// against another one has to say so rather than warm-start across it.
 #[test]
 fn a_stale_generation_is_an_error_not_a_warm_start() {
-    let mut session = Session::from_doc(block::trouser_front()).expect("the block drapes");
+    let mut session =
+        Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes");
     let piece = session.piece().expect("the session has a document");
     session
         .slot
