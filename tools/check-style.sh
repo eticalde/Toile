@@ -79,5 +79,28 @@ for f in $(find crates -name '*.rs'); do
     say "$f:$start: comentario de $run líneas seguidas (máx $BLOCK_MAX) (§2.4)"
 done
 
+# 6. Only `+ - * / sqrt` and one pinned `libm` reach the geometry. Std's
+#    transcendentals have unspecified precision, so the same source can give
+#    different bits on ARM and x86 and a golden would move under a dependency
+#    nobody touched. Anchored to method syntax, so the qualified `libm::acos`
+#    this exists to permit does not match, and so `cos` does not match `acos`
+#    or half the English language. Each file is read up to its own test
+#    module: a test may measure with whatever it likes.
+BANNED='\.(powf|powi|sin|cos|tan|asin|acos|atan|atan2|exp|exp2|ln|log2|log10|sinh|cosh|tanh|hypot)[[:space:]]*\('
+GEOMETRY='crates/toile-sim/src crates/toile-engine/src crates/toile-anny/src crates/toile-mesh/src'
+for f in $(find $GEOMETRY -name '*.rs' | grep -v -e '/tests/' -e 'tests\.rs$' -e '/export/'); do
+  hits=$(awk '/#\[cfg\(test\)\]/ { exit } { print FNR": "$0 }' "$f" | grep -E "$BANNED" | head -3)
+  [ -n "$hits" ] && say "$f: trascendente de std en la geometría (§determinismo)
+$hits"
+done
+
+# 6b. And libm is the exception only where an angle or a ramp earns it: a new
+#     file reaching for it is a new way for two machines to disagree.
+LIBM_EARNED='body/bake/pseudo\.rs|couture/seam\.rs|couture/place\.rs'
+for f in $(grep -rlE --include='*.rs' 'libm::' crates | grep -v -e '/tests/' -e 'tests\.rs$'); do
+  echo "$f" | grep -qE "$LIBM_EARNED" ||
+    say "$f: libm:: fuera de donde está justificado (§determinismo)"
+done
+
 [ $fail -eq 0 ] && echo "✓ estilo"
 exit $fail

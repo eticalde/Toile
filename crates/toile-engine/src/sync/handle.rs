@@ -3,15 +3,19 @@ use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use crossbeam_channel::{RecvTimeoutError, Sender, TryRecvError, unbounded};
-use toile_sim::xpbd::{DistanceConstraints, SdfGrid, State};
+use toile_sim::xpbd::{DistanceConstraints, SdfGrid, Seams, State};
 
-use super::worker::{Sim, Snapshot};
+use super::report::Snapshot;
+use super::worker::Sim;
 use crate::couture::MeshSwap;
 
 enum Msg {
+    /// The product recompiled: what every edge rests at, and what is sewn to
+    /// what. The two travel together because a shape edit moves both.
     RestUpdate {
         generation: u64,
         rests: Vec<f32>,
+        seams: Seams,
     },
     /// A piece re-meshed elsewhere, with the drape to carry onto it.
     ///
@@ -44,9 +48,13 @@ pub struct SimHandle {
 }
 
 impl SimHandle {
-    /// Hot-swaps the rest state. Does not block.
-    pub fn send_rests(&self, generation: u64, rests: Vec<f32>) {
-        let _ = self.tx.send(Msg::RestUpdate { generation, rests });
+    /// Hot-swaps the rest state and the sewing. Does not block.
+    pub fn send_rests(&self, generation: u64, rests: Vec<f32>, seams: Seams) {
+        let _ = self.tx.send(Msg::RestUpdate {
+            generation,
+            rests,
+            seams,
+        });
     }
 
     /// Hands the sim a mesh built elsewhere. Does not block.
@@ -100,6 +108,7 @@ impl Drop for SimHandle {
 pub fn spawn(
     state: State,
     cons: DistanceConstraints,
+    seams: Seams,
     sdf: Arc<SdfGrid>,
     tris: Vec<u32>,
     dt: f32,
@@ -110,7 +119,7 @@ pub fn spawn(
     let published = snapshot.clone();
 
     let join = std::thread::spawn(move || {
-        let mut sim = Sim::new(state, cons, sdf, tris, dt, substeps_per_tick);
+        let mut sim = Sim::new(state, cons, seams, sdf, tris, dt, substeps_per_tick);
 
         // Fixed step anchored to the wall clock: a tick represents exactly
         // `substeps_per_tick × dt` of simulated time and is scheduled at that
@@ -194,7 +203,11 @@ fn drain(rx: &crossbeam_channel::Receiver<Msg>, first: Option<Msg>, sim: &mut Si
         };
         let taken = match m {
             Msg::Stop => return Drained::Stop,
-            Msg::RestUpdate { generation, rests } => sim.apply_rests(generation, &rests),
+            Msg::RestUpdate {
+                generation,
+                rests,
+                seams,
+            } => sim.apply_rests(generation, &rests, seams),
             Msg::MeshSwap { generation, swap } => sim.apply_swap(generation, swap),
             Msg::Collider { generation, sdf } => sim.apply_collider(generation, sdf),
         };

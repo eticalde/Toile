@@ -1,5 +1,8 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
+/// The same habits over a product of two sewn pieces.
+mod product;
+
 use std::time::{Duration, Instant};
 
 use toile_engine::body::{BodyMesh, Collider, Phenotype, bake, body_mesh};
@@ -99,6 +102,54 @@ fn at_mark(session: &Session) -> Vec<[f32; 3]> {
         "the sim thread never reached {MARK} substeps"
     );
     snap.positions.as_chunks::<3>().0.to_vec()
+}
+
+/// What watching a whole drape found.
+struct Watched {
+    /// The most particles ever past the band, and the substep it happened at.
+    worst: (usize, u64),
+    /// The most of the garment ever within a cell of the skin, and when.
+    worn: (usize, u64),
+}
+
+/// Watches every frame the sim publishes up to [`MARK`].
+///
+/// A lone panel is read at the mark because that is where it comes to rest. A
+/// sewn tube cannot be: let go round a limb, with no friction to hold it and
+/// no floor to stop it, it slides down the leg, so by the mark it hangs below
+/// the feet and that frame says nothing about how it was worn. What must hold
+/// for a tube is that no particle was ever driven past the band — at any
+/// moment of the drape, not at one chosen instant.
+///
+/// # Panics
+/// If the sim thread never reaches [`MARK`] substeps.
+fn through_the_drape(session: &Session, sdf: &SdfGrid) -> Watched {
+    let deadline = Instant::now() + PATIENCE;
+    let mut seen = 0;
+    let mut found = Watched {
+        worst: (0, 0),
+        worn: (0, 0),
+    };
+    while Instant::now() < deadline {
+        let snap = session.snapshot();
+        if snap.substeps > seen {
+            seen = snap.substeps;
+            let points = snap.positions.as_chunks::<3>().0;
+            let (deep, _) = buried(sdf, points);
+            if deep > found.worst.0 {
+                found.worst = (deep, seen);
+            }
+            let on_skin = touching(sdf, points);
+            if on_skin > found.worn.0 {
+                found.worn = (on_skin, seen);
+            }
+        }
+        if seen >= MARK {
+            return found;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    panic!("the sim thread never reached {MARK} substeps");
 }
 
 /// Whether the drape goes to sleep inside `budget` substeps.

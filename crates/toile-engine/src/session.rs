@@ -3,8 +3,10 @@ mod edit;
 mod error;
 mod open;
 mod pieces;
+mod place;
 mod remesh;
 mod seam;
+mod sew;
 mod slot;
 mod spawn;
 
@@ -13,12 +15,13 @@ use std::sync::Arc;
 pub use error::SessionError;
 use remesh::Remesher;
 pub use seam::{SeamFault, pair_seam_anchored};
+use slot::Draped;
 pub use slot::PieceSlot;
-use spawn::{drape_piece, spawn_sim};
+use toile_sim::xpbd::DistanceConstraints;
 
 use crate::body::Collider;
-use crate::couture::COMPLIANCE;
-use crate::draft::{Draft, PieceKey};
+use crate::couture::{self, COMPLIANCE, ShapePipeline};
+use crate::draft::{Draft, PieceKey, SeamKey};
 use crate::sync::{SimHandle, Snapshot};
 
 /// Simulated seconds per substep.
@@ -27,23 +30,19 @@ const DT: f32 = 1.0 / 600.0;
 /// Substeps per published frame.
 const SUBSTEPS_PER_TICK: u32 = 10;
 
-/// The document a session edits, and the piece of it that drapes, once one
-/// does: a document opened blank has pieces to draw before any of them drapes.
-struct Drafted {
-    draft: Draft,
-    piece: Option<PieceKey>,
-}
-
-/// A live editing session: one piece, draping, edited in place.
+/// A live editing session: a product draping, edited in place.
 ///
 /// This is the whole surface a client gets. No solver type crosses it, which
 /// is what lets the desktop app depend on the engine alone.
 pub struct Session {
-    /// The meshed piece on the stand, absent while a document has no piece
-    /// draping yet.
-    slot: Option<PieceSlot>,
-    contour: Vec<[f64; 2]>,
-    drafted: Option<Drafted>,
+    /// Every piece on the stand, in the order the one combined solver state
+    /// concatenates them; empty while a document has nothing draping yet.
+    draping: Vec<Draped>,
+    /// Their triangles as one list, each piece's rebased past the vertices of
+    /// the pieces before it, so it indexes the combined state.
+    tris: Vec<u32>,
+    /// The document this session edits, when it was opened from one.
+    draft: Option<Draft>,
     /// The sim thread, spawned only once a piece drapes.
     handle: Option<SimHandle>,
     /// The body the drape falls on. Held here and not only on the sim thread
@@ -53,12 +52,14 @@ pub struct Session {
     /// The mesher, started the first time a topology edit needs it: a session
     /// that only ever moves points never pays for a thread.
     remesher: Option<Remesher>,
-    /// A shape edit arrived while the mesher was working, and has not reached
-    /// the solver yet.
-    moved_while_meshing: bool,
+    /// The document seams that would not pair onto the cloth, as of the last
+    /// time the product was sewn. Kept rather than recomputed per frame: the
+    /// interface asks every frame, and the answer only changes when something
+    /// re-pairs them.
+    faults: Vec<(SeamKey, SeamFault)>,
     generation: u64,
-    /// The generation the mesh on the table was installed at, for telling a
-    /// snapshot of the old triangulation from one of this mesh.
+    /// The generation the meshes on the table were last installed at, for
+    /// telling a snapshot of an old triangulation from one of these meshes.
     mesh_generation: u64,
     revision: u64,
     /// How long the last recompile took, for the status bar.
@@ -70,12 +71,34 @@ pub struct Session {
 impl Session {
     /// The document this session edits, when it was opened from one.
     pub fn draft(&self) -> Option<&Draft> {
-        self.drafted.as_ref().map(|held| &held.draft)
+        self.draft.as_ref()
     }
 
-    /// The piece this session drapes, once one does.
+    /// The first piece of the product that drapes, once one does.
+    ///
+    /// Every piece the document holds drapes now, so this is the one a panel
+    /// falls back to rather than the only one on the stand;
+    /// [`Session::pieces`] is the whole list.
     pub fn piece(&self) -> Option<PieceKey> {
-        self.drafted.as_ref().and_then(|held| held.piece)
+        self.draping.first().and_then(|held| held.piece)
+    }
+
+    /// Every document piece on the stand, in the order the combined solver
+    /// state concatenates them.
+    ///
+    /// Empty for the demo scene, whose panel belongs to no document.
+    pub fn pieces(&self) -> Vec<PieceKey> {
+        self.draping.iter().filter_map(|held| held.piece).collect()
+    }
+
+    /// Where a piece's vertices begin in the combined solver state.
+    ///
+    /// A seam joins two vertices of that one state, so each side of one has to
+    /// be offset by its own piece's base — which is exactly what
+    /// [`pair_seam_anchored`] asks for. `None` for a piece that does not drape.
+    pub fn offset(&self, piece: PieceKey) -> Option<u32> {
+        let at = self.index_of(piece)?;
+        couture::offsets(&self.pipelines()).get(at).copied()
     }
 
     /// How many times the document on this table has changed.
@@ -87,31 +110,43 @@ impl Session {
         self.revision
     }
 
-    /// The piece's control contour, in metres of pattern space.
+    /// One piece's control contour, in metres of pattern space; empty for a
+    /// piece that does not drape.
     ///
     /// Suffixed for the same reason [`crate::draft::Draft::outline_m`] is: a
     /// client holds this and the draft's centimetres as one type, and only the
     /// name says which of the two it is holding.
-    pub fn contour_m(&self) -> &[[f64; 2]] {
-        &self.contour
+    pub fn contour_m(&self, piece: PieceKey) -> &[[f64; 2]] {
+        match self.index_of(piece) {
+            Some(at) => self.draping[at].contour.as_slice(),
+            None => &[],
+        }
     }
 
-    /// Mesh triangles, indexing the snapshot's positions; empty while nothing
-    /// drapes.
+    /// Every draping piece's control contour, in the order the combined state
+    /// holds them. The demo scene's own panel is in here too, unnamed.
+    pub fn contours_m(&self) -> impl Iterator<Item = &[[f64; 2]]> {
+        self.draping.iter().map(|held| held.contour.as_slice())
+    }
+
+    /// The whole product's triangles, indexing the snapshot's positions; empty
+    /// while nothing drapes.
     pub fn triangles(&self) -> &[u32] {
-        self.slot.as_ref().map_or(&[], |slot| &slot.pipeline().tris)
+        &self.tris
     }
 
-    /// Mesh vertex count, for sizing render buffers; zero while nothing drapes.
+    /// The whole product's vertex count, for sizing render buffers; zero while
+    /// nothing drapes.
     pub fn n_vertices(&self) -> usize {
-        self.slot
-            .as_ref()
-            .map_or(0, |slot| slot.pipeline().pos2d.len())
+        self.draping
+            .iter()
+            .map(|held| held.slot.pipeline().pos2d.len())
+            .sum()
     }
 
-    /// The generation the mesh on the table was installed at.
+    /// The generation the meshes on the table were last installed at.
     ///
-    /// A snapshot carrying an earlier generation was published before this
+    /// A snapshot carrying an earlier generation was published before the last
     /// mesh swapped in: its positions belong to the old triangulation, even
     /// when the vertex counts happen to agree.
     pub fn mesh_generation(&self) -> u64 {
@@ -150,40 +185,30 @@ impl Session {
         snap.converged && snap.generation == self.generation
     }
 
-    /// Adopts a piece drawn into a blank document as the one that drapes,
-    /// meshing it and starting the sim thread around it.
-    ///
-    /// # Errors
-    /// `SessionError` when the piece carries a defect or a contour the mesher
-    /// refuses; the table then stays blank and the drawing can be corrected.
-    pub(super) fn seed_piece(&mut self, piece: PieceKey) -> Result<(), SessionError> {
-        let Some(drafted) = self.drafted.as_mut() else {
-            return Ok(());
-        };
-        let (slot, contour, state) =
-            drape_piece(&drafted.draft, piece, self.collider.release_height())?;
-        drafted.piece = Some(piece);
-        self.handle = Some(spawn_sim(&slot, state, &self.collider));
-        self.slot = Some(slot);
-        self.contour = contour;
-        self.generation = 0;
-        self.mesh_generation = 0;
-        Ok(())
+    /// Where a piece sits among the ones on the stand.
+    fn index_of(&self, piece: PieceKey) -> Option<usize> {
+        self.draping
+            .iter()
+            .position(|held| held.piece == Some(piece))
     }
 
-    /// Tears the drape down to a blank table, keeping the document.
-    ///
-    /// The sim thread stops when its handle drops. Used when the piece that was
-    /// draping leaves the document, as an undo of the first piece does.
-    pub(super) fn unseed(&mut self) {
-        self.handle = None;
-        self.slot = None;
-        self.contour = Vec::new();
-        self.remesher = None;
-        self.moved_while_meshing = false;
-        if let Some(drafted) = self.drafted.as_mut() {
-            drafted.piece = None;
-        }
+    /// Every piece's mesh, in the order the combined state holds them.
+    fn pipelines(&self) -> Vec<&ShapePipeline> {
+        self.draping
+            .iter()
+            .map(|held| held.slot.pipeline())
+            .collect()
+    }
+
+    /// The whole product's stretch constraints, as the solver holds them.
+    fn constraints(&self) -> DistanceConstraints {
+        couture::combine_constraints(&self.pipelines(), COMPLIANCE)
+    }
+
+    /// Rebuilds the triangle list the viewer draws, after a mesh changed.
+    fn relist(&mut self) {
+        let tris = couture::combine_triangles(&self.pipelines());
+        self.tris = tris;
     }
 }
 

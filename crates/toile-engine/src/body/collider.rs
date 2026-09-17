@@ -4,6 +4,7 @@ use toile_anny::BodyMesh;
 use toile_sim::xpbd::SdfGrid;
 
 use super::bake::{self, BakeError};
+use super::belt::{self, Belt};
 use crate::{couture, demo};
 
 /// How far above a body a garment is let go, in metres.
@@ -14,13 +15,13 @@ use crate::{couture, demo};
 /// the sphere and a guess for a person.
 pub const CLEARANCE: f32 = 0.20;
 
-/// The body a drape falls on: the field the solver collides against, and
-/// where a garment is let go over it.
+/// The body a drape falls on: the field the solver collides against, where a
+/// garment is let go over it, and the rings that say where one belongs on it.
 ///
-/// The field's own box answers neither question. The demo sphere bakes a
+/// The field's own box answers none of the three. The demo sphere bakes a
 /// 1.4 m cube around a ball 30 cm across, so a height taken off the grid
 /// would release the bodice most of a metre above a body that is not there.
-/// What travels here is the body's own extent.
+/// What travels here is the body's own extent, and its own measurements.
 ///
 /// Cloning is cheap and shares the voxels: the field is written once by the
 /// bake and read for the rest of its life.
@@ -30,6 +31,7 @@ pub struct Collider {
     release: f32,
     lo: [f32; 3],
     hi: [f32; 3],
+    belts: Arc<[Belt]>,
 }
 
 impl Collider {
@@ -46,6 +48,7 @@ impl Collider {
             release: couture::DROP_HEIGHT,
             lo: [-r; 3],
             hi: [r; 3],
+            belts: Arc::from([]),
         }
     }
 
@@ -63,8 +66,9 @@ impl Collider {
 
     /// A field already baked, put back over the body it was baked from.
     ///
-    /// The cache stores the voxels and not the body, so the extent is measured
-    /// from the mesh again rather than written down twice and trusted.
+    /// The cache stores the voxels and not the body, so the extent and the
+    /// rings are measured from the mesh again rather than written down twice
+    /// and trusted.
     pub(crate) fn over(field: SdfGrid, mesh: &BodyMesh) -> Collider {
         let (lo, hi) = extent(&mesh.positions);
         Collider {
@@ -72,6 +76,7 @@ impl Collider {
             release: hi[1] + CLEARANCE,
             lo,
             hi,
+            belts: Arc::from(belt::of(mesh)),
         }
     }
 
@@ -85,6 +90,11 @@ impl Collider {
         (self.lo, self.hi)
     }
 
+    /// The body's own measurement rings; empty for one they were not cut for.
+    pub(crate) fn belts(&self) -> &[Belt] {
+        &self.belts
+    }
+
     /// Whether a point is under this body's skin.
     ///
     /// The field's own sign, read exactly where and how the solver reads it,
@@ -92,6 +102,18 @@ impl Collider {
     /// asking and another to the drape being asked about.
     pub fn contains(&self, p: [f32; 3]) -> bool {
         self.field.sample(p[0], p[1], p[2]) < 0.0
+    }
+
+    /// Whether a point is so far under the skin that nothing will carry it
+    /// out again.
+    ///
+    /// Past the band the field is saturated flat: its gradient is exactly
+    /// zero, so the contact solve has no normal to push along and the
+    /// particle stays wherever it was put. Cloth resting on a body straddles
+    /// the surface by a fraction of a millimetre and is not this; a garment
+    /// let go with cloth in here never recovers.
+    pub fn swallows(&self, p: [f32; 3]) -> bool {
+        self.field.sample(p[0], p[1], p[2]) <= -(bake::BAND as f32)
     }
 
     /// Samples along x, y and z.

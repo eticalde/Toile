@@ -158,8 +158,9 @@ fn seat(draft: &Draft, piece: PieceKey) -> usize {
 fn front() -> Front {
     let mut session =
         Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes");
+    let piece = session.piece().expect("the block drapes a piece");
     let verts_before = session.n_vertices();
-    let nodes_before = session.contour_m().len();
+    let nodes_before = session.contour_m(piece).len();
     // A swap that carries nothing is not the case under test: the panel has to
     // be draping when the mesh is pulled from under it.
     while session.snapshot().substeps < DRAPE_SUBSTEPS as u64 {
@@ -182,7 +183,7 @@ fn front() -> Front {
         remesh_ms: session.last_remesh_ms,
         to_solver_ms: t0.elapsed().as_secs_f64() * 1000.0,
         verts: (verts_before, session.n_vertices()),
-        nodes: (nodes_before, session.contour_m().len()),
+        nodes: (nodes_before, session.contour_m(piece).len()),
     }
 }
 

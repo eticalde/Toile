@@ -1,9 +1,14 @@
-use toile_engine::draft::{Draft, EdgeRange, Seam, SeamKind};
+use toile_engine::draft::{Draft, EdgeRange, Seam, SeamKey, SeamKind};
+use toile_engine::session::SeamFault;
 
 /// What a row says when the draft cannot answer for one of the four anchors.
 const UNMEASURED: &str = "— / —";
 /// What a seam is called when its side A is not anchored on its own piece.
 const UNANCHORED: &str = "costura sin anclar";
+/// Why a seam never reached the cloth: an end that is not on its own contour.
+const LOOSE: &str = "un extremo no cae sobre un nodo de su pieza";
+/// The same, for a side with no length between its two ends.
+const PINCHED: &str = "los dos extremos caen en el mismo punto";
 
 /// One seam of the document as the panel reports it.
 ///
@@ -29,6 +34,28 @@ pub fn measured(draft: &Draft) -> Vec<Row> {
         .seams
         .iter()
         .map(|(_, seam)| row(draft, seam))
+        .collect()
+}
+
+/// The seams the engine could not pair onto the cloth, said in words.
+///
+/// A seam that refuses is left out of the solver, so the garment draping is a
+/// seam short of the one drawn on the table. That is the same kind of thing as
+/// two sides that do not close, and it is said in the same place — the fault
+/// is the engine's to find and this panel's to name, so the wording is here
+/// and not in the error the engine raises.
+pub fn refused(draft: &Draft, faults: &[(SeamKey, SeamFault)]) -> Vec<String> {
+    faults
+        .iter()
+        .filter_map(|(key, why)| {
+            let seam = draft.doc().seams.get(*key)?;
+            let named = name(draft, &seam.a).unwrap_or_else(|| UNANCHORED.to_owned());
+            let said = match why {
+                SeamFault::Unanchored => LOOSE,
+                SeamFault::EmptyRange => PINCHED,
+            };
+            Some(format!("{named}: {said}"))
+        })
         .collect()
 }
 

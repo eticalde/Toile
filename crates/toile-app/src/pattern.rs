@@ -76,11 +76,12 @@ struct Node {
 
 /// Draws the 2D pattern and applies drags straight to the session.
 ///
-/// Every drag frame recompiles the rest state, so the 3D panel is already
-/// showing the edit by the time the pointer moves again. A session with no
-/// document behind it draws its contour and nothing more: there is no node to
-/// name in a command, and this panel writes no other kind of edit — so it
-/// paints no grabbable mark either.
+/// Every piece of the product is drawn, because every piece of it drapes. Each
+/// drag frame recompiles the rest state of the piece the node belongs to, so
+/// the 3D panel is already showing the edit by the time the pointer moves
+/// again. A session with no document behind it draws its contours and nothing
+/// more: there is no node to name in a command, and this panel writes no other
+/// kind of edit — so it paints no grabbable mark either.
 pub fn show(
     ui: &mut egui::Ui,
     size: egui::Vec2,
@@ -91,21 +92,26 @@ pub fn show(
     let (resp, painter) = widgets::mat_canvas(ui, theme, size, egui::Sense::click_and_drag());
     let rect = resp.rect;
 
-    // The line is the flattening, curves and all: it is what the cloth is cut
-    // along. The dots below are the nodes, which are fewer.
-    let contour_m: Vec<[f64; 2]> = session.contour_m().to_vec();
-    let view = DrapeView::fit(&contour_m, rect);
-    let line: Vec<egui::Pos2> = contour_m
-        .iter()
-        .map(|&p| view.to_screen_from_m(p))
-        .collect();
-    painter.add(egui::Shape::closed_line(
-        line,
-        egui::Stroke::new(1.6, theme.outline),
-    ));
-    let nodes = match (session.draft(), session.piece()) {
-        (Some(draft), Some(piece)) => nodes_of(draft, piece, &view),
-        _ => Vec::new(),
+    // A line per piece: the flattening, curves and all, which is what the
+    // cloth is cut along. The dots below are the nodes, which are fewer. The
+    // view frames all of them together, so the pieces keep the sizes they have
+    // relative to one another.
+    let contours: Vec<Vec<[f64; 2]>> = session.contours_m().map(<[[f64; 2]]>::to_vec).collect();
+    let view = DrapeView::fit(contours.iter().flatten(), rect);
+    for contour in &contours {
+        let line: Vec<egui::Pos2> = contour.iter().map(|&p| view.to_screen_from_m(p)).collect();
+        painter.add(egui::Shape::closed_line(
+            line,
+            egui::Stroke::new(1.6, theme.outline),
+        ));
+    }
+    let nodes: Vec<Node> = match session.draft() {
+        Some(draft) => session
+            .pieces()
+            .into_iter()
+            .flat_map(|piece| nodes_of(draft, piece, &view))
+            .collect(),
+        None => Vec::new(),
     };
 
     if resp.drag_started()
@@ -202,9 +208,10 @@ struct DrapeView {
 }
 
 impl DrapeView {
-    fn fit(contour_m: &[[f64; 2]], rect: egui::Rect) -> Self {
+    /// Frames every point it is given, whichever piece each one came from.
+    fn fit<'a>(points_m: impl IntoIterator<Item = &'a [f64; 2]>, rect: egui::Rect) -> Self {
         let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
-        for p in contour_m {
+        for p in points_m {
             for k in 0..2 {
                 lo[k] = lo[k].min(p[k]);
                 hi[k] = hi[k].max(p[k]);

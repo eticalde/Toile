@@ -3,8 +3,9 @@ use std::time::Instant;
 
 use crossbeam_channel::{Receiver, Sender, TryRecvError, unbounded};
 use toile_mesh::cdt::MeshError;
+use toile_mesh::transfer::Locator;
 
-use crate::couture::{self, COMPLIANCE, MeshSwap, ShapePipeline};
+use crate::couture::{self, ShapePipeline};
 use crate::draft::PieceKey;
 
 /// A rebuild on its way to the mesher.
@@ -34,14 +35,15 @@ pub struct Remeshed {
     pub built: Result<Rebuilt, MeshError>,
 }
 
-/// The new mesh, and the message that carries the drape onto it.
+/// The new mesh, and what the drape is carried onto it through.
 pub struct Rebuilt {
     /// The contour it was built from.
     pub contour: Vec<[f64; 2]>,
     /// The pipeline that compiles that contour's shape edits.
     pub pipeline: ShapePipeline,
-    /// What the sim thread needs to inherit the drape.
-    pub swap: Box<MeshSwap>,
+    /// The rest space of the mesh it replaces, for finding the new vertices
+    /// inside it.
+    pub locator: Locator,
 }
 
 /// The mesher, on a thread of its own.
@@ -134,21 +136,31 @@ impl Drop for Remesher {
     }
 }
 
-/// Meshes a contour and compiles the message that carries the drape onto it.
+/// Meshes a contour and indexes the mesh it replaces.
+///
+/// The locator is built here rather than where the swap is assembled: it is
+/// the costly half of the transfer, and the whole point of this thread is that
+/// the interface never pays for it. What the swap carries besides — the
+/// product's constraints and its triangles — cannot be known here, because the
+/// other pieces go on being edited while this runs.
 fn build(job: Job) -> Remeshed {
     let t = Instant::now();
-    let (samples, max_area) = couture::for_contour(&job.contour);
-    let built = ShapePipeline::build(&job.contour, samples, max_area).map(|pipeline| {
-        let swap = MeshSwap::new(&job.old_pos2d, &job.old_tris, &pipeline, COMPLIANCE);
-        Rebuilt {
-            contour: job.contour,
-            pipeline,
-            swap: Box::new(swap),
-        }
+    let Job {
+        piece,
+        topology,
+        contour,
+        old_pos2d,
+        old_tris,
+    } = job;
+    let (samples, max_area) = couture::for_contour(&contour);
+    let built = ShapePipeline::build(&contour, samples, max_area).map(|pipeline| Rebuilt {
+        contour,
+        pipeline,
+        locator: Locator::build(&old_pos2d, &old_tris),
     });
     Remeshed {
-        piece: job.piece,
-        topology: job.topology,
+        piece,
+        topology,
         ms: t.elapsed().as_secs_f64() * 1000.0,
         built,
     }

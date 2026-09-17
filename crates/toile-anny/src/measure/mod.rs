@@ -12,7 +12,12 @@ use geom::{perimeter, walk};
 
 /// The number of body vertices every baked ring and path indexes into: the
 /// fixed shape [`measure`] requires of its `positions` argument.
-const BODY_VERTEX_COUNT: usize = 13_380;
+///
+/// Public so a caller holding a mesh from somewhere else can ask whether the
+/// rings mean anything against it before reading one: they are fixed vertex
+/// indices, so against any other layout they measure another body's vertices
+/// rather than failing.
+pub const BODY_VERTEX_COUNT: usize = 13_380;
 
 /// The 20 catalogue measurements read directly off a generated Anny mesh, in
 /// centimetres.
@@ -142,6 +147,21 @@ pub fn ring(id: RingId) -> Ring {
         points: &baked.ring_points[start..start + e.length as usize],
         normal: e.normal,
     }
+}
+
+/// One ring's girth on `positions`, in metres.
+///
+/// The very sum [`measure`] reports that ring's catalogue row from, in the
+/// plane the ring was cut on — the same call, so a client putting a garment
+/// somewhere by its girth and the panel printing that girth cannot come to
+/// disagree about what the body measures there.
+///
+/// # Panics
+/// If `positions` is not the Anny body's own [`BODY_VERTEX_COUNT`] layout,
+/// which the baked ring indexes into.
+pub fn girth(positions: &[f32], id: RingId) -> f32 {
+    let Ring { points, normal } = ring(id);
+    perimeter(positions, points, normal)
 }
 
 /// The points of the path a [`PathId`] names, sliced out of the shipped

@@ -1,17 +1,17 @@
-use toile_sim::xpbd::State;
+use toile_sim::xpbd::Seams;
 
 use super::{COMPLIANCE, DT, PieceSlot, SUBSTEPS_PER_TICK, SessionError};
 use crate::body::Collider;
-use crate::couture::{self, ShapePipeline};
+use crate::couture::{self, Layout, ShapePipeline};
 use crate::draft::{Draft, PieceKey};
 use crate::sync::{self, SimHandle};
 
-/// Meshes a piece and seeds its drape: the slot, its contour, and the dropped
-/// starting state, shared by opening a document and adopting a drawn piece.
+/// Meshes a piece: the slot it goes in, and the contour it was meshed from.
 ///
-/// `release` is the height the piece is let go from, which the body it will
-/// fall on decides: a garment starts over the body it is being fitted to, and
-/// a person is not a ball.
+/// Where it is let go is not decided here. A piece falls with the rest of the
+/// product, from a height the body decides and at a place its seams decide,
+/// and one piece of a product has no starting state of its own — see
+/// [`spawn_sim`].
 ///
 /// # Errors
 /// `SessionError` when the piece carries a defect or a contour the mesher
@@ -19,8 +19,7 @@ use crate::sync::{self, SimHandle};
 pub(super) fn drape_piece(
     draft: &Draft,
     piece: PieceKey,
-    release: f32,
-) -> Result<(PieceSlot, Vec<[f64; 2]>, State), SessionError> {
+) -> Result<(PieceSlot, Vec<[f64; 2]>), SessionError> {
     if let [defect, ..] = draft.defects(piece) {
         return Err(SessionError::Defective {
             piece,
@@ -30,23 +29,40 @@ pub(super) fn drape_piece(
     let contour = draft.outline_m(piece).to_vec();
     let (samples, max_area) = couture::for_contour(&contour);
     let pipeline = ShapePipeline::build(&contour, samples, max_area)?;
-    let state = couture::drop_state(&pipeline, release);
     let slot = PieceSlot::new(pipeline, draft.topology(piece));
-    Ok((slot, contour, state))
+    Ok((slot, contour))
 }
 
-/// Starts the sim thread around a meshed piece, colliding against `collider`.
+/// Starts the sim thread around every piece of the product, colliding against
+/// `collider` and sewn along `seams`.
+///
+/// One state and one thread whatever the product holds, because a seam joins
+/// two vertices *within* a state: pieces sewn to each other have to be solved
+/// together or they cannot be sewn at all.
+///
+/// `around` is the ring the seams and the body put the pieces on, and it
+/// carries its own height. A piece it does not place — a lone panel, which has
+/// no partner to be placed against — is let go exactly as a lone piece is let
+/// go today, flat at the height the body decides.
 ///
 /// The field crosses as a second owner of the same voxels, so starting a
 /// thread over a body already baked copies a pointer rather than tens of
 /// megabytes.
-pub(super) fn spawn_sim(slot: &PieceSlot, state: State, collider: &Collider) -> SimHandle {
-    let cons = slot.pipeline().constraints(COMPLIANCE);
+pub(super) fn spawn_sim(
+    pipelines: &[&ShapePipeline],
+    tris: Vec<u32>,
+    seams: Seams,
+    around: Option<&Layout>,
+    collider: &Collider,
+) -> SimHandle {
+    let state = couture::drop_all(pipelines, collider.release_height(), around);
+    let cons = couture::combine_constraints(pipelines, COMPLIANCE);
     sync::spawn(
         state,
         cons,
+        seams,
         collider.shared(),
-        slot.pipeline().tris.clone(),
+        tris,
         DT,
         SUBSTEPS_PER_TICK,
     )

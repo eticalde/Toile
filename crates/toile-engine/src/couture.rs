@@ -1,11 +1,15 @@
 mod density;
 mod pipeline;
+mod place;
+mod product;
 mod seam;
 mod seed;
 mod transfer;
 
 pub use density::for_contour;
 pub use pipeline::{COMPLIANCE, RestStateError, ShapePipeline};
-pub use seam::pair_seam;
+pub use place::{Layout, Wrap};
+pub use product::{combine_constraints, combine_triangles, drop_all, offsets};
+pub use seam::{SEAM_PASSES, SEAM_STEP, pair_seam, sewing_at};
 pub use seed::{DROP_HEIGHT, drop_state};
 pub use transfer::{MeshSwap, onto, transfer_state};

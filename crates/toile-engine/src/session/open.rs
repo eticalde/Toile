@@ -1,20 +1,17 @@
 use super::spawn::{drape_piece, spawn_sim};
-use super::{Drafted, PieceSlot, Session, SessionError};
+use super::{Draped, PieceSlot, Session, SessionError};
 use crate::body::Collider;
+use crate::demo;
 use crate::draft::{Doc, Draft, MeasureSet};
-use crate::sync::SimHandle;
-use crate::{couture, demo};
 
 impl Session {
     /// The demo bodice, draping over the avatar on its own thread.
+    ///
+    /// The sphere is the physics reference, and it is let go at the height the
+    /// drape golden was taken at: [`Collider::demo`] carries that very
+    /// constant, so nothing here chooses a number.
     pub fn demo_bodice() -> Session {
-        let contour = demo::bodice_contour();
-        let pipeline = demo::pipeline(&contour);
-        let state = demo::drop_state(&pipeline);
-        let slot = PieceSlot::new(pipeline, 0);
-        let collider = Collider::demo();
-        let handle = spawn_sim(&slot, state, &collider);
-        build(Some(slot), contour, None, Some(handle), collider)
+        Session::demo_bodice_over(Collider::demo())
     }
 
     /// The demo bodice, let go over `collider` rather than over the sphere.
@@ -25,11 +22,11 @@ impl Session {
     /// so this drapes differently and is meant to.
     pub fn demo_bodice_over(collider: Collider) -> Session {
         let contour = demo::bodice_contour();
-        let pipeline = demo::pipeline(&contour);
-        let state = couture::drop_state(&pipeline, collider.release_height());
-        let slot = PieceSlot::new(pipeline, 0);
-        let handle = spawn_sim(&slot, state, &collider);
-        build(Some(slot), contour, None, Some(handle), collider)
+        let slot = PieceSlot::new(demo::pipeline(&contour), 0);
+        let mut session = build(None, collider);
+        session.draping = vec![Draped::new(None, slot, contour)];
+        session.start();
+        session
     }
 
     /// A blank document over `body`: a table with nothing drawn, ready for the
@@ -47,10 +44,10 @@ impl Session {
     pub fn blank(body: Collider) -> Session {
         let doc = Doc::new(MeasureSet::default());
         let draft = Draft::from_doc(doc).expect("an empty document resolves");
-        blank_with(draft, body)
+        build(Some(draft), body)
     }
 
-    /// A document on the table over `body`, draping its first piece if one can
+    /// A document on the table over `body`, draping every piece of it that can
     /// be draped.
     ///
     /// The body arrives with the document because this seeds the drape: a
@@ -59,60 +56,94 @@ impl Session {
     /// can carry it back out. Whoever opens a document knows the body it
     /// resolves against, so no later frame has to correct this one.
     ///
-    /// A document with no pieces — or one whose first piece is still too
-    /// partial to mesh, as an autosave taken mid-drawing leaves it — opens as a
-    /// blank table wrapping it, the same state a fresh product starts in, so
-    /// every saved product reopens rather than being refused. Drawing on takes
-    /// the piece up again once its contour can be meshed.
+    /// A document with no pieces — or one whose pieces are still too partial to
+    /// mesh, as an autosave taken mid-drawing leaves them — opens as a blank
+    /// table wrapping it, the same state a fresh product starts in, so every
+    /// saved product reopens rather than being refused.
     ///
     /// # Errors
     /// `SessionError` when the document itself does not resolve into a draft.
     pub fn from_doc(doc: Doc, body: Collider) -> Result<Session, SessionError> {
-        let draft = Draft::from_doc(doc)?;
-        let Some(piece) = draft.doc().piece_keys().first().copied() else {
-            return Ok(blank_with(draft, body));
+        let mut session = build(Some(Draft::from_doc(doc)?), body);
+        session.reseed();
+        Ok(session)
+    }
+
+    /// Meshes every piece the document holds and lets the whole product go.
+    ///
+    /// Called when the set of pieces on the stand changes — one drawn, one
+    /// removed, one that has only now become meshable. The pieces already
+    /// draping are let go again with it: a piece arriving or leaving moves
+    /// where every piece after it begins in the combined state, and re-dropping
+    /// is the honest way to say so until the solver can take a piece in on its
+    /// own. A rebuild and a drag do not go through here, and those are the two
+    /// that happen while somebody is watching the cloth.
+    pub(super) fn reseed(&mut self) {
+        // Any rebuild in flight was compiled against a set of meshes that is
+        // about to stop existing, so the mesher goes with them.
+        self.remesher = None;
+        self.draping = match self.draft.as_ref() {
+            Some(draft) => meshed(draft),
+            None => Vec::new(),
         };
-        let Ok((slot, contour, state)) = drape_piece(&draft, piece, body.release_height()) else {
-            return Ok(blank_with(draft, body));
-        };
-        let handle = spawn_sim(&slot, state, &body);
-        let drafted = Drafted {
-            draft,
-            piece: Some(piece),
-        };
-        Ok(build(
-            Some(slot),
-            contour,
-            Some(drafted),
-            Some(handle),
-            body,
-        ))
+        self.start();
+    }
+
+    /// Lays the pieces out as one solver state and starts the thread that
+    /// integrates it. A stand with nothing on it gets no thread.
+    ///
+    /// The seams are paired and the product placed here and nowhere else in
+    /// the opening: this is the one moment the cloth has no position yet, so
+    /// it is the one moment a placement can be chosen without throwing a drape
+    /// away.
+    fn start(&mut self) {
+        self.relist();
+        self.generation = 0;
+        self.mesh_generation = 0;
+        let seams = self.resew();
+        let around = self.layout();
+        self.handle = (!self.draping.is_empty()).then(|| {
+            spawn_sim(
+                &self.pipelines(),
+                self.tris.clone(),
+                seams,
+                around.as_ref(),
+                &self.collider,
+            )
+        });
     }
 }
 
-/// A blank table wrapping a document already resolved into a draft: no piece
-/// drapes, no mesh, no sim thread, until one is drawn or taken up.
-fn blank_with(draft: Draft, body: Collider) -> Session {
-    let drafted = Drafted { draft, piece: None };
-    build(None, Vec::new(), Some(drafted), None, body)
+/// Every piece of the document that meshes, in the order the document holds
+/// them.
+///
+/// Best-effort on purpose. A piece being drawn lands empty and gains its
+/// vertices one command at a time, so it cannot mesh until it has enough of
+/// them; leaving it off the stand until the next vertex is what keeps the
+/// whole draw one smooth gesture.
+fn meshed(draft: &Draft) -> Vec<Draped> {
+    draft
+        .doc()
+        .piece_keys()
+        .into_iter()
+        .filter_map(|piece| {
+            let (slot, contour) = drape_piece(draft, piece).ok()?;
+            Some(Draped::new(Some(piece), slot, contour))
+        })
+        .collect()
 }
 
-/// Fills the session's fields; the caller decides whether a piece drapes.
-fn build(
-    slot: Option<PieceSlot>,
-    contour: Vec<[f64; 2]>,
-    drafted: Option<Drafted>,
-    handle: Option<SimHandle>,
-    collider: Collider,
-) -> Session {
+/// Fills the session's fields; the caller lays the pieces out and starts the
+/// thread.
+fn build(draft: Option<Draft>, collider: Collider) -> Session {
     Session {
-        slot,
-        contour,
-        drafted,
-        handle,
+        draping: Vec::new(),
+        tris: Vec::new(),
+        draft,
+        handle: None,
         collider,
         remesher: None,
-        moved_while_meshing: false,
+        faults: Vec::new(),
         generation: 0,
         mesh_generation: 0,
         revision: 0,

@@ -165,10 +165,20 @@ impl ShapePipeline {
         self.contour_len
     }
 
+    /// Rest length per edge, in the order of [`ShapePipeline::edges`].
+    ///
+    /// The same slice [`ShapePipeline::derive`] hands back, read without
+    /// deriving: a piece of a product that an edit did not touch contributes
+    /// its share of the solver's rest lengths from here.
+    pub fn rests(&self) -> &[f32] {
+        &self.rests
+    }
+
     fn recompute_rests(&mut self) {
         for (k, &(a, b)) in self.edges.iter().enumerate() {
             let (pa, pb) = (self.pos2d[a as usize], self.pos2d[b as usize]);
-            self.rests[k] = (((pb[0] - pa[0]).powi(2) + (pb[1] - pa[1]).powi(2)).sqrt()) as f32;
+            let (dx, dy) = (pb[0] - pa[0], pb[1] - pa[1]);
+            self.rests[k] = (dx * dx + dy * dy).sqrt() as f32;
         }
     }
 

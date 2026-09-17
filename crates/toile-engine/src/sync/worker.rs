@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
-use thiserror::Error;
 use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, SdfGrid, Seams, State};
 
-use crate::couture::{MeshSwap, onto};
+use super::report::{Snapshot, StaleMessage};
+use crate::couture::{self, MeshSwap, onto};
 
 /// Sleep threshold on mean kinetic energy per vertex, about 2 mm/s RMS: one
 /// loose vertex fluttering must not keep the whole garment awake.
@@ -13,48 +13,6 @@ const SLEEP_ENERGY_PER_VERT: f32 = 2.0e-6;
 /// kinetic-damping zero leaves velocities at zero without the cloth actually
 /// being at equilibrium.
 const QUIET_TICKS_TO_SLEEP: u32 = 3;
-
-/// Why the sim thread would not take a message.
-///
-/// A refusal is loud rather than silent for one reason: every case here is a
-/// message compiled against a mesh the solver has already replaced, and taking
-/// it would warm-start the drape over a topology that no longer exists.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
-pub enum StaleMessage {
-    /// A message from before the one the solver is already running.
-    #[error("a message at generation {got} arrived after generation {applied}")]
-    Generation {
-        /// The generation the solver is at.
-        applied: u64,
-        /// The generation the message names.
-        got: u64,
-    },
-    /// Rest lengths for another mesh's constraints.
-    #[error("{got} rest lengths for a mesh of {expected} constraints")]
-    RestCount {
-        /// Constraints the solver holds.
-        expected: usize,
-        /// Rest lengths the message carries.
-        got: usize,
-    },
-}
-
-/// What the sim thread publishes after every tick.
-#[derive(Debug, Clone, Default)]
-pub struct Snapshot {
-    /// Last rest-state generation applied before these substeps.
-    pub generation: u64,
-    /// Substeps run since the thread started.
-    pub substeps: u64,
-    /// The sim is asleep, waiting for an edit.
-    pub converged: bool,
-    /// Interleaved xyz positions.
-    pub positions: Vec<f32>,
-    /// Interleaved xyz vertex normals.
-    pub normals: Vec<f32>,
-    /// The last message the sim refused, if it ever refused one.
-    pub refused: Option<StaleMessage>,
-}
 
 /// The simulation, owned exclusively by its thread.
 pub(super) struct Sim {
@@ -77,6 +35,7 @@ impl Sim {
     pub(super) fn new(
         state: State,
         cons: DistanceConstraints,
+        seams: Seams,
         sdf: Arc<SdfGrid>,
         tris: Vec<u32>,
         dt: f32,
@@ -85,7 +44,7 @@ impl Sim {
         Self {
             state,
             cons,
-            seams: Seams::default(),
+            seams,
             sdf,
             tris,
             dt,
@@ -103,15 +62,21 @@ impl Sim {
         self.converged
     }
 
-    /// Hot-swaps the rest state and wakes the sim.
+    /// Hot-swaps the rest state and what is sewn to what, and wakes the sim.
+    ///
+    /// The two arrive together because a shape edit moves both: the rest
+    /// lengths because the cloth changed shape, and the seams because an
+    /// anchor is a node of that same contour.
     ///
     /// # Errors
-    /// `StaleMessage` when the rest lengths were compiled against a mesh the
-    /// solver has already left behind.
+    /// `StaleMessage` when the message was compiled against a mesh the solver
+    /// has already left behind — by generation, by rest count, or by naming a
+    /// vertex it does not hold.
     pub(super) fn apply_rests(
         &mut self,
         generation: u64,
         rests: &[f32],
+        seams: Seams,
     ) -> Result<(), StaleMessage> {
         self.fresh(generation)?;
         if rests.len() != self.cons.rest.len() {
@@ -120,12 +85,15 @@ impl Sim {
                 got: rests.len(),
             });
         }
+        holds(&seams, self.state.len())?;
         self.cons.rest.copy_from_slice(rests);
+        self.seams = seams;
         self.wake(generation);
         Ok(())
     }
 
-    /// Puts the piece on a new mesh, carrying the drape onto it.
+    /// Puts one piece of the product on a new mesh, carrying the drape onto
+    /// it and leaving the other pieces where they are.
     ///
     /// The mailbox is drained between ticks, never inside one, so the state
     /// this replaces is always a whole substep's worth: the transfer never
@@ -133,17 +101,39 @@ impl Sim {
     ///
     /// # Errors
     /// `StaleMessage::Generation` when a later message has already been
-    /// applied, which means this rebuild was superseded before it landed.
+    /// applied, which means this rebuild was superseded before it landed, and
+    /// `SwapRange` or `SeamRange` when it names a vertex past the end of the
+    /// state — refused rather than sliced, because a panic here would stop the
+    /// drape with nothing said.
     pub(super) fn apply_swap(
         &mut self,
         generation: u64,
         swap: Box<MeshSwap>,
     ) -> Result<(), StaleMessage> {
         self.fresh(generation)?;
+        let len = self.state.len();
+        if swap.at as usize + swap.replacing as usize > len {
+            return Err(StaleMessage::SwapRange {
+                at: swap.at,
+                replacing: swap.replacing,
+                len,
+            });
+        }
+        // Against the state the swap leaves behind, not the one it replaces:
+        // a rebuilt piece changes how many vertices stand before every piece
+        // after it, so the seams travelling with it are written in the new
+        // numbering and only that one can judge them.
+        holds(
+            &swap.seams,
+            len - swap.replacing as usize + swap.pos2d.len(),
+        )?;
         self.state = onto(&swap, &self.state);
-        let MeshSwap { tris, cons, .. } = *swap;
+        let MeshSwap {
+            tris, cons, seams, ..
+        } = *swap;
         self.cons = cons;
         self.tris = tris;
+        self.seams = seams;
         self.wake(generation);
         Ok(())
     }
@@ -201,10 +191,18 @@ impl Sim {
     }
 
     /// Advances one tick and updates the convergence verdict.
+    ///
+    /// The sewing tightens as the drape runs, and it is counted from the
+    /// thread's own substeps rather than from the last edit: a product is let
+    /// go with its seams open, and that is the one moment they need to be
+    /// soft. A later edit moves the cloth, not the pieces apart.
     pub(super) fn tick(&mut self) {
         let inv_n = 1.0 / self.state.len() as f32;
         let mut e_avg = 0.0f32;
         for _ in 0..self.substeps_per_tick {
+            if !self.seams.is_empty() {
+                (self.seams.compliance, self.seams.max_step) = couture::sewing_at(self.substeps);
+            }
             xpbd::substep(&mut self.state, &self.cons, &self.seams, &self.sdf, self.dt);
             self.substeps += 1;
             e_avg = self.damper.observe(&mut self.state) * inv_n;
@@ -235,6 +233,24 @@ impl Sim {
             normals,
             refused: self.refused,
         })
+    }
+}
+
+/// Whether every sewn vertex is one a state of `len` particles holds.
+///
+/// The solver indexes these directly, so one past the end is a panic on the
+/// sim thread rather than a wrong drape — the same reason a swap's run is
+/// checked before it is taken.
+fn holds(seams: &Seams, len: usize) -> Result<(), StaleMessage> {
+    match seams
+        .a
+        .iter()
+        .chain(&seams.b)
+        .copied()
+        .find(|&v| v as usize >= len)
+    {
+        Some(vertex) => Err(StaleMessage::SeamRange { vertex, len }),
+        None => Ok(()),
     }
 }
 

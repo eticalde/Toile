@@ -12,6 +12,10 @@ use crate::draft::{BodyShape, MeasureSet};
 /// Turning a body mesh into the signed distance field the solver collides
 /// against.
 pub mod bake;
+/// The body's own measurement rings, and which one a garment belongs at.
+mod belt;
+pub use belt::Belt;
+pub(crate) use belt::worn_at;
 /// Baked fields kept between runs, so a body is baked once and not once a run.
 pub mod cache;
 /// The body a drape falls on, and where a garment is let go over it.

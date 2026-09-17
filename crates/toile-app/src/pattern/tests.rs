@@ -140,12 +140,18 @@ fn a_table_with_no_document_paints_nothing_to_grab() {
     // The demo bodice draws a contour of a hundred and twenty-eight points and
     // owns no node at all: every one of them was a dot promising a drag that
     // could never be issued.
-    assert!(session.contour_m().len() > 100);
+    let contours: Vec<&[[f64; 2]]> = session.contours_m().collect();
+    assert_eq!(contours.len(), 1, "the demo drapes the one panel");
+    assert!(contours[0].len() > 100);
     let rect = Rect::from_min_size(pos2(0.0, 0.0), vec2(PANEL[0], PANEL[1]));
-    let view = DrapeView::fit(session.contour_m(), rect);
-    let nodes = match (session.draft(), session.piece()) {
-        (Some(draft), Some(piece)) => nodes_of(draft, piece, &view),
-        _ => Vec::new(),
+    let view = DrapeView::fit(contours.iter().copied().flatten(), rect);
+    let nodes: Vec<Node> = match session.draft() {
+        Some(draft) => session
+            .pieces()
+            .into_iter()
+            .flat_map(|piece| nodes_of(draft, piece, &view))
+            .collect(),
+        None => Vec::new(),
     };
     assert!(nodes.is_empty());
 }

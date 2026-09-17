@@ -1,5 +1,50 @@
 use super::pipeline::ShapePipeline;
 
+/// Seam compliance a product is let go with.
+///
+/// Soft, because a product is let go with its seams open: the pieces are
+/// placed around the body and the cloth between two of them has yet to be
+/// pulled together. A firm seam over that gap is a detonation, not a drape.
+pub const SEAM_SOFT: f32 = 1.0e-5;
+
+/// Seam compliance once the product has been pulled together: firm enough
+/// that a sewn pair reads as one point.
+pub const SEAM_FIRM: f32 = 1.0e-9;
+
+/// Most a sewn pair may be pulled together in one pass, in metres.
+///
+/// This and not the compliance is what governs a wide gap: the correction a
+/// pair asks for is half the distance between its two ends, and over anything
+/// but a closed seam that is far more than the cap allows.
+pub const SEAM_STEP: f32 = 0.002;
+
+/// The same cap once the seams are firm, when what is left to close is the
+/// residue rather than the gap.
+const SEAM_STEP_FIRM: f32 = 0.01;
+
+/// Seam passes per substep. Seams are few and dominate the conditioning, so
+/// iterating them is cheap and closes what one capped pass cannot.
+pub const SEAM_PASSES: u32 = 4;
+
+/// Substeps the compliance takes to go from soft to firm.
+const RAMP: u64 = 450;
+
+/// How stiff the seams are, and how far they may pull, `substeps` into a
+/// drape: the schedule the seams benchmark settled on.
+pub fn sewing_at(substeps: u64) -> (f32, f32) {
+    if substeps >= RAMP {
+        return (SEAM_FIRM, SEAM_STEP_FIRM);
+    }
+    let t = substeps as f32 / RAMP as f32;
+    // `libm` rather than the intrinsic, for the reason the bake pins it: this
+    // runs on every substep of a sewn drape, and std's `powf` is the
+    // platform's, so the same garment would be pulled together a little
+    // differently on the second architecture. The contract here allows
+    // `+ - * / sqrt` and this one pinned crate, and names `powf` among what
+    // it does not.
+    (SEAM_SOFT * libm::powf(SEAM_FIRM / SEAM_SOFT, t), SEAM_STEP)
+}
+
 /// Pairs two boundary runs for sewing: `count` pairs at equal relative
 /// fractions of each run.
 ///

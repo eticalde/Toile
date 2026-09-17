@@ -32,7 +32,10 @@ pub fn mvc_weights(boundary: &[[f64; 2]], interior: &[[f64; 2]]) -> BoundaryInte
         let row = &mut weights[j * n..(j + 1) * n];
         let d: Vec<f64> = boundary
             .iter()
-            .map(|v| ((v[0] - p[0]).powi(2) + (v[1] - p[1]).powi(2)).sqrt())
+            .map(|v| {
+                let (dx, dy) = (v[0] - p[0], v[1] - p[1]);
+                (dx * dx + dy * dy).sqrt()
+            })
             .collect();
 
         // Sitting on a boundary vertex: the general formula divides by zero.

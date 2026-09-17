@@ -192,13 +192,14 @@ fn the_solver_keeps_integrating_while_the_worker_meshes() {
         Session::from_doc(block::trouser_front(), Collider::demo()).expect("the block drapes");
     let before = substeps_past(&session, 0);
     assert!(before > 0, "the sim thread is running");
-    let nodes = session.contour_m().len();
+    let piece = session.piece().expect("the block drapes a piece");
+    let nodes = session.contour_m(piece).len();
 
     let command = insert(&mut session);
     session.edit(command).expect("a node goes into the contour");
     assert!(session.remeshing(), "the rebuild left the interface thread");
     assert_eq!(
-        session.contour_m().len(),
+        session.contour_m(piece).len(),
         nodes,
         "the solver still holds the contour it was meshed from"
     );
@@ -211,7 +212,7 @@ fn the_solver_keeps_integrating_while_the_worker_meshes() {
 
     assert!(session.wait_for_remesh().expect("the rebuild lands"));
     assert!(!session.remeshing());
-    assert_eq!(session.contour_m().len(), nodes + 1);
+    assert_eq!(session.contour_m(piece).len(), nodes + 1);
     assert!(session.last_remesh_ms > 0.0);
 
     // The proof that the swap actually landed: a shape edit derives against
@@ -268,10 +269,11 @@ fn undoing_an_insertion_meshes_the_piece_back() {
     session.edit(command).expect("a node goes into the contour");
     session.wait_for_remesh().expect("the rebuild lands");
 
-    let nodes = session.contour_m().len();
+    let piece = session.piece().expect("the block drapes a piece");
+    let nodes = session.contour_m(piece).len();
     session.undo().expect("the insertion comes back out");
     session.wait_for_remesh().expect("the rebuild lands");
-    assert_eq!(session.contour_m().len(), nodes - 1);
+    assert_eq!(session.contour_m(piece).len(), nodes - 1);
     assert_eq!(session.n_vertices(), vertices, "the same mesh, rebuilt");
     assert!(!session.remeshing());
 }

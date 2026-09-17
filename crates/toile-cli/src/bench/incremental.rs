@@ -162,6 +162,7 @@ pub fn run_async() {
     let handle = sync::spawn(
         demo::drop_state(&pipe),
         cons,
+        Seams::default(),
         std::sync::Arc::new(demo::avatar_sdf()),
         pipe.tris.clone(),
         DT,
@@ -190,7 +191,7 @@ pub fn run_async() {
 
         let generation = u64::from(f) + 1;
         let sent = Instant::now();
-        handle.send_rests(generation, rests);
+        handle.send_rests(generation, rests, Seams::default());
         latency_ms.push(wait_for_generation(&handle, generation, sent));
 
         std::thread::sleep(frame_dur.saturating_sub(frame_start.elapsed()));
