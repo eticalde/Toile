@@ -6,7 +6,7 @@ use toile_engine::draft::{PieceKey, block};
 use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
 
-use super::{LANDED, MARK, at_mark, buried, reference, span, through_the_drape, touching};
+use crate::watch::{LANDED, MARK, at_mark, buried, reference, span, through_the_drape, touching};
 
 /// How far from a seam, in metres of cloth, a vertex has to be before the two
 /// pieces coming close there counts as one passing through the other.
@@ -106,9 +106,10 @@ fn about_the_axis(run: std::ops::Range<usize>, at: &[[f32; 3]], axis: [f32; 2]) 
 /// body's: the measurement ring a garment this size is worn at, which for one
 /// leg's worth of trouser is the thigh.
 ///
-/// Measured at a fixed substep, the way the one-piece scenes beside this are:
-/// there is no floor and nothing holds a garment on, so there is no rest to
-/// wait for.
+/// Read at a fixed substep and not at rest, deliberately. Since the floor
+/// landed a sewn tube does come to a stop — at about 12,200 substeps — but it
+/// stops in a heap on the ground. What this asks is how the product sits *on*
+/// the body while it is still being worn, and only the mark answers that.
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
 fn a_sewn_product_is_let_go_around_the_body() {
@@ -252,12 +253,11 @@ fn at_the_mark(session: &Session, sdf: &SdfGrid, released: &Released) {
         "the garment is not on the body: not one of {count} particles lies \
          within a cell of the skin"
     );
-    // Still on the body, rather than fallen away beneath it. The one-piece
-    // scenes beside this ask for the whole panel to be above the body's lowest
-    // point, and a sewn tube cannot answer that: it is let go round a limb and
-    // hangs a metre down from there, so with no friction to hold it and no
-    // floor to stop it the hem is under the foot from the first substep. What
-    // can be asked, and is, is that the cloth has not left the body.
+    // Still on the body, rather than fallen away beneath it. A sewn tube is
+    // let go round a limb and hangs a metre down from there, so its hem is
+    // under the foot from the first substep and the whole-panel reading the
+    // one-piece scenes take cannot be asked of it. What can be asked, and is,
+    // is that the cloth has not left the body by the mark.
     assert!(
         high > lo[1],
         "the garment fell clear of the body instead of onto it: its top {high} \

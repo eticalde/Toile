@@ -4,6 +4,7 @@ mod seams;
 use eframe::egui::{self, Align2, FontId, Rect, Sense, Stroke, Vec2, pos2, vec2};
 use eframe::egui_wgpu::RenderState;
 use icons::{check_icon, pause_icon, play_icon, reset_icon, warn_icon};
+use toile_engine::draft::BodyMesh;
 use toile_engine::session::Session;
 
 use crate::fitting::Fitting;
@@ -74,12 +75,28 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
                 && let Some(mesh) = w.fitting.mesh()
             {
                 st.viewport
-                    .set_avatar(&st.rs, Avatar::body(mesh, theme.avatar));
+                    .set_avatar(&st.rs, standing(w.session, mesh, theme));
                 st.body_at = Some(w.fitting.solves());
             }
             st.viewport.show(ui, half, &st.rs, theme, w.session);
         });
     });
+}
+
+/// The body as the viewport draws it, on the ground it stands on.
+///
+/// The plane is the solver's own, read off the body the drape is falling on,
+/// so the surface a person watches the garment land on is the one that
+/// stopped it. A body that stands on nothing — the demo sphere, which is the
+/// physics reference and floats — is drawn without any.
+fn standing(session: &Session, mesh: &BodyMesh, theme: &Theme) -> Avatar {
+    let avatar = Avatar::body(mesh, theme.avatar);
+    let Some(y) = session.collider().ground() else {
+        return avatar;
+    };
+    let (lo, hi) = session.collider().extent();
+    let centre = [f32::midpoint(lo[0], hi[0]), f32::midpoint(lo[2], hi[2])];
+    avatar.standing_on(y, centre, theme.ground)
 }
 
 // ── bars and panels ───────────────────────────────────────────────────────

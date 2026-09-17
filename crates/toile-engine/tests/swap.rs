@@ -1,8 +1,5 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
-#![allow(
-    clippy::float_cmp,
-    reason = "a move to a round number of centimetres lands on it exactly"
-)]
+#![allow(clippy::float_cmp, reason = "a round centimetre is landed on exactly")]
 
 use std::time::{Duration, Instant};
 
@@ -12,7 +9,7 @@ use toile_engine::draft::{
     Binding, Command, Draft, Identity, PieceKey, Point, PointKey, SegmentEdit, block,
 };
 use toile_engine::session::Session;
-use toile_sim::xpbd::{self, SdfGrid, Seams, State};
+use toile_sim::xpbd::{self, DistanceConstraints, Floor, SdfGrid, Seams, State};
 
 /// Simulated seconds per substep, as the engine runs it.
 const DT: f32 = 1.0 / 600.0;
@@ -54,6 +51,14 @@ fn sphere() -> SdfGrid {
     SdfGrid::sphere(48, 0.5 / 47.0, [-0.25, -0.25, -0.25], [0.0, 0.0, 0.0], 0.08)
 }
 
+/// `n` substeps of the reference scalar path: no ground, nothing sewn.
+fn drape(state: &mut State, cons: &DistanceConstraints, sdf: &SdfGrid, n: usize) {
+    let seams = Seams::default();
+    for _ in 0..n {
+        xpbd::substep(state, cons, &seams, sdf, Floor::none(), None, DT);
+    }
+}
+
 /// Mean kinetic energy per vertex, the number the sim thread sleeps on.
 fn energy(state: &State) -> f32 {
     xpbd::kinetic_energy(state) / state.len() as f32
@@ -82,12 +87,9 @@ fn the_drape_survives_a_mesh_swap() {
     assert_ne!(old.pos2d.len(), new.pos2d.len(), "the mesh really changed");
     let cons = old.constraints(COMPLIANCE);
     let sdf = sphere();
-    let no_seams = Seams::default();
 
     let mut state = couture::drop_state(&old, couture::DROP_HEIGHT);
-    for _ in 0..DRAPE {
-        xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
-    }
+    drape(&mut state, &cons, &sdf, DRAPE);
     let (was_moving, was_at) = (energy(&state), height(&state));
     let (was_lowest, was_highest) = span(&state);
     assert!(
@@ -122,15 +124,13 @@ fn the_drape_survives_a_mesh_swap() {
     // pull it back onto its rest lengths. It is a step, not a bang, and it is
     // paid once — a tenth of a second later the panel is quieter than it was
     // before the swap, which is the drape carrying on rather than restarting.
-    xpbd::substep(&mut carried, &swap.cons, &no_seams, &sdf, DT);
+    drape(&mut carried, &swap.cons, &sdf, 1);
     let spike = energy(&carried);
     assert!(
         spike < was_moving * SPIKE,
         "the swap cost one bounded step: {spike} against {was_moving}"
     );
-    for _ in 0..SETTLE {
-        xpbd::substep(&mut carried, &swap.cons, &no_seams, &sdf, DT);
-    }
+    drape(&mut carried, &swap.cons, &sdf, SETTLE);
     assert!(
         energy(&carried) < was_moving,
         "and the panel went on settling: {} against {was_moving}",

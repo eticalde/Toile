@@ -2,194 +2,49 @@
 
 /// The same habits over a product of two sewn pieces.
 mod product;
+/// The vocabulary every scene here is measured in.
+mod watch;
 
-use std::time::{Duration, Instant};
-
-use toile_engine::body::{BodyMesh, Collider, Phenotype, bake, body_mesh};
+use toile_engine::body::{Collider, bake};
 use toile_engine::draft::block;
 use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
+use watch::{LANDED, REST, at_rest, buried, footing, parks_by, reference, span, touching};
 
-/// How long a test waits on the sim thread before calling it stuck.
-const PATIENCE: Duration = Duration::from_secs(60);
+/// How close to the ground the whole garment lies once it has parked, in
+/// metres, for a scene that came to rest on the floor rather than on the body.
+const ON_THE_GROUND: f32 = 0.15;
 
-/// Where in the drape the garment is measured, in substeps.
+/// What a seeded scene is held to: the garment came down, it came to a stop,
+/// none of it went through the ground, and none of it is buried where the
+/// field could never push it out again.
 ///
-/// Three simulated seconds: after the panel has come down onto the body, and
-/// seconds before it slides off one. There is no settled state to measure
-/// instead, and the last test here is what says so.
-const MARK: u64 = 1800;
-
-/// Substeps a drape is given to go to sleep in.
+/// Measured at rest, which is a thing that exists only since the floor landed.
+/// Before it, a garment let go over a body slid off and fell for as long as
+/// anything integrated it — hundreds of metres inside the minute — so these
+/// scenes had to be read at a fixed substep instead.
 ///
-/// The demo bodice parks on the sphere in a little over two thousand, and the
-/// first half of the last test is what keeps this number honest: a budget too
-/// short to catch the scene that does park would make the half about the body
-/// pass against anything at all.
-const PARKED: u64 = 3600;
-
-/// How far the garment must have fallen to count as landed, in metres.
+/// Burial is the sharp one. The others say the drape behaved; this one is the
+/// bug the tests were written for, where a garment let go at some other body's
+/// height starts inside this one and no contact solve can carry it out.
 ///
-/// It is released a clearance above the body's top and comes to rest on it,
-/// so the whole drop is that clearance; a fraction of it is enough to tell a
-/// panel on the body from one still hanging where it was let go.
-const LANDED: f32 = 0.05;
-
-/// The reference adult body the Anny goldens are taken against.
-fn reference() -> BodyMesh {
-    let phenotype = Phenotype {
-        gender: 0.0,
-        age: 0.8,
-        muscle: 0.5,
-        weight: 0.5,
-        height: 0.5,
-        proportions: 0.5,
-    };
-    body_mesh(&phenotype, &[0.0; 20])
-}
-
-/// Particles buried past the band, and particles in all.
-///
-/// Not the field's bare sign, which is a razor edge: cloth resting on a body
-/// straddles the zero isosurface, so every drape here reads several hundred
-/// particles a fraction of a millimetre under the skin, and one settled on
-/// the demo sphere reads nineteen hundred. Counting those would call a good
-/// drape swallowed. What must never happen is a particle out past the band,
-/// where the field is saturated flat, its gradient is exactly zero, and no
-/// contact solve has a normal to push it back out along.
-fn buried(sdf: &SdfGrid, points: &[[f32; 3]]) -> (usize, usize) {
-    let floor = -(bake::BAND as f32);
-    let deep = points
-        .iter()
-        .filter(|p| sdf.sample(p[0], p[1], p[2]) <= floor)
-        .count();
-    (deep, points.len())
-}
-
-/// Particles close enough to the skin to be held there by the contact solve.
-///
-/// One cell is the field's own resolution, and the gap a garment hangs at is
-/// several of them, so this counts the cloth that is on the body rather than
-/// near it.
-fn touching(sdf: &SdfGrid, points: &[[f32; 3]]) -> usize {
-    let cell = bake::CELL as f32;
-    points
-        .iter()
-        .filter(|p| sdf.sample(p[0], p[1], p[2]).abs() <= cell)
-        .count()
-}
-
-/// The cloth's lowest and highest particle, in metres.
-fn span(points: &[[f32; 3]]) -> (f32, f32) {
-    points.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
-        (lo.min(p[1]), hi.max(p[1]))
-    })
-}
-
-/// The frame after the sim thread has run [`MARK`] substeps.
-///
-/// Counted in substeps and not in seconds, because the solver's step is
-/// fixed: the frame this returns is the same drape on a fast machine and on
-/// a slow one.
-fn at_mark(session: &Session) -> Vec<[f32; 3]> {
-    let deadline = Instant::now() + PATIENCE;
-    while Instant::now() < deadline && session.snapshot().substeps < MARK {
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    let snap = session.snapshot();
-    assert!(
-        snap.substeps >= MARK,
-        "the sim thread never reached {MARK} substeps"
-    );
-    snap.positions.as_chunks::<3>().0.to_vec()
-}
-
-/// What watching a whole drape found.
-struct Watched {
-    /// The most particles ever past the band, and the substep it happened at.
-    worst: (usize, u64),
-    /// The most of the garment ever within a cell of the skin, and when.
-    worn: (usize, u64),
-}
-
-/// Watches every frame the sim publishes up to [`MARK`].
-///
-/// A lone panel is read at the mark because that is where it comes to rest. A
-/// sewn tube cannot be: let go round a limb, with no friction to hold it and
-/// no floor to stop it, it slides down the leg, so by the mark it hangs below
-/// the feet and that frame says nothing about how it was worn. What must hold
-/// for a tube is that no particle was ever driven past the band — at any
-/// moment of the drape, not at one chosen instant.
-///
-/// # Panics
-/// If the sim thread never reaches [`MARK`] substeps.
-fn through_the_drape(session: &Session, sdf: &SdfGrid) -> Watched {
-    let deadline = Instant::now() + PATIENCE;
-    let mut seen = 0;
-    let mut found = Watched {
-        worst: (0, 0),
-        worn: (0, 0),
-    };
-    while Instant::now() < deadline {
-        let snap = session.snapshot();
-        if snap.substeps > seen {
-            seen = snap.substeps;
-            let points = snap.positions.as_chunks::<3>().0;
-            let (deep, _) = buried(sdf, points);
-            if deep > found.worst.0 {
-                found.worst = (deep, seen);
-            }
-            let on_skin = touching(sdf, points);
-            if on_skin > found.worn.0 {
-                found.worn = (on_skin, seen);
-            }
-        }
-        if seen >= MARK {
-            return found;
-        }
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    panic!("the sim thread never reached {MARK} substeps");
-}
-
-/// Whether the drape goes to sleep inside `budget` substeps.
-///
-/// # Panics
-/// If the sim thread never runs that many substeps, which means it is stuck
-/// rather than busy.
-fn parks_by(session: &Session, budget: u64) -> bool {
-    let deadline = Instant::now() + PATIENCE;
-    while Instant::now() < deadline {
-        if session.settled() {
-            return true;
-        }
-        if session.snapshot().substeps >= budget {
-            return false;
-        }
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    panic!("the sim thread never reached {budget} substeps");
-}
-
-/// What a seeded scene is held to: the garment came down onto the body, it is
-/// resting on it, and none of it is buried where the field cannot push it out
-/// again.
-///
-/// Contact is the one that refuses a miss. A span that lies between the crown
-/// and the feet is also where a panel that has slid off and is falling past
-/// the hips reads: over this body the demo bodice keeps such a span for
-/// seconds after the last of it has left the skin, so the span alone passes
-/// in the very case this exists to refuse.
-fn lands_on_the_body(scene: &str, session: &Session, sdf: &SdfGrid) {
+/// Where the heap came to rest is what keeps the other three from being
+/// satisfied by a garment that never met the body at all: one let go beside
+/// the person comes down, stops above the ground, and is buried in nothing.
+fn rests_clear_of_the_body(scene: &str, session: &Session, sdf: &SdfGrid) {
     let (lo, hi) = session.collider().extent();
     let release = session.collider().release_height();
-    let points = at_mark(session);
+    let floor = session
+        .collider()
+        .ground()
+        .expect("a baked body stands on a plane");
+    let (points, at) = at_rest(session);
     let (low, high) = span(&points);
     let (deep, all) = buried(sdf, &points);
     let on_skin = touching(sdf, &points);
     println!(
-        "{scene}: cloth {low:.3}..{high:.3}, body {:.3}..{:.3}, released {release:.3}, \
-         {on_skin} of {all} on the skin, {deep} buried",
+        "{scene}: parked at {at} substeps · cloth {low:.4}..{high:.4} · body {:.4}..{:.4} \
+         · floor {floor:.4} · released {release:.3} · {on_skin} of {all} on the skin, {deep} buried",
         lo[1], hi[1]
     );
     assert!(
@@ -197,18 +52,28 @@ fn lands_on_the_body(scene: &str, session: &Session, sdf: &SdfGrid) {
         "{scene}: the garment never came down from {release}: {high}"
     );
     assert!(
-        low > lo[1],
-        "{scene}: the garment fell past the body instead of onto it: {low} under {}",
-        lo[1]
-    );
-    assert!(
-        on_skin > 0,
-        "{scene}: the garment is not on the body: not one of {all} particles \
-         lies within a cell of the skin"
+        low >= floor,
+        "{scene}: the garment went through the ground: {low} under {floor}"
     );
     assert_eq!(
         deep, 0,
         "{scene}: {deep} of {all} particles are buried past the band"
+    );
+    // The miss the other three cannot see. Cloth resting on the floor a long
+    // way from the person satisfies every one of them, and counting what is
+    // buried says least of all out there, since nothing far from a body is
+    // ever inside one. These two scenes settle a third of a metre and half a
+    // metre inside the footprint; the same panel let go two metres to the side
+    // lands well over a metre outside it.
+    let (cx, cz) = footing(&points);
+    assert!(
+        cx >= lo[0] && cx <= hi[0] && cz >= lo[2] && cz <= hi[2],
+        "{scene}: the garment came to rest beside the body instead of on it: \
+         its weight lies at x {cx} z {cz}, outside x {}..{} z {}..{}",
+        lo[0],
+        hi[0],
+        lo[2],
+        hi[2]
     );
 }
 
@@ -220,8 +85,7 @@ fn lands_on_the_body(scene: &str, session: &Session, sdf: &SdfGrid) {
 /// height over an adult body, 1,299 of the trouser front's 10,513 particles
 /// begin out past the band, where the field is saturated flat and its
 /// gradient is exactly zero. The contact solve has no normal to push along,
-/// so they never come out — a minute later the panel has stopped moving with
-/// sixty-three of them still in there.
+/// so they never come out.
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
 fn opening_a_document_does_not_bury_the_garment_in_the_body() {
@@ -232,7 +96,7 @@ fn opening_a_document_does_not_bury_the_garment_in_the_body() {
     // grid itself carries.
     let sdf = bake::sdf(&mesh).expect("the Anny body is closed and orientable");
     let session = Session::from_doc(block::trouser_front(), body).expect("the block drapes");
-    lands_on_the_body("opened document", &session, &sdf);
+    rests_clear_of_the_body("opened document", &session, &sdf);
 }
 
 /// The scene the app starts on, measured the same way, which is what said the
@@ -244,38 +108,51 @@ fn the_startup_scene_does_not_bury_the_garment_in_the_body() {
     let body = Collider::bake(&mesh).expect("the Anny body is closed and orientable");
     let sdf = bake::sdf(&mesh).expect("the Anny body is closed and orientable");
     let session = Session::demo_bodice_over(body);
-    lands_on_the_body("startup scene", &session, &sdf);
+    rests_clear_of_the_body("startup scene", &session, &sdf);
 }
 
-/// No drape over a body settles yet, which is why the two tests above measure
-/// at a fixed substep instead of waiting for one that settles.
+/// A drape over a body now parks — on the ground, and not on the body.
 ///
-/// There is no floor. A panel is let go a clearance above the body's top,
-/// which over an adult puts it over the crown of the head; it comes down
-/// there, hangs while friction loses to gravity, slides off, and then falls
-/// for as long as anything integrates it — hundreds of metres down within the
-/// minute, and metres a second all the way. The sim thread sleeps on mean
-/// kinetic energy per vertex, and a garment still falling never goes quiet.
+/// This is what the floor bought and what it did not. Before it, a panel let
+/// go over an adult came down on the crown, hung while friction lost to
+/// gravity, slid off and then fell for ever, so nothing over a body ever went
+/// quiet. Now the same panel lands on the plane the body stands on and stops
+/// there: the startup bodice parks at about 7,100 substeps with every one of
+/// its particles within a couple of centimetres of the floor.
 ///
-/// So the same panel is run over both, to the same budget. The sphere half is
-/// not scenery: a test that only ever asserts a negative cannot tell "this
-/// never settles" from "nothing here would have noticed if it had", and the
-/// scene that does park is what rules the second reading out.
+/// What it did not buy is a garment that stays on. Nothing holds a bodice at
+/// the shoulders of a body it was dropped over, so at rest it is a heap around
+/// the feet — 16 of its 12,540 particles within a cell of the skin. Whoever
+/// makes a garment stay where it was put should tighten the last assertion
+/// here, because it is the one that says the cloth is on the floor.
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
-fn the_same_panel_parks_on_the_sphere_and_never_on_a_body() {
+fn a_drape_over_a_body_parks_on_the_ground_and_not_yet_on_the_body() {
+    // The sphere half is not scenery: it is the physics reference, it has no
+    // floor, and it still parks on its own — which is what says the budget
+    // below measures a drape that settles rather than one nothing watches.
     assert!(
-        parks_by(&Session::demo_bodice(), PARKED),
-        "the demo bodice stopped parking on the sphere inside {PARKED} substeps, \
-         so the budget no longer tells a drape that settles from one that never \
-         will, and the half below proves nothing until it is raised"
+        parks_by(&Session::demo_bodice(), REST),
+        "the demo bodice stopped parking on the sphere inside {REST} substeps"
     );
 
     let mesh = reference();
     let body = Collider::bake(&mesh).expect("the Anny body is closed and orientable");
+    let floor = body.ground().expect("a baked body stands on a plane");
+    let session = Session::demo_bodice_over(body);
+    let (points, at) = at_rest(&session);
+    let (low, high) = span(&points);
+    println!("over a body: parked at {at} substeps · cloth {low:.4}..{high:.4} · floor {floor:.4}");
     assert!(
-        !parks_by(&Session::demo_bodice_over(body), PARKED),
-        "a drape settled on a body: either a floor has landed or the panel now \
-         stays on, and the two tests above should go back to measuring at rest"
+        low >= floor,
+        "it came to rest on the ground, not through it: {low} under {floor}"
+    );
+    assert!(
+        high - floor < ON_THE_GROUND,
+        "the whole garment is lying on the floor rather than worn on the body: \
+         its highest point {high} stands {} above the ground. If a garment now \
+         stays on, this is the assertion to tighten and the two tests above \
+         should measure what is worn rather than what came to rest",
+        high - floor
     );
 }

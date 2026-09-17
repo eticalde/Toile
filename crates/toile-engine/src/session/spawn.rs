@@ -1,10 +1,22 @@
-use toile_sim::xpbd::Seams;
+use toile_sim::xpbd::{Floor, Seams};
 
 use super::{COMPLIANCE, DT, PieceSlot, SUBSTEPS_PER_TICK, SessionError};
 use crate::body::Collider;
 use crate::couture::{self, Layout, ShapePipeline};
 use crate::draft::{Draft, PieceKey};
-use crate::sync::{self, SimHandle};
+use crate::sync::{self, Scene, SimHandle};
+
+/// What a body offers the solver: its field, and the plane it stands on.
+///
+/// The one place the two are put together, so a body handed to a running sim
+/// and a body a fresh thread starts on cannot come to disagree about where
+/// the ground is.
+pub(super) fn scene_of(collider: &Collider) -> Scene {
+    Scene {
+        sdf: collider.shared(),
+        floor: collider.ground().map_or(Floor::none(), Floor::at),
+    }
+}
 
 /// Meshes a piece: the slot it goes in, and the contour it was meshed from.
 ///
@@ -61,7 +73,7 @@ pub(super) fn spawn_sim(
         state,
         cons,
         seams,
-        collider.shared(),
+        scene_of(collider),
         tris,
         DT,
         SUBSTEPS_PER_TICK,

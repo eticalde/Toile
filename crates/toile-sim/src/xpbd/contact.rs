@@ -56,6 +56,55 @@ pub(super) fn resolve(sdf: &SdfGrid, eps: f32, p: [f32; 3], q: [f32; 3]) -> ([f3
     (p, q)
 }
 
+/// The ground a body stands on: the plane cloth may not fall through, or no
+/// ground at all.
+///
+/// The demo sphere floats, and it is the physics reference, so it carries
+/// [`Floor::none`] and every drape golden is taken with nothing underneath.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Floor(Option<f32>);
+
+impl Floor {
+    /// No ground: cloth falls for as long as anything integrates it.
+    pub const fn none() -> Floor {
+        Floor(None)
+    }
+
+    /// Ground at `y` metres.
+    pub const fn at(y: f32) -> Floor {
+        Floor(Some(y))
+    }
+
+    /// The plane's height, when there is one.
+    pub const fn level(self) -> Option<f32> {
+        self.0
+    }
+}
+
+/// Rests one particle on the plane at `y`, with the friction and the damping
+/// the field's own contact uses. A particle above it is returned untouched.
+///
+/// The plane's normal is `+y` exactly, so what [`resolve`] spends four samples
+/// establishing is a constant here: no gradient, no `eps`, and the tangential
+/// motion friction takes is simply the horizontal part of the step. There is
+/// no saturated interior to guard against either — a plane has a normal
+/// everywhere, so a particle under it always has somewhere to be pushed.
+#[inline]
+pub(super) fn rest_on(y: f32, p: [f32; 3], q: [f32; 3]) -> ([f32; 3], [f32; 3]) {
+    if p[1] >= y {
+        return (p, q);
+    }
+    let mut p = [p[0], y, p[2]];
+    p[0] -= FRICTION * (p[0] - q[0]);
+    p[2] -= FRICTION * (p[2] - q[2]);
+    let q = [
+        q[0] + CONTACT_DAMP * (p[0] - q[0]),
+        q[1] + CONTACT_DAMP * (p[1] - q[1]),
+        q[2] + CONTACT_DAMP * (p[2] - q[2]),
+    ];
+    (p, q)
+}
+
 /// Carries cloth a newly installed field has swallowed back out onto its
 /// surface, without stirring it.
 ///

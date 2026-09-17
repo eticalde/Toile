@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use toile_sim::xpbd::{self, DistanceConstraints, SdfGrid, Seams, State};
+use toile_sim::xpbd::{self, DistanceConstraints, Floor, SdfGrid, Seams, State};
 
 use super::scene::{DT, Lcg, same_bits, shuffle};
 
@@ -114,15 +114,21 @@ pub fn build(target: usize) -> Scene {
     }
 }
 
+/// One substep of the reference scalar path over the benchmark scene.
+fn step(s: &mut Scene, seams: &Seams) {
+    let (state, cons, sdf) = (&mut s.state, &s.cons, &s.sdf);
+    xpbd::substep(state, cons, seams, sdf, Floor::none(), None, DT);
+}
+
 /// Milliseconds per timed substep, and the final position hash.
-fn measure(target: usize, mut step: impl FnMut(&mut Scene)) -> (f64, u64) {
+fn measure(target: usize, mut one: impl FnMut(&mut Scene)) -> (f64, u64) {
     let mut scene = build(target);
     for _ in 0..WARMUP {
-        step(&mut scene);
+        one(&mut scene);
     }
     let t = Instant::now();
     for _ in 0..TIMED {
-        step(&mut scene);
+        one(&mut scene);
     }
     let ms = t.elapsed().as_secs_f64() * 1000.0 / TIMED as f64;
     (ms, xpbd::position_hash(&scene.state))
@@ -152,12 +158,8 @@ struct Timings {
 
 fn time_paths(target: usize, colored: &xpbd::ColoredConstraints) -> Timings {
     let no_seams = Seams::default();
-    let (mono, h1) = measure(target, |s| {
-        xpbd::substep(&mut s.state, &s.cons, &no_seams, &s.sdf, DT);
-    });
-    let (_, h2) = measure(target, |s| {
-        xpbd::substep(&mut s.state, &s.cons, &no_seams, &s.sdf, DT);
-    });
+    let (mono, h1) = measure(target, |s| step(s, &no_seams));
+    let (_, h2) = measure(target, |s| step(s, &no_seams));
 
     let all = std::thread::available_parallelism().map_or(8, std::num::NonZero::get);
     let mut runs = Vec::new();
@@ -198,14 +200,14 @@ fn time_paths(target: usize, colored: &xpbd::ColoredConstraints) -> Timings {
 
 fn time_normals(target: usize) -> f64 {
     let no_seams = Seams::default();
-    let mut scene = build(target);
-    let mut normals = vec![0.0f32; scene.state.len() * 3];
+    let mut s = build(target);
+    let mut normals = vec![0.0f32; s.state.len() * 3];
     for _ in 0..WARMUP {
-        xpbd::substep(&mut scene.state, &scene.cons, &no_seams, &scene.sdf, DT);
+        step(&mut s, &no_seams);
     }
     let t = Instant::now();
     for _ in 0..60 {
-        xpbd::vertex_normals(&scene.state, &scene.tris, &mut normals);
+        xpbd::vertex_normals(&s.state, &s.tris, &mut normals);
     }
     t.elapsed().as_secs_f64() * 1000.0 / 60.0
 }

@@ -6,7 +6,7 @@ use toile_engine::demo;
 use toile_engine::draft::{Command, Draft, Identity, PieceKey, Point, SegmentEdit, block};
 use toile_engine::session::Session;
 use toile_mesh::transfer;
-use toile_sim::xpbd::{self, Seams};
+use toile_sim::xpbd::{self, Floor, Seams};
 
 use super::scene::{DT, same_bits, seconds, settle};
 
@@ -37,7 +37,15 @@ fn swap() -> Swap {
     let cons_a = pipe_a.constraints(1.0e-8);
     let sdf = demo::avatar_sdf();
     for _ in 0..DRAPE_SUBSTEPS {
-        xpbd::substep(&mut state, &cons_a, &no_seams, &sdf, DT);
+        xpbd::substep(
+            &mut state,
+            &cons_a,
+            &no_seams,
+            &sdf,
+            Floor::none(),
+            None,
+            DT,
+        );
     }
     let n = state.len();
     let energy_before = f64::from(xpbd::kinetic_energy(&state) / n as f32);
@@ -58,7 +66,15 @@ fn swap() -> Swap {
     let rebuild_ms = t0.elapsed().as_secs_f64() * 1000.0;
     let nb = state_b.len();
 
-    xpbd::substep(&mut state_b, &cons_b, &no_seams, &sdf, DT);
+    xpbd::substep(
+        &mut state_b,
+        &cons_b,
+        &no_seams,
+        &sdf,
+        Floor::none(),
+        None,
+        DT,
+    );
     let energy_after = f64::from(xpbd::kinetic_energy(&state_b) / nb as f32);
 
     let steps = settle(&mut state_b, &cons_b, &no_seams, &sdf, 6000);

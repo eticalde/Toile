@@ -41,6 +41,8 @@ pub struct Theme {
     pub cloth: [f32; 3],
     /// Avatar colour, linear RGB for the renderer.
     pub avatar: [f32; 3],
+    /// The ground the body stands on, linear RGB for the renderer.
+    pub ground: [f32; 3],
 }
 
 impl Theme {
@@ -65,6 +67,10 @@ impl Theme {
             outline: Color32::from_rgb(239, 231, 218),
             cloth: [0.79, 0.48, 0.33],
             avatar: [0.29, 0.26, 0.24],
+            // Darker than the avatar and warmer than the mat: the floor has to
+            // read as a surface the body stands on without competing with the
+            // garment, which is the only thing on the canvas worth looking at.
+            ground: [0.16, 0.14, 0.12],
         }
     }
 

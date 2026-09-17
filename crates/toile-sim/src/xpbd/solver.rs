@@ -1,6 +1,10 @@
-use super::contact;
+use super::contact::{self, Floor};
+use super::layers::Layers;
 use super::sdf::SdfGrid;
 use super::state::{DistanceConstraints, Seams, State};
+
+#[cfg(test)]
+mod tests;
 
 // The scalar path is the reference formulation: the goldens are defined by
 // it, and every other path must reproduce its bits.
@@ -11,11 +15,16 @@ pub(super) const DAMPING: f32 = 0.999;
 ///
 /// Small steps: N substeps of one constraint iteration beat one step of N
 /// iterations, so lambda starts from zero each substep and never accumulates.
+///
+/// A scene whose `floor` is [`Floor::none`] and whose `layers` is `None` runs
+/// exactly the passes it has always run, in the order it has always run them.
 pub fn substep(
     state: &mut State,
     cons: &DistanceConstraints,
     seams: &Seams,
     sdf: &SdfGrid,
+    floor: Floor,
+    layers: Option<&mut Layers>,
     dt: f32,
 ) {
     let inv_dt2 = 1.0 / (dt * dt);
@@ -27,7 +36,27 @@ pub fn substep(
     if !seams.is_empty() {
         solve_seams(state, seams, inv_dt2);
     }
+    // Ahead of the body and ahead of the ground, because those two get the
+    // last word. Out past the band a baked field has no gradient left to carry
+    // cloth back with, so a push that parts two layers must never be what puts
+    // a particle inside a person; and nothing at all may end under the floor.
+    // Cloth against cloth is the one contact here another pass can still
+    // correct, so it is the one that goes first. It also wants the positions
+    // the stretch and the seams have already had their say over: a fold the
+    // constraints were about to pull out is not a fold.
+    if let Some(layers) = layers {
+        layers.separate(state);
+    }
     collide(state, sdf);
+    // After the body and not before it. The ground is the one surface nothing
+    // may end up under, and the field's gradient under a sole points down: a
+    // particle the body pushes through the floor has to meet the plane after
+    // that push, not before it. Still ahead of `derive_velocities`, so cloth
+    // that lands is stopped the way the body stops it — moving `p` and
+    // leaving `q` behind is what makes a contact a contact here.
+    if let Some(y) = floor.level() {
+        rest_on_floor(state, y);
+    }
     derive_velocities(state, dt);
 }
 
@@ -146,6 +175,23 @@ fn collide(state: &mut State, sdf: &SdfGrid) {
         let (p, q) = contact::resolve(
             sdf,
             eps,
+            [state.px[i], state.py[i], state.pz[i]],
+            [state.qx[i], state.qy[i], state.qz[i]],
+        );
+        [state.px[i], state.py[i], state.pz[i]] = p;
+        [state.qx[i], state.qy[i], state.qz[i]] = q;
+    }
+}
+
+/// Rests the whole cloth on the ground plane.
+///
+/// A scene with no floor never reaches this, which is why the floor costs a
+/// scene without one nothing at all — not a branch per particle, and not a
+/// push multiplied by zero.
+fn rest_on_floor(state: &mut State, y: f32) {
+    for i in 0..state.len() {
+        let (p, q) = contact::rest_on(
+            y,
             [state.px[i], state.py[i], state.pz[i]],
             [state.qx[i], state.qy[i], state.qz[i]],
         );

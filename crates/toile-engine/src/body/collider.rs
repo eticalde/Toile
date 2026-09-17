@@ -31,6 +31,7 @@ pub struct Collider {
     release: f32,
     lo: [f32; 3],
     hi: [f32; 3],
+    ground: Option<f32>,
     belts: Arc<[Belt]>,
 }
 
@@ -41,6 +42,9 @@ impl Collider {
     /// The release is [`couture::DROP_HEIGHT`] itself rather than the sphere's
     /// top plus [`CLEARANCE`]. The two agree to the centimetre and not to the
     /// bit, and this one is the number the drape golden stands on.
+    /// It stands on nothing, and that is the point: a ball hanging in the
+    /// void is the scene every drape golden is taken in, and a floor under it
+    /// would be a different scene.
     pub fn demo() -> Collider {
         let r = demo::AVATAR_RADIUS;
         Collider {
@@ -48,6 +52,7 @@ impl Collider {
             release: couture::DROP_HEIGHT,
             lo: [-r; 3],
             hi: [r; 3],
+            ground: None,
             belts: Arc::from([]),
         }
     }
@@ -76,6 +81,7 @@ impl Collider {
             release: hi[1] + CLEARANCE,
             lo,
             hi,
+            ground: Some(lo[1]),
             belts: Arc::from(belt::of(mesh)),
         }
     }
@@ -88,6 +94,22 @@ impl Collider {
     /// The body's lowest and highest corner, in metres.
     pub fn extent(&self) -> ([f32; 3], [f32; 3]) {
         (self.lo, self.hi)
+    }
+
+    /// The plane this body stands on, in metres; `None` for one that stands
+    /// on nothing.
+    ///
+    /// A body's own lowest point, because that is what standing means: the
+    /// Anny body is modelled soles-down and reaches its lowest at the feet —
+    /// the reference adult at −0.837 m, nowhere near the zero a floor would
+    /// be at if it were guessed. Taking it off the mesh rather than writing a
+    /// number down is also what lets a shorter body stand on its own floor
+    /// instead of hovering over somebody else's.
+    ///
+    /// Plain metres rather than the solver's own type: the interface draws
+    /// this ground, and `toile-app` never sees `toile-sim`.
+    pub fn ground(&self) -> Option<f32> {
+        self.ground
     }
 
     /// The body's own measurement rings; empty for one they were not cut for.

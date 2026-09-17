@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
-use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, SdfGrid, Seams, State};
+use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, Seams, State};
 
+use super::handle::Scene;
 use super::report::{Snapshot, StaleMessage};
 use crate::couture::{self, MeshSwap, onto};
 
@@ -19,7 +20,7 @@ pub(super) struct Sim {
     state: State,
     cons: DistanceConstraints,
     seams: Seams,
-    sdf: Arc<SdfGrid>,
+    scene: Scene,
     tris: Vec<u32>,
     dt: f32,
     substeps_per_tick: u32,
@@ -36,7 +37,7 @@ impl Sim {
         state: State,
         cons: DistanceConstraints,
         seams: Seams,
-        sdf: Arc<SdfGrid>,
+        scene: Scene,
         tris: Vec<u32>,
         dt: f32,
         substeps_per_tick: u32,
@@ -45,7 +46,7 @@ impl Sim {
             state,
             cons,
             seams,
-            sdf,
+            scene,
             tris,
             dt,
             substeps_per_tick,
@@ -157,11 +158,14 @@ impl Sim {
     pub(super) fn apply_collider(
         &mut self,
         generation: u64,
-        sdf: Arc<SdfGrid>,
+        scene: Scene,
     ) -> Result<(), StaleMessage> {
         self.fresh(generation)?;
-        self.sdf = sdf;
-        xpbd::lift_out_of(&self.sdf, &mut self.state);
+        // The ground arrives with the field: a body that got shorter stands on
+        // a higher plane, and a drape left resting on the old one would hang
+        // in the air beside the new body.
+        self.scene = scene;
+        xpbd::lift_out_of(&self.scene.sdf, &mut self.state);
         self.wake(generation);
         Ok(())
     }
@@ -203,7 +207,18 @@ impl Sim {
             if !self.seams.is_empty() {
                 (self.seams.compliance, self.seams.max_step) = couture::sewing_at(self.substeps);
             }
-            xpbd::substep(&mut self.state, &self.cons, &self.seams, &self.sdf, self.dt);
+            xpbd::substep(
+                &mut self.state,
+                &self.cons,
+                &self.seams,
+                &self.scene.sdf,
+                self.scene.floor,
+                // The drape a person watches does not collide with itself
+                // yet. The pass exists and is proven, and what it costs per
+                // substep is the whole reason it is not switched on here.
+                None,
+                self.dt,
+            );
             self.substeps += 1;
             e_avg = self.damper.observe(&mut self.state) * inv_n;
         }

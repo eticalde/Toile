@@ -1,4 +1,11 @@
+#![allow(
+    clippy::float_cmp,
+    reason = "a plane handed to the sim comes back at the very bits it was given"
+)]
+
 use std::sync::Arc;
+
+use toile_sim::xpbd::{Floor, SdfGrid};
 
 use super::*;
 use crate::couture::{COMPLIANCE, ShapePipeline};
@@ -26,15 +33,21 @@ fn sim(pipe: &ShapePipeline) -> Sim {
     )
 }
 
-/// A sphere at the origin, as the sim thread takes one.
-fn ball(radius: f32) -> Arc<SdfGrid> {
-    Arc::new(SdfGrid::sphere(
-        8,
-        0.25,
-        [-1.0, -1.0, -1.0],
-        [0.0, 0.0, 0.0],
-        radius,
-    ))
+/// A sphere at the origin standing on nothing, as the sim thread takes one.
+///
+/// No floor, because every test here is about what the mailbox does with a
+/// message: a ground would add a pass none of them measures.
+fn ball(radius: f32) -> Scene {
+    Scene {
+        sdf: Arc::new(SdfGrid::sphere(
+            8,
+            0.25,
+            [-1.0, -1.0, -1.0],
+            [0.0, 0.0, 0.0],
+            radius,
+        )),
+        floor: Floor::none(),
+    }
 }
 
 /// One pair sewn between the two vertices named.
@@ -171,6 +184,33 @@ fn a_swap_between_ticks_keeps_the_cloth_where_it_was() {
     assert_eq!(sim.apply_swap(1, swap), Ok(()));
     assert!((mean_height(&sim.state) - before).abs() < 1.0e-3);
     assert!(!sim.converged(), "a swap wakes the cloth");
+}
+
+/// The plane a body of this height would stand on.
+const PLANE: f32 = -0.837;
+
+/// A body arriving brings its own ground with it.
+///
+/// The field and the plane are one message because they are one body. Taking
+/// the field and keeping the ground the body before it stood on would leave
+/// the drape resting on a plane that belongs to nothing on the stand — which
+/// over a shorter body is a garment lying in the air below its feet.
+#[test]
+fn a_body_arriving_brings_its_own_ground() {
+    let (old, _) = meshes();
+    let mut sim = sim(&old);
+    assert_eq!(
+        sim.scene.floor.level(),
+        None,
+        "the fixture stands on nothing"
+    );
+    let standing = Scene {
+        sdf: ball(0.10).sdf,
+        floor: Floor::at(PLANE),
+    };
+    assert_eq!(sim.apply_collider(1, standing), Ok(()));
+    assert_eq!(sim.scene.floor.level(), Some(PLANE));
+    assert!(!sim.converged(), "a body wakes the cloth");
 }
 
 fn mean_height(state: &State) -> f32 {

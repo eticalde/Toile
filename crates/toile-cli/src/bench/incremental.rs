@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use toile_doc::{Binding, Command, Doc, MeasureSet, Piece, PieceKey, Point, PointKey, Winding};
 use toile_engine::{demo, sync};
-use toile_sim::xpbd::{self, Seams};
+use toile_sim::xpbd::{self, Floor, Seams};
 
 use super::scene::{DT, avg, max, same_bits, seconds, settle};
 
@@ -92,7 +92,7 @@ fn storm() -> Storm {
     let mut cons = pipe.constraints(1.0e-8);
     let sdf = demo::avatar_sdf();
     for _ in 0..DRAPE_SUBSTEPS {
-        xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
+        xpbd::substep(&mut state, &cons, &no_seams, &sdf, Floor::none(), None, DT);
     }
 
     let base = contour[demo::SHOULDER_POINT];
@@ -107,7 +107,7 @@ fn storm() -> Storm {
         cons.rest.copy_from_slice(rests);
         derive_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
         for _ in 0..10 {
-            xpbd::substep(&mut state, &cons, &no_seams, &sdf, DT);
+            xpbd::substep(&mut state, &cons, &no_seams, &sdf, Floor::none(), None, DT);
         }
     }
 
@@ -163,7 +163,10 @@ pub fn run_async() {
         demo::drop_state(&pipe),
         cons,
         Seams::default(),
-        std::sync::Arc::new(demo::avatar_sdf()),
+        sync::Scene {
+            sdf: std::sync::Arc::new(demo::avatar_sdf()),
+            floor: Floor::none(),
+        },
         pipe.tris.clone(),
         DT,
         10,

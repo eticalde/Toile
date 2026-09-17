@@ -3,11 +3,26 @@ use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use crossbeam_channel::{RecvTimeoutError, Sender, TryRecvError, unbounded};
-use toile_sim::xpbd::{DistanceConstraints, SdfGrid, Seams, State};
+use toile_sim::xpbd::{DistanceConstraints, Floor, SdfGrid, Seams, State};
 
 use super::report::Snapshot;
 use super::worker::Sim;
 use crate::couture::MeshSwap;
+
+/// What the cloth collides with: the body's field, and the ground it stands
+/// on.
+///
+/// The two travel together because they move together. A body put on the
+/// stand brings its own floor with it — a shorter person stands lower — and a
+/// message carrying the field alone would leave the drape resting on the
+/// plane the body before it stood on.
+#[derive(Clone)]
+pub struct Scene {
+    /// The body's field, shared rather than copied.
+    pub sdf: Arc<SdfGrid>,
+    /// The plane under it, if this body stands on one.
+    pub floor: Floor,
+}
 
 enum Msg {
     /// The product recompiled: what every edge rests at, and what is sewn to
@@ -35,7 +50,7 @@ enum Msg {
     /// a newly drawn piece against this body copies nothing at all.
     Collider {
         generation: u64,
-        sdf: Arc<SdfGrid>,
+        scene: Scene,
     },
     Stop,
 }
@@ -71,8 +86,8 @@ impl SimHandle {
     /// The drape carries on against the body it has until the message reaches
     /// the top of the mailbox, which is what keeps a re-solved body off the
     /// interface thread.
-    pub fn send_collider(&self, generation: u64, sdf: Arc<SdfGrid>) {
-        let _ = self.tx.send(Msg::Collider { generation, sdf });
+    pub fn send_collider(&self, generation: u64, scene: Scene) {
+        let _ = self.tx.send(Msg::Collider { generation, scene });
     }
 
     /// The most recent published snapshot. Does not block.
@@ -109,7 +124,7 @@ pub fn spawn(
     state: State,
     cons: DistanceConstraints,
     seams: Seams,
-    sdf: Arc<SdfGrid>,
+    scene: Scene,
     tris: Vec<u32>,
     dt: f32,
     substeps_per_tick: u32,
@@ -119,7 +134,7 @@ pub fn spawn(
     let published = snapshot.clone();
 
     let join = std::thread::spawn(move || {
-        let mut sim = Sim::new(state, cons, seams, sdf, tris, dt, substeps_per_tick);
+        let mut sim = Sim::new(state, cons, seams, scene, tris, dt, substeps_per_tick);
 
         // Fixed step anchored to the wall clock: a tick represents exactly
         // `substeps_per_tick × dt` of simulated time and is scheduled at that
@@ -209,7 +224,7 @@ fn drain(rx: &crossbeam_channel::Receiver<Msg>, first: Option<Msg>, sim: &mut Si
                 seams,
             } => sim.apply_rests(generation, &rests, seams),
             Msg::MeshSwap { generation, swap } => sim.apply_swap(generation, swap),
-            Msg::Collider { generation, sdf } => sim.apply_collider(generation, sdf),
+            Msg::Collider { generation, scene } => sim.apply_collider(generation, scene),
         };
         if let Err(why) = taken {
             sim.refuse(why);

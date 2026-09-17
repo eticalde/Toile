@@ -1,6 +1,8 @@
 mod color;
 mod contact;
+mod crossings;
 mod damping;
+mod layers;
 mod metrics;
 mod normals;
 mod parallel;
@@ -9,10 +11,13 @@ mod sdf;
 mod simd;
 mod solver;
 mod state;
+mod vector;
 
 pub use color::{ColoredConstraints, color_constraints};
-pub use contact::lift_out_of;
+pub use contact::{Floor, lift_out_of};
+pub use crossings::self_crossings;
 pub use damping::{KineticDamper, zero_velocities};
+pub use layers::Layers;
 pub use metrics::{kinetic_energy, max_speed, position_hash};
 pub use normals::vertex_normals;
 pub use parallel::substep_colored;

@@ -1,5 +1,7 @@
 use toile_engine::draft::BodyMesh;
 
+use super::ground;
+
 /// How far under its own skin the body is drawn, in metres.
 ///
 /// The cloth settles where the collision field reads zero, which is the skin
@@ -46,6 +48,19 @@ impl Avatar {
             verts,
             idx: mesh.indices.clone(),
         }
+    }
+
+    /// Puts the ground this body stands on behind it.
+    ///
+    /// It rides in the same buffers as the body because it changes exactly
+    /// when the body does and never otherwise: a shorter person stands on a
+    /// higher plane, so the two are laid out and uploaded together.
+    pub fn standing_on(mut self, y: f32, centre: [f32; 2], color: [f32; 3]) -> Avatar {
+        let (verts, idx) = ground::grid(y, centre, color);
+        let base = self.len() as u32;
+        self.idx.extend(idx.into_iter().map(|i| i + base));
+        self.verts.extend(verts);
+        self
     }
 
     /// How many vertices it carries.
