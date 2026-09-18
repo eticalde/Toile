@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Arena, Dart, MannequinKey, MeasureSet, Notch, Piece, PieceKey, Pin, Point, PointKey, Seam,
-    Symmetry, Variable, VariableKey,
+    Arena, Dart, Elastic, MannequinKey, MeasureSet, Notch, Piece, PieceKey, Pin, Point, PointKey,
+    Seam, Symmetry, Variable, VariableKey,
 };
 
 /// The document: everything a pattern file holds.
@@ -18,6 +18,15 @@ pub struct Doc {
     pub points: Arena<Point>,
     /// The seams between stretches of contour.
     pub seams: Arena<Seam>,
+    /// The elastics holding stretches of contour in.
+    ///
+    /// With none of them nothing is written at all, so a product nobody has put
+    /// an elastic on stays the file an older Toile wrote, byte for byte. The
+    /// slot count goes unwritten with them, and strands nothing: an elastic
+    /// names a piece and its nodes, and no entry of the document names an
+    /// elastic back.
+    #[serde(default, skip_serializing_if = "Arena::is_empty")]
+    pub elastics: Arena<Elastic>,
     /// The notches on the contours.
     pub notches: Arena<Notch>,
     /// The darts and their wedges.
@@ -55,6 +64,7 @@ impl Doc {
             pieces: Arena::new(),
             points: Arena::new(),
             seams: Arena::new(),
+            elastics: Arena::new(),
             notches: Arena::new(),
             darts: Arena::new(),
             symmetries: Arena::new(),

@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{Key, SAMPLES};
+use crate::{Elastic, Key, SAMPLES};
 
 /// What can go wrong while reading or writing the document.
 ///
@@ -70,6 +70,19 @@ pub enum DocError {
     /// A seam side whose two ends sit on different pieces.
     #[error("a seam side has to start and end on one piece")]
     SplitSeamSide,
+    /// An elastic whose two ends sit on different pieces.
+    #[error("an elastic has to start and end on one piece")]
+    SplitElastic,
+    /// A ratio no elastic holds a stretch to, which is where the numbers JSON
+    /// cannot spell land as well.
+    #[error(
+        "an elastic holds a stretch to a ratio in (0, {}] of the drawn length",
+        Elastic::MAX_RATIO
+    )]
+    ElasticRatio,
+    /// A strength that is not a finite number above zero.
+    #[error("an elastic pulls with a finite strength above zero")]
+    ElasticStrength,
     /// A point another piece still draws itself with.
     #[error("the point still belongs to `{0}`")]
     Shared(String),

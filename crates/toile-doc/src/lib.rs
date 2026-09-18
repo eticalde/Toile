@@ -17,6 +17,8 @@ mod command;
 mod dart;
 /// The document itself.
 mod doc;
+/// A stretch of contour held to a ratio of the length it was drawn at.
+mod elastic;
 /// What can go wrong while reading or writing the document.
 mod error;
 /// The formula language a coordinate can be written in.
@@ -54,15 +56,16 @@ pub use binding::Binding;
 pub use command::{Applied, ChangeClass, Coalesced, Command, History};
 pub use dart::{Dart, DartWedge, FoldDirection, WedgeNode};
 pub use doc::Doc;
+pub use elastic::Elastic;
 pub use error::DocError;
 pub use json::{
     FormatError, PERSONA_VERSION, VERSION as FORMAT_VERSION,
-    VERSION_EXTENDED as FORMAT_VERSION_EXTENDED, VERSION_LINKED as FORMAT_VERSION_LINKED,
-    VERSION_PLACED as FORMAT_VERSION_PLACED,
+    VERSION_ELASTIC as FORMAT_VERSION_ELASTIC, VERSION_EXTENDED as FORMAT_VERSION_EXTENDED,
+    VERSION_LINKED as FORMAT_VERSION_LINKED, VERSION_PLACED as FORMAT_VERSION_PLACED,
 };
 pub use key::{
-    DartKey, Identity, Key, MannequinKey, NotchKey, PieceKey, PinKey, PointKey, SeamKey,
-    SymmetryKey, VariableKey,
+    DartKey, ElasticKey, Identity, Key, MannequinKey, NotchKey, PieceKey, PinKey, PointKey,
+    SeamKey, SymmetryKey, VariableKey,
 };
 pub use measure::{BodyShape, MeasureSet};
 pub use notch::{Notch, NotchCount};

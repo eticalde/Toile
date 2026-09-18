@@ -1,4 +1,4 @@
-use crate::{Axis, Command, MannequinKey, NotchKey, PieceKey, PointKey, VariableKey};
+use crate::{Axis, Command, ElasticKey, MannequinKey, NotchKey, PieceKey, PointKey, VariableKey};
 
 /// Whether one edit stands for an earlier edit of the same gesture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,6 +24,8 @@ enum Field<'a> {
     Phenotype(MannequinKey),
     MannequinName(MannequinKey),
     Samples(PieceKey, PointKey),
+    ElasticRatio(ElasticKey),
+    ElasticStrength(ElasticKey),
     NotchPlace(NotchKey),
     PieceName(PieceKey),
     Grain(PieceKey),
@@ -69,6 +71,10 @@ impl Command {
             Command::SetPhenotype { mannequin, .. } => Some(Field::Phenotype(*mannequin)),
             Command::RenameMannequin { mannequin, .. } => Some(Field::MannequinName(*mannequin)),
             Command::SetSamples { piece, node, .. } => Some(Field::Samples(*piece, *node)),
+            Command::SetElasticRatio { elastic, .. } => Some(Field::ElasticRatio(*elastic)),
+            Command::SetElasticStrength { elastic, .. } => {
+                Some(Field::ElasticStrength(*elastic))
+            }
             Command::MoveNotch { notch, .. } => Some(Field::NotchPlace(*notch)),
             Command::RenamePiece { piece, .. } => Some(Field::PieceName(*piece)),
             Command::SetGrain { piece, .. } => Some(Field::Grain(*piece)),
@@ -91,6 +97,8 @@ impl Command {
             | Command::RemoveMannequin { .. }
             | Command::AddSeam { .. }
             | Command::RemoveSeam { .. }
+            | Command::AddElastic { .. }
+            | Command::RemoveElastic { .. }
             | Command::AddNotch { .. }
             | Command::RemoveNotch { .. }
             | Command::AddDart { .. }

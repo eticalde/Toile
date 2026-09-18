@@ -43,6 +43,14 @@ pub const VERSION_LINKED: u32 = 3;
 /// save it back with its pieces wherever the overview first laid them.
 pub const VERSION_PLACED: u32 = 4;
 
+/// The format version of a document that holds an elastic.
+///
+/// Under the placement's rule it takes the next number, and here the rule bites
+/// hardest: a build that reads version 4 predates the elastic, so it would open
+/// the product, drop what holds the garment on the body, and drape the same
+/// file into a different garment.
+pub const VERSION_ELASTIC: u32 = 5;
+
 /// A file: the version, and the pattern under it.
 #[derive(Serialize)]
 struct Written<'a> {
@@ -65,11 +73,14 @@ impl Doc {
     ///
     /// A pure function of what the document carries, never of the file it was
     /// read from, so one document still has exactly one text: the highest
-    /// number any body or piece in it needs.
+    /// number any body, piece or elastic in it needs.
     pub fn format_version(&self) -> u32 {
         let bodies = self.mannequins.iter().map(|(_, set)| set.format_version());
         let pieces = self.pieces.iter().map(|(_, piece)| piece.format_version());
-        bodies.chain(pieces).max().unwrap_or(VERSION)
+        // An elastic has no older spelling to fall back to, so one of them is
+        // enough to make the whole document ask for its version.
+        let elastic = (!self.elastics.is_empty()).then_some(VERSION_ELASTIC);
+        bodies.chain(pieces).chain(elastic).max().unwrap_or(VERSION)
     }
 
     /// The document as canonical JSON, ending in a newline.
@@ -104,10 +115,10 @@ impl Doc {
     /// could not have written.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = version(text)?;
-        if !(u64::from(VERSION)..=u64::from(VERSION_PLACED)).contains(&found) {
+        if !(u64::from(VERSION)..=u64::from(VERSION_ELASTIC)).contains(&found) {
             return Err(FormatError::UnknownVersion {
                 found,
-                newest: VERSION_PLACED,
+                newest: VERSION_ELASTIC,
             });
         }
         let loaded: Loaded =

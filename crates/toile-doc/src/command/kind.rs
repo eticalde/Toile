@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    Axis, Binding, BodyShape, Dart, DartKey, DartWedge, EdgeAnchor, Grain, Identity, MannequinKey,
-    MeasureSet, Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey, Placement, Point, PointKey,
-    Seam, SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
+    Axis, Binding, BodyShape, Dart, DartKey, DartWedge, EdgeAnchor, Elastic, ElasticKey, Grain,
+    Identity, MannequinKey, MeasureSet, Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey,
+    Placement, Point, PointKey, Seam, SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
 };
 
 /// A reversible edit to the document.
@@ -103,6 +103,17 @@ pub enum Command {
     },
     /// Unpicks a seam.
     RemoveSeam { seam: SeamKey },
+    /// Holds a stretch of contour in, to a ratio of the length it was drawn at.
+    AddElastic {
+        identity: Identity<Elastic>,
+        elastic: Elastic,
+    },
+    /// Lets that stretch out again.
+    RemoveElastic { elastic: ElasticKey },
+    /// Writes the ratio an elastic holds its stretch to.
+    SetElasticRatio { elastic: ElasticKey, to: f64 },
+    /// Writes how hard it holds it.
+    SetElasticStrength { elastic: ElasticKey, to: f64 },
     /// Marks a contour, and the facing contour with it.
     AddNotch {
         identity: Identity<Notch>,
@@ -190,7 +201,14 @@ impl Command {
             // A refresh carries a phenotype too, but it is priced by its tape,
             // which is what the pattern resolves against.
             | Command::RefreshMannequin { .. }
-            | Command::ResolveWith { .. } => ChangeClass::Shape,
+            | Command::ResolveWith { .. }
+            // The whole of an elastic is a rest length. The drawing does not
+            // move and no node is gained, so the cloth of the piece is
+            // re-derived where it stands and the drape carries on.
+            | Command::AddElastic { .. }
+            | Command::RemoveElastic { .. }
+            | Command::SetElasticRatio { .. }
+            | Command::SetElasticStrength { .. } => ChangeClass::Shape,
             Command::InsertNode { .. }
             | Command::RemoveNode { .. }
             | Command::SetSegment { .. }

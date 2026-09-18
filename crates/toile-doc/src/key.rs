@@ -3,7 +3,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
 
-use crate::{Dart, MeasureSet, Notch, Piece, Pin, Point, Seam, Symmetry, Variable};
+use crate::{Dart, Elastic, MeasureSet, Notch, Piece, Pin, Point, Seam, Symmetry, Variable};
 
 /// The stable identity of one entity of the document.
 ///
@@ -127,6 +127,8 @@ pub type PieceKey = Key<Piece>;
 pub type PointKey = Key<Point>;
 /// The identity of a seam.
 pub type SeamKey = Key<Seam>;
+/// The identity of an elastic.
+pub type ElasticKey = Key<Elastic>;
 /// The identity of a notch.
 pub type NotchKey = Key<Notch>;
 /// The identity of a dart.

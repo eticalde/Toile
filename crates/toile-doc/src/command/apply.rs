@@ -1,10 +1,13 @@
 mod curve;
+mod elastic;
 mod join;
 mod mannequin;
 mod name;
+mod range;
 mod topology;
 
 use curve::{set_samples, set_segment};
+use elastic::{add_elastic, remove_elastic, set_ratio, set_strength};
 use join::{add_seam, remove_seam};
 use mannequin::{
     add_mannequin, refresh_mannequin, remove_mannequin, rename_mannequin, resolve_with,
@@ -28,14 +31,14 @@ impl Command {
     /// taken, `UnknownMeasure` for a measurement the body does not carry,
     /// `BodyInUse` for taking away the body the pattern resolves against,
     /// `NonFinite` for a number the file could not spell, `NotAStem`,
-    /// `NotADay` or `NotAFingerprint` for a link to the library Toile could
-    /// not have written,
-    /// `NoSuchNode` for a contour that does not run through the node named,
-    /// `Occupied` for a key another entry still holds, `Sampling` for a
-    /// flattening no tract can be asked for, `Shared` for a point another
-    /// piece still draws itself with, `SplitSeamSide` for a seam side whose
-    /// ends disagree on their piece, and `NotYetImplemented` for an edit whose
-    /// tool has not been built yet.
+    /// `NotADay` or `NotAFingerprint` for a link Toile could not have written,
+    /// `ElasticRatio` or `ElasticStrength` for a pull no elastic carries,
+    /// `NoSuchNode` for a node no contour runs through, `Occupied` for a key
+    /// another entry still holds, `Sampling` for a flattening no tract can be
+    /// asked for, `Shared` for a point another piece still draws itself with,
+    /// `SplitSeamSide` or `SplitElastic` for a stretch whose ends disagree on
+    /// their piece, and `NotYetImplemented` for an edit whose tool has not
+    /// been built yet.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
         self.apply_as(doc, Naming::Checked)
     }
@@ -90,6 +93,10 @@ impl Command {
             Command::RemovePiece { piece } => remove_piece(doc, piece),
             Command::AddSeam { identity, seam } => add_seam(doc, identity, seam),
             Command::RemoveSeam { seam } => remove_seam(doc, seam),
+            Command::AddElastic { identity, elastic } => add_elastic(doc, identity, elastic),
+            Command::RemoveElastic { elastic } => remove_elastic(doc, elastic),
+            Command::SetElasticRatio { elastic, to } => set_ratio(doc, elastic, to),
+            Command::SetElasticStrength { elastic, to } => set_strength(doc, elastic, to),
             Command::AddNotch { .. }
             | Command::MoveNotch { .. }
             | Command::RemoveNotch { .. }

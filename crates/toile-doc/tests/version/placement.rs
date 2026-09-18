@@ -1,4 +1,4 @@
-use toile_doc::{Doc, FormatError};
+use toile_doc::Doc;
 
 use super::{EMPTY, SHIPPED, header, linked, restamped, rewritten, shaped};
 
@@ -15,7 +15,7 @@ const FIRST_PIECE_PLACED: &str = "\"radians\": 1.5707963267948966
         }";
 
 /// `file` with its first piece arranged on the overview, stamped `version`.
-fn placed(file: &str, version: u32) -> String {
+pub(super) fn placed(file: &str, version: u32) -> String {
     assert!(
         file.contains(FIRST_PIECE_END),
         "the block moved under the test"
@@ -70,31 +70,5 @@ fn a_version_4_document_round_trips_byte_identical() {
         assert_eq!(rewritten(&file).as_bytes(), file.as_bytes());
         let doc = Doc::from_json(&file).expect("this build reads version 4");
         assert_eq!(Doc::from_json(&doc.to_canonical_json()), Ok(doc));
-    }
-}
-
-/// A build cannot know what a later field means, so it refuses the file for
-/// its version rather than open it and drop that field on the next save.
-#[test]
-fn a_version_5_document_is_refused_loudly() {
-    for later in [
-        restamped(SHIPPED, 5),
-        restamped(&shaped(2), 5),
-        placed(SHIPPED, 5),
-    ] {
-        let error = Doc::from_json(&later).expect_err("this build reads up to version 4");
-        assert_eq!(
-            error,
-            FormatError::UnknownVersion {
-                found: 5,
-                newest: 4
-            }
-        );
-        assert!(
-            error
-                .to_string()
-                .contains("version 5; this build reads versions 1 to 4"),
-            "{error}"
-        );
     }
 }

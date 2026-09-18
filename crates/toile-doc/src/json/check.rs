@@ -52,6 +52,9 @@ pub(super) fn references(doc: &Doc) -> Result<(), FormatError> {
         range(doc, seam.a)?;
         range(doc, seam.b)?;
     }
+    for (_, elastic) in doc.elastics.iter() {
+        range(doc, elastic.at)?;
+    }
     for (_, notch) in doc.notches.iter() {
         anchor(doc, notch.at)?;
         if let Some(mate) = notch.mate {

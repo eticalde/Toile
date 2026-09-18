@@ -1,13 +1,12 @@
+use super::range::stretch;
 use crate::{
-    Applied, ChangeClass, Command, Doc, DocError, EdgeAnchor, EdgeRange, Identity, PieceKey, Seam,
-    SeamKey,
+    Applied, ChangeClass, Command, Doc, DocError, EdgeRange, Identity, PieceKey, Seam, SeamKey,
 };
 
 /// Sews two stretches of contour together.
 ///
-/// Every anchor is checked before the seam lands: a seam that cites a dead
-/// point would sit in the document waiting for the derive that cannot resolve
-/// it, so it is refused here, with the key named.
+/// Every anchor is checked before the seam lands, by the one rule every stretch
+/// answers to.
 pub(crate) fn add_seam(
     doc: &mut Doc,
     identity: Identity<Seam>,
@@ -52,26 +51,7 @@ fn side(doc: &Doc, range: EdgeRange) -> Result<(), DocError> {
     if range.piece().is_none() {
         return Err(DocError::SplitSeamSide);
     }
-    anchored(doc, range.head)?;
-    anchored(doc, range.tail)
-}
-
-/// One anchor, checked against the contour it claims to sit on.
-///
-/// The point has to be live, and it has to be a node of the piece it names: a
-/// handle is a point of the document too, but nothing sews to a handle.
-fn anchored(doc: &Doc, anchor: EdgeAnchor) -> Result<(), DocError> {
-    let held = doc
-        .pieces
-        .get(anchor.piece)
-        .ok_or_else(|| DocError::stale(anchor.piece))?;
-    if doc.points.get(anchor.from).is_none() {
-        return Err(DocError::stale(anchor.from));
-    }
-    if held.node_index(anchor.from).is_none() {
-        return Err(DocError::NoSuchNode);
-    }
-    Ok(())
+    stretch(doc, range)
 }
 
 /// The pieces the seam sews, in key order.
