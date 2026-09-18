@@ -307,6 +307,7 @@ blockquote.frase b{
     <li><a href="#fases">8 · Las fases M0–M9</a></li>
     <li><a href="#dueno">9 · Las once decisiones</a></li>
     <li><a href="#golden">10 · El golden que no se mueve</a></li>
+    <li><a href="#vestir">11 · Vestir el cuerpo</a></li>
   </ol>
 </nav>
 
@@ -756,6 +757,45 @@ data:   f32 LE, orden (k*ny + j)*nx + i</code></pre>
   <p>Un patrón ingenuo <code>sin|cos|ln</code> matchearía <code>using</code>, <code>acos</code> y media lengua inglesa. <code>hypot</code> entra en la lista aunque el diseño original la olvidara: tiene la misma precisión no especificada, y fue por ahí por donde se coló en la fórmula del radio. Cada fichero se lee <strong>hasta su propio <code>#[cfg(test)]</code></strong>: un test mide con lo que quiera. La llamada calificada <code>libm::acos</code> no es método y no dispara el grep; la regla 6b acota dónde puede aparecer <code>libm::</code> — hoy <code>body/bake/pseudo.rs</code> (el ángulo de las pseudo-normales), <code>couture/seam.rs</code> (la rampa de rigidez de costura) y <code>couture/place.rs</code> (el seno y coseno del enrollado) — porque un fichero nuevo que lo invoque es una forma nueva de que dos máquinas discrepen.</p>
 
   <p>La regla se escribió tarde, y su primera ejecución lo demostró: cazó dos <code>powi(2)</code> vivos que llevaban ahí desde antes, uno en la longitud de reposo de cada arista (<code>couture/pipeline.rs</code>) y otro en las coordenadas de valor medio del mallador (<code>toile-mesh/interp.rs</code>) — los dos sitios más calientes posibles hacia los bits que CI compara. Reescritos como multiplicación, el golden del solver no se movió: en este objetivo LLVM ya los bajaba a <code>x*x</code>. Nada lo garantizaba, y eso era exactamente el problema.</p>
+</section>
+
+<section id="vestir">
+  <h2><span class="num">§ 11</span>Vestir el cuerpo: cuatro decisiones más</h2>
+
+  <p>Con el bake en pie, la prenda dejó de caer sobre una esfera: el producto entero se drapea sobre el cuerpo en un solo estado del solver, colocado por sus propias costuras, con un suelo bajo los pies. Lo que ese trabajo dejó a la vista fueron cuatro problemas que no eran defectos sino bifurcaciones, y se elevaron al dueño. Cada opción se argumentó contra lo que hace CLO3D —sólo desde su documentación pública, sus patentes y la literatura de la que desciende: el enfoque, nunca el código— y se contestaron el 2026-09-18. Son <strong>vinculantes</strong> como las once de arriba, y siguen su numeración.</p>
+
+  <div class="decision">
+    <b>Decisión 12 · Qué sujeta una prenda al cuerpo</b>
+    <p><strong>Elasticidad por segmento</strong> —una razón (0–200 %, 100 % = la longitud dibujada) y una rigidez, sobre un contorno o una línea interna; no sobre la costura ni sobre la pieza— y <strong>costuras que cierran sin gravedad</strong> antes de soltarla. El anclaje explícito a la línea de la que la prenda cuelga queda para después, sólo si hace falta. <code>FRICTION</code> no se toca: mueve el golden eterno; una fricción estática entraría como parámetro nuevo con el valor de hoy por defecto.</p>
+    <p><em>Por qué:</em> medido, la prenda se coloca, cierra sus costuras, resbala y reposa amontonada en el suelo — la fricción no sostiene un tubo sobre un miembro que se estrecha. CLO3D tampoco lo pretende: envía restricciones explícitas (fricción del avatar, pins, <em>tack</em>, atar un contorno a una cinta del cuerpo) y juzga el ajuste por un mapa de tensión, con «Can't Wear» en rojo, no por si la prenda se cae. Sujetar y medir el ajuste son dos problemas. La elasticidad por segmento es su mecanismo para una cinturilla, y una cinturilla al 85 % con rigidez finita aprieta sin estar clavada: si la prenda no entra, lo dice la tensión. El cierre sin gravedad viene de GarmentCodeData.</p>
+    <p><em>Lo que arrastra:</em> es un concepto nuevo del documento, así que toma el siguiente número de versión (<a href="#formato">§&nbsp;6</a>). Y la regla de colocación supone que una prenda es un tubo cerrado: un pantalón entero es una Y, y el bloque que se envía es medio pantalón.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 13 · La tela contra sí misma</b>
+    <p>En este orden: <strong>limitar la velocidad de despenetración</strong> —corregir por substep sólo <code>min(d₀, v_max·Δt)</code>, en lugar del <code>FOLLOW = 0.5</code> elegido a ojo—; <strong>sub-relajar los contactos simultáneos</strong> ×0,25; <strong>reusar el conjunto de contactos</strong> entre substeps, reconstruido cada N substeps contados y nunca por reloj; y <strong>arista-arista</strong> al final. La pasada sigue apagada por defecto hasta que un drapeado con ella encendida se duerma.</p>
+    <p><em>Por qué:</em> quita el 97,4 % de los cruces pero inyecta energía — 2,19e-2 por vértice contra un umbral de sueño de 2,0e-6 — y la tela no reposa jamás: aunque fuera gratis no podría encenderse, y además cuesta 23,9×. La causa tiene nombre en la literatura de XPBD (Macklin, «Small Steps», §4.3): un contacto que se resuelve entero en un substep separa a <code>d₀/Δt</code>, y a 1/600 s somos el caso extremo. El ×0,25 es de Bridson 2002. CLO3D detecta vértice-triángulo y arista-arista en tres etapas y paga «al menos 5×» por su modo preciso: nuestro coste es del orden de la industria. Su entero de capa resuelve prendas multicapa, que aquí aún no existen.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 14 · Cuándo duerme un drapeado</b>
+    <p>El sueño se decide por <strong>desplazamiento</strong>: dormir cuando casi ningún vértice se movió más de un umbral en el tick, con <code>QUIET_TICKS_TO_SLEEP</code> como permanencia. Se calibra contra dos estados medidos del delantero de pantalón: el del substep 20.780 —donde hoy se declara reposo, a 24,5 mm/s— no debe pasar; el de ~60.780, el reposo de verdad, sí.</p>
+    <p><em>Por qué:</em> dos causas distintas. La energía se leía sólo en el último substep del tick, y los ceros del amortiguador leen exactamente 0; y una media deja que el grueso ya quieto tape un bajo que aún se mueve — el centroide se movió 0,7 mm mientras la peor partícula se movía 4,5 cm. Acumular la energía del tick arregla sólo la primera. El criterio es el de GarmentCodeData: menos del 1,5 % de los vértices por encima de 0,4 mm.</p>
+    <p><em>La puerta que queda abierta:</em> CLO3D no tiene parada automática porque su simulación es un medio de edición en vivo, y Toile la querrá. Por eso el reposo es un <strong>sueño reversible de despertar instantáneo, nunca un estado «terminado»</strong>: ninguna semántica de producto cuelga de él; agarrar la tela será otra fuente de despertar, como lo es hoy editar un punto; el umbral se calibra conservador —dormirse tarde cuesta CPU, dormirse pronto se ve—; y el comportamiento exacto de CLO será una bandera que desactiva el sueño.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 15 · Las plantas que se atraviesan</b>
+    <p>Se aceptan los cuatro voxeles de suela —escritos en <code>Manifold::earns_the_sign</code> y fijados por un test— y el bake gana un <strong>sensor</strong>: cuenta y localiza los cruces triángulo-triángulo de la malla e <strong>informa, sin rechazar nunca</strong>, porque el cuerpo por defecto de la app los tiene.</p>
+    <p><em>Por qué:</em> Bærentzen–Aanæs es exacto para una superficie cerrada y orientable <em>que no se atraviese</em>, y contar semiaristas no ve esa tercera condición: al fenotipo por defecto 52 parejas de triángulos de las plantas se cruzan y el campo lee cuatro voxeles de suela como aire, dentro de un pie apoyado en el suelo. Esos cuatro no preocupan; preocupa no tener sensor para el mismo defecto en una axila o una entrepierna de un cuerpo extremo, que es donde la literatura de SMPL dice que ocurre.</p>
+  </div>
+
+  <div class="discarded">
+    <b>Descartado — colisionar contra la malla con offset, como CLO3D</b>
+    <p>CLO3D no hornea un campo: colisiona contra los triángulos del avatar con un <em>skin offset</em> de 3 mm, y por eso tolera mallas localmente rotas. Evitaría toda esta clase de defecto, pero tira el bake, el cache y sus goldens, y una consulta contra un BVH pone en riesgo el determinismo bit a bit que el campo da gratis. El arreglo identificado, si el sensor dispara donde la tela llega, es <strong>firmar con número de giro generalizado</strong> (Barill et al. 2018): robusto a auto-intersecciones, al precio de más <code>libm</code> —su ángulo sólido pide <code>atan2</code>— y de re-fijar los goldens de campo y drapeado de Anny.</p>
+  </div>
+
+  <p>El orden de implementación también quedó decidido: <strong>12 → 14 → 13</strong>, con el sensor de la 15 cuando quepa. La 12 es la que se ve; el reposo tiene que ser honesto antes de juzgar nada contra él; y los pliegues sólo aparecen cuando la prenda se queda puesta.</p>
 
   <hr>
 
