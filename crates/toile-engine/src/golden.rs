@@ -1,4 +1,4 @@
-use toile_sim::xpbd::{self, Seams, Stage};
+use toile_sim::xpbd::{self, SdfGrid, Seams, Stage};
 
 use crate::demo;
 use crate::draft::{Draft, block};
@@ -133,6 +133,11 @@ pub fn anny_solved_hash() -> u64 {
 pub fn anny_sdf_hash() -> u64 {
     let mesh = toile_anny::body_mesh(&REFERENCE, &[0.0; 20]);
     let sdf = crate::body::bake::sdf(&mesh).expect("the Anny body is closed and orientable");
+    field_hash(&sdf)
+}
+
+/// Hashes a whole baked field: the counts, where it sits, and every voxel.
+pub(crate) fn field_hash(sdf: &SdfGrid) -> u64 {
     let mut h = FNV_BASIS;
     for n in sdf.dims {
         h = (h ^ n as u64).wrapping_mul(FNV_PRIME);

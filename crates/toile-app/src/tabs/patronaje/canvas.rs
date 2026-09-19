@@ -138,7 +138,7 @@ fn detail(
             }
             marks::drawing(painter, theme, state.view, pending, *rubber);
         }
-        Gesture::Idle | Gesture::Pan { .. } | Gesture::Arrange(_) => {}
+        Gesture::Idle | Gesture::Pan { .. } | Gesture::Arrange(_) | Gesture::Sewing(_) => {}
     }
 }
 

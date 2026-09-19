@@ -1,8 +1,12 @@
+use toile_anny::BodyMesh;
+
 use super::{BakeError, Lattice, inspect, mesh_sdf};
 
 mod anny;
 mod brute;
 mod cavity;
+mod crossed;
+mod crossing;
 
 /// The cube's side, in metres.
 const SIDE: f32 = 0.2;
@@ -58,6 +62,35 @@ fn cube() -> (Vec<f32>, Vec<u32>) {
         CORNERS.iter().flatten().map(|c| c * SIDE).collect(),
         FACES.iter().flatten().copied().collect(),
     )
+}
+
+/// Two of that cube in one mesh, a corner of the second pushed a few
+/// millimetres into the far corner of the first: a closed, orientable
+/// surface the bake accepts, and one that passes through itself.
+///
+/// Millimetres, because that is the crossing a body has: two skins that
+/// overlap by a fraction of the band. Behind a corner the wrong sign reaches
+/// well over twice as far as the corner went in, and at a centimetre it
+/// reaches the samples the band never touched: the flood fill's argument
+/// that such a region has one sign stops holding, and a debug build asserts
+/// it.
+pub(crate) fn crossed_cubes() -> BodyMesh {
+    let (mut positions, mut indices) = cube();
+    let (second, faces) = cube();
+    for p in second.as_chunks::<3>().0 {
+        positions.extend([
+            p[0] + SIDE - 0.003,
+            p[1] + SIDE - 0.004,
+            p[2] + SIDE - 0.005,
+        ]);
+    }
+    indices.extend(faces.iter().map(|v| v + CORNERS.len() as u32));
+    BodyMesh {
+        normals: vec![0.0; positions.len()],
+        positions,
+        indices,
+        stations: Vec::new(),
+    }
 }
 
 #[test]

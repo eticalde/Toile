@@ -52,6 +52,28 @@ fn the_bar_names_the_body_even_when_the_document_has_not() {
     let session = Session::from_doc(block::trousers(), Collider::demo()).expect("the block opens");
     assert_eq!(fitted(&session), Some("Etienne"));
 
-    paint(|ui, theme| sub_bar(ui, theme, &session, "en caché"));
-    paint(|ui, theme| sub_bar(ui, theme, &blank, "horneando…"));
+    paint(|ui, theme| sub_bar(ui, theme, &session, "en caché", None));
+    paint(|ui, theme| sub_bar(ui, theme, &blank, "horneando…", Some("14 · entrepierna")));
+}
+
+/// The bar says where a body crosses itself when a garment can reach it, and
+/// says nothing of the soles the body the app opens with crosses at.
+#[test]
+fn the_bar_names_a_crossing_a_garment_can_reach_and_keeps_quiet_about_soles() {
+    use toile_engine::body::bake::crossings;
+    use toile_engine::body::{self, NO_LEVERS, Phenotype, body_mesh};
+
+    let solved = body::solve_anny(&body::default_measures(), &Phenotype::default());
+    let opening = crossings(&body_mesh(&solved.phenotype, &solved.levers));
+    assert!(!opening.all().is_empty(), "its soles do cross");
+    assert_eq!(note::crossed(&opening), None);
+
+    let heavy = Phenotype {
+        gender: 0.0,
+        weight: 1.0,
+        muscle: 1.0,
+        ..Phenotype::default()
+    };
+    let found = crossings(&body_mesh(&heavy, &NO_LEVERS));
+    assert_eq!(note::crossed(&found).as_deref(), Some("14 · entrepierna"));
 }

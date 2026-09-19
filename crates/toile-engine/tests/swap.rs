@@ -59,7 +59,7 @@ fn drape(state: &mut State, cons: &DistanceConstraints, sdf: &SdfGrid, n: usize)
     }
 }
 
-/// Mean kinetic energy per vertex, the number the sim thread sleeps on.
+/// Mean kinetic energy per vertex: the drape's motion, in one number.
 fn energy(state: &State) -> f32 {
     xpbd::kinetic_energy(state) / state.len() as f32
 }

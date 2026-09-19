@@ -4,6 +4,7 @@ mod caption;
 mod curve;
 mod dimension;
 mod empty;
+mod follow;
 mod gesture;
 mod input;
 mod inspector;
@@ -16,8 +17,11 @@ mod pick;
 mod precision;
 mod report;
 mod ruler;
+mod sew;
 mod snap;
 mod state;
+mod stitch;
+mod thread;
 mod tools;
 mod tract;
 mod tree;
@@ -58,6 +62,7 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
     // edit: what an edit adds or takes away is what the mat follows.
     let active = active_piece(draft, patronaje.active, session.piece());
     let before = draft.map(|d| d.doc().piece_keys()).unwrap_or_default();
+    let sewn = follow::seam_keys(session);
     patronaje.active = active;
     let state = &mut *patronaje;
     let mut verbs = Vec::new();
@@ -81,8 +86,9 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
         }
         asked
     }));
+    let faults = session.seam_faults();
     let asked = right_panel(ui, theme, |ui| {
-        inspector::show(ui, theme, draft, active, state)
+        inspector::show(ui, theme, draft, faults, active, state)
     });
     // The panel brackets its own entries: a field confirmed is one of its own
     // under its own name, and a rail dragged holds one open across frames. A
@@ -93,7 +99,8 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
     }
     verbs.extend(canvas::show(ui, theme, draft, active, state));
     let said = apply(session, verbs, &mut patronaje.refused);
-    let moved = follow(session, patronaje, &before);
+    let moved = follow::pieces(session, patronaje, &before);
+    follow::seams(session, patronaje, &sewn);
     if said || moved {
         // The bars are drawn before the tabs, so what this run has to say
         // reaches the status bar on the frame after it. Nothing else asks for
@@ -124,11 +131,14 @@ fn active_piece(
 /// What the product tree's plea does to the tab, and the edits it asks for.
 ///
 /// A new drawing and the whole product wait for the mat to be free of every
-/// gesture but a drawing, which they walk away from: any other gesture may
-/// hold the undo stack open, and a view left behind would leave that entry
-/// open with it.
+/// gesture but a drawing or a side picked for a seam, which they walk away
+/// from: any other gesture may hold the undo stack open, and a view left
+/// behind would leave that entry open with it.
 fn plead(state: &mut State, plea: tree::Plea, has_document: bool) -> Vec<Verb> {
-    let free = matches!(state.gesture, Gesture::Idle | Gesture::Drawing { .. });
+    let free = matches!(
+        state.gesture,
+        Gesture::Idle | Gesture::Drawing { .. } | Gesture::Sewing(_)
+    );
     match plea {
         // A drawing already in progress starts over: the row was pressed to
         // start one.
@@ -183,29 +193,6 @@ fn begin_piece(state: &mut State, has_document: bool) {
         rubber: [0.0, 0.0],
         back_to,
     };
-}
-
-/// Keeps the mat on a piece that exists, and says whether the pieces on the
-/// table changed at all — an addition to follow, or a removal to redraw for.
-///
-/// A piece just drawn is opened, so the mat follows the hand onto what it drew.
-/// On the whole product a piece that comes back, as an undone removal brings
-/// it, is only put in front. A detail whose piece has gone falls back to the
-/// whole product rather than to some other piece nobody asked for.
-fn follow(session: &Session, state: &mut State, before: &[PieceKey]) -> bool {
-    let after = session
-        .draft()
-        .map(|d| d.doc().piece_keys())
-        .unwrap_or_default();
-    if let Some(&fresh) = after.iter().find(|key| !before.contains(key)) {
-        match state.scope {
-            Scope::Piece => state.open(fresh),
-            Scope::Product => state.active = Some(fresh),
-        }
-    } else if state.scope == Scope::Piece && state.active.is_some_and(|key| !after.contains(&key)) {
-        state.overview();
-    }
-    after != before
 }
 
 /// Plays what the panels asked for, in the order they asked for it, and

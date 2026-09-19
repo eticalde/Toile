@@ -1,3 +1,6 @@
+/// The anatomical station every vertex of a [`BodyMesh`] is tagged with,
+/// which is what a place on the body is named by.
+pub use toile_anny::Station;
 use toile_anny::measure::Measures;
 /// Anny's phenotype inputs: sex, age, build, muscle, height, proportions.
 pub use toile_anny::phenotype::Phenotype;

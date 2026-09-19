@@ -1,5 +1,6 @@
 use eframe::egui::{self, Align2, FontId, Rect, Response, Sense, Stroke, StrokeKind, Vec2, vec2};
 
+use super::gesture::Gesture;
 use super::state::{Scope, State, Tool};
 use super::wire::Verb;
 use crate::glyph;
@@ -21,7 +22,7 @@ const TOOLS: [(&str, &str, bool); 8] = [
     ("Piquete", "2 9 14 9; 8 9 8 5", false),
     ("Espejo", "8 2 8 14; 5 5 2 8 5 11; 11 5 14 8 11 11", false),
     ("Medir", "2 6 14 6 14 10 2 10 2 6; 5 6 5 8; 11 6 11 8", true),
-    ("Coser", "2 11 5 6 8 11 11 6 14 11", false),
+    ("Coser", "2 11 5 6 8 11 11 6 14 11", true),
 ];
 
 /// The tile that is a switch and not a tool: measuring is never modal, so it
@@ -35,6 +36,7 @@ fn tool_of(name: &str) -> Option<Tool> {
         "Seleccionar" => Some(Tool::Select),
         "Punto" => Some(Tool::Point),
         "Curva" => Some(Tool::Curve),
+        "Coser" => Some(Tool::Sew),
         _ => None,
     }
 }
@@ -47,14 +49,19 @@ const HISTORY: [(&str, &str); 2] = [
 
 /// How a tile is drawn with the mat as it stands.
 ///
-/// On the whole product a press only chooses and moves pieces, which is what
-/// choosing means there, so that tile is the one lit and every tile that works
-/// on a single piece is drawn dead until one is open.
+/// On the whole product a press chooses and moves pieces, or sews two of
+/// them, so those two tiles are the live ones and every tile that works on a
+/// single piece is drawn dead until one is open. Whatever piece tool was last
+/// in hand, choosing is what it does there, so that is the tile lit.
 fn weight_of(name: &str, ready: bool, state: &State) -> Weight {
     let held = tool_of(name);
-    let choosing = held == Some(Tool::Select);
     if state.scope == Scope::Product {
-        return Weight::of(choosing, ready && choosing);
+        let sewing = state.tool == Tool::Sew;
+        return match held {
+            Some(Tool::Sew) => Weight::of(sewing, ready),
+            Some(Tool::Select) => Weight::of(!sewing, ready),
+            _ => Weight::Absent,
+        };
     }
     let lit = if name == MEASURE {
         state.dimensions
@@ -80,12 +87,25 @@ pub fn grid(ui: &mut egui::Ui, theme: &Theme, state: &mut State) {
                 if name == MEASURE {
                     state.dimensions = !state.dimensions;
                 } else if let Some(chosen) = tool_of(name) {
-                    state.tool = chosen;
+                    take(state, chosen);
                 }
             }
         });
         ui.add_space(4.0);
     }
+}
+
+/// Puts a tool in hand. Sewing goes back to the whole product for it, and
+/// any other tool lets go of a side picked for a seam nobody finished.
+fn take(state: &mut State, tool: Tool) {
+    if tool == Tool::Sew {
+        state.sew();
+        return;
+    }
+    if matches!(state.gesture, Gesture::Sewing(_)) {
+        state.gesture = Gesture::Idle;
+    }
+    state.tool = tool;
 }
 
 /// The two steps through the undo stack, each dead while it leads nowhere.
@@ -188,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn on_the_whole_product_only_the_tile_that_chooses_is_live() {
+    fn on_the_whole_product_only_choosing_and_sewing_are_live() {
         use Weight::{Absent, Held, Ready};
         let piece = State {
             scope: Scope::Piece,
@@ -196,7 +216,7 @@ mod tests {
             dimensions: true,
             ..State::default()
         };
-        let expected = [Ready, Ready, Held, Absent, Absent, Absent, Held, Absent];
+        let expected = [Ready, Ready, Held, Absent, Absent, Absent, Held, Ready];
         assert_eq!(weights(&piece), expected);
         let whole = State {
             scope: Scope::Product,
@@ -204,8 +224,17 @@ mod tests {
         };
         assert_eq!(
             weights(&whole),
-            [Held, Absent, Absent, Absent, Absent, Absent, Absent, Absent],
+            [Held, Absent, Absent, Absent, Absent, Absent, Absent, Ready],
             "a tool for one piece looks dead while every piece is on the mat"
+        );
+        let sewing = State {
+            tool: Tool::Sew,
+            ..whole.clone()
+        };
+        assert_eq!(
+            weights(&sewing),
+            [Ready, Absent, Absent, Absent, Absent, Absent, Absent, Held],
+            "with the sewing tool in hand its tile is the one lit"
         );
     }
 }

@@ -10,6 +10,7 @@ mod fitting;
 mod glyph;
 mod library;
 mod pattern;
+mod seam;
 mod tabs;
 mod theme;
 mod viewport;

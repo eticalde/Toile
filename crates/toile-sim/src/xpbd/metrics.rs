@@ -45,8 +45,9 @@ pub fn seam_gap(state: &State, seams: &Seams) -> f32 {
 
 /// Largest particle speed, in metres per second.
 ///
-/// Not what sleeping is decided on: that is mean kinetic energy per vertex,
-/// which one loose vertex fluttering cannot hold above the threshold.
+/// Not a reading of rest: kinetic damping zeroes every velocity at each energy
+/// peak, so this is exactly nothing on a substep the cloth is still travelling
+/// through.
 pub fn max_speed(state: &State) -> f32 {
     let mut m = 0.0f32;
     for i in 0..state.len() {

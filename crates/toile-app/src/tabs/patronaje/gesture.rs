@@ -6,6 +6,7 @@ use toile_engine::draft::{Axis, Binding, Doc, PieceKey, PointKey};
 
 use super::arrange::Arrange;
 use super::curve::Bend;
+use super::sew::Sewing;
 use super::snap::{SnapConfig, Snapped};
 use super::state::{Scope, Selection, Tool};
 use super::tract::Tract;
@@ -49,6 +50,8 @@ pub enum Gesture {
     },
     /// Moving a whole piece across the product.
     Arrange(Arrange),
+    /// One tract picked for a seam, waiting for the tract it is sewn to.
+    Sewing(Sewing),
 }
 
 /// The nodes taken in hand, as the gesture holds them.

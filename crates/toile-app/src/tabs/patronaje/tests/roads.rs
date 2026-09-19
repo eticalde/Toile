@@ -135,7 +135,7 @@ fn taking_off_the_piece_on_the_mat_goes_back_to_the_whole_product() {
     let verbs = plead(&mut bench.state, tree::Plea::Remove(second), true);
     apply(&mut bench.session, verbs, &mut bench.state.refused);
     assert_eq!(bench.state.refused, None, "the removal is taken");
-    follow(&bench.session, &mut bench.state, &before);
+    follow::pieces(&bench.session, &mut bench.state, &before);
     assert!(bench.doc().pieces.get(second).is_none());
     assert_eq!(bench.state.scope, Scope::Product);
 }

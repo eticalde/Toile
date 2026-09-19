@@ -5,7 +5,7 @@ use std::time::Instant;
 use toile_engine::body::{BodyMesh, Collider, Phenotype, bake, body_mesh};
 use toile_engine::couture::{self, COMPLIANCE, ShapePipeline};
 use toile_engine::draft::{Draft, block};
-use toile_sim::xpbd::{self, Floor, Layers, SdfGrid, Seams, Stage, State};
+use toile_sim::xpbd::{self, Floor, KineticDamper, Layers, SdfGrid, Seams, Stage, State};
 
 /// Simulated seconds per substep, as the engine runs it.
 const DT: f32 = 1.0 / 600.0;
@@ -19,6 +19,19 @@ const WATCH: usize = 250;
 
 /// Substeps timed for the cost reading: one simulated second.
 const TIMED: usize = 600;
+
+/// Substeps the heap is watched for: a hundred simulated seconds.
+const WATCHED: usize = 60_000;
+
+/// Substep the heap has to be quiet from. The panel leaves the body and lands
+/// a little before twelve thousand, so this is the landing and as long again.
+const QUIET_FROM: usize = 24_000;
+
+/// Substeps one line of the energy report covers.
+const LINE: usize = 6_000;
+
+/// Mean kinetic energy per vertex the sim thread goes to sleep under.
+const SLEEP_ENERGY_PER_VERT: f32 = 2.0e-6;
 
 /// Triangle area cap the crossings are counted at.
 ///
@@ -191,6 +204,53 @@ fn a_garment_settled_on_the_ground_stops_going_through_itself() {
         kept.span.0 >= ground,
         "and nothing went through the ground: {} under {ground}",
         kept.span.0
+    );
+}
+
+/// Holding a heap apart must not be what keeps it awake.
+///
+/// The same heap, run the way the sim thread runs it: the kinetic damper after
+/// every substep, and the energy it hands back read against the threshold the
+/// thread sleeps under. Every substep is read and the loudest one is what is
+/// judged, because a mean lets a heap that twitches once a second pass, and a
+/// reading taken once a tick can land on one of the damper's zeroes.
+#[test]
+#[ignore = "release-only: a real body baked and a hundred seconds of heap"]
+fn a_heap_held_apart_goes_quiet_and_stays_quiet() {
+    let mesh = reference();
+    let body = Collider::bake(&mesh).expect("the Anny body is closed and orientable");
+    let sdf = bake::sdf(&mesh).expect("the Anny body is closed and orientable");
+    let pipe = panel(COARSE);
+    let cons = pipe.constraints(COMPLIANCE);
+    let seams = Seams::default();
+    let mut layers = Layers::of(&pipe.tris, &cons, &seams, pipe.pos2d.len());
+    let floor = body.ground().map_or(Floor::none(), Floor::at);
+    let stage = Stage::around(&sdf).on(floor);
+    let mut state = couture::drop_state(&pipe, body.release_height());
+    let mut damper = KineticDamper::new();
+    let per_vertex = 1.0 / state.len() as f32;
+
+    let (mut loudest, mut fastest, mut late) = (0.0f32, 0.0f32, 0.0f32);
+    for step in 1..=WATCHED {
+        let on = Some(&mut layers);
+        xpbd::substep(&mut state, &cons, &seams, &stage, on, DT);
+        fastest = fastest.max(xpbd::max_speed(&state));
+        let energy = damper.observe(&mut state) * per_vertex;
+        loudest = loudest.max(energy);
+        if step > QUIET_FROM {
+            late = late.max(energy);
+        }
+        if step % LINE == 0 {
+            println!(
+                "to {step}: loudest {loudest:.3e} a vertex · fastest {fastest:.4} m/s · {} crossings",
+                xpbd::self_crossings(&state, &pipe.tris)
+            );
+            (loudest, fastest) = (0.0, 0.0);
+        }
+    }
+    assert!(
+        late < SLEEP_ENERGY_PER_VERT,
+        "the heap never stayed under the energy it sleeps at: {late:e} after {QUIET_FROM}"
     );
 }
 

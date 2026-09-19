@@ -12,6 +12,8 @@ use crate::couture::{COMPLIANCE, ShapePipeline};
 
 /// What the weightless phase is and is not, measured against its absence.
 mod gravity;
+/// What wakes a drape that has gone to sleep.
+mod wake;
 
 /// A rectangle and the same rectangle with one node more.
 fn meshes() -> (ShapePipeline, ShapePipeline) {

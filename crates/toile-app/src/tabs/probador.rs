@@ -1,4 +1,5 @@
 mod icons;
+mod note;
 mod seams;
 
 use eframe::egui::{self, Align2, FontId, Rect, Sense, Stroke, Vec2, pos2, vec2};
@@ -7,12 +8,13 @@ use icons::{check_icon, pause_icon, play_icon, reset_icon, warn_icon};
 use toile_engine::draft::BodyMesh;
 use toile_engine::session::Session;
 
-use crate::fitting::Fitting;
 use crate::pattern;
 use crate::tabs::{UNNAMED, Workspace, right_panel};
 use crate::theme::Theme;
 use crate::viewport::{Avatar, Viewport};
-use crate::widgets::{PAD, button_ghost_icon, field_row, footer_note, readout, section_with};
+use crate::widgets::{
+    PAD, alert_note, button_ghost_icon, field_row, footer_note, readout, section_with,
+};
 
 /// Gap between the 2D and 3D halves, in points.
 const SPLIT_GAP: f32 = 12.0;
@@ -60,8 +62,9 @@ impl State {
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
-    let body = body_note(w.fitting);
-    sub_bar(ui, theme, w.session, &body);
+    let body = note::cost(w.fitting);
+    let crossed = w.fitting.crossings.as_ref().and_then(note::crossed);
+    sub_bar(ui, theme, w.session, &body, crossed.as_deref());
     right_panel(ui, theme, |ui| inspector(ui, theme, w.session));
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let full = ui.available_size();
@@ -113,7 +116,7 @@ fn standing(session: &Session, mesh: &BodyMesh, theme: &Theme) -> Avatar {
 /// a swapped mesh and a shutdown, and nothing else: there is no pause to ask
 /// for, no resume, and no starting state to go back to. They keep their room
 /// so that the phase which builds them moves nothing on this bar.
-fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session, body: &str) {
+fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session, body: &str, crossed: Option<&str>) {
     egui::Panel::top("probador-subbar")
         .exact_size(SUBBAR_H)
         .frame(
@@ -127,6 +130,12 @@ fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session, body: &str) {
                     readout(ui, theme, "maniquí", named, 150.0);
                 }
                 readout(ui, theme, "cuerpo", body, 170.0);
+                // In the ink of any other readout: it is something known about
+                // the body, and the body was baked and is draped on all the
+                // same.
+                if let Some(crossed) = crossed {
+                    readout(ui, theme, "cruces", crossed, 190.0);
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     button_ghost_icon(ui, theme, "Reiniciar", reset_icon);
@@ -159,14 +168,14 @@ fn inspector(ui: &mut egui::Ui, theme: &Theme, session: &Session) {
     }
     for seam in &rows {
         if let Some(complaint) = seam.complaint.as_deref() {
-            mismatch(ui, theme, complaint);
+            alert_note(ui, theme, complaint);
         }
     }
     // A seam the engine could not pair is not draping at all, which is a
     // louder thing than two sides that do not close, and is said the same way.
     if let Some(draft) = session.draft() {
         for why in seams::refused(draft, session.seam_faults()) {
-            mismatch(ui, theme, &why);
+            alert_note(ui, theme, &why);
         }
     }
     let draped = draped(session);
@@ -179,23 +188,6 @@ fn inspector(ui: &mut egui::Ui, theme: &Theme, session: &Session) {
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         footer_note(ui, theme, NOTE);
     });
-}
-
-/// What the body on the stand cost, and where it came from.
-///
-/// The bake runs on its own thread and the drape is never held up waiting for
-/// it, so a person who moves a measurement sees the body change before the
-/// field behind it does. This is the whole of the report, and it belongs on
-/// the bar that names the body rather than in a dialog nobody asked for.
-fn body_note(fitting: &Fitting) -> String {
-    if let Some(why) = fitting.refused.as_deref() {
-        return why.to_owned();
-    }
-    match &fitting.cost {
-        Some(cost) if cost.cached => "en caché".to_owned(),
-        Some(cost) => format!("horneado en {:.0} ms", cost.ms),
-        None => "horneando…".to_owned(),
-    }
 }
 
 /// The body the document on the table resolves against, by name.
@@ -254,20 +246,6 @@ fn seam_row(ui: &mut egui::Ui, theme: &Theme, seam: &seams::Row) {
         FontId::monospace(11.0),
         ink,
     );
-}
-
-/// Says in words what the warning mark on the seam row only hints at.
-fn mismatch(ui: &mut egui::Ui, theme: &Theme, complaint: &str) {
-    let margin = egui::Margin {
-        left: 12,
-        right: 12,
-        top: 6,
-        bottom: 10,
-    };
-    egui::Frame::new().inner_margin(margin).show(ui, |ui| {
-        let body = egui::RichText::new(complaint).monospace().size(11.0);
-        ui.label(body.color(theme.alert));
-    });
 }
 
 /// The seam between the two halves of the split, ruled on both sides.

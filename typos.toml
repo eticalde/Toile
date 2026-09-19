@@ -72,3 +72,6 @@ varios = "varios"
 # "double", in the drafting bar's hint that a double click opens a piece.
 # crates/toile-app/src/tabs/patronaje/report.rs
 doble = "doble"
+# "elbow", one of the parts of the body the fitting bar names a crossing at.
+# crates/toile-app/src/tabs/probador/note.rs
+codo = "codo"

@@ -16,7 +16,7 @@ use toile_engine::body::{Collider, bake};
 use toile_engine::draft::block;
 use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
-use watch::{LANDED, REST, at_rest, buried, footing, parks_by, reference, span, touching};
+use watch::{LANDED, LONG, at_rest, buried, footing, parks_by, reference, span, touching};
 
 /// How far above the ground the whole garment stands once it has parked, in
 /// metres, for a scene that came to rest on the body rather than on the floor.
@@ -124,24 +124,24 @@ fn the_startup_scene_does_not_bury_the_garment_in_the_body() {
 /// This is what a contact that reads the push bought. Under the fixed share of
 /// the substep's motion a panel let go over an adult came down on the crown,
 /// hung while friction lost to gravity, slid off and heaped on the plane the
-/// body stands on — at rest, 16 of the bodice's 12,540 particles were still
-/// within a cell of the skin. The same bodice now comes down onto the
-/// shoulders and stays: it parks at about 1,070 substeps with its cloth
-/// between 0.53 m and 1.06 m, the lowest of it 1.36 m clear of the floor.
+/// body stands on — at rest, a handful of the bodice's 12,540 particles were
+/// still within a cell of the skin. The same bodice now comes down onto the
+/// shoulders and stays, its cloth between 0.53 m and 1.06 m and the lowest of
+/// it 1.36 m clear of the floor.
 ///
-/// The sphere half is not scenery: it is the physics reference, it has no
-/// floor, it asks for no grip at all, and it still parks on its own — which is
-/// what says the budget below measures a drape that settles rather than one
-/// nothing watches.
+/// The sphere half is the contrast, and it says sleep is not handed out to
+/// whatever is slow: the physics reference has no floor and asks for no grip,
+/// and a bodice balanced on a ball is never at rest.
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
 fn a_drape_over_a_body_parks_on_the_body_and_not_on_the_ground() {
-    // The sphere half is not scenery: it is the physics reference, it has no
-    // floor, and it still parks on its own — which is what says the budget
-    // below measures a drape that settles rather than one nothing watches.
+    // It slides sideways at a few millimetres a second and gathering, and
+    // leaves the ball at about 23,000 substeps to fall for ever. A mean of the
+    // energy called that slide parked at 2,280.
     assert!(
-        parks_by(&Session::demo_bodice(), REST),
-        "the demo bodice stopped parking on the sphere inside {REST} substeps"
+        !parks_by(&Session::demo_bodice(), LONG),
+        "the demo bodice went to sleep on the sphere inside {LONG} substeps. If \
+         something now holds it there, this is the assertion to invert"
     );
 
     let mesh = reference();

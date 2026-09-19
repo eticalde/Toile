@@ -106,10 +106,11 @@ fn about_the_axis(run: std::ops::Range<usize>, at: &[[f32; 3]], axis: [f32; 2]) 
 /// body's: the measurement ring a garment this size is worn at, which for one
 /// leg's worth of trouser is the thigh.
 ///
-/// Read at a fixed substep and not at rest, deliberately. Since the floor
-/// landed a sewn tube does come to a stop — at about 12,200 substeps — but it
-/// stops in a heap on the ground. What this asks is how the product sits *on*
-/// the body while it is still being worn, and only the mark answers that.
+/// Read at a fixed substep and not at rest, deliberately. A sewn tube does
+/// come to a stop, but not at the ring it was let go on: nothing yet holds a
+/// garment where it was put, so at rest it is further down the body or on the
+/// ground. What this asks is how the product sits *on* the body while it is
+/// still being worn, and only the mark answers that.
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
 fn a_sewn_product_is_let_go_around_the_body() {

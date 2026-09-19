@@ -7,9 +7,11 @@ use toile_sim::xpbd::SdfGrid;
 /// How long a test waits on the sim thread before calling it stuck.
 ///
 /// The thread runs at the wall clock's own cadence — ten substeps every
-/// sixteen milliseconds — so the slowest scene here is about thirty-five
-/// seconds of real time, and a bake stands in front of it.
-pub const PATIENCE: Duration = Duration::from_secs(180);
+/// sixteen milliseconds — so a scene that uses the whole of [`REST`] is two and
+/// a quarter minutes of real time, and a bake stands in front of it. What is
+/// left over is for a machine running every scene here at once, where a tick
+/// that overruns is re-anchored rather than caught up on.
+pub const PATIENCE: Duration = Duration::from_secs(300);
 
 /// Where in the drape a garment still being worn is measured, in substeps.
 ///
@@ -22,9 +24,8 @@ pub const MARK: u64 = 1800;
 /// substeps.
 ///
 /// Thirty-three simulated seconds, and long past the moment a tube with
-/// nothing holding it on has slid down the body and heaped on the ground — the
-/// shipped block does that by about 12,200. A garment still worn here is worn
-/// because something holds it.
+/// nothing holding it on has slid down the body and heaped on the ground. A
+/// garment still worn here is worn because something holds it.
 pub const LONG: u64 = 20_000;
 
 /// Where a drape that has stopped changing is read, in substeps.
@@ -39,10 +40,14 @@ pub const SETTLED: u64 = 12_000;
 
 /// Substeps a drape is given to come to rest in.
 ///
-/// The trouser front is the slowest of these scenes, quiet at 20,780; this
-/// leaves half as much again. Counted in substeps and not in seconds, so the
-/// budget means the same thing on a fast machine and a slow one.
-pub const REST: u64 = 30_000;
+/// Sized for a heap that creeps. Against a body that lets cloth slide, the
+/// trouser front lay on the ground creeping for 53,290 substeps before it
+/// slept, and this leaves half as much again; against a body that grips, the
+/// seeded scenes here sleep inside 7,000. The slow figure is the one kept, so
+/// that a scene which starts slipping again reports its number and not a
+/// timeout. Counted in substeps and not in seconds, so the budget means the
+/// same thing on a fast machine and a slow one.
+pub const REST: u64 = 80_000;
 
 /// How far the garment must have fallen to count as landed, in metres.
 ///
@@ -130,7 +135,7 @@ pub fn span(points: &[[f32; 3]]) -> (f32, f32) {
 /// Reading a drape at rest needs this, because "on the body" stopped meaning
 /// "touching the skin" the moment the floor landed: nothing holds a garment up
 /// yet, so it comes to rest in a heap around the feet and grazes the skin
-/// almost by accident — the startup bodice with sixteen of its twelve thousand
+/// almost by accident — the startup bodice with seven of its twelve thousand
 /// particles. Where that heap sits still tells a garment that came down this
 /// body from one that came down beside it.
 pub fn footing(points: &[[f32; 3]]) -> (f32, f32) {
@@ -182,11 +187,12 @@ pub fn at_mark(session: &Session) -> Vec<[f32; 3]> {
     at_substep(session, MARK)
 }
 
-/// The frame the drape declares itself at rest on, and the substep it happened
-/// at; `None` when it is still moving at `budget`.
+/// The frame the drape goes to sleep on, and the substep it happened at; `None`
+/// when it is still moving at `budget`.
 ///
-/// Declared and not proven: the sleep test is known to fire early, so a scene
-/// that has to be read at rest is read at a fixed substep as well.
+/// Asleep is as near to at rest as the sim thread will say, and it is not
+/// stillness: a heap on the ground goes on creeping under the sleep threshold
+/// for minutes, a few millimetres in all.
 ///
 /// # Panics
 /// If the sim thread never runs `budget` substeps, which means it is stuck

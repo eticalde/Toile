@@ -1,12 +1,13 @@
 mod basis;
 
+use toile_engine::body::bake::Crossings;
 use toile_engine::body::cache::{self, Cache};
-use toile_engine::body::oven::{Baked, Job, Oven};
+use toile_engine::body::oven::{Baked, Job, Made, Order, Oven};
 use toile_engine::body::{self, Collider};
 use toile_engine::draft::{BodyMesh, Doc, MeasureSet};
 use toile_engine::session::Session;
 
-use self::basis::Basis;
+use self::basis::{Basis, tape, tape_of};
 
 #[cfg(test)]
 mod tests;
@@ -57,6 +58,9 @@ pub struct Fitting {
     pub cost: Option<Cost>,
     /// Why the last body could not be baked, if one could not.
     pub refused: Option<String>,
+    /// Where the body on the stand passes through itself, once the oven has
+    /// looked it over. Never a reason to refuse it.
+    pub crossings: Option<Crossings>,
 }
 
 impl Fitting {
@@ -98,6 +102,7 @@ impl Fitting {
             cache: None,
             cost: None,
             refused: None,
+            crossings: None,
         }
     }
 
@@ -204,20 +209,29 @@ impl Fitting {
         self.key = key;
         self.solves += 1;
         self.refused = None;
+        self.crossings = None;
         let found = self.cache.as_ref().and_then(|cache| cache.load(key, &mesh));
+        self.mesh = Some(mesh);
         if found.is_some() {
             self.cost = Some(Cost {
                 ms: 0.0,
                 cached: true,
             });
+            // A field off the disk is voxels and nothing else, so the body it
+            // came back for has still never been looked over.
+            self.order(Order::Inspect);
         } else {
-            self.oven.send(Job {
-                key,
-                mesh: mesh.clone(),
-            });
+            self.order(Order::Bake);
         }
-        self.mesh = Some(mesh);
         found
+    }
+
+    /// Sends the body last solved to the oven.
+    fn order(&mut self, order: Order) {
+        if let Some(mesh) = self.mesh.clone() {
+            let key = self.key;
+            self.oven.send(Job { key, mesh, order });
+        }
     }
 
     /// Waits for the bake that is out, for the one caller allowed to wait.
@@ -234,14 +248,15 @@ impl Fitting {
     }
 
     /// Takes a finished bake in and puts it under the drape.
+    ///
+    /// Whatever lands for the body on the stand is worth a frame: a field, a
+    /// refusal, or only word of where the body crosses itself.
     fn land(&mut self, done: Baked, session: &mut Session) -> bool {
-        match self.keep(done) {
-            Some(collider) => {
-                self.wear(collider, session);
-                true
-            }
-            None => self.refused.is_some(),
+        let current = done.key == self.key;
+        if let Some(collider) = self.keep(done) {
+            self.wear(collider, session);
         }
+        current
     }
 
     /// Files a finished bake and hands it back, unless it is a body the
@@ -252,8 +267,12 @@ impl Fitting {
         if done.key != self.key {
             return None;
         }
-        match done.field {
-            Ok(collider) => {
+        match done.made {
+            Made::Crossings(found) => {
+                self.crossings = Some(found);
+                None
+            }
+            Made::Field(Ok(collider)) => {
                 if let Some(cache) = self.cache.as_ref() {
                     let _ = cache.store(done.key, &collider);
                 }
@@ -261,29 +280,15 @@ impl Fitting {
                     ms: done.ms,
                     cached: false,
                 });
+                // Asked for only now, with the field already on its way to
+                // the drape: nobody waiting for a body waits for this.
+                self.order(Order::Inspect);
                 Some(collider)
             }
-            Err(why) => {
+            Made::Field(Err(why)) => {
                 self.refused = Some(format!("el cuerpo no se pudo hornear: {why}"));
                 None
             }
         }
     }
-}
-
-/// The body the product on the table resolves against, or the loose body while
-/// no product is open.
-fn tape(session: &Session, loose: &MeasureSet) -> MeasureSet {
-    tape_of(session.draft().map(toile_engine::draft::Draft::doc), loose)
-}
-
-/// The body `doc` resolves against, or `loose` where there is no document.
-///
-/// The loose body is the mannequin tab's own, handed in rather than copied:
-/// with no product open every slider in that tab writes into it, and the body
-/// the cloth falls on has to be that very one. Reading a second reference tape
-/// here is what let the two come to disagree about which body it is.
-fn tape_of(doc: Option<&Doc>, loose: &MeasureSet) -> MeasureSet {
-    doc.and_then(|doc| doc.measures().cloned())
-        .unwrap_or_else(|| loose.clone())
 }

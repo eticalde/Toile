@@ -1,4 +1,6 @@
-use eframe::egui::{self, Align2, Color32, FontId, Painter, Rect, Response, Sense, Ui, Vec2, vec2};
+use eframe::egui::{
+    self, Align2, Color32, FontId, Id, Painter, Rect, Response, Sense, Ui, Vec2, vec2,
+};
 
 use super::PAD;
 use crate::theme::Theme;
@@ -56,7 +58,28 @@ pub fn list_row_noted(
     selected: bool,
     note: (&str, Color32),
 ) -> Response {
-    row(ui, theme, (label, selected), PAD, true, Some(note))
+    row(ui, theme, (label, selected), PAD, true, Some(note), None)
+}
+
+/// The same noted entry under an identity the caller names, so a press aimed
+/// from outside the panel finds the row by what it lists and not by where the
+/// rows above happened to leave it.
+pub fn list_row_named(
+    ui: &mut Ui,
+    theme: &Theme,
+    id: Id,
+    (label, selected): (&str, bool),
+    note: (&str, Color32),
+) -> Response {
+    row(
+        ui,
+        theme,
+        (label, selected),
+        PAD,
+        true,
+        Some(note),
+        Some(id),
+    )
 }
 
 /// The same entry pushed right by `indent`, one level down a tree.
@@ -73,7 +96,15 @@ pub fn tree_row(
     live: bool,
     icon: impl FnOnce(&Painter, Rect, Color32),
 ) -> Response {
-    let resp = row(ui, theme, (label, selected), ICON_X + indent, live, None);
+    let resp = row(
+        ui,
+        theme,
+        (label, selected),
+        ICON_X + indent,
+        live,
+        None,
+        None,
+    );
     let slot = Rect::from_center_size(
         resp.rect.left_center() + vec2(PAD + indent + ICON / 2.0, 0.0),
         Vec2::splat(ICON),
@@ -89,9 +120,13 @@ fn row(
     text_x: f32,
     live: bool,
     note: Option<(&str, Color32)>,
+    named: Option<Id>,
 ) -> Response {
     let sense = if live { Sense::click() } else { Sense::hover() };
-    let (rect, resp) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_H), sense);
+    // Taking the room and interacting with it are two steps, so a name the
+    // caller gave stands in for the one the layout would have issued.
+    let (auto, rect) = ui.allocate_space(vec2(ui.available_width(), ROW_H));
+    let resp = ui.interact(rect, named.unwrap_or(auto), sense);
     let tint = if selected {
         0.16
     } else if live && resp.hovered() {
@@ -141,6 +176,33 @@ pub fn footer_note(ui: &mut Ui, theme: &Theme, text: &str) {
         ui.label(body.color(theme.muted));
     });
     rule(ui, theme);
+}
+
+/// A line that says something is wrong, in the ink of a fault.
+///
+/// What a warning mark on a row only hints at is said here in words, and in
+/// the one colour the panels keep for it.
+pub fn alert_note(ui: &mut Ui, theme: &Theme, text: &str) {
+    note(ui, text, theme.alert);
+}
+
+/// A line of explanation inside a group, with no rule closing the group
+/// under it.
+pub fn plain_note(ui: &mut Ui, theme: &Theme, text: &str) {
+    note(ui, text, theme.muted);
+}
+
+fn note(ui: &mut Ui, text: &str, ink: Color32) {
+    let margin = egui::Margin {
+        left: PAD as i8,
+        right: PAD as i8,
+        top: 6,
+        bottom: 10,
+    };
+    egui::Frame::new().inner_margin(margin).show(ui, |ui| {
+        let body = egui::RichText::new(text).monospace().size(11.0);
+        ui.label(body.color(ink));
+    });
 }
 
 /// The hairline that closes a group at the foot of a panel.

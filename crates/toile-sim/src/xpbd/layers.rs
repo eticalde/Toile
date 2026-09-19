@@ -89,7 +89,10 @@ impl Layers {
     /// the grid in one fixed scan, and over each cell's vertices in ascending
     /// order — a later pair sees what an earlier one moved, and sees it the
     /// same way on every machine.
-    pub(super) fn separate(&mut self, state: &mut State) {
+    ///
+    /// `dt` is the substep being solved, in seconds: how far one contact may
+    /// correct is a speed, and it is only a distance against that.
+    pub(super) fn separate(&mut self, state: &mut State, dt: f32) {
         // A swap replaces the triangles and the state together. Colliding one
         // against the other is a wrong drape rather than a slow one, so a
         // mismatch is refused here instead of indexed past the end.
@@ -105,6 +108,7 @@ impl Layers {
             ..
         } = self;
         grid.build(state, *cell);
+        let reach = touch::reach(dt);
 
         let mut hits = 0u64;
         for t in tris.as_chunks::<3>().0 {
@@ -121,7 +125,7 @@ impl Layers {
                             if t.iter().any(|&w| joined.holds(v, w)) {
                                 continue;
                             }
-                            if touch::part(state, v as usize, corner, *thickness) {
+                            if touch::part(state, v as usize, corner, *thickness, reach) {
                                 hits += 1;
                             }
                         }

@@ -57,12 +57,12 @@ impl Desk {
             events,
             ..RawInput::default()
         };
-        let draft = self.session.draft();
+        let (draft, faults) = (self.session.draft(), self.session.seam_faults());
         let (theme, state) = (&self.theme, &mut self.state);
         let piece = state.active;
         let mut asked = Vec::new();
         let pass = self.ctx.run_ui(input, |ui| {
-            asked = right_panel(ui, theme, |ui| show(ui, theme, draft, piece, state));
+            asked = right_panel(ui, theme, |ui| show(ui, theme, draft, faults, piece, state));
         });
         self.cursor = pass.platform_output.cursor_icon;
         pass.drop_without_applying_deltas();

@@ -3,7 +3,7 @@ use toile_engine::session::Session;
 
 use super::active_piece;
 use super::gesture::Gesture;
-use super::state::{Scope, State};
+use super::state::{Scope, State, Tool};
 
 /// The two nodes a base block names for the side seam, so the bar can measure
 /// it instead of quoting it. A piece that names neither reports its perimeter.
@@ -25,7 +25,7 @@ pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
     }
     let draft = session.draft();
     let mut cells = match (draft, state.scope) {
-        (Some(draft), Scope::Product) => product(draft),
+        (Some(draft), Scope::Product) => product(draft, state),
         (Some(draft), Scope::Piece) => {
             match active_piece(Some(draft), state.active, session.piece()) {
                 Some(piece) => one(draft, piece),
@@ -50,8 +50,9 @@ fn empty() -> Vec<(String, bool)> {
 }
 
 /// The whole product: how many pieces it holds, which of them is broken, and
-/// how one of them is opened.
-fn product(draft: &Draft) -> Vec<(String, bool)> {
+/// what a press does next — open a piece, or with the sewing tool in hand pick
+/// the side the seam is waiting for.
+fn product(draft: &Draft, state: &State) -> Vec<(String, bool)> {
     let doc = draft.doc();
     let count = match doc.pieces.len() {
         0 => "sin piezas".to_owned(),
@@ -64,8 +65,18 @@ fn product(draft: &Draft) -> Vec<(String, bool)> {
             cells.push((format!("{}: contorno con defectos", held.name), true));
         }
     }
+    let next = match (state.tool, &state.gesture) {
+        (Tool::Sew, Gesture::Sewing(_)) => {
+            "coser: pulsa el segundo tramo · Mayús alarga el lado · Esc suelta"
+        }
+        (Tool::Sew, _) if state.selection.seam().is_some() => {
+            "coser: pulsa el primer tramo · Mayús ajusta un lado de la costura elegida"
+        }
+        (Tool::Sew, _) => "coser: pulsa el primer tramo",
+        _ => "doble clic abre una pieza",
+    };
     if !doc.pieces.is_empty() {
-        cells.push(("doble clic abre una pieza".to_owned(), false));
+        cells.push((next.to_owned(), false));
     }
     cells
 }
