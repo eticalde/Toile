@@ -2,101 +2,77 @@ use std::collections::VecDeque;
 
 use super::Lattice;
 
-/// Which side of the skin a flood decided one untouched sample is on.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Claim {
-    /// Not reached by either flood yet.
-    None,
-    /// Air.
-    Outside,
-    /// Body.
-    Inside,
-}
-
-/// Gives every sample the band never reached a saturated `±band`, flooding
-/// each untouched region from the band that walls it in.
+/// Gives every sample the band never reached a saturated `±band`: flesh
+/// wherever a flood from the band's inside samples arrives, air elsewhere.
 ///
-/// Reach is the wrong question to ask. A pocket whose mouth is narrower than
-/// the band is sealed off from the box's rim by the band itself, so "could
-/// not be reached from the outside" catches trapped air as well as flesh.
-/// What does hold is the sign: two untouched samples one cell apart cannot
-/// straddle the skin, because the true distance moves by at most that cell
-/// between them and both are further out than the band, so one of them would
-/// have to be in it. Every untouched region therefore carries one sign
-/// throughout, and so do the band samples along its border — seeding each
-/// flood from the untouched neighbours of a touched sample of its own sign
-/// partitions the untouched set exactly, with no rim to special-case.
+/// Reach from the box's rim is the wrong question to ask. A pocket whose
+/// mouth is narrower than the band is sealed off from the rim by the band
+/// itself, so "could not be reached from the outside" catches trapped air as
+/// well as flesh. What does hold is that an untouched sample and a sample
+/// one cell from it cannot straddle a sheet of the skin: the true distance
+/// moves by at most that cell between them, so the untouched one would have
+/// to be in the band. The skin therefore wraps an untouched region, and every
+/// band sample along its border, the same number of times throughout.
 ///
 /// The solver never reads a magnitude out here, only a sign: it asks about
 /// particles it is holding against the skin.
 pub(super) fn saturate(lattice: &Lattice, nearest: &[f32], data: &mut [f32]) {
     let band = lattice.band as f32;
     let untouched = |slot: usize| nearest[slot] == f32::INFINITY;
-    let mut claim = vec![Claim::None; lattice.len()];
+    let mut flesh = vec![false; lattice.len()];
     let mut queue = VecDeque::new();
 
+    // Only an inside reading seeds a flood, because it is the only one a
+    // body that passes through itself leaves trustworthy. A sample behind
+    // its nearest sheet is wrapped once more than whatever lies in front of
+    // that sheet, and a skin with no part turned inside out wraps nothing
+    // fewer than zero times: it is flesh, and so is the region it borders. A
+    // sample in front of its nearest sheet reads air whether that sheet is
+    // the skin or a sheet of it buried in flesh, as where two buttocks meet.
+    // So a region with both readings on its border is flesh, and were it
+    // not, flesh is still the safer mistake in a field cloth collides with:
+    // cloth is pushed out of doubtful space rather than left to sit in it.
+    // Where the skin crosses nothing, no region has both and this decides
+    // nothing.
     let [nx, ny, nz] = lattice.dims;
     for k in 0..nz {
         for j in 0..ny {
             for i in 0..nx {
                 let slot = lattice.index(i, j, k);
-                if untouched(slot) {
-                    continue;
+                if !untouched(slot) && data[slot] < 0.0 {
+                    spread(lattice, [i, j, k], &untouched, &mut flesh, &mut queue);
                 }
-                let side = if data[slot] < 0.0 {
-                    Claim::Inside
-                } else {
-                    Claim::Outside
-                };
-                spread(lattice, [i, j, k], side, &untouched, &mut claim, &mut queue);
             }
         }
     }
-
     while let Some(n) = queue.pop_front() {
-        let side = claim[lattice.index(n[0], n[1], n[2])];
-        spread(lattice, n, side, &untouched, &mut claim, &mut queue);
+        spread(lattice, n, &untouched, &mut flesh, &mut queue);
     }
 
     for slot in 0..lattice.len() {
-        if !untouched(slot) {
-            continue;
+        if untouched(slot) {
+            data[slot] = if flesh[slot] { -band } else { band };
         }
-        debug_assert_ne!(
-            claim[slot],
-            Claim::None,
-            "an untouched region with no band of its own to take a sign from"
-        );
-        data[slot] = if claim[slot] == Claim::Inside {
-            -band
-        } else {
-            band
-        };
     }
 }
 
-/// Claims every untouched sample one step from `n` for `side`.
+/// Marks every untouched sample one step from `n` as flesh.
+///
+/// A sample is queued once, when it is first marked, and whichever seed gets
+/// to it first changes nothing: what comes out is the set the seeds can
+/// reach, and a set has no scan order in it.
 fn spread(
     lattice: &Lattice,
     n: [usize; 3],
-    side: Claim,
     untouched: &impl Fn(usize) -> bool,
-    claim: &mut [Claim],
+    flesh: &mut [bool],
     queue: &mut VecDeque<[usize; 3]>,
 ) {
     for next in steps(lattice, n).into_iter().flatten() {
         let slot = lattice.index(next[0], next[1], next[2]);
-        if !untouched(slot) {
-            continue;
-        }
-        if claim[slot] == Claim::None {
-            claim[slot] = side;
+        if untouched(slot) && !flesh[slot] {
+            flesh[slot] = true;
             queue.push_back(next);
-        } else {
-            debug_assert_eq!(
-                claim[slot], side,
-                "one untouched region reached from both sides of the skin"
-            );
         }
     }
 }

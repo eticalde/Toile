@@ -40,7 +40,7 @@ pub const BAND: f64 = 0.025;
 /// different version of that code is a different field. A `libm` bump is
 /// therefore a bump of this number and regenerated SDF goldens in the same
 /// commit — never a silent drift under a cached field.
-pub const BAKE_VERSION: u32 = 2;
+pub const BAKE_VERSION: u32 = 3;
 
 /// The most samples a bake will allocate.
 ///
@@ -86,9 +86,9 @@ impl Lattice {
     /// A lattice around a mesh's own bounding box, padded by the band and one
     /// cell.
     ///
-    /// That pad is what lets the flood fill seed itself from the outer face
-    /// of the box: with it, no sample out there can be within the band of the
-    /// surface, so every one of them is known to be outside without asking.
+    /// That pad keeps the whole band inside the box: with it, no sample on
+    /// the outer face can be within the band of the surface, so the rim is
+    /// past the band all the way round and nothing beyond it is worth storing.
     ///
     /// The origin and the cell are rounded through `f32` before any sample
     /// position is computed from them, because the grid the solver reads

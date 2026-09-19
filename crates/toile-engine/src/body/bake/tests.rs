@@ -5,6 +5,7 @@ use super::{BakeError, Lattice, inspect, mesh_sdf};
 mod anny;
 mod brute;
 mod cavity;
+mod crossed;
 mod crossing;
 
 /// The cube's side, in metres.
