@@ -191,6 +191,11 @@ impl ShapePipeline {
             compliance: vec![compliance; self.edges.len()],
             strain_limit: 0.0,
             strain_sweeps: 0,
+            // A mesh holds no elastic: which of its edges a band runs over is
+            // the document's answer, written by [`super::hold`] over the
+            // product's combined set, where an edge index means something.
+            held: Vec::new(),
+            held_passes: 0,
         }
     }
 

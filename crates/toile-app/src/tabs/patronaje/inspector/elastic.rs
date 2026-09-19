@@ -11,8 +11,9 @@ use crate::widgets::{PAD, Track, button_named, footer_note, section, track};
 
 const NONE: &str = "Un elástico sujeta el tramo a una fracción del largo con que se dibujó, y \
                     tira hasta que el cuerpo lo detiene. Sin él solo el roce sostiene la prenda.";
-const HELD: &str = "100 % es el largo dibujado. La rigidez va en múltiplos de la de la tela: \
-                    10 mantiene su razón, 0,1 es un frunce que cede antes que el tejido.";
+const HELD: &str = "100 % es el largo dibujado. La rigidez es cuánto resiste la banda a que \
+                    la estiren: 10 la mantiene cerca de su razón, 0,1 la deja ceder el doble. \
+                    Por encima de 3 apenas cambia.";
 
 const PUT_ON: &str = "poner un elástico";
 const TAKE_OFF: &str = "quitar el elástico";
@@ -27,10 +28,19 @@ const STRENGTH: &str = "ajustar la rigidez del elástico";
 /// all and be refused for it.
 const RATIO_SPAN: (f64, f64) = (20.0, 200.0);
 
-/// What the strength rail offers, as a multiple of the cloth's own stiffness:
-/// a tenth gives before the cloth does, fifty is a band that is not argued
-/// with.
+/// What the strength rail offers, as a multiple of a band of strength one.
+///
+/// Measured on the seeded skirt three simulated seconds in, the waistband
+/// stands at 120 % of the length it is held to at the default of ten and 143 %
+/// at a tenth of it, and it sits 10.7 cm higher on the body for it. The rail
+/// does its work at the slack end: the knee is near three, where the band
+/// already stands at 122 %, so everything from there to fifty is one firm band
+/// told apart by a couple of points. `tests/seeding/grip.rs` reads all three.
 const STRENGTH_SPAN: (f64, f64) = (0.1, 50.0);
+
+// A rail that reached under the document's floor would offer a drag the edit
+// refuses, so the two are held together where the build can see them.
+const _: () = assert!(STRENGTH_SPAN.0 >= Elastic::MIN_STRENGTH);
 
 /// The rail a drag has hold of, and whether a pointer is still on it.
 ///

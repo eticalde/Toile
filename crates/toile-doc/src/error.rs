@@ -67,6 +67,10 @@ pub enum DocError {
     /// A point the piece's contour does not run through.
     #[error("the piece has no node at that point")]
     NoSuchNode,
+    /// An anchor whose fraction is not one the tract leaving its node can
+    /// answer for, which is where a NaN the file cannot spell lands as well.
+    #[error("a stretch is anchored at a fraction of its tract outside 0 to 1")]
+    AnchorFraction,
     /// A seam side whose two ends sit on different pieces.
     #[error("a seam side has to start and end on one piece")]
     SplitSeamSide,
@@ -80,8 +84,11 @@ pub enum DocError {
         Elastic::MAX_RATIO
     )]
     ElasticRatio,
-    /// A strength that is not a finite number above zero.
-    #[error("an elastic pulls with a finite strength above zero")]
+    /// A strength under the floor an elastic is written at, or not finite.
+    #[error(
+        "an elastic pulls with a finite strength of at least {}",
+        Elastic::MIN_STRENGTH
+    )]
     ElasticStrength,
     /// A point another piece still draws itself with.
     #[error("the point still belongs to `{0}`")]

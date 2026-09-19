@@ -1,5 +1,7 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
+/// What a waistband is worth on the body, and what it is still not worth.
+mod grip;
 /// The same habits over a product of two sewn pieces.
 mod product;
 /// The tube skirt an elastic is proved on.
@@ -16,26 +18,27 @@ use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
 use watch::{LANDED, REST, at_rest, buried, footing, parks_by, reference, span, touching};
 
-/// How close to the ground the whole garment lies once it has parked, in
-/// metres, for a scene that came to rest on the floor rather than on the body.
-const ON_THE_GROUND: f32 = 0.15;
+/// How far above the ground the whole garment stands once it has parked, in
+/// metres, for a scene that came to rest on the body rather than on the floor.
+const ON_THE_BODY: f32 = 1.00;
 
 /// What a seeded scene is held to: the garment came down, it came to a stop,
 /// none of it went through the ground, and none of it is buried where the
 /// field could never push it out again.
 ///
 /// Measured at rest, which is a thing that exists only since the floor landed.
-/// Before it, a garment let go over a body slid off and fell for as long as
-/// anything integrated it — hundreds of metres inside the minute — so these
-/// scenes had to be read at a fixed substep instead.
+/// Before it, a garment let go over a body fell for as long as anything
+/// integrated it, so these scenes had to be read at a fixed substep instead.
 ///
-/// Burial is the sharp one. The others say the drape behaved; this one is the
-/// bug the tests were written for, where a garment let go at some other body's
-/// height starts inside this one and no contact solve can carry it out.
+/// Burial is the sharp one: the bug these tests were written for, where a
+/// garment let go at some other body's height starts inside this one and no
+/// contact solve can carry it out.
 ///
-/// Where the heap came to rest is what keeps the other three from being
-/// satisfied by a garment that never met the body at all: one let go beside
-/// the person comes down, stops above the ground, and is buried in nothing.
+/// Where the garment's weight came to rest is what keeps the other three from
+/// being satisfied by one that never met the body at all. Both scenes now rest
+/// on the body rather than round its feet: 3,235 of the startup bodice's
+/// 12,540 particles sit within a cell of the skin, where under the fixed share
+/// of the motion it was 16.
 fn rests_clear_of_the_body(scene: &str, session: &Session, sdf: &SdfGrid) {
     let (lo, hi) = session.collider().extent();
     let release = session.collider().release_height();
@@ -116,26 +119,23 @@ fn the_startup_scene_does_not_bury_the_garment_in_the_body() {
     rests_clear_of_the_body("startup scene", &session, &sdf);
 }
 
-/// A drape over a body now parks — on the ground, and not on the body.
+/// A drape over a body now parks on the body, and not on the ground.
 ///
-/// This is what the floor bought and what it did not. Before it, a panel let
-/// go over an adult came down on the crown, hung while friction lost to
-/// gravity, slid off and then fell for ever, so nothing over a body ever went
-/// quiet. Now the same panel lands on the plane the body stands on and stops
-/// there: the startup bodice parks at about 7,100 substeps with every one of
-/// its particles within a couple of centimetres of the floor.
+/// This is what a contact that reads the push bought. Under the fixed share of
+/// the substep's motion a panel let go over an adult came down on the crown,
+/// hung while friction lost to gravity, slid off and heaped on the plane the
+/// body stands on — at rest, 16 of the bodice's 12,540 particles were still
+/// within a cell of the skin. The same bodice now comes down onto the
+/// shoulders and stays: it parks at about 1,070 substeps with its cloth
+/// between 0.53 m and 1.06 m, the lowest of it 1.36 m clear of the floor.
 ///
-/// What it did not buy is a garment that stays on. Nothing holds a bodice at
-/// the shoulders of a body it was dropped over, so at rest it is a heap around
-/// the feet — 16 of its 12,540 particles within a cell of the skin. An elastic
-/// exists now and places a garment where it belongs, and it does not change
-/// this reading: measured in `worn`, a waistband grips and then creeps down at
-/// a rate its own tension cannot alter. Whoever gives friction that tension to
-/// read should tighten the last assertion here, because it is the one that
-/// says the cloth is on the floor.
+/// The sphere half is not scenery: it is the physics reference, it has no
+/// floor, it asks for no grip at all, and it still parks on its own — which is
+/// what says the budget below measures a drape that settles rather than one
+/// nothing watches.
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
-fn a_drape_over_a_body_parks_on_the_ground_and_not_yet_on_the_body() {
+fn a_drape_over_a_body_parks_on_the_body_and_not_on_the_ground() {
     // The sphere half is not scenery: it is the physics reference, it has no
     // floor, and it still parks on its own — which is what says the budget
     // below measures a drape that settles rather than one nothing watches.
@@ -156,11 +156,9 @@ fn a_drape_over_a_body_parks_on_the_ground_and_not_yet_on_the_body() {
         "it came to rest on the ground, not through it: {low} under {floor}"
     );
     assert!(
-        high - floor < ON_THE_GROUND,
-        "the whole garment is lying on the floor rather than worn on the body: \
-         its highest point {high} stands {} above the ground. If a garment now \
-         stays on, this is the assertion to tighten and the two tests above \
-         should measure what is worn rather than what came to rest",
+        high - floor > ON_THE_BODY,
+        "the garment is worn on the body rather than lying on the floor: its \
+         highest point {high} stands {} above the ground",
         high - floor
     );
 }

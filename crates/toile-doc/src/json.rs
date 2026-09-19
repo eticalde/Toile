@@ -111,8 +111,9 @@ impl Doc {
     /// `FormatError`, naming what is wrong with the file: text that is not
     /// JSON, JSON that stops early, a missing or unknown version, a shape that
     /// is not a pattern's, a key that leads nowhere, a tract asking to be
-    /// flattened at a count no tract can carry, or a link to the library Toile
-    /// could not have written.
+    /// flattened at a count no tract can carry, a link to the library Toile
+    /// could not have written, or an elastic holding a stretch to numbers no
+    /// elastic holds.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = version(text)?;
         if !(u64::from(VERSION)..=u64::from(VERSION_ELASTIC)).contains(&found) {
@@ -126,6 +127,7 @@ impl Doc {
         check::references(&loaded.doc)?;
         check::samplings(&loaded.doc)?;
         check::origins(&loaded.doc)?;
+        check::elastics(&loaded.doc)?;
         Ok(loaded.doc)
     }
 }
@@ -156,7 +158,7 @@ fn version(text: &str) -> Result<u64, FormatError> {
 #[cfg(test)]
 mod tests {
     use crate::json::FormatError;
-    use crate::{Doc, MeasureSet, block};
+    use crate::{Command, Doc, EdgeRange, Elastic, Identity, MeasureSet, block};
 
     #[test]
     fn a_file_begins_with_the_format_and_its_version() {
@@ -182,5 +184,45 @@ mod tests {
             Doc::from_json("{\"toile\": \"1\", \"doc\": {}}"),
             Err(FormatError::NoHeader)
         );
+    }
+
+    /// A hand-edited elastic is refused the way a hand-edited sampling is.
+    /// Not every number a file can spell is one an elastic holds, and the
+    /// difference reaches the solver as a rest length and as a compliance. A
+    /// strength of `1e-300` is the case "above zero" let through: positive,
+    /// finite, and a waistline that runs at no stiffness at all.
+    #[test]
+    fn an_elastic_the_file_carries_is_checked_before_the_pattern_opens() {
+        let mut doc = block::trouser_front();
+        let front = doc.piece_named(block::FRONT).expect("the block draws one");
+        let at = {
+            let named = |label| doc.shows_label(front, label).expect("the block names it");
+            EdgeRange::between(front, named("cintura_cf"), named("cadera_lat"))
+        };
+        Command::AddElastic {
+            identity: Identity::New,
+            elastic: Elastic::new(at, 0.85, 10.0),
+        }
+        .apply(&mut doc)
+        .expect("both ends are nodes of the front");
+        let written = doc.to_canonical_json();
+        assert_eq!(Doc::from_json(&written), Ok(doc));
+        for hand in [
+            "\"ratio\": -5",
+            "\"ratio\": 1e9",
+            "\"strength\": 0",
+            "\"strength\": 1e-300",
+        ] {
+            let (key, _) = hand.split_once(':').expect("every case names its key");
+            let was = if key == "\"ratio\"" {
+                "\"ratio\": 0.85"
+            } else {
+                "\"strength\": 10"
+            };
+            let edited = written.replace(was, hand);
+            assert_ne!(edited, written, "{hand} left the file as it was");
+            let error = Doc::from_json(&edited).expect_err(hand);
+            assert!(matches!(error, FormatError::Elastic(_)), "{hand}: {error}");
+        }
     }
 }

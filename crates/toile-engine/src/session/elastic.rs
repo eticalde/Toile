@@ -14,7 +14,7 @@ pub(super) struct Elastics {
 }
 
 /// One elastic read onto one piece's mesh: the boundary vertices it runs over
-/// and where it opens in the constraint set.
+/// and where that piece's edges open in the constraint set.
 struct Run {
     at: usize,
     base: usize,
@@ -44,17 +44,17 @@ impl Session {
                 continue;
             };
             let pipe = pipes[run.at];
-            let ratio = elastic.ratio as f32;
-            let compliance = couture::compliance_of(elastic.strength);
-            for pair in run.verts.windows(2) {
-                if let Some(edge) = pipe.edge_index(pair[0], pair[1]) {
-                    held.push(Held {
-                        edge: run.base + edge,
-                        ratio,
-                        compliance,
-                    });
-                }
-            }
+            let edges: Vec<usize> = run
+                .verts
+                .windows(2)
+                .filter_map(|pair| pipe.edge_index(pair[0], pair[1]))
+                .map(|edge| run.base + edge)
+                .collect();
+            held.push(Held {
+                edges,
+                ratio: elastic.ratio as f32,
+                compliance: couture::compliance_of(elastic.strength),
+            });
             widen(&mut waists, run.at, pipe, &run.verts);
             for &v in &run.verts {
                 ordinate += pipe.pos2d[v as usize][1];
@@ -66,6 +66,26 @@ impl Session {
             at: ordinate / counted as f64,
         });
         Elastics { held, band }
+    }
+
+    /// Every stretch of cloth the product's elastics hold, as pairs of
+    /// vertices of the combined state with the length each is held to.
+    ///
+    /// Plain indices and plain metres, for the reason [`Session::sewn_pairs`]
+    /// hands seams over that way: a test measuring what a band came to on the
+    /// body, or a client drawing one, does it without the solver's vocabulary
+    /// crossing over. Summed in three dimensions and set against these rest
+    /// lengths, it is the one reading that tells an elastic holding its ratio
+    /// from one being dragged open.
+    pub fn held_cloth(&self) -> Vec<((u32, u32), f32)> {
+        let cons = self.constraints();
+        cons.held
+            .iter()
+            .map(|&e| {
+                let at = e as usize;
+                ((cons.a[at], cons.b[at]), cons.rest[at])
+            })
+            .collect()
     }
 
     /// One elastic on the cloth: which piece it lands on, where that piece's
@@ -119,9 +139,9 @@ fn edge_bases(pipes: &[&ShapePipeline]) -> Vec<usize> {
 
 /// Widens one piece's entry to take in the cloth a stretch covers.
 ///
-/// Per piece and not per elastic, so two elastics laid over one stretch — the
-/// document allows them, as it allows two seams — count the cloth they share
-/// once rather than twice.
+/// Per piece and not per elastic: the cloth two elastics share is one length
+/// of cloth, counted once here and held once by [`couture::hold`], which is
+/// where what two elastics over one stretch mean is written.
 fn widen(waists: &mut Vec<(usize, f64, f64)>, at: usize, pipe: &ShapePipeline, verts: &[u32]) {
     let (lo, hi) = verts.iter().fold((f64::MAX, f64::MIN), |(lo, hi), &v| {
         let x = pipe.pos2d[v as usize][0];
@@ -138,10 +158,16 @@ fn widen(waists: &mut Vec<(usize, f64, f64)>, at: usize, pipe: &ShapePipeline, v
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::float_cmp,
+        reason = "an edge nothing held carries the very bits it was given"
+    )]
+
     use toile_doc::{Command, Doc, EdgeRange, Identity, MeasureSet, Piece, Point, Winding};
 
     use super::*;
     use crate::body::Collider;
+    use crate::couture::COMPLIANCE;
     use crate::draft::PieceKey;
 
     /// A panel two tenths of a metre wide, with its hem named so a stretch can
@@ -176,19 +202,18 @@ mod tests {
         let session = Session::from_doc(doc, Collider::demo()).expect("the panel drapes");
         let read = session.elastics();
         let pipe = session.pipelines()[0];
-        assert!(!read.held.is_empty(), "the hem carries edges");
-        for one in &read.held {
-            let (a, b) = pipe.edges[one.edge];
+        let [one] = &read.held[..] else {
+            panic!("one elastic, one stretch: {:?}", read.held);
+        };
+        assert!(!one.edges.is_empty(), "the hem carries edges");
+        for &edge in &one.edges {
+            let (a, b) = pipe.edges[edge];
             for v in [a, b] {
                 let p = pipe.pos2d[v as usize];
-                assert!(
-                    p[1].abs() < 1.0e-9,
-                    "edge {} leaves the hem at {p:?}",
-                    one.edge
-                );
+                assert!(p[1].abs() < 1.0e-9, "edge {edge} leaves the hem at {p:?}");
             }
-            assert!((one.ratio - 0.85).abs() < 1.0e-7);
         }
+        assert!((one.ratio - 0.85).abs() < 1.0e-7);
         // Within one boundary sample of the hem's own length: a stretch covers
         // the vertices the mesher laid, and the last one before a corner sits
         // a little short of it.
@@ -206,5 +231,67 @@ mod tests {
         let read = session.elastics();
         assert!(read.held.is_empty());
         assert_eq!(read.band, None);
+    }
+
+    /// The set the solver is handed carries what the document holds: shorter
+    /// rests under the band, its compliance on those edges, and every other
+    /// edge of the product exactly as the concatenation left it.
+    ///
+    /// This is what tells [`Session::constraints`] from the bare
+    /// concatenation. Every other reading of a band goes through the
+    /// placement, which never touches `hold`, so a session that quietly handed
+    /// the plain constraints out would drape a garment with a waistband drawn
+    /// on it and no waistband in the solver.
+    #[test]
+    fn what_the_solver_is_handed_carries_what_the_elastics_hold() {
+        let (mut doc, piece) = panel();
+        let named = |doc: &Doc, l| doc.shows_label(piece, l).expect("the panel names it");
+        let at = EdgeRange::between(piece, named(&doc, "a"), named(&doc, "b"));
+        Command::AddElastic {
+            identity: Identity::New,
+            elastic: toile_doc::Elastic::new(at, 0.85, couture::HOLDS_ITS_RATIO),
+        }
+        .apply(&mut doc)
+        .expect("both ends are nodes of the panel");
+
+        let session = Session::from_doc(doc, Collider::demo()).expect("the panel drapes");
+        let plain = couture::combine_constraints(&session.pipelines(), COMPLIANCE);
+        let handed = session.constraints();
+        let held = session.elastics().held;
+        let edges: Vec<usize> = held.iter().flat_map(|one| one.edges.clone()).collect();
+        assert!(!edges.is_empty(), "the hem carries edges");
+        assert_ne!(handed.rest, plain.rest, "the band reached the solver");
+        for one in &held {
+            for &edge in &one.edges {
+                assert_eq!(handed.rest[edge], plain.rest[edge] * one.ratio);
+                assert_eq!(handed.compliance[edge], one.compliance);
+            }
+        }
+        for edge in (0..plain.len()).filter(|e| !edges.contains(e)) {
+            assert_eq!(handed.rest[edge], plain.rest[edge]);
+            assert_eq!(handed.compliance[edge], plain.compliance[edge]);
+        }
+        // And those edges are the ones swept again: a band the cloth outvotes
+        // holds nothing, whatever its rest length says.
+        let mut named = handed.held.clone();
+        named.sort_unstable();
+        let mut want: Vec<u32> = edges.iter().map(|&e| e as u32).collect();
+        want.sort_unstable();
+        assert_eq!(named, want);
+        assert!(handed.held_passes > 0);
+    }
+
+    /// And a product with no elastic is handed the concatenation itself, bit
+    /// for bit — the reduction the drape goldens stand on, asked of the
+    /// session rather than of `hold` alone.
+    #[test]
+    fn what_a_product_with_no_elastic_is_handed_is_the_concatenation() {
+        let (doc, _) = panel();
+        let session = Session::from_doc(doc, Collider::demo()).expect("the panel drapes");
+        let plain = couture::combine_constraints(&session.pipelines(), COMPLIANCE);
+        let handed = session.constraints();
+        assert_eq!(handed.rest, plain.rest);
+        assert_eq!(handed.compliance, plain.compliance);
+        assert!(handed.held.is_empty(), "and nothing is swept again");
     }
 }

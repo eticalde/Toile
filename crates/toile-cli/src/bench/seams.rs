@@ -132,6 +132,8 @@ fn combine(front: &ShapePipeline, back: &ShapePipeline, na: u32) -> DistanceCons
             .collect(),
         strain_limit: 1.03,
         strain_sweeps: 4,
+        held: Vec::new(),
+        held_passes: 0,
     }
 }
 

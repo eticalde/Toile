@@ -79,6 +79,8 @@ pub fn build(target: usize) -> Scene {
         compliance: Vec::with_capacity(edges.len()),
         strain_limit: 0.0,
         strain_sweeps: 0,
+        held: Vec::new(),
+        held_passes: 0,
     };
     for (a, b, c) in edges {
         let (ia, ib) = (a as usize, b as usize);

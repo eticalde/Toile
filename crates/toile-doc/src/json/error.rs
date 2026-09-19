@@ -43,6 +43,9 @@ pub enum FormatError {
     /// A body's link to the library that Toile could not have written.
     #[error("a body's link to the library is not one Toile writes: {0}")]
     Origin(#[source] DocError),
+    /// An elastic holding its stretch to numbers no elastic holds.
+    #[error("an elastic in the pattern holds a stretch to numbers no elastic holds: {0}")]
+    Elastic(#[source] DocError),
 }
 
 impl FormatError {

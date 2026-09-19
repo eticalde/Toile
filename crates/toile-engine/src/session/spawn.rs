@@ -6,15 +6,17 @@ use crate::couture::{self, Layout, ShapePipeline};
 use crate::draft::{Draft, PieceKey};
 use crate::sync::{self, Scene, SimHandle};
 
-/// What a body offers the solver: its field, and the plane it stands on.
+/// What a body offers the solver: its field, the plane it stands on, and how
+/// the two hold cloth.
 ///
-/// The one place the two are put together, so a body handed to a running sim
+/// The one place the three are put together, so a body handed to a running sim
 /// and a body a fresh thread starts on cannot come to disagree about where
-/// the ground is.
+/// the ground is or what holds a garment up.
 pub(super) fn scene_of(collider: &Collider) -> Scene {
     Scene {
         sdf: collider.shared(),
         floor: collider.ground().map_or(Floor::none(), Floor::at),
+        grip: collider.grip(),
     }
 }
 

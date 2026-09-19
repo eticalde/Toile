@@ -7,7 +7,7 @@ use super::report::{Snapshot, StaleMessage};
 use crate::couture::{self, MeshSwap, onto};
 
 /// Sleep threshold on mean kinetic energy per vertex, about 2 mm/s RMS: one
-/// loose vertex fluttering must not keep the whole garment awake.
+/// loose vertex must not keep the whole garment awake.
 const SLEEP_ENERGY_PER_VERT: f32 = 2.0e-6;
 
 /// Consecutive quiet ticks required before sleeping. More than one, because a
@@ -65,32 +65,46 @@ impl Sim {
 
     /// Hot-swaps the rest state and what is sewn to what, and wakes the sim.
     ///
-    /// The three arrive together because a shape edit moves all of them: the
-    /// rest lengths because the cloth changed shape, the compliances because
-    /// an elastic is a stretch of that same contour pulling harder than the
-    /// cloth around it, and the seams because an anchor is one of its nodes.
+    /// The four arrive together because a shape edit moves all of them: the
+    /// rest lengths because the cloth changed shape, the compliances and the
+    /// held edges because an elastic writes both and putting one on a tract
+    /// that had none changes neither count, and the seams because an anchor is
+    /// one of its nodes.
     ///
     /// # Errors
     /// `StaleMessage` when the message was compiled against a mesh the solver
-    /// has already left behind — by generation, by rest count, or by naming a
-    /// vertex it does not hold.
+    /// has already left behind — by generation, by rest or compliance count, or
+    /// by naming a vertex or an edge it does not hold.
     pub(super) fn apply_rests(
         &mut self,
         generation: u64,
         rests: &[f32],
         compliance: &[f32],
+        (held, passes): (Vec<u32>, u32),
         seams: Seams,
     ) -> Result<(), StaleMessage> {
         self.fresh(generation)?;
-        if rests.len() != self.cons.rest.len() || compliance.len() != self.cons.compliance.len() {
+        if rests.len() != self.cons.rest.len() {
             return Err(StaleMessage::RestCount {
                 expected: self.cons.rest.len(),
                 got: rests.len(),
             });
         }
+        if compliance.len() != self.cons.compliance.len() {
+            return Err(StaleMessage::ComplianceCount {
+                expected: self.cons.compliance.len(),
+                got: compliance.len(),
+            });
+        }
+        let edges = self.cons.len();
+        if let Some(&edge) = held.iter().find(|&&e| e as usize >= edges) {
+            return Err(StaleMessage::HeldRange { edge, len: edges });
+        }
         holds(&seams, self.state.len())?;
         self.cons.rest.copy_from_slice(rests);
         self.cons.compliance.copy_from_slice(compliance);
+        self.cons.held = held;
+        self.cons.held_passes = passes;
         self.seams = seams;
         self.wake(generation);
         Ok(())
@@ -213,7 +227,9 @@ impl Sim {
         let inv_n = 1.0 / self.state.len() as f32;
         let mut e_avg = 0.0f32;
         for _ in 0..self.substeps_per_tick {
-            let mut stage = Stage::around(&self.scene.sdf).on(self.scene.floor);
+            let mut stage = Stage::around(&self.scene.sdf)
+                .on(self.scene.floor)
+                .holding(self.scene.grip);
             if !self.seams.is_empty() {
                 (self.seams.compliance, self.seams.max_step) = couture::sewing_at(self.substeps);
                 let gap = xpbd::seam_gap(&self.state, &self.seams);
@@ -264,11 +280,9 @@ impl Sim {
     }
 }
 
-/// Whether every sewn vertex is one a state of `len` particles holds.
-///
-/// The solver indexes these directly, so one past the end is a panic on the
-/// sim thread rather than a wrong drape — the same reason a swap's run is
-/// checked before it is taken.
+/// Whether every sewn vertex is one a state of `len` particles holds: the
+/// solver indexes these directly, so one past the end is a panic on the sim
+/// thread rather than a wrong drape.
 fn holds(seams: &Seams, len: usize) -> Result<(), StaleMessage> {
     match seams
         .a

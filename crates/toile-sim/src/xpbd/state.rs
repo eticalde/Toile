@@ -73,6 +73,18 @@ pub struct DistanceConstraints {
     /// a global default: four is interactive (~1.4% residual on long chains),
     /// sixteen is measurement grade (~0.9%).
     pub strain_sweeps: u32,
+    /// Edges an elastic holds, swept again after the whole set; empty for a
+    /// product with none, and then the pass does not run.
+    ///
+    /// Indices into this very set. A boundary vertex of a cloth mesh carries
+    /// half a dozen interior edges asking for the length they were drawn at
+    /// and two contour edges asking to be shorter, so one sweep leaves the
+    /// contour outvoted five to one: measured, a hem asked for fifteen per
+    /// cent gives up three. Sweeping those few edges again is what lets a band
+    /// carry the vote, and it is the same argument `Seams::iterations` makes.
+    pub held: Vec<u32>,
+    /// How many of those extra sweeps there are; zero is none.
+    pub held_passes: u32,
 }
 
 impl DistanceConstraints {

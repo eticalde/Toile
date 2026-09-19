@@ -1,7 +1,7 @@
 use std::sync::{Arc, OnceLock};
 
 use toile_anny::BodyMesh;
-use toile_sim::xpbd::SdfGrid;
+use toile_sim::xpbd::{Grip, SdfGrid};
 
 use super::bake::{self, BakeError};
 use super::belt::{self, Belt};
@@ -14,6 +14,21 @@ use crate::{couture, demo};
 /// that same gap is what puts one rule behind both, instead of a literal for
 /// the sphere and a guess for a person.
 pub const CLEARANCE: f32 = 0.20;
+
+/// How a body's skin holds cloth: the static coefficient, then the kinetic
+/// one.
+///
+/// Textile against dry human skin is measured between about 0.3 and 0.7 —
+/// Derler and Gerhardt's 2012 review of skin friction collects the range, and
+/// cotton on a dry forearm sits near its middle; wet skin goes past one. These
+/// two sit in the upper half of the dry range and keep the usual ratio of
+/// about two thirds between sliding and holding, which is what gives a
+/// waistband something to catch on before it moves.
+///
+/// Every baked body gets this grip and only the demo sphere does not: no
+/// document field, setting or control carries it, so a person can neither see
+/// it nor turn it off. That is a product decision made here by a constant.
+const SKIN: (f32, f32) = (0.6, 0.4);
 
 /// The body a drape falls on: the field the solver collides against, where a
 /// garment is let go over it, and the rings that say where one belongs on it.
@@ -32,6 +47,7 @@ pub struct Collider {
     lo: [f32; 3],
     hi: [f32; 3],
     ground: Option<f32>,
+    grip: Grip,
     belts: Arc<[Belt]>,
 }
 
@@ -53,6 +69,10 @@ impl Collider {
             lo: [-r; 3],
             hi: [r; 3],
             ground: None,
+            // The sphere holds cloth the way it always has. It is the physics
+            // reference and every drape golden is hashed off it, so the one
+            // body in the tree that must never read the push is this one.
+            grip: Grip::slipping(),
             belts: Arc::from([]),
         }
     }
@@ -82,6 +102,7 @@ impl Collider {
             lo,
             hi,
             ground: Some(lo[1]),
+            grip: Grip::coulomb(SKIN.0, SKIN.1),
             belts: Arc::from(belt::of(mesh)),
         }
     }
@@ -110,6 +131,15 @@ impl Collider {
     /// this ground, and `toile-app` never sees `toile-sim`.
     pub fn ground(&self) -> Option<f32> {
         self.ground
+    }
+
+    /// How this body's surface holds cloth pressed against it.
+    ///
+    /// A baked person's skin reads the push and can hold a garment up; the
+    /// demo sphere takes the fixed share of the motion it always has. That is
+    /// the whole of who asks for the new contact and who does not.
+    pub(crate) fn grip(&self) -> Grip {
+        self.grip
     }
 
     /// The body's own measurement rings; empty for one they were not cut for.

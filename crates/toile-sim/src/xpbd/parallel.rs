@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 
 use super::color::ColoredConstraints;
-use super::contact;
+use super::contact::{self, Grip};
 use super::ptr::Buffers;
 use super::sdf::SdfGrid;
 use super::solver::{DAMPING, GRAVITY};
@@ -16,8 +16,9 @@ pub(super) const MIN_CHUNK: usize = 4096;
 /// are disjoint and there are no reductions, so no result depends on the
 /// scheduler.
 ///
-/// Unlike [`super::substep`], this path carries neither seams nor strain
-/// limiting.
+/// Unlike [`super::substep`], this path carries neither seams, nor strain
+/// limiting, nor a stage: no floor, no held edges, and contacts that take the
+/// fixed share of the motion they always have.
 pub fn substep_colored(state: &mut State, cc: &ColoredConstraints, sdf: &SdfGrid, dt: f32) {
     let n = state.len();
     let b = Buffers::of(state);
@@ -96,7 +97,7 @@ pub(super) fn collide(b: Buffers, sdf: &SdfGrid, n: usize) {
             // SAFETY: one index per iteration, disjoint.
             unsafe {
                 let (p, q) = b.pq(i);
-                let (p, q) = contact::resolve(sdf, eps, p, q);
+                let (p, q) = contact::resolve(sdf, eps, Grip::slipping(), p, q);
                 b.set_pq(i, p, q);
             }
         });

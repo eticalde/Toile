@@ -46,16 +46,16 @@ fn along(state: &State, run: &[u32]) -> f32 {
         .sum()
 }
 
-/// The edges of one stretch, held to `ratio` at `strength`.
+/// One stretch of the panel's contour, held to `ratio` at `strength`.
 fn band(pipe: &ShapePipeline, run: &[u32], ratio: f64, strength: f64) -> Vec<Held> {
-    run.windows(2)
-        .filter_map(|pair| pipe.edge_index(pair[0], pair[1]))
-        .map(|edge| Held {
-            edge,
-            ratio: ratio as f32,
-            compliance: couture::compliance_of(strength),
-        })
-        .collect()
+    vec![Held {
+        edges: run
+            .windows(2)
+            .filter_map(|pair| pipe.edge_index(pair[0], pair[1]))
+            .collect(),
+        ratio: ratio as f32,
+        compliance: couture::compliance_of(strength),
+    }]
 }
 
 /// Lets the panel go weightless and returns what it settles to.
@@ -82,18 +82,19 @@ fn hem_after(pipe: &ShapePipeline, hem: &[u32], ratio: Option<f64>) -> (f32, Sta
 
 /// The elastic does what it says: the stretch it holds comes in, a tighter
 /// ratio brings it in further, neither goes past what it asked for, and the
-/// cloth across the panel is left where it was.
+/// cloth across the panel barely moves.
 ///
 /// Weightless and out of reach of any field, so nothing but the elastic is
 /// pulling. On a body the reading would be the body's: a band cannot be
 /// shorter than the person it is sitting on.
 ///
-/// How far it comes is the mesh's answer, not the band's. One row of boundary
-/// edges asking to be shorter meets, at each of its vertices, half a dozen
-/// interior edges asking to stay the length they were drawn at, and it is
-/// outvoted: a hem asked for fifteen per cent gives up three. That is the
-/// honest behaviour of a gather, and what it is worth is measured here rather
-/// than assumed.
+/// How far it comes was the mesh's answer before it was the band's. One row of
+/// boundary edges asking to be shorter meets, at each of its vertices, half a
+/// dozen interior edges asking for the length they were drawn at, and with one
+/// sweep of the set it was outvoted: a hem asked for fifteen per cent gave up
+/// three. Swept again it carries the vote — the same hem now gives up nearly
+/// fourteen, and one asked for half comes in the whole way — and the cloth
+/// behind it follows by three per cent rather than by nothing at all.
 #[test]
 fn a_held_stretch_comes_in_toward_its_ratio_and_the_rest_does_not() {
     let pipe = panel();
@@ -127,8 +128,13 @@ fn a_held_stretch_comes_in_toward_its_ratio_and_the_rest_does_not() {
         "nor does the tighter one: {tighter}"
     );
     assert!(
-        (along(&held, &far) - opposite).abs() < opposite * 0.01,
-        "while the edge across the panel is where it was: {} against {opposite}",
+        gathered < drawn * 0.90,
+        "and it comes most of the way, not a tenth of it: {gathered} of {drawn}"
+    );
+    assert!(
+        (along(&held, &far) - opposite).abs() < opposite * 0.05,
+        "while the edge across the panel follows only a little: {} against \
+         {opposite}",
         along(&held, &far)
     );
 }

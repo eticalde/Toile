@@ -1,4 +1,5 @@
 use super::*;
+use crate::xpbd::contact::Floor;
 use crate::xpbd::metrics::position_hash;
 
 /// Simulated seconds per substep, as the engine runs it.
@@ -155,3 +156,6 @@ fn a_weightless_stage_leaves_the_cloth_at_the_height_it_was_let_go() {
     );
     assert!(lowest(&falling) < RELEASE, "and the same scene does fall");
 }
+
+/// What a band held in the constraint set is worth, and what decides it.
+mod held;

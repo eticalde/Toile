@@ -39,20 +39,20 @@ const SHUT: f32 = 0.0009;
 /// Whether the product is still being pulled together `substeps` into a
 /// drape, with its widest sewn pair `gap` metres apart.
 ///
-/// This is the one question gravity waits on. A garment is let go with its
-/// seams open — 8 cm apart on the shipped block — and letting it fall while it
-/// is still in pieces drags the halves past each other before they can meet;
-/// `GarmentCodeData` closes the seams first for exactly that reason.
+/// The one question gravity waits on. What waiting buys, measured in
+/// `the_phase_buys_a_product_sewn_where_it_was_let_go`, is a product sewn
+/// where it was let go: two panels 8 cm open are shut at substep 11 having
+/// moved nothing at all, and without the phase at that same substep, 1.8 mm
+/// lower and already falling. It buys no different end state — both arms read
+/// their seams at 0.000 m three seconds in, and so does the shipped block.
 ///
-/// The gap itself and not a counted number of substeps, because it measures
-/// the thing being waited for: a two-piece tube and a twelve-piece jacket are
-/// shut at different moments, and a count tuned on one would let the other
-/// fall half-made. Both are deterministic; only one is about the garment.
+/// The gap and not a counted number of substeps, because it measures the
+/// thing waited for: a two-piece tube and a twelve-piece jacket are shut at
+/// different moments, and a count tuned on one would let the other fall
+/// half-made. Both are deterministic; only one is about the garment.
 ///
-/// The ramp is the cap, and less a second criterion than the end of the
-/// first: past it the sewing is firm, so a pair still open has had the pulling
-/// it is going to get and will not close by hanging any longer. A garment
-/// whose seams cannot meet falls late rather than never.
+/// The ramp is the cap rather than a second criterion: past it the sewing is
+/// firm, so a pair still open has had the pulling it is going to get.
 pub fn closing(substeps: u64, gap: f32) -> bool {
     substeps < RAMP && gap > SHUT
 }
@@ -122,4 +122,44 @@ pub fn pair_seam(
         vb.push(pb);
     }
     (va, vb)
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(
+        clippy::float_cmp,
+        reason = "the schedule's two ends are the very constants it was written from"
+    )]
+
+    use super::*;
+
+    /// Both halves of the criterion decide, and neither on its own is it.
+    ///
+    /// The gap is the question; the ramp is the cap behind it. A garment whose
+    /// seams cannot meet falls late rather than never, and one whose seams
+    /// meet early falls early rather than waiting out the ramp.
+    #[test]
+    fn the_phase_ends_on_whichever_comes_first_of_the_gap_and_the_ramp() {
+        let wide = SHUT * 10.0;
+        assert!(closing(0, wide), "let go with its seams open");
+        assert!(closing(RAMP - 1, wide), "and still open a substep short");
+        assert!(!closing(RAMP, wide), "the ramp is the cap");
+        assert!(!closing(RAMP * 10, wide));
+
+        assert!(closing(RAMP / 2, SHUT * 1.01), "a hair open is open");
+        assert!(!closing(RAMP / 2, SHUT), "and shut is shut, early");
+        assert!(!closing(0, 0.0), "so a product with nothing sewn falls");
+    }
+
+    /// The sewing goes from soft to firm across the ramp and stays there, and
+    /// the cap on one pass goes with it.
+    #[test]
+    fn the_sewing_ramps_from_soft_to_firm_and_stops_there() {
+        assert_eq!(sewing_at(0), (SEAM_SOFT, SEAM_STEP));
+        let (middling, step) = sewing_at(RAMP / 2);
+        assert!(middling < SEAM_SOFT && middling > SEAM_FIRM, "{middling}");
+        assert_eq!(step, SEAM_STEP);
+        assert_eq!(sewing_at(RAMP), (SEAM_FIRM, SEAM_STEP_FIRM));
+        assert_eq!(sewing_at(u64::MAX), (SEAM_FIRM, SEAM_STEP_FIRM));
+    }
 }

@@ -7,7 +7,8 @@ use super::*;
 use crate::xpbd::crossings::self_crossings;
 use crate::xpbd::metrics::position_hash;
 use crate::xpbd::sdf::SdfGrid;
-use crate::xpbd::solver::{Stage, substep};
+use crate::xpbd::solver::substep;
+use crate::xpbd::stage::Stage;
 
 /// Simulated seconds per substep, as the engine runs it.
 const DT: f32 = 1.0 / 600.0;

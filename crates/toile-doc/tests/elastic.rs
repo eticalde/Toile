@@ -105,14 +105,11 @@ fn a_ratio_no_elastic_holds_is_refused_before_it_is_written() {
 }
 
 #[test]
-fn a_strength_that_is_not_finite_and_positive_is_refused() {
+fn a_strength_that_is_not_finite_or_is_under_the_floor_is_refused() {
     let mut doc = block::trouser_front();
     let key = banded(&mut doc);
-    for strength in [0.0, -30.0, f64::NAN, f64::NEG_INFINITY, f64::INFINITY] {
-        let slider = Command::SetElasticStrength {
-            elastic: key,
-            to: strength,
-        };
+    for to in [0.0, -30.0, 1.0e-300, f64::NAN, f64::INFINITY] {
+        let slider = Command::SetElasticStrength { elastic: key, to };
         assert_eq!(slider.apply(&mut doc), Err(DocError::ElasticStrength));
     }
     assert_eq!(held(&doc, key).strength, 30.0);

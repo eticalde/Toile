@@ -27,6 +27,16 @@ pub const MARK: u64 = 1800;
 /// because something holds it.
 pub const LONG: u64 = 20_000;
 
+/// Where a drape that has stopped changing is read, in substeps.
+///
+/// Twenty simulated seconds, or wherever the drape went quiet first — see
+/// [`at_substep`]. Measured on the seeded skirt, the band's length and the
+/// cloth's span read the same here as at [`LONG`] to four decimal places, so a
+/// scene that only has to say where the garment ended is read here and costs a
+/// third less wall clock, which for a thread paced by that clock is a third
+/// less of a test.
+pub const SETTLED: u64 = 12_000;
+
 /// Substeps a drape is given to come to rest in.
 ///
 /// The trouser front is the slowest of these scenes, quiet at 20,780; this
@@ -80,6 +90,34 @@ pub fn touching(sdf: &SdfGrid, points: &[[f32; 3]]) -> usize {
         .count()
 }
 
+/// What the cloth an elastic holds came to: how far the run measures in three
+/// dimensions, what it is held to, and how high it stands.
+///
+/// The pairs are the ones [`Session::held_cloth`] names. Summed in `f64`
+/// because a couple of hundred lengths of four millimetres each, added in
+/// `f32`, carry more rounding than the millimetre a strength is read by.
+pub fn band_of(held: &[((u32, u32), f32)], points: &[[f32; 3]]) -> ((f64, f64), f64) {
+    let (mut walk, mut rest, mut high, mut counted) = (0.0f64, 0.0f64, 0.0f64, 0usize);
+    for &((a, b), at) in held {
+        let (a, b) = (points[a as usize], points[b as usize]);
+        let (dx, dy, dz) = (
+            f64::from(b[0] - a[0]),
+            f64::from(b[1] - a[1]),
+            f64::from(b[2] - a[2]),
+        );
+        walk += (dx * dx + dy * dy + dz * dz).sqrt();
+        rest += f64::from(at);
+        high += f64::from(a[1]) + f64::from(b[1]);
+        counted += 2;
+    }
+    let at = if counted > 0 {
+        high / counted as f64
+    } else {
+        0.0
+    };
+    ((walk, rest), at)
+}
+
 /// The cloth's lowest and highest particle, in metres.
 pub fn span(points: &[[f32; 3]]) -> (f32, f32) {
     points.iter().fold((f32::MAX, f32::MIN), |(lo, hi), p| {
@@ -110,18 +148,28 @@ fn points_of(session: &Session) -> Vec<[f32; 3]> {
     session.snapshot().positions.as_chunks::<3>().0.to_vec()
 }
 
-/// The frame after the sim thread has run `substeps` substeps.
+/// The frame after the sim thread has run `substeps` substeps, or the frame it
+/// went quiet on if it sleeps before then.
+///
+/// A sleeping sim parks in `recv` at zero CPU and its counter stops, so a
+/// scene that settles early would never reach a later mark however long
+/// anything waited. Reading it where it stopped is the same reading: a drape
+/// that has gone quiet is not going anywhere. Since a garment began staying on
+/// the body, that is most of them.
 ///
 /// # Panics
-/// If the sim thread never gets that far.
+/// If the sim thread neither gets that far nor goes quiet.
 pub fn at_substep(session: &Session, substeps: u64) -> Vec<[f32; 3]> {
     let deadline = Instant::now() + PATIENCE;
-    while Instant::now() < deadline && session.snapshot().substeps < substeps {
+    let far_enough =
+        |session: &Session| session.snapshot().substeps >= substeps || session.settled();
+    while Instant::now() < deadline && !far_enough(session) {
         std::thread::sleep(Duration::from_millis(2));
     }
     assert!(
-        session.snapshot().substeps >= substeps,
-        "the sim thread never reached {substeps} substeps"
+        far_enough(session),
+        "the sim thread reached {} of {substeps} substeps in {PATIENCE:?}",
+        session.snapshot().substeps
     );
     points_of(session)
 }
@@ -214,10 +262,10 @@ pub fn through_the_drape(session: &Session, sdf: &SdfGrid) -> Watched {
                 found.worn = (on_skin, seen);
             }
         }
-        if seen >= MARK {
+        if seen >= MARK || session.settled() {
             return found;
         }
         std::thread::sleep(Duration::from_millis(2));
     }
-    panic!("the sim thread never reached {MARK} substeps");
+    panic!("the sim thread reached {seen} of {MARK} substeps in {PATIENCE:?}");
 }

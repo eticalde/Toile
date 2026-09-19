@@ -67,7 +67,11 @@ fn quantised(row: &Track<'_>, rail: Rect, x: f32) -> f64 {
     let (lo, hi) = row.span;
     let along = f64::from((x - rail.left()) / rail.width().max(1.0)).clamp(0.0, 1.0);
     let raw = lo + along * (hi - lo);
-    ((raw / row.step).round() * row.step).clamp(lo, hi)
+    // Divided by the step's reciprocal, never multiplied by the step. A tenth
+    // is not a binary fraction, so three of them come to 0.30000000000000004
+    // and that is the number the file would carry — while the box beside the
+    // rail draws "0,3". Dividing by ten gives the tenth itself.
+    ((raw / row.step).round() / (1.0 / row.step)).clamp(lo, hi)
 }
 
 /// How far along the rail a value sits, from 0 at its low end to 1 at its
@@ -188,22 +192,48 @@ mod tests {
         assert_eq!(quantised(&row, rail, 190.0), quantised(&row, rail, 190.4));
     }
 
-    /// A strength rail reads in tenths, and the tenth it reads is the one the
-    /// box writes: a value the document already holds comes back bit for bit,
-    /// so a press that moves nothing asks for no edit.
-    #[test]
-    fn a_tenth_comes_back_as_the_very_number_the_document_holds() {
-        let row = Track {
+    /// The strength rail: a tenth from a tenth of a multiple, as the elastic
+    /// panel offers it.
+    fn firm() -> Track<'static> {
+        Track {
             label: "rigidez",
             span: (0.1, 50.0),
             step: 0.1,
             value: 10.0,
             unit: "×",
             decimals: 1,
-        };
-        let rail = rail();
+        }
+    }
+
+    /// A strength rail reads in tenths, and the tenth it reads is the one the
+    /// box writes: a value the document already holds comes back bit for bit,
+    /// so a press that moves nothing asks for no edit.
+    #[test]
+    fn a_tenth_comes_back_as_the_very_number_the_document_holds() {
+        let (row, rail) = (firm(), rail());
         let at = rail.left() + rail.width() * fraction(&row, 10.0);
         assert_eq!(quantised(&row, rail, at).to_bits(), 10.0_f64.to_bits());
+    }
+
+    /// And so does every other tenth the rail offers, not only the round ones.
+    ///
+    /// Snapping by multiplication passes at 10.0 and fails at 0.3: a hundred
+    /// and seventy-seven of these five hundred tenths come back as the double
+    /// next door, and the file then carries 0.30000000000000004 under a box
+    /// that reads "0,3".
+    #[test]
+    fn every_tenth_the_rail_offers_is_the_tenth_and_not_its_neighbour() {
+        let (row, rail) = (firm(), rail());
+        for tenths in 1..=500 {
+            let value = f64::from(tenths) / 10.0;
+            let at = rail.left() + rail.width() * fraction(&row, value);
+            assert_eq!(
+                quantised(&row, rail, at).to_bits(),
+                value.to_bits(),
+                "the rail read {value} as {}",
+                quantised(&row, rail, at)
+            );
+        }
     }
 
     #[test]

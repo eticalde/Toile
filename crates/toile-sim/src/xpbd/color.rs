@@ -53,6 +53,12 @@ pub fn color_constraints(cons: &DistanceConstraints, n_verts: usize) -> ColoredC
         compliance: Vec::with_capacity(m),
         strain_limit: cons.strain_limit,
         strain_sweeps: cons.strain_sweeps,
+        // Colouring permutes the edges, so an index into the set it was given
+        // names another edge in the set it hands back. The colour path carries
+        // neither seams nor strain limiting either: it is the benchmark's
+        // solver, not the garment's.
+        held: Vec::new(),
+        held_passes: 0,
     };
     let mut ranges = Vec::with_capacity(n_colors);
     for g in &groups {
@@ -81,6 +87,8 @@ mod tests {
             compliance: vec![0.0; (n - 1) as usize],
             strain_limit: 0.0,
             strain_sweeps: 0,
+            held: Vec::new(),
+            held_passes: 0,
         }
     }
 

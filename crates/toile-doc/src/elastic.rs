@@ -35,6 +35,17 @@ impl Elastic {
     /// length.
     pub const MAX_RATIO: f64 = 2.0;
 
+    /// The slackest an elastic is written at: a hundredth of a band of
+    /// strength one.
+    ///
+    /// A floor, and not only "above zero", because of what a strength becomes.
+    /// The stretch an elastic holds runs at the elastic's stiffness in place of
+    /// the cloth's own, so a number small enough asks for no band and gets no
+    /// cloth either: a hand-typed `1e-300` is positive, finite, and a waistline
+    /// nothing holds to any length. That is a different garment from the one
+    /// with no elastic on it, and no elastic is what such a number meant.
+    pub const MIN_STRENGTH: f64 = 0.01;
+
     /// An elastic holding `at` to `ratio` of its drawn length, at `strength`.
     pub fn new(at: EdgeRange, ratio: f64, strength: f64) -> Elastic {
         Elastic {
@@ -50,14 +61,15 @@ impl Elastic {
     /// infinity fails every comparison here, and the writer would spell one
     /// `null` and refuse the whole product on the next open. A ratio of zero is
     /// refused with them — a stretch pulled to no length at all is not an
-    /// elastic — and so is a strength of zero, which holds nothing and would
-    /// read as an elastic that does nothing.
+    /// elastic — and so is a strength under [`Elastic::MIN_STRENGTH`], zero
+    /// included, which holds nothing and takes the cloth's own hold with it.
     pub(crate) fn check(self) -> Result<(), DocError> {
         let holds = self.ratio > 0.0 && self.ratio <= Elastic::MAX_RATIO;
         if !holds {
             return Err(DocError::ElasticRatio);
         }
-        if self.strength <= 0.0 || !self.strength.is_finite() {
+        let pulls = self.strength >= Elastic::MIN_STRENGTH && self.strength.is_finite();
+        if !pulls {
             return Err(DocError::ElasticStrength);
         }
         Ok(())
@@ -111,6 +123,27 @@ mod tests {
             assert_eq!(
                 Elastic::new(range(), 0.85, strength).check(),
                 Err(DocError::ElasticStrength),
+                "{strength}"
+            );
+        }
+    }
+
+    /// Positive and finite is not enough: the floor is a number, the floor
+    /// itself passes, and everything the strength rail offers stands above it.
+    #[test]
+    fn a_strength_under_the_floor_is_refused_and_the_floor_is_not() {
+        let under = Elastic::MIN_STRENGTH / 2.0;
+        for strength in [1.0e-300, f64::MIN_POSITIVE, 1.0e-6, under] {
+            assert_eq!(
+                Elastic::new(range(), 0.85, strength).check(),
+                Err(DocError::ElasticStrength),
+                "{strength}"
+            );
+        }
+        for strength in [Elastic::MIN_STRENGTH, 0.1, 10.0, 50.0, 1.0e300] {
+            assert_eq!(
+                Elastic::new(range(), 0.85, strength).check(),
+                Ok(()),
                 "{strength}"
             );
         }

@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use toile_doc::{Binding, Command, Doc, MeasureSet, Piece, PieceKey, Point, PointKey, Winding};
 use toile_engine::couture::COMPLIANCE;
 use toile_engine::{demo, sync};
-use toile_sim::xpbd::{self, Floor, Seams, Stage};
+use toile_sim::xpbd::{self, Floor, Grip, Seams, Stage};
 
 use super::scene::{DT, avg, max, same_bits, seconds, settle};
 
@@ -167,6 +167,7 @@ pub fn run_async() {
         sync::Scene {
             sdf: std::sync::Arc::new(demo::avatar_sdf()),
             floor: Floor::none(),
+            grip: Grip::slipping(),
         },
         pipe.tris.clone(),
         DT,
@@ -196,7 +197,7 @@ pub fn run_async() {
         let generation = u64::from(f) + 1;
         let sent = Instant::now();
         let firm = vec![COMPLIANCE; rests.len()];
-        handle.send_rests(generation, rests, firm, Seams::default());
+        handle.send_rests(generation, rests, firm, (Vec::new(), 0), Seams::default());
         latency_ms.push(wait_for_generation(&handle, generation, sent));
 
         std::thread::sleep(frame_dur.saturating_sub(frame_start.elapsed()));

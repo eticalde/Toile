@@ -231,7 +231,13 @@ impl Session {
         let seams = self.resew();
         self.generation += 1;
         if let Some(handle) = self.handle.as_ref() {
-            handle.send_rests(self.generation, cons.rest, cons.compliance, seams);
+            handle.send_rests(
+                self.generation,
+                cons.rest,
+                cons.compliance,
+                (cons.held, cons.held_passes),
+                seams,
+            );
         }
     }
 }

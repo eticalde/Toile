@@ -5,10 +5,13 @@
 
 use std::sync::Arc;
 
-use toile_sim::xpbd::{Floor, SdfGrid};
+use toile_sim::xpbd::{Floor, Grip, SdfGrid};
 
 use super::*;
 use crate::couture::{COMPLIANCE, ShapePipeline};
+
+/// What the weightless phase is and is not, measured against its absence.
+mod gravity;
 
 /// A rectangle and the same rectangle with one node more.
 fn meshes() -> (ShapePipeline, ShapePipeline) {
@@ -33,6 +36,20 @@ fn sim(pipe: &ShapePipeline) -> Sim {
     )
 }
 
+/// A sim over a state already seeded, on the same ball, drawing nothing: the
+/// triangles are the viewer's and no test here publishes a frame.
+fn sim_of(state: State, cons: DistanceConstraints, seams: Seams, per_tick: u32) -> Sim {
+    Sim::new(
+        state,
+        cons,
+        seams,
+        ball(0.15),
+        Vec::new(),
+        1.0 / 600.0,
+        per_tick,
+    )
+}
+
 /// A sphere at the origin standing on nothing, as the sim thread takes one.
 ///
 /// No floor, because every test here is about what the mailbox does with a
@@ -47,6 +64,7 @@ fn ball(radius: f32) -> Scene {
             radius,
         )),
         floor: Floor::none(),
+        grip: Grip::slipping(),
     }
 }
 
@@ -70,7 +88,10 @@ fn a_stale_generation_is_an_error_not_a_warm_start() {
     let held = old.constraints(COMPLIANCE);
     let (stale, firm) = (held.rest, held.compliance);
     let mut sim = sim(&old);
-    assert_eq!(sim.apply_rests(1, &stale, &firm, Seams::default()), Ok(()));
+    assert_eq!(
+        sim.apply_rests(1, &stale, &firm, (Vec::new(), 0), Seams::default()),
+        Ok(())
+    );
 
     let swap = Box::new(MeshSwap::new(&old.pos2d, &old.tris, &new, COMPLIANCE));
     let edges = swap.cons.rest.len();
@@ -80,7 +101,7 @@ fn a_stale_generation_is_an_error_not_a_warm_start() {
 
     // The rest update that was in flight when the swap landed.
     assert_eq!(
-        sim.apply_rests(1, &stale, &firm, Seams::default()),
+        sim.apply_rests(1, &stale, &firm, (Vec::new(), 0), Seams::default()),
         Err(StaleMessage::Generation { applied: 2, got: 1 })
     );
     assert_eq!(sim.cons.rest.len(), edges, "the new mesh kept its rests");
@@ -94,12 +115,39 @@ fn rest_lengths_for_another_mesh_are_refused_by_count() {
     let mut sim = sim(&new);
     let expected = sim.cons.rest.len();
     let held = old.constraints(COMPLIANCE);
-    let refused = sim.apply_rests(1, &held.rest, &held.compliance, Seams::default());
+    let refused = sim.apply_rests(
+        1,
+        &held.rest,
+        &held.compliance,
+        (Vec::new(), 0),
+        Seams::default(),
+    );
     assert_eq!(
         refused,
         Err(StaleMessage::RestCount {
             expected,
             got: old.edges.len()
+        })
+    );
+}
+
+/// And the compliances are counted on their own. They are the half an
+/// elastic writes, so a message that carried the right number of rest lengths
+/// and the wrong number of compliances is exactly the shape a waistband
+/// compiled against a mesh that has since been rebuilt arrives in.
+#[test]
+fn compliances_for_another_mesh_are_named_as_compliances() {
+    let (old, new) = meshes();
+    let mut sim = sim(&new);
+    let expected = sim.cons.compliance.len();
+    let fits = sim.cons.rest.clone();
+    let short = old.constraints(COMPLIANCE).compliance;
+    assert_ne!(fits.len(), short.len(), "the two meshes differ in edges");
+    assert_eq!(
+        sim.apply_rests(1, &fits, &short, (Vec::new(), 0), Seams::default()),
+        Err(StaleMessage::ComplianceCount {
+            expected,
+            got: short.len()
         })
     );
 }
@@ -142,7 +190,13 @@ fn a_seam_past_the_end_of_the_state_is_refused() {
     let held = old.pos2d.len();
     let firm = old.constraints(COMPLIANCE);
     assert_eq!(
-        sim.apply_rests(1, &firm.rest, &firm.compliance, sewn(0, held as u32)),
+        sim.apply_rests(
+            1,
+            &firm.rest,
+            &firm.compliance,
+            (Vec::new(), 0),
+            sewn(0, held as u32)
+        ),
         Err(StaleMessage::SeamRange {
             vertex: held as u32,
             len: held,
@@ -208,6 +262,7 @@ fn a_body_arriving_brings_its_own_ground() {
     let standing = Scene {
         sdf: ball(0.10).sdf,
         floor: Floor::at(PLANE),
+        grip: Grip::slipping(),
     };
     assert_eq!(sim.apply_collider(1, standing), Ok(()));
     assert_eq!(sim.scene.floor.level(), Some(PLANE));

@@ -1,6 +1,7 @@
-use super::contact::{self, Floor};
+use super::contact::{self, Grip};
 use super::layers::Layers;
 use super::sdf::SdfGrid;
+use super::stage::Stage;
 use super::state::{DistanceConstraints, Seams, State};
 
 #[cfg(test)]
@@ -11,54 +12,6 @@ mod tests;
 /// What pulls on a particle, in metres per second squared.
 pub const GRAVITY: f32 = -9.81;
 pub(super) const DAMPING: f32 = 0.999;
-
-/// Everything a substep asks of the world outside the cloth: the body it
-/// falls on, the ground it may not fall through, and the pull on it.
-///
-/// The three travel together because a substep reads them together, and
-/// because the alternative is an eighth parameter. Gravity is here rather
-/// than a constant so that a garment can be sewn shut before it is allowed to
-/// fall: [`Stage::weightless`] is that moment, and nothing else changes.
-#[derive(Debug, Clone, Copy)]
-#[must_use]
-pub struct Stage<'a> {
-    /// The body the cloth collides with.
-    pub sdf: &'a SdfGrid,
-    /// The plane under it, when the scene has one.
-    pub floor: Floor,
-    /// The pull on every particle, in metres per second squared.
-    pub gravity: f32,
-}
-
-impl<'a> Stage<'a> {
-    /// A body hanging in the void, under ordinary gravity: the scene every
-    /// drape golden is taken in.
-    pub const fn around(sdf: &'a SdfGrid) -> Stage<'a> {
-        Stage {
-            sdf,
-            floor: Floor::none(),
-            gravity: GRAVITY,
-        }
-    }
-
-    /// The same, with ground under it.
-    pub const fn on(self, floor: Floor) -> Stage<'a> {
-        Stage {
-            sdf: self.sdf,
-            floor,
-            gravity: self.gravity,
-        }
-    }
-
-    /// The same, with nothing pulling.
-    pub const fn weightless(self) -> Stage<'a> {
-        Stage {
-            sdf: self.sdf,
-            floor: self.floor,
-            gravity: 0.0,
-        }
-    }
-}
 
 /// One full XPBD substep.
 ///
@@ -78,6 +31,9 @@ pub fn substep(
     let inv_dt2 = 1.0 / (dt * dt);
     integrate(state, stage.gravity, dt);
     solve_distance(state, cons, inv_dt2);
+    if !cons.held.is_empty() {
+        solve_held(state, cons, inv_dt2);
+    }
     if cons.strain_limit > 0.0 {
         limit_strain(state, cons);
     }
@@ -95,7 +51,7 @@ pub fn substep(
     if let Some(layers) = layers {
         layers.separate(state);
     }
-    collide(state, stage.sdf);
+    collide(state, stage.sdf, stage.grip);
     // After the body and not before it. The ground is the one surface nothing
     // may end up under, and the field's gradient under a sole points down: a
     // particle the body pushes through the floor has to meet the plane after
@@ -103,7 +59,7 @@ pub fn substep(
     // that lands is stopped the way the body stops it — moving `p` and
     // leaving `q` behind is what makes a contact a contact here.
     if let Some(y) = stage.floor.level() {
-        rest_on_floor(state, y);
+        rest_on_floor(state, y, stage.grip);
     }
     derive_velocities(state, dt);
 }
@@ -127,23 +83,52 @@ fn integrate(state: &mut State, gravity: f32, dt: f32) {
 /// Sequential Gauss-Seidel over the constraints, in their stored order.
 fn solve_distance(state: &mut State, cons: &DistanceConstraints, inv_dt2: f32) {
     for c in 0..cons.len() {
-        let (ia, ib) = (cons.a[c] as usize, cons.b[c] as usize);
-        let (wa, wb) = (state.inv_mass[ia], state.inv_mass[ib]);
-        let w = wa + wb;
-        if w == 0.0 {
-            continue;
-        }
-        let dx = state.px[ib] - state.px[ia];
-        let dy = state.py[ib] - state.py[ia];
-        let dz = state.pz[ib] - state.pz[ia];
-        let len = (dx * dx + dy * dy + dz * dz).sqrt();
-        if len <= 1.0e-9 {
-            continue;
-        }
-        let alpha = cons.compliance[c] * inv_dt2;
-        let corr = (len - cons.rest[c]) / ((w + alpha) * len);
-        apply_pair(state, (ia, ib), (wa, wb), [corr * dx, corr * dy, corr * dz]);
+        solve_one(state, cons, c, inv_dt2);
     }
+}
+
+/// Extra Gauss-Seidel sweeps over the edges an elastic holds.
+///
+/// The one thing a band can be made stiffer by. A boundary vertex carries half
+/// a dozen interior edges asking for the length the cloth was drawn at and two
+/// contour edges asking to be shorter, and one sweep over the set puts them
+/// all once: the band loses the vote. Compliance cannot buy it back — at
+/// dt = 1/600 s an edge of any stiffness this tree writes already takes better
+/// than 98 % of its correction in one pass — so what is left is to sweep those
+/// few edges again, which is the argument `Seams::iterations` makes for itself.
+///
+/// Sweeps alternate direction for the reason [`limit_strain`]'s do: a
+/// sequential sweep re-stretches the edges behind it, and on a long run
+/// alternating ones converge where same-direction ones crawl.
+fn solve_held(state: &mut State, cons: &DistanceConstraints, inv_dt2: f32) {
+    let m = cons.held.len();
+    for pass in 0..cons.held_passes {
+        for k in 0..m {
+            let at = if pass % 2 == 0 { k } else { m - 1 - k };
+            solve_one(state, cons, cons.held[at] as usize, inv_dt2);
+        }
+    }
+}
+
+/// One distance constraint, projected onto its pair.
+#[inline]
+fn solve_one(state: &mut State, cons: &DistanceConstraints, c: usize, inv_dt2: f32) {
+    let (ia, ib) = (cons.a[c] as usize, cons.b[c] as usize);
+    let (wa, wb) = (state.inv_mass[ia], state.inv_mass[ib]);
+    let w = wa + wb;
+    if w == 0.0 {
+        return;
+    }
+    let dx = state.px[ib] - state.px[ia];
+    let dy = state.py[ib] - state.py[ia];
+    let dz = state.pz[ib] - state.pz[ia];
+    let len = (dx * dx + dy * dy + dz * dz).sqrt();
+    if len <= 1.0e-9 {
+        return;
+    }
+    let alpha = cons.compliance[c] * inv_dt2;
+    let corr = (len - cons.rest[c]) / ((w + alpha) * len);
+    apply_pair(state, (ia, ib), (wa, wb), [corr * dx, corr * dy, corr * dz]);
 }
 
 /// Hard post-solve clamp of over-elongated edges.
@@ -217,12 +202,13 @@ fn apply_pair(state: &mut State, (ia, ib): (usize, usize), (wa, wb): (f32, f32),
     state.pz[ib] -= wb * s[2];
 }
 
-fn collide(state: &mut State, sdf: &SdfGrid) {
+fn collide(state: &mut State, sdf: &SdfGrid, grip: Grip) {
     let eps = sdf.cell * 0.5;
     for i in 0..state.len() {
         let (p, q) = contact::resolve(
             sdf,
             eps,
+            grip,
             [state.px[i], state.py[i], state.pz[i]],
             [state.qx[i], state.qy[i], state.qz[i]],
         );
@@ -236,10 +222,11 @@ fn collide(state: &mut State, sdf: &SdfGrid) {
 /// A scene with no floor never reaches this, which is why the floor costs a
 /// scene without one nothing at all — not a branch per particle, and not a
 /// push multiplied by zero.
-fn rest_on_floor(state: &mut State, y: f32) {
+fn rest_on_floor(state: &mut State, y: f32, grip: Grip) {
     for i in 0..state.len() {
         let (p, q) = contact::rest_on(
             y,
+            grip,
             [state.px[i], state.py[i], state.pz[i]],
             [state.qx[i], state.qy[i], state.qz[i]],
         );

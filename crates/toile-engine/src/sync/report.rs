@@ -23,6 +23,31 @@ pub enum StaleMessage {
         /// Rest lengths the message carries.
         got: usize,
     },
+    /// Compliances for another mesh's constraints.
+    ///
+    /// Its own variant and not a count folded into [`StaleMessage::RestCount`]:
+    /// the two lists arrive together and are checked together, and a refusal
+    /// that named the rest lengths when the compliances were the short list
+    /// would send whoever read it looking at the half that was right.
+    #[error("{got} compliances for a mesh of {expected} constraints")]
+    ComplianceCount {
+        /// Constraints the solver holds.
+        expected: usize,
+        /// Compliances the message carries.
+        got: usize,
+    },
+    /// An elastic naming an edge the solver's constraint set does not hold.
+    ///
+    /// The solver indexes these directly, so one past the end is a panic on
+    /// the sim thread rather than a wrong drape — the same reason a sewn
+    /// vertex is checked before it is taken.
+    #[error("an elastic on edge {edge}, in a set of {len}")]
+    HeldRange {
+        /// The edge the message named.
+        edge: u32,
+        /// Constraints the solver holds.
+        len: usize,
+    },
     /// A swap naming a run of the combined state the solver does not hold.
     #[error("a swap of {replacing} vertices at {at}, in a state of {len}")]
     SwapRange {

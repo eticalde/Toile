@@ -4,7 +4,10 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use toile_doc::formula::Formula;
-use toile_doc::{Axis, Binding, Command, Doc, History, MeasureSet, PointKey, block};
+use toile_doc::{
+    Axis, Binding, Command, Doc, DocError, EdgeAnchor, EdgeRange, Elastic, History, Identity,
+    MeasureSet, PointKey, Seam, SeamOrientation, block,
+};
 
 fn env() -> BTreeMap<String, f64> {
     [("a", 3.0), ("b", 7.0), ("cintura", 84.0), ("cadera", 98.0)]
@@ -248,4 +251,41 @@ fn probe_implausible_slot_counts() {
             "{issued} slots took {took:?}"
         );
     }
+}
+
+#[test]
+fn probe_a_stretch_anchored_at_a_fraction_no_file_can_spell() {
+    // A NaN fraction passes every other check a stretch answers, so the seam
+    // or the elastic lands, the product saves — and never opens again: the
+    // writer spells a NaN `null`, and no reader takes `null` for a number.
+    let mut doc = block::trouser_front();
+    let piece = doc.piece_named(block::FRONT).expect("the block draws one");
+    let named = |label: &str| doc.shows_label(piece, label).expect("the block names it");
+    let good = EdgeRange::between(piece, named("cintura_cf"), named("cadera_lat"));
+    let before = doc.to_canonical_json();
+    for t in [f64::NAN, f64::INFINITY, 4.0] {
+        let bad = EdgeRange {
+            tail: EdgeAnchor { t, ..good.tail },
+            ..good
+        };
+        let seam = Command::AddSeam {
+            identity: Identity::New,
+            seam: Seam::plain(good, bad, SeamOrientation::Aligned),
+        };
+        let elastic = Command::AddElastic {
+            identity: Identity::New,
+            elastic: Elastic::new(bad, 0.85, 10.0),
+        };
+        println!(
+            "t {t} => {:?} / {:?}",
+            seam.clone().apply(&mut doc).err(),
+            {
+                let mut again = doc.clone();
+                elastic.apply(&mut again).err()
+            }
+        );
+        assert_eq!(seam.apply(&mut doc).err(), Some(DocError::AnchorFraction));
+    }
+    assert_eq!(doc.to_canonical_json(), before, "nothing landed");
+    assert_eq!(Doc::from_json(&before), Ok(doc), "and the file still opens");
 }

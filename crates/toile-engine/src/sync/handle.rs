@@ -3,35 +3,41 @@ use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use crossbeam_channel::{RecvTimeoutError, Sender, TryRecvError, unbounded};
-use toile_sim::xpbd::{DistanceConstraints, Floor, SdfGrid, Seams, State};
+use toile_sim::xpbd::{DistanceConstraints, Floor, Grip, SdfGrid, Seams, State};
 
 use super::report::Snapshot;
 use super::worker::Sim;
 use crate::couture::MeshSwap;
 
-/// What the cloth collides with: the body's field, and the ground it stands
-/// on.
+/// What the cloth collides with: the body's field, the ground it stands on,
+/// and how the two hold what touches them.
 ///
-/// The two travel together because they move together. A body put on the
+/// The three travel together because they move together. A body put on the
 /// stand brings its own floor with it — a shorter person stands lower — and a
 /// message carrying the field alone would leave the drape resting on the
-/// plane the body before it stood on.
+/// plane the body before it stood on. The grip goes with them for the same
+/// reason: a person's skin holds a garment and the demo sphere does not, so
+/// swapping one body for the other has to swap what its surface does.
 #[derive(Clone)]
 pub struct Scene {
     /// The body's field, shared rather than copied.
     pub sdf: Arc<SdfGrid>,
     /// The plane under it, if this body stands on one.
     pub floor: Floor,
+    /// How that body and that plane hold cloth pressed against them.
+    pub grip: Grip,
 }
 
 enum Msg {
     /// The product recompiled: what every edge rests at, how hard it is held
-    /// there, and what is sewn to what. They travel together because a shape
-    /// edit moves all three.
+    /// there, which edges an elastic holds, and what is sewn to what. They
+    /// travel together because a shape edit moves all four.
     RestUpdate {
         generation: u64,
         rests: Vec<f32>,
         compliance: Vec<f32>,
+        /// The edges an elastic holds, and the sweeps they get.
+        held: (Vec<u32>, u32),
         seams: Seams,
     },
     /// A piece re-meshed elsewhere, with the drape to carry onto it.
@@ -66,11 +72,19 @@ pub struct SimHandle {
 
 impl SimHandle {
     /// Hot-swaps the rest state and the sewing. Does not block.
-    pub fn send_rests(&self, generation: u64, rests: Vec<f32>, compliance: Vec<f32>, seams: Seams) {
+    pub fn send_rests(
+        &self,
+        generation: u64,
+        rests: Vec<f32>,
+        compliance: Vec<f32>,
+        held: (Vec<u32>, u32),
+        seams: Seams,
+    ) {
         let _ = self.tx.send(Msg::RestUpdate {
             generation,
             rests,
             compliance,
+            held,
             seams,
         });
     }
@@ -225,8 +239,9 @@ fn drain(rx: &crossbeam_channel::Receiver<Msg>, first: Option<Msg>, sim: &mut Si
                 generation,
                 rests,
                 compliance,
+                held,
                 seams,
-            } => sim.apply_rests(generation, &rests, &compliance, seams),
+            } => sim.apply_rests(generation, &rests, &compliance, held, seams),
             Msg::MeshSwap { generation, swap } => sim.apply_swap(generation, swap),
             Msg::Collider { generation, scene } => sim.apply_collider(generation, scene),
         };

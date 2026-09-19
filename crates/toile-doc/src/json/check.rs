@@ -19,6 +19,21 @@ pub(super) fn samplings(doc: &Doc) -> Result<(), FormatError> {
     Ok(())
 }
 
+/// Checks that every elastic holds its stretch to numbers an elastic holds.
+///
+/// The same rule the edit answers to, asked again of the file, because the
+/// file is the other way in: a hand-typed ratio of `-5` or `1e9` reaches the
+/// solver as a rest length, and a strength of `0` or `1e-300` as a compliance
+/// that leaves the stretch held by nothing, the cloth's own stiffness
+/// included. Refused here rather than clamped, so the product that opens is
+/// the product that was written or none at all.
+pub(super) fn elastics(doc: &Doc) -> Result<(), FormatError> {
+    for (_, elastic) in doc.elastics.iter() {
+        elastic.check().map_err(FormatError::Elastic)?;
+    }
+    Ok(())
+}
+
 /// Checks every body's link to the library by the text it carries.
 ///
 /// Its stem becomes a file name when a product opens, and a fingerprint of the
@@ -100,7 +115,41 @@ fn live<T>(arena: &Arena<T>, key: Key<T>) -> Result<(), FormatError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{MannequinKey, PointKey, block};
+    use crate::{Elastic, MannequinKey, PointKey, block};
+
+    /// A hand-edited elastic is named rather than handed to the solver: a
+    /// ratio of `1e9` throws a chain four hundred thousand kilometres long,
+    /// a strength of `0` is a compliance no edge can be solved at, and one of
+    /// `1e-300` is a compliance under which the edge is never solved.
+    #[test]
+    fn an_elastic_holding_a_stretch_to_numbers_no_elastic_holds_is_named() {
+        let doc = block::trouser_front();
+        let front = doc.piece_named(block::FRONT).expect("the block draws one");
+        let named = |label| {
+            doc.shows_label(front, label)
+                .unwrap_or_else(|| panic!("the block names {label}"))
+        };
+        let at = EdgeRange::between(front, named("cintura_cf"), named("cadera_lat"));
+        assert_eq!(elastics(&doc), Ok(()), "the block holds none");
+        for (ratio, strength) in [
+            (-5.0, 10.0),
+            (1.0e9, 10.0),
+            (0.0, 10.0),
+            (0.85, 0.0),
+            (0.85, 1.0e-300),
+        ] {
+            let mut edited = doc.clone();
+            edited.elastics.insert(Elastic::new(at, ratio, strength));
+            let error = elastics(&edited).expect_err("the numbers are not an elastic's");
+            assert!(
+                error.to_string().starts_with("an elastic in the pattern"),
+                "{ratio} at {strength}: {error}"
+            );
+        }
+        let mut held = doc.clone();
+        held.elastics.insert(Elastic::new(at, 0.85, 10.0));
+        assert_eq!(elastics(&held), Ok(()), "and a waistband passes");
+    }
 
     #[test]
     fn a_pattern_that_cites_only_what_it_carries_passes() {
