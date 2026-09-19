@@ -93,7 +93,7 @@ pub fn substep(
     // the stretch and the seams have already had their say over: a fold the
     // constraints were about to pull out is not a fold.
     if let Some(layers) = layers {
-        layers.separate(state);
+        layers.separate(state, dt);
     }
     collide(state, stage.sdf);
     // After the body and not before it. The ground is the one surface nothing
