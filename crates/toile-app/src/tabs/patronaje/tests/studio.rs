@@ -1,4 +1,4 @@
-use eframe::egui::epaint::ClippedShape;
+use eframe::egui::epaint::{ClippedShape, Shape};
 use eframe::egui::{self, Event, Id, Key, Modifiers, Pos2, RawInput, Rect, pos2, vec2};
 use toile_engine::body::Collider;
 use toile_engine::draft::{Doc, PointKey};
@@ -103,4 +103,19 @@ impl Studio {
     pub(super) fn doc(&self) -> &Doc {
         self.session.draft().expect("a product is open").doc()
     }
+}
+
+/// Every shape the last frame painted, with the groups opened up.
+pub(super) fn painted(studio: &Studio) -> Vec<&Shape> {
+    fn open<'a>(shape: &'a Shape, out: &mut Vec<&'a Shape>) {
+        match shape {
+            Shape::Vec(inner) => inner.iter().for_each(|shape| open(shape, out)),
+            other => out.push(other),
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &studio.shapes {
+        open(&clipped.shape, &mut out);
+    }
+    out
 }

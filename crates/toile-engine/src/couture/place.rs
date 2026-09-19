@@ -36,12 +36,14 @@ pub struct Layout {
     /// Once a pattern is a ring, falling from above the head means nothing:
     /// there is no direction for it to fall from that is round the body.
     pub stand: f32,
-    /// The highest pattern ordinate over the pieces this places.
+    /// The pattern ordinate the ring's height names: the line of cloth the
+    /// product hangs by.
     ///
-    /// Everything hangs below it by the distance the pattern puts between
-    /// them, so the pieces keep the rise they are drafted with: a back that
-    /// sits two centimetres above the front on the page sits two centimetres
-    /// above it on the body.
+    /// Everything else sits above or below it by the distance the pattern puts
+    /// between them, so the pieces keep the rise they are drafted with: a back
+    /// that sits two centimetres above the front on the page sits two
+    /// centimetres above it on the body. For a product with nothing holding it
+    /// this is its topmost point; for one with an elastic it is the elastic.
     pub crest: f64,
     /// One entry per piece, in the order the combined state holds them;
     /// `None` for a piece the seams do not place.

@@ -1,6 +1,6 @@
-use toile_sim::xpbd::{Floor, Seams};
+use toile_sim::xpbd::{DistanceConstraints, Floor, Seams};
 
-use super::{COMPLIANCE, DT, PieceSlot, SUBSTEPS_PER_TICK, SessionError};
+use super::{DT, PieceSlot, SUBSTEPS_PER_TICK, SessionError};
 use crate::body::Collider;
 use crate::couture::{self, Layout, ShapePipeline};
 use crate::draft::{Draft, PieceKey};
@@ -46,29 +46,31 @@ pub(super) fn drape_piece(
 }
 
 /// Starts the sim thread around every piece of the product, colliding against
-/// `collider` and sewn along `seams`.
+/// `collider`, held to `cons` and sewn along `seams`.
 ///
 /// One state and one thread whatever the product holds, because a seam joins
 /// two vertices *within* a state: pieces sewn to each other have to be solved
-/// together or they cannot be sewn at all.
+/// together or they cannot be sewn at all. The field crosses as a second owner
+/// of the same voxels, so starting a thread over a body already baked copies a
+/// pointer rather than tens of megabytes.
 ///
 /// `around` is the ring the seams and the body put the pieces on, and it
 /// carries its own height. A piece it does not place — a lone panel, which has
 /// no partner to be placed against — is let go exactly as a lone piece is let
 /// go today, flat at the height the body decides.
 ///
-/// The field crosses as a second owner of the same voxels, so starting a
-/// thread over a body already baked copies a pointer rather than tens of
-/// megabytes.
+/// The constraints arrive rather than being compiled here: what an edge rests
+/// at is the session's answer and not the mesh's, because an elastic is
+/// written over a stretch only the table holding the document can place.
 pub(super) fn spawn_sim(
     pipelines: &[&ShapePipeline],
     tris: Vec<u32>,
+    cons: DistanceConstraints,
     seams: Seams,
     around: Option<&Layout>,
     collider: &Collider,
 ) -> SimHandle {
     let state = couture::drop_all(pipelines, collider.release_height(), around);
-    let cons = couture::combine_constraints(pipelines, COMPLIANCE);
     sync::spawn(
         state,
         cons,

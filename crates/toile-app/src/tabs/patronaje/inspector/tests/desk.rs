@@ -7,9 +7,19 @@ use toile_engine::session::Session;
 
 use super::super::super::state::{Scope, Selection, State};
 use super::super::show;
-use crate::tabs::patronaje::{apply, entry};
+use crate::tabs::patronaje::apply;
 use crate::tabs::right_panel;
 use crate::theme::Theme;
+
+/// One press or release of the primary button, where the pointer is.
+fn press(at: Pos2, pressed: bool) -> Event {
+    Event::PointerButton {
+        pos: at,
+        button: PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    }
+}
 
 /// A product on the table and the right panel over it, with nothing else on
 /// the screen: every edit the panel asks for is played the way the tab plays
@@ -50,31 +60,37 @@ impl Desk {
         let draft = self.session.draft();
         let (theme, state) = (&self.theme, &mut self.state);
         let piece = state.active;
-        let mut asked = None;
+        let mut asked = Vec::new();
         let pass = self.ctx.run_ui(input, |ui| {
             asked = right_panel(ui, theme, |ui| show(ui, theme, draft, piece, state));
         });
         self.cursor = pass.platform_output.cursor_icon;
         pass.drop_without_applying_deltas();
-        if let Some((label, command)) = asked {
-            apply(
-                &mut self.session,
-                entry(label, command),
-                &mut self.state.refused,
-            );
+        apply(&mut self.session, asked, &mut self.state.refused);
+    }
+
+    /// The pointer pressing at `from`, dragged to `to` over `steps` frames,
+    /// and let go there.
+    ///
+    /// A frame each, because a rail answers where the pointer is now: a drag
+    /// that arrived in one frame would write one value and prove nothing about
+    /// the frames in between landing in a single entry.
+    pub(super) fn drag(&mut self, from: Pos2, to: Pos2, steps: u8) {
+        self.frame(vec![Event::PointerMoved(from)]);
+        self.frame(vec![press(from, true)]);
+        for step in 1..=steps {
+            let along = f32::from(step) / f32::from(steps);
+            let at = from + (to - from) * along;
+            self.frame(vec![Event::PointerMoved(at)]);
         }
+        self.frame(vec![press(to, false)]);
     }
 
     /// The pointer arriving, pressing and letting go, a frame each.
     pub(super) fn click(&mut self, at: Pos2) {
         self.frame(vec![Event::PointerMoved(at)]);
         for pressed in [true, false] {
-            self.frame(vec![Event::PointerButton {
-                pos: at,
-                button: PointerButton::Primary,
-                pressed,
-                modifiers: Modifiers::NONE,
-            }]);
+            self.frame(vec![press(at, pressed)]);
         }
     }
 
@@ -96,11 +112,25 @@ impl Desk {
 
     /// The middle of what was drawn under `id`.
     pub(super) fn centre(&self, id: Id) -> Pos2 {
-        self.ctx
-            .read_response(id)
-            .expect("the panel drew it")
-            .rect
-            .center()
+        self.rect(id).center()
+    }
+
+    /// What was drawn under `id`, where the last frame put it.
+    pub(super) fn rect(&self, id: Id) -> Rect {
+        self.ctx.read_response(id).expect("the panel drew it").rect
+    }
+
+    /// Whether the panel drew anything under `id` at all.
+    pub(super) fn drew(&self, id: Id) -> bool {
+        self.ctx.read_response(id).is_some()
+    }
+
+    /// How many entries the product's history would take back.
+    pub(super) fn entries(&self) -> usize {
+        self.session
+            .draft()
+            .expect("a product is open")
+            .undo_depth()
     }
 }
 
@@ -118,6 +148,15 @@ pub(super) fn hip() -> (Desk, PointKey) {
     desk.state.scope = Scope::Piece;
     desk.state.active = Some(piece);
     desk.state.selection = Selection::point(point);
+    desk.frame(Vec::new());
+    (desk, point)
+}
+
+/// The same block, open on the tract that leaves its hip: the one selection
+/// the elastic section is drawn for.
+pub(super) fn hem() -> (Desk, PointKey) {
+    let (mut desk, point) = hip();
+    desk.state.selection = Selection::Edge(point);
     desk.frame(Vec::new());
     (desk, point)
 }

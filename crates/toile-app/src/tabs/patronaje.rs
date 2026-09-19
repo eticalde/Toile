@@ -84,10 +84,12 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
     let asked = right_panel(ui, theme, |ui| {
         inspector::show(ui, theme, draft, active, state)
     });
-    // One field confirmed is one entry of its own, under its own name: an edit
-    // from a panel never folds into whatever gesture the mat left open.
-    if let Some((label, command)) = asked.filter(|_| !asking) {
-        verbs.extend(entry(label, command));
+    // The panel brackets its own entries: a field confirmed is one of its own
+    // under its own name, and a rail dragged holds one open across frames. A
+    // question on the mat owns the stack, so while one waits none of them is
+    // played at all.
+    if !asking {
+        verbs.extend(asked);
     }
     verbs.extend(canvas::show(ui, theme, draft, active, state));
     let said = apply(session, verbs, &mut patronaje.refused);

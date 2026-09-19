@@ -102,10 +102,12 @@ impl Session {
         self.mesh_generation = 0;
         let seams = self.resew();
         let around = self.layout();
+        let cons = self.constraints();
         self.handle = (!self.draping.is_empty()).then(|| {
             spawn_sim(
                 &self.pipelines(),
                 self.tris.clone(),
+                cons,
                 seams,
                 around.as_ref(),
                 &self.collider,

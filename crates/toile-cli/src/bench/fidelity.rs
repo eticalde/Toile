@@ -1,4 +1,4 @@
-use toile_sim::xpbd::{self, DistanceConstraints, Floor, SdfGrid, Seams, State};
+use toile_sim::xpbd::{self, DistanceConstraints, SdfGrid, Seams, Stage, State};
 
 use super::scene::{DT, settle};
 
@@ -145,7 +145,7 @@ pub fn run() {
         let (avg_settle, max_settle) = stretch(&state);
 
         for _ in 0..REFINE_SUBSTEPS {
-            xpbd::substep(&mut state, &cons, &no_seams, &sdf, Floor::none(), None, DT);
+            xpbd::substep(&mut state, &cons, &no_seams, &Stage::around(&sdf), None, DT);
         }
         let (avg_ref, max_ref) = stretch(&state);
 

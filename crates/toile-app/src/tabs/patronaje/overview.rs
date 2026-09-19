@@ -6,7 +6,7 @@ use super::layout::{self, Laid};
 use super::pick::EDGE_PT;
 use super::state::State;
 use super::wire::{self, Verb};
-use super::{arrange, canvas};
+use super::{arrange, canvas, marks, tract};
 use crate::theme::Theme;
 use crate::widgets::fill;
 
@@ -111,6 +111,11 @@ fn piece(
     };
     let width = if lit { 2.0 } else { 1.5 };
     let line = Stroke::new(width, ink);
+    // Flattened here and not in `layout`, which every frame of every gesture
+    // walks: only the drawing needs the tracts, and only to find the held ones.
+    let tracts = tract::of(draft, it.piece);
+    let at = (it.piece, tracts.as_slice(), it.shift);
+    marks::elastics(p, theme, draft.doc(), at, state.view);
     canvas::paper_and_outline(p, &it.outline, state.view, &grounds, line);
     let held = draft.doc().pieces.get(it.piece);
     let (Some(held), Some(bbox)) = (held, layout::bounds(std::slice::from_ref(it))) else {

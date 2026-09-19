@@ -1,15 +1,18 @@
 mod cite;
+pub(super) mod elastic;
 mod tape;
 mod variables;
 pub(super) mod write;
 
 use cite::Cite;
 use eframe::egui;
+pub(super) use elastic::Grip;
 use toile_engine::draft::{Axis, Defect, Draft, EvalError, PieceKey, PointKey};
 use write::Asked;
 
 use super::curve::{self, Side};
 use super::state::State;
+use super::wire::Verb;
 use crate::file::Action;
 use crate::theme::Theme;
 use crate::widgets::{button_ghost, button_secondary, field_row, footer_note, section};
@@ -24,10 +27,11 @@ const FOOT_H: f32 = 74.0;
 /// The right panel: the bindings of whatever is chosen, the names they can
 /// read, and the ways out of the app.
 ///
-/// It writes nothing itself; the edit it asks for is applied by the tab, so
+/// It writes nothing itself; the edits it asks for are played by the tab, so
 /// the document is borrowed for reading only while the panel draws. One field
 /// confirmed is one named entry of the history, never a fold into whatever
-/// gesture happened to be open. The names belong to the product and not to a
+/// gesture happened to be open; a rail dragged is one entry too, held open
+/// across the frames of the drag. The names belong to the product and not to a
 /// piece, so a product with no piece drawn yet lists them too.
 pub fn show(
     ui: &mut egui::Ui,
@@ -35,8 +39,9 @@ pub fn show(
     draft: Option<&Draft>,
     piece: Option<PieceKey>,
     state: &mut State,
-) -> Option<Asked> {
+) -> Vec<Verb> {
     let body = (ui.available_height() - FOOT_H).max(0.0);
+    let mut verbs = Vec::new();
     let asked = egui::ScrollArea::vertical()
         .max_height(body)
         .auto_shrink([false, false])
@@ -45,7 +50,7 @@ pub fn show(
             if let Some(draft) = draft {
                 let cite = Cite::begin(ui.ctx(), draft.doc(), state);
                 if let Some(piece) = piece {
-                    asked = chosen(ui, theme, draft, piece, (state, &cite));
+                    asked = chosen(ui, theme, draft, piece, (state, &cite), &mut verbs);
                 } else {
                     unchosen(ui, theme);
                 }
@@ -61,7 +66,11 @@ pub fn show(
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         footer_note(ui, theme, NOTE);
     });
-    asked
+    verbs.extend(elastic::settle(state));
+    if let Some((label, command)) = asked {
+        verbs.extend(super::entry(label, command));
+    }
+    verbs
 }
 
 /// What the panel says where a piece would be inspected and there is none.
@@ -77,10 +86,11 @@ fn chosen(
     draft: &Draft,
     piece: PieceKey,
     writing: (&mut State, &Cite),
+    verbs: &mut Vec<Verb>,
 ) -> Option<Asked> {
     let state = &*writing.0;
     if let Some(from) = state.selection.edge() {
-        return tract(ui, theme, draft, (piece, from), writing);
+        return tract(ui, theme, draft, (piece, from), writing, verbs);
     }
     match state.selection.count() {
         0 => {
@@ -149,14 +159,15 @@ fn group(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, state: &State, many: u
     }
 }
 
-/// The chosen tract: the two nodes it runs between, how long it is, and — when
-/// it bends — how finely it is flattened.
+/// The chosen tract: the two nodes it runs between, how long it is, when it
+/// bends how finely it is flattened, and what holds it in.
 fn tract(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: &Draft,
     at: (PieceKey, PointKey),
     writing: (&mut State, &Cite),
+    verbs: &mut Vec<Verb>,
 ) -> Option<Asked> {
     let (piece, from) = at;
     let nodes = draft.points_cm(piece);
@@ -170,7 +181,10 @@ fn tract(
     section(ui, theme, &format!("Borde {} → {}", ends.0, ends.1));
     let length = format!("{:.1}", draft.run_length_cm(piece, from, to));
     field_row(ui, theme, "largo", &length, "cm");
-    write::samples(ui, theme, draft, (piece, from), writing)
+    let (state, cite) = writing;
+    let asked = write::samples(ui, theme, draft, (piece, from), (&mut *state, cite));
+    elastic::show(ui, theme, doc, (piece, from, to), (state, verbs));
+    asked
 }
 
 /// What the piece is, when nothing on it is chosen.

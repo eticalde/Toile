@@ -9,7 +9,7 @@ use toile_engine::draft::{
     Binding, Command, Draft, Identity, PieceKey, Point, PointKey, SegmentEdit, block,
 };
 use toile_engine::session::Session;
-use toile_sim::xpbd::{self, DistanceConstraints, Floor, SdfGrid, Seams, State};
+use toile_sim::xpbd::{self, DistanceConstraints, SdfGrid, Seams, Stage, State};
 
 /// Simulated seconds per substep, as the engine runs it.
 const DT: f32 = 1.0 / 600.0;
@@ -55,7 +55,7 @@ fn sphere() -> SdfGrid {
 fn drape(state: &mut State, cons: &DistanceConstraints, sdf: &SdfGrid, n: usize) {
     let seams = Seams::default();
     for _ in 0..n {
-        xpbd::substep(state, cons, &seams, sdf, Floor::none(), None, DT);
+        xpbd::substep(state, cons, &seams, &Stage::around(sdf), None, DT);
     }
 }
 

@@ -1,6 +1,6 @@
 use eframe::egui::{
-    self, Align2, Color32, FontId, Painter, Pos2, Rect, Response, Sense, Shape, Stroke, StrokeKind,
-    Ui, Vec2, pos2, vec2,
+    self, Align2, Color32, FontId, Id, Painter, Pos2, Rect, Response, Sense, Shape, Stroke,
+    StrokeKind, Ui, Vec2, pos2, vec2,
 };
 
 use super::CORNER;
@@ -92,12 +92,21 @@ fn cycle_mark(p: &Painter, centre: Pos2, color: Color32) {
 
 /// Filled call to action.
 pub fn button_primary(ui: &mut Ui, theme: &Theme, label: &str) -> Response {
-    button(ui, theme, label, true, 0.0).0
+    button(ui, theme, label, true, 0.0, None).0
 }
 
 /// Outlined action, the default weight.
 pub fn button_secondary(ui: &mut Ui, theme: &Theme, label: &str) -> Response {
-    button(ui, theme, label, false, 0.0).0
+    button(ui, theme, label, false, 0.0, None).0
+}
+
+/// The same outlined action under an identity the caller names.
+///
+/// A button laid out by whatever rows happen to sit above it can only be
+/// reached by guessing where it landed. Named, it is found by what it does,
+/// which is what a press aimed from outside the panel needs.
+pub fn button_named(ui: &mut Ui, theme: &Theme, id: Id, label: &str) -> Response {
+    button(ui, theme, label, false, 0.0, Some(id)).0
 }
 
 /// An action whose phase has not arrived: the same room, no border, muted ink,
@@ -148,7 +157,7 @@ pub fn button_icon(
     primary: bool,
     icon: impl FnOnce(&Painter, Rect, Color32),
 ) -> Response {
-    let (resp, slot) = button(ui, theme, label, primary, GLYPH);
+    let (resp, slot) = button(ui, theme, label, primary, GLYPH, None);
     let color = if primary { theme.on_accent } else { theme.ink };
     icon(ui.painter(), slot, color);
     resp
@@ -161,6 +170,7 @@ fn button(
     label: &str,
     primary: bool,
     glyph_w: f32,
+    named: Option<Id>,
 ) -> (Response, Rect) {
     let font = FontId::proportional(12.0);
     let text = ui.painter().layout_no_wrap(
@@ -170,7 +180,11 @@ fn button(
     );
     let lead = if glyph_w > 0.0 { glyph_w + 6.0 } else { 0.0 };
     let size = vec2(text.size().x + lead + 28.0, 26.0);
-    let (rect, resp) = ui.allocate_exact_size(size, Sense::click());
+    // Taking the room and interacting with it are two steps, so a name the
+    // caller gave stands in for the one the layout would have issued and the
+    // button is still one widget.
+    let (auto, rect) = ui.allocate_space(size);
+    let resp = ui.interact(rect, named.unwrap_or(auto), Sense::click());
     let fill = if primary {
         theme.accent
     } else if resp.hovered() {

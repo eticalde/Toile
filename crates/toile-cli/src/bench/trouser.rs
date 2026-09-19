@@ -3,7 +3,7 @@ use std::time::Instant;
 use toile_engine::couture::{self, ShapePipeline};
 use toile_engine::demo;
 use toile_engine::draft::{Axis, Binding, Command, Draft, PieceKey, PointKey, block};
-use toile_sim::xpbd::{self, Floor, Seams};
+use toile_sim::xpbd::{self, Seams, Stage};
 
 use super::scene::{DT, avg, max, same_bits, seconds, settle};
 
@@ -73,7 +73,7 @@ fn storm() -> Storm {
     let mut cons = pipe.constraints(1.0e-8);
     let sdf = demo::avatar_sdf();
     for _ in 0..DRAPE_SUBSTEPS {
-        xpbd::substep(&mut state, &cons, &no_seams, &sdf, Floor::none(), None, DT);
+        xpbd::substep(&mut state, &cons, &no_seams, &Stage::around(&sdf), None, DT);
     }
 
     let base = draft.resolved(node).expect("the waist resolves")[0];
@@ -96,7 +96,7 @@ fn storm() -> Storm {
         cons.rest.copy_from_slice(rests);
         derive_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
         for _ in 0..10 {
-            xpbd::substep(&mut state, &cons, &no_seams, &sdf, Floor::none(), None, DT);
+            xpbd::substep(&mut state, &cons, &no_seams, &Stage::around(&sdf), None, DT);
         }
     }
 

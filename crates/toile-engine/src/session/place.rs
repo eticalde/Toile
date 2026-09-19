@@ -15,6 +15,18 @@ mod strip;
 /// answer differently, and one coarser hands the garment room it never needed.
 const OPENING: f64 = bake::CELL;
 
+/// How far round a product's elastics go, and the line of cloth they run at.
+///
+/// What holds a garment on is what says where it hangs from, so a product
+/// that carries elastics is placed by them: see [`around`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct Band {
+    /// The cloth the elastics cover, across every piece, in metres.
+    pub(super) girth: f64,
+    /// The pattern ordinate they run at, in metres.
+    pub(super) at: f64,
+}
+
 /// Where a sewn product is let go on the body.
 ///
 /// Three readings, from three places. The seams chain the pieces into a strip
@@ -34,6 +46,7 @@ pub(super) fn around(
     sewn: &[Sewn],
     pipes: &[&ShapePipeline],
     collider: &Collider,
+    band: Option<Band>,
 ) -> Option<Layout> {
     let joins = adjacency(sewn, pipes.len())?;
     let (steps, closed) = walk(sewn, pipes, &joins)?;
@@ -49,8 +62,15 @@ pub(super) fn around(
     // fifth of this block's trousers, which would then wrap a ring a fifth too
     // small and overlap each other on it.
     let girth: f64 = steps.iter().map(|s| s.hi - s.lo).sum();
-    let (crest, hem) = rise(&steps, pipes);
-    let (axis, stand) = stands(collider, girth, crest - hem);
+    let (top, hem) = rise(&steps, pipes);
+    // A garment is held up by one line of itself, so that line is the one
+    // matched to a ring and the one stood on it. With an elastic that is the
+    // elastic; without one it is the topmost edge, as it always was. Read the
+    // widest girth for both and a tube skirt is matched by its hip to the ring
+    // nearest that — the upper chest, measured — and then stood with its
+    // waistline up there, two rings above where a waistband belongs.
+    let (hangs_by, crest) = band.map_or((girth, top), |band| (band.girth, band.at));
+    let (axis, stand) = stands(collider, hangs_by, girth, crest - hem);
 
     // The garment's own size first, opened only as far as the person under it
     // makes necessary. A ring smaller than the body starts the cloth inside it,
@@ -136,8 +156,8 @@ fn clear_of(layout: &Layout, pipes: &[&ShapePipeline], collider: &Collider) -> b
 /// and the cube a test bakes. There is no ring to be matched to, so the
 /// garment is let go about the whole of it, which is where every garment went
 /// before any ring was read.
-fn stands(collider: &Collider, girth: f64, rise: f64) -> ([f32; 2], f32) {
-    if let Some(belt) = worn_at(collider.belts(), girth, rise) {
+fn stands(collider: &Collider, hangs_by: f64, widest: f64, rise: f64) -> ([f32; 2], f32) {
+    if let Some(belt) = worn_at(collider.belts(), hangs_by, widest, rise) {
         return (belt.centre, belt.height);
     }
     let (lo, hi) = collider.extent();

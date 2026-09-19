@@ -77,7 +77,12 @@ impl Session {
     /// garment was put, and a test measuring it against the body, both need
     /// the centre, the size and the height that were chosen.
     pub fn layout(&self) -> Option<couture::Layout> {
-        place::around(&self.sewn().0, &self.pipelines(), &self.collider)
+        place::around(
+            &self.sewn().0,
+            &self.pipelines(),
+            &self.collider,
+            self.elastics().band,
+        )
     }
 
     /// The document seams that could not be paired onto the cloth.

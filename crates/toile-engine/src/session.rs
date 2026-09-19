@@ -1,5 +1,6 @@
 mod collider;
 mod edit;
+mod elastic;
 mod error;
 mod open;
 mod pieces;
@@ -200,9 +201,18 @@ impl Session {
             .collect()
     }
 
-    /// The whole product's stretch constraints, as the solver holds them.
+    /// The whole product's stretch constraints, as the solver holds them,
+    /// with whatever the document's elastics hold written into them.
+    ///
+    /// The one place a rest length and a compliance are decided, so that the
+    /// set a fresh thread starts on, the set a rebuild carries over and the
+    /// numbers a drag sends cannot come to disagree about what an elastic
+    /// does. A product with no elastic gets the concatenation and nothing
+    /// else — see [`couture::hold`].
     fn constraints(&self) -> DistanceConstraints {
-        couture::combine_constraints(&self.pipelines(), COMPLIANCE)
+        let mut cons = couture::combine_constraints(&self.pipelines(), COMPLIANCE);
+        couture::hold(&mut cons, &self.elastics().held);
+        cons
     }
 
     /// Rebuilds the triangle list the viewer draws, after a mesh changed.

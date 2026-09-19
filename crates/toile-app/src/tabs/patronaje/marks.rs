@@ -1,15 +1,19 @@
 use eframe::egui::{Align2, FontId, Painter, Pos2, Rect, Shape, Stroke, StrokeKind, vec2};
-use toile_engine::draft::{Draft, PieceKey, PointKey};
+use toile_engine::draft::{Doc, Draft, EdgeRange, PieceKey, PointKey};
 
 use super::curve::{self, Bend};
 use super::pick::Hover;
 use super::snap::{SnapKind, Snapped};
 use super::state::State;
+use super::tract::Tract;
 use super::view::View;
 use crate::theme::Theme;
 
 /// How far the guide of an axis reaches past the pointer, in screen points.
 const GUIDE: f32 = 60.0;
+
+/// How wide the tape under an elastic tract is drawn.
+const TAPE: f32 = 5.0;
 
 /// The length of one dash of a guide, and of the gap after it.
 const DASH: f32 = 5.0;
@@ -51,6 +55,59 @@ pub fn nodes(
         let at = screen + vec2(9.0, -9.0);
         p.text(at, Align2::LEFT_BOTTOM, name, font, theme.ink_soft);
     }
+}
+
+/// The tape of every elastic the piece carries, laid along the tracts it
+/// holds.
+///
+/// Drawn under the cut line and wider than it, so the stretch reads as a band
+/// with the line that will be cut still down its middle: what an elastic
+/// changes is how the cloth behaves, never where the scissors go.
+///
+/// `shift` is how far the view moves the piece from its own coordinates, which
+/// the whole product does and a piece on its own does not.
+pub fn elastics(
+    p: &Painter,
+    theme: &Theme,
+    doc: &Doc,
+    at: (PieceKey, &[Tract], [f64; 2]),
+    view: View,
+) {
+    let (piece, tracts, shift) = at;
+    let ink = Stroke::new(TAPE, theme.elastic);
+    for (_, held) in doc.elastics.iter() {
+        if held.at.piece() != Some(piece) {
+            continue;
+        }
+        for tract in run(tracts, held.at) {
+            let line: Vec<Pos2> = tract
+                .line
+                .iter()
+                .map(|&[x, y]| view.to_screen([x + shift[0], y + shift[1]]))
+                .collect();
+            p.add(Shape::line(line, ink));
+        }
+    }
+}
+
+/// The tracts a stretch runs over, in contour order from its head to its tail.
+///
+/// Node to node: the drawing marks whole tracts, which is what the panel
+/// writes. A head that is also the tail names the whole contour rather than
+/// nothing, which is the only reading that closes.
+fn run(tracts: &[Tract], at: EdgeRange) -> Vec<&Tract> {
+    let Some(start) = tracts.iter().position(|it| it.node == at.head.from) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for step in 0..tracts.len() {
+        let tract = &tracts[(start + step) % tracts.len()];
+        if step > 0 && tract.node == at.tail.from {
+            break;
+        }
+        out.push(tract);
+    }
+    out
 }
 
 /// The handles of the tracts the drawing is showing them for.

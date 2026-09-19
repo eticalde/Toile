@@ -2,8 +2,13 @@
 
 /// The same habits over a product of two sewn pieces.
 mod product;
+/// The tube skirt an elastic is proved on.
+mod skirt;
 /// The vocabulary every scene here is measured in.
 mod watch;
+/// What holds a garment on, measured against the same garment with nothing
+/// holding it.
+mod worn;
 
 use toile_engine::body::{Collider, bake};
 use toile_engine::draft::block;
@@ -122,9 +127,12 @@ fn the_startup_scene_does_not_bury_the_garment_in_the_body() {
 ///
 /// What it did not buy is a garment that stays on. Nothing holds a bodice at
 /// the shoulders of a body it was dropped over, so at rest it is a heap around
-/// the feet — 16 of its 12,540 particles within a cell of the skin. Whoever
-/// makes a garment stay where it was put should tighten the last assertion
-/// here, because it is the one that says the cloth is on the floor.
+/// the feet — 16 of its 12,540 particles within a cell of the skin. An elastic
+/// exists now and places a garment where it belongs, and it does not change
+/// this reading: measured in `worn`, a waistband grips and then creeps down at
+/// a rate its own tension cannot alter. Whoever gives friction that tension to
+/// read should tighten the last assertion here, because it is the one that
+/// says the cloth is on the floor.
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
 fn a_drape_over_a_body_parks_on_the_ground_and_not_yet_on_the_body() {

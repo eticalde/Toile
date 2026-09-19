@@ -1,4 +1,4 @@
-use toile_sim::xpbd::{self, DistanceConstraints, Floor, KineticDamper, SdfGrid, Seams, State};
+use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, SdfGrid, Seams, Stage, State};
 
 /// Simulated seconds per substep: 60 Hz visual at ten substeps a frame.
 pub const DT: f32 = 1.0 / 600.0;
@@ -68,7 +68,7 @@ pub fn settle_with(
     let mut steps = 0usize;
     while quiet < QUIET_TICKS && steps < max_steps {
         before(steps, seams);
-        xpbd::substep(state, cons, seams, sdf, Floor::none(), None, DT);
+        xpbd::substep(state, cons, seams, &Stage::around(sdf), None, DT);
         steps += 1;
         let e = damper.observe(state);
         if steps.is_multiple_of(TICK) {

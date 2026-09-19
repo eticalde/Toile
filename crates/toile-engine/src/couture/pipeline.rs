@@ -204,6 +204,34 @@ impl ShapePipeline {
         self.interior_verts.len()
     }
 
+    /// The boundary vertices a stretch of the contour runs over, in the order
+    /// the contour runs them.
+    ///
+    /// `run` is where it starts and how far it goes, never its two ends, for
+    /// the reason [`super::pair_seam`] takes a seam's side that way: the walk
+    /// is what a stretch is, and a stretch that passes the closure is as long
+    /// as the walk rather than as short as the gap it leaves. Sorted by how
+    /// far into the run each vertex sits, so the closure costs the order
+    /// nothing.
+    pub fn boundary_run(&self, (start, span): (f64, f64)) -> Vec<u32> {
+        let from = start.rem_euclid(1.0);
+        let mut along: Vec<(f64, u32)> = self
+            .boundary_fracs
+            .iter()
+            .zip(&self.boundary_verts)
+            .map(|(&f, &v)| ((f - from).rem_euclid(1.0), v))
+            .filter(|&(into, _)| into <= span)
+            .collect();
+        along.sort_by(|a, b| a.0.total_cmp(&b.0));
+        along.into_iter().map(|(_, v)| v).collect()
+    }
+
+    /// Where an edge sits in [`ShapePipeline::edges`]; `None` when the mesh
+    /// joins no such pair.
+    pub fn edge_index(&self, a: u32, b: u32) -> Option<usize> {
+        self.edges.binary_search(&(a.min(b), a.max(b))).ok()
+    }
+
     /// The boundary vertex nearest a fraction of the perimeter.
     pub fn boundary_vertex_near(&self, fraction: f64) -> u32 {
         let fr = fraction.rem_euclid(1.0);
@@ -246,51 +274,4 @@ fn classify(p: [f64; 2], boundary: &[[f64; 2]], fractions: &[f64]) -> VertexRole
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A rectangle, corners only: cheap to mesh and easy to edit.
-    fn rectangle() -> Vec<[f64; 2]> {
-        vec![[0.0, 0.0], [0.30, 0.0], [0.30, 0.20], [0.0, 0.20]]
-    }
-
-    fn pipeline() -> ShapePipeline {
-        ShapePipeline::build(&rectangle(), 16, 0.01).expect("the rectangle is finite")
-    }
-
-    #[test]
-    fn derive_with_a_different_point_count_is_an_error() {
-        let mut pipe = pipeline();
-        let mut grown = rectangle();
-        grown.push([0.15, 0.30]);
-        assert_eq!(
-            pipe.derive(&grown),
-            Err(RestStateError::PointCount {
-                expected: 4,
-                got: 5
-            })
-        );
-    }
-
-    #[test]
-    fn a_moved_node_keeps_the_mesh_and_changes_the_rest_lengths() {
-        let mut pipe = pipeline();
-        let before = pipe.rests.clone();
-        let mut edited = rectangle();
-        edited[1][0] += 0.05;
-        let after = pipe.derive(&edited).expect("the node count did not move");
-        assert_eq!(after.len(), before.len());
-        assert_ne!(after, before.as_slice());
-        assert_eq!(pipe.contour_len(), 4);
-    }
-
-    #[test]
-    fn a_contour_the_mesher_refuses_is_an_error_not_a_panic() {
-        let mut broken = rectangle();
-        broken[2][0] = f64::NAN;
-        assert_eq!(
-            ShapePipeline::build(&broken, 16, 0.01).err(),
-            Some(MeshError::NonFiniteVertex { index: 0 })
-        );
-    }
-}
+mod tests;

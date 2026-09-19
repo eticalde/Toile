@@ -3,6 +3,7 @@ use std::collections::BTreeSet;
 use toile_engine::draft::{Axis, PieceKey, PointKey, VariableKey};
 
 use super::gesture::{Ask, Gesture};
+use super::inspector::Grip;
 use super::snap::{SnapConfig, Snapped};
 use super::view::View;
 use crate::file::Action;
@@ -170,6 +171,8 @@ pub struct State {
     pub ask: Option<Ask>,
     /// The field of the inspector being written in, while one is.
     pub editing: Option<FieldEdit>,
+    /// The inspector rail a drag has hold of, while one holds it.
+    pub grip: Grip,
     /// What the session last refused to do, while it stands.
     ///
     /// A refused edit leaves the document exactly as it was, and nothing on
@@ -193,6 +196,7 @@ impl State {
         self.caught = None;
         self.ask = None;
         self.editing = None;
+        self.grip = Grip::default();
         self.refused = None;
         self.frame = true;
     }
@@ -270,6 +274,7 @@ impl Default for State {
             caught: None,
             ask: None,
             editing: None,
+            grip: Grip::default(),
             refused: None,
         }
     }

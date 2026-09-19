@@ -45,25 +45,28 @@ pub(super) fn of(mesh: &BodyMesh) -> Vec<Belt> {
         .collect()
 }
 
-/// Which ring a garment `girth` metres round and `rise` metres deep is worn
-/// at; `None` for a body that carries no rings.
+/// Which ring a garment hanging by `hangs_by` metres of cloth, `widest`
+/// metres round at its fullest and `rise` metres deep is worn at; `None` for
+/// a body that carries no rings.
 ///
-/// Two questions, in this order. First, can the garment be there at all: it
-/// is put on over the body and then hangs down from where it sits, so every
-/// ring it would have to pass on the way down, within its own rise, has to be
-/// no wider than the garment is. That is what stops a trouser leg from being
-/// hung round the head, which its girth alone would happily accept — the head
-/// and the thigh of this body are within a centimetre of each other, and the
-/// chest below the head is not.
+/// Two questions, in this order, and each takes the girth that answers it.
+/// First, can the garment be there at all: it is put on over the body and
+/// hangs from where it sits, so every ring it would pass on the way down,
+/// within its own rise, has to be no wider than the garment is at its
+/// fullest. That is what stops a trouser leg from being hung round the head,
+/// which its girth alone would happily accept — the head and the thigh of this
+/// body are within a centimetre of each other, and the chest below the head is
+/// not.
 ///
-/// Then, of the rings that are left, the one nearest its girth. Nearest as a
-/// ratio and not a difference, so the same rule reads a cuff and a coat: a
-/// centimetre is most of a wrist and nothing on a hip.
-pub(crate) fn worn_at(belts: &[Belt], girth: f64, rise: f64) -> Option<&Belt> {
+/// Then, of the rings left, the one nearest the line the garment hangs by —
+/// for anything held on by a waistband, that band and not the skirt under it.
+/// Nearest as a ratio and not a difference, so the same rule reads a cuff and
+/// a coat: a centimetre is most of a wrist and nothing on a hip.
+pub(crate) fn worn_at(belts: &[Belt], hangs_by: f64, widest: f64, rise: f64) -> Option<&Belt> {
     belts
         .iter()
-        .filter(|belt| passable(belts, belt, girth, rise))
-        .min_by(|a, b| apart(a, girth).total_cmp(&apart(b, girth)))
+        .filter(|belt| passable(belts, belt, widest, rise))
+        .min_by(|a, b| apart(a, hangs_by).total_cmp(&apart(b, hangs_by)))
 }
 
 /// Whether nothing the garment would hang over is wider than the garment.
@@ -118,7 +121,7 @@ mod tests {
     #[test]
     fn a_leg_of_cloth_is_worn_at_the_thigh_and_not_at_the_head() {
         let body = body();
-        let worn = worn_at(&body, 0.7025, 1.065).expect("the body carries rings");
+        let worn = worn_at(&body, 0.7025, 0.7025, 1.065).expect("the body carries rings");
         assert_eq!(worn.girth, 0.580);
         assert_eq!(worn.height, 0.054);
     }
@@ -131,14 +134,30 @@ mod tests {
     #[test]
     fn a_garment_wider_than_every_ring_lands_on_the_widest_it_can_reach() {
         let body = body();
-        let worn = worn_at(&body, 1.405, 1.065).expect("the body carries rings");
+        let worn = worn_at(&body, 1.405, 1.405, 1.065).expect("the body carries rings");
         assert_eq!(worn.girth, 1.048);
     }
 
     /// A body with no rings names none, rather than guessing at one.
     #[test]
     fn a_body_without_rings_is_worn_nowhere() {
-        assert_eq!(worn_at(&[], 0.7, 1.0), None);
+        assert_eq!(worn_at(&[], 0.7, 0.7, 1.0), None);
+    }
+
+    /// A waistband is what a skirt hangs by, so the ring is matched to the
+    /// band while the hip under it is only asked to be got past.
+    ///
+    /// Read the widest girth for both and this skirt is matched to the upper
+    /// chest, whose 1.048 is the nearest ring to its 1.08 of hip — and then
+    /// stood with its *waistline* up there, two rings too high.
+    #[test]
+    fn a_skirt_hangs_by_its_waistband_and_not_by_its_hip() {
+        let body = body();
+        let (band, widest, rise) = (0.88, 1.08, 0.55);
+        let worn = worn_at(&body, band, widest, rise).expect("the body carries rings");
+        assert_eq!(worn.girth, 0.880, "the waist");
+        let by_the_widest = worn_at(&body, widest, widest, rise).expect("the body carries rings");
+        assert_eq!(by_the_widest.girth, 1.048, "the chest, read the old way");
     }
 
     /// Nearness is a ratio: a ring half the garment's girth and one twice it

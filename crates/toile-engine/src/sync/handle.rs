@@ -25,11 +25,13 @@ pub struct Scene {
 }
 
 enum Msg {
-    /// The product recompiled: what every edge rests at, and what is sewn to
-    /// what. The two travel together because a shape edit moves both.
+    /// The product recompiled: what every edge rests at, how hard it is held
+    /// there, and what is sewn to what. They travel together because a shape
+    /// edit moves all three.
     RestUpdate {
         generation: u64,
         rests: Vec<f32>,
+        compliance: Vec<f32>,
         seams: Seams,
     },
     /// A piece re-meshed elsewhere, with the drape to carry onto it.
@@ -64,10 +66,11 @@ pub struct SimHandle {
 
 impl SimHandle {
     /// Hot-swaps the rest state and the sewing. Does not block.
-    pub fn send_rests(&self, generation: u64, rests: Vec<f32>, seams: Seams) {
+    pub fn send_rests(&self, generation: u64, rests: Vec<f32>, compliance: Vec<f32>, seams: Seams) {
         let _ = self.tx.send(Msg::RestUpdate {
             generation,
             rests,
+            compliance,
             seams,
         });
     }
@@ -221,8 +224,9 @@ fn drain(rx: &crossbeam_channel::Receiver<Msg>, first: Option<Msg>, sim: &mut Si
             Msg::RestUpdate {
                 generation,
                 rests,
+                compliance,
                 seams,
-            } => sim.apply_rests(generation, &rests, seams),
+            } => sim.apply_rests(generation, &rests, &compliance, seams),
             Msg::MeshSwap { generation, swap } => sim.apply_swap(generation, swap),
             Msg::Collider { generation, scene } => sim.apply_collider(generation, scene),
         };

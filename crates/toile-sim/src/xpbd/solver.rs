@@ -8,27 +8,75 @@ mod tests;
 
 // The scalar path is the reference formulation: the goldens are defined by
 // it, and every other path must reproduce its bits.
-pub(super) const GRAVITY: f32 = -9.81;
+/// What pulls on a particle, in metres per second squared.
+pub const GRAVITY: f32 = -9.81;
 pub(super) const DAMPING: f32 = 0.999;
+
+/// Everything a substep asks of the world outside the cloth: the body it
+/// falls on, the ground it may not fall through, and the pull on it.
+///
+/// The three travel together because a substep reads them together, and
+/// because the alternative is an eighth parameter. Gravity is here rather
+/// than a constant so that a garment can be sewn shut before it is allowed to
+/// fall: [`Stage::weightless`] is that moment, and nothing else changes.
+#[derive(Debug, Clone, Copy)]
+#[must_use]
+pub struct Stage<'a> {
+    /// The body the cloth collides with.
+    pub sdf: &'a SdfGrid,
+    /// The plane under it, when the scene has one.
+    pub floor: Floor,
+    /// The pull on every particle, in metres per second squared.
+    pub gravity: f32,
+}
+
+impl<'a> Stage<'a> {
+    /// A body hanging in the void, under ordinary gravity: the scene every
+    /// drape golden is taken in.
+    pub const fn around(sdf: &'a SdfGrid) -> Stage<'a> {
+        Stage {
+            sdf,
+            floor: Floor::none(),
+            gravity: GRAVITY,
+        }
+    }
+
+    /// The same, with ground under it.
+    pub const fn on(self, floor: Floor) -> Stage<'a> {
+        Stage {
+            sdf: self.sdf,
+            floor,
+            gravity: self.gravity,
+        }
+    }
+
+    /// The same, with nothing pulling.
+    pub const fn weightless(self) -> Stage<'a> {
+        Stage {
+            sdf: self.sdf,
+            floor: self.floor,
+            gravity: 0.0,
+        }
+    }
+}
 
 /// One full XPBD substep.
 ///
 /// Small steps: N substeps of one constraint iteration beat one step of N
 /// iterations, so lambda starts from zero each substep and never accumulates.
 ///
-/// A scene whose `floor` is [`Floor::none`] and whose `layers` is `None` runs
+/// A stage whose `floor` is [`Floor::none`] and whose `layers` is `None` runs
 /// exactly the passes it has always run, in the order it has always run them.
 pub fn substep(
     state: &mut State,
     cons: &DistanceConstraints,
     seams: &Seams,
-    sdf: &SdfGrid,
-    floor: Floor,
+    stage: &Stage,
     layers: Option<&mut Layers>,
     dt: f32,
 ) {
     let inv_dt2 = 1.0 / (dt * dt);
-    integrate(state, dt);
+    integrate(state, stage.gravity, dt);
     solve_distance(state, cons, inv_dt2);
     if cons.strain_limit > 0.0 {
         limit_strain(state, cons);
@@ -47,14 +95,14 @@ pub fn substep(
     if let Some(layers) = layers {
         layers.separate(state);
     }
-    collide(state, sdf);
+    collide(state, stage.sdf);
     // After the body and not before it. The ground is the one surface nothing
     // may end up under, and the field's gradient under a sole points down: a
     // particle the body pushes through the floor has to meet the plane after
     // that push, not before it. Still ahead of `derive_velocities`, so cloth
     // that lands is stopped the way the body stops it — moving `p` and
     // leaving `q` behind is what makes a contact a contact here.
-    if let Some(y) = floor.level() {
+    if let Some(y) = stage.floor.level() {
         rest_on_floor(state, y);
     }
     derive_velocities(state, dt);
@@ -62,13 +110,13 @@ pub fn substep(
 
 /// Semi-implicit integration, saving the previous position for the velocity
 /// derivation at the end of the substep.
-fn integrate(state: &mut State, dt: f32) {
+fn integrate(state: &mut State, gravity: f32, dt: f32) {
     for i in 0..state.len() {
         state.qx[i] = state.px[i];
         state.qy[i] = state.py[i];
         state.qz[i] = state.pz[i];
         if state.inv_mass[i] > 0.0 {
-            state.vy[i] += GRAVITY * dt;
+            state.vy[i] += gravity * dt;
             state.px[i] += state.vx[i] * dt;
             state.py[i] += state.vy[i] * dt;
             state.pz[i] += state.vz[i] * dt;

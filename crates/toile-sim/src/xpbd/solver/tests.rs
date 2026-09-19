@@ -68,8 +68,9 @@ fn a_floor_nothing_reaches_changes_no_bits() {
     let (mut without, cons, sdf) = scene();
     let mut with = without.clone();
     for _ in 0..STEPS {
-        substep(&mut without, &cons, &seams, &sdf, Floor::none(), None, DT);
-        substep(&mut with, &cons, &seams, &sdf, Floor::at(-100.0), None, DT);
+        substep(&mut without, &cons, &seams, &Stage::around(&sdf), None, DT);
+        let deep = Stage::around(&sdf).on(Floor::at(-100.0));
+        substep(&mut with, &cons, &seams, &deep, None, DT);
     }
     assert!(lowest(&without) > -100.0, "the cloth never reached it");
     assert_eq!(
@@ -88,8 +89,9 @@ fn a_floor_the_cloth_reaches_holds_it_up() {
     let seams = Seams::default();
     let plane = 0.20;
     let (mut state, cons, sdf) = scene();
+    let ground = Stage::around(&sdf).on(Floor::at(plane));
     for _ in 0..STEPS {
-        substep(&mut state, &cons, &seams, &sdf, Floor::at(plane), None, DT);
+        substep(&mut state, &cons, &seams, &ground, None, DT);
     }
     assert!(
         lowest(&state) >= plane,
@@ -110,11 +112,46 @@ fn the_same_sheet_without_a_floor_is_still_falling() {
     let seams = Seams::default();
     let (mut state, cons, sdf) = scene();
     for _ in 0..STEPS {
-        substep(&mut state, &cons, &seams, &sdf, Floor::none(), None, DT);
+        substep(&mut state, &cons, &seams, &Stage::around(&sdf), None, DT);
     }
     assert!(
         lowest(&state) < 0.20,
         "nothing stopped it: {}",
         lowest(&state)
     );
+}
+
+/// A weightless stage is the pull turned off and nothing else.
+///
+/// The sheet is let go flat, so every edge of it is horizontal and no
+/// correction the constraints make has a vertical part: with nothing pulling,
+/// each particle stays at the very height it started at, to the bit. The same
+/// stage under ordinary gravity brings the sheet down, which is what says
+/// this measured the pull rather than a scene that never moves.
+#[test]
+#[allow(
+    clippy::float_cmp,
+    reason = "nothing was added to these heights, so they are the bits they were given"
+)]
+fn a_weightless_stage_leaves_the_cloth_at_the_height_it_was_let_go() {
+    let seams = Seams::default();
+    let (mut hanging, cons, sdf) = scene();
+    let mut falling = hanging.clone();
+    for _ in 0..STEPS {
+        substep(
+            &mut hanging,
+            &cons,
+            &seams,
+            &Stage::around(&sdf).weightless(),
+            None,
+            DT,
+        );
+        substep(&mut falling, &cons, &seams, &Stage::around(&sdf), None, DT);
+    }
+    assert!(
+        hanging.py.iter().all(|&y| y == RELEASE),
+        "nothing pulled on it: {}",
+        lowest(&hanging)
+    );
+    assert!(lowest(&falling) < RELEASE, "and the same scene does fall");
 }

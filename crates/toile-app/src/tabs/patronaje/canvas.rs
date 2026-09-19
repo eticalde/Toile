@@ -104,6 +104,10 @@ fn detail(
             theme.alert
         };
         let line = Stroke::new(1.5, ink);
+        // Under the paper and the cut line, so the tape reads as something the
+        // tract wears rather than as the tract itself.
+        let at = (piece, tracts.as_slice(), [0.0, 0.0]);
+        marks::elastics(painter, theme, draft.doc(), at, state.view);
         paper_and_outline(
             painter,
             draft.flat_cm(piece),

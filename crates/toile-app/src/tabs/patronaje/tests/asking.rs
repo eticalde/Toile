@@ -5,22 +5,7 @@ use toile_engine::draft::block;
 use super::super::state::Scope;
 use super::bench::front_and_back;
 use super::button;
-use super::studio::{BACK_ROW, FRONT_ROW, PLUS_ROW, Studio, WHOLE_ROW};
-
-/// Every shape the last frame painted, with the groups opened up.
-fn painted(studio: &Studio) -> Vec<&Shape> {
-    fn open<'a>(shape: &'a Shape, out: &mut Vec<&'a Shape>) {
-        match shape {
-            Shape::Vec(inner) => inner.iter().for_each(|shape| open(shape, out)),
-            other => out.push(other),
-        }
-    }
-    let mut out = Vec::new();
-    for clipped in &studio.shapes {
-        open(&clipped.shape, &mut out);
-    }
-    out
-}
+use super::studio::{BACK_ROW, FRONT_ROW, PLUS_ROW, Studio, WHOLE_ROW, painted};
 
 /// Whether the last frame lit the spot `at` the way a row lights under the
 /// pointer.

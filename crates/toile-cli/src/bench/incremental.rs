@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 use std::time::{Duration, Instant};
 
 use toile_doc::{Binding, Command, Doc, MeasureSet, Piece, PieceKey, Point, PointKey, Winding};
+use toile_engine::couture::COMPLIANCE;
 use toile_engine::{demo, sync};
-use toile_sim::xpbd::{self, Floor, Seams};
+use toile_sim::xpbd::{self, Floor, Seams, Stage};
 
 use super::scene::{DT, avg, max, same_bits, seconds, settle};
 
@@ -92,7 +93,7 @@ fn storm() -> Storm {
     let mut cons = pipe.constraints(1.0e-8);
     let sdf = demo::avatar_sdf();
     for _ in 0..DRAPE_SUBSTEPS {
-        xpbd::substep(&mut state, &cons, &no_seams, &sdf, Floor::none(), None, DT);
+        xpbd::substep(&mut state, &cons, &no_seams, &Stage::around(&sdf), None, DT);
     }
 
     let base = contour[demo::SHOULDER_POINT];
@@ -107,7 +108,7 @@ fn storm() -> Storm {
         cons.rest.copy_from_slice(rests);
         derive_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
         for _ in 0..10 {
-            xpbd::substep(&mut state, &cons, &no_seams, &sdf, Floor::none(), None, DT);
+            xpbd::substep(&mut state, &cons, &no_seams, &Stage::around(&sdf), None, DT);
         }
     }
 
@@ -194,7 +195,8 @@ pub fn run_async() {
 
         let generation = u64::from(f) + 1;
         let sent = Instant::now();
-        handle.send_rests(generation, rests, Seams::default());
+        let firm = vec![COMPLIANCE; rests.len()];
+        handle.send_rests(generation, rests, firm, Seams::default());
         latency_ms.push(wait_for_generation(&handle, generation, sent));
 
         std::thread::sleep(frame_dur.saturating_sub(frame_start.elapsed()));

@@ -29,6 +29,34 @@ pub const SEAM_PASSES: u32 = 4;
 /// Substeps the compliance takes to go from soft to firm.
 const RAMP: u64 = 450;
 
+/// How near a sewn pair has to stand for the seam to count as shut, in metres.
+///
+/// A tenth of the spacing the mesher lays boundary vertices at: inside that,
+/// the two sides are one line as far as the cloth is concerned, and what is
+/// left is the residue a firm seam holds rather than a gap.
+const SHUT: f32 = 0.0009;
+
+/// Whether the product is still being pulled together `substeps` into a
+/// drape, with its widest sewn pair `gap` metres apart.
+///
+/// This is the one question gravity waits on. A garment is let go with its
+/// seams open — 8 cm apart on the shipped block — and letting it fall while it
+/// is still in pieces drags the halves past each other before they can meet;
+/// `GarmentCodeData` closes the seams first for exactly that reason.
+///
+/// The gap itself and not a counted number of substeps, because it measures
+/// the thing being waited for: a two-piece tube and a twelve-piece jacket are
+/// shut at different moments, and a count tuned on one would let the other
+/// fall half-made. Both are deterministic; only one is about the garment.
+///
+/// The ramp is the cap, and less a second criterion than the end of the
+/// first: past it the sewing is firm, so a pair still open has had the pulling
+/// it is going to get and will not close by hanging any longer. A garment
+/// whose seams cannot meet falls late rather than never.
+pub fn closing(substeps: u64, gap: f32) -> bool {
+    substeps < RAMP && gap > SHUT
+}
+
 /// How stiff the seams are, and how far they may pull, `substeps` into a
 /// drape: the schedule the seams benchmark settled on.
 pub fn sewing_at(substeps: u64) -> (f32, f32) {

@@ -18,6 +18,15 @@ pub const PATIENCE: Duration = Duration::from_secs(180);
 /// read here and not at rest, because at rest it is on the ground.
 pub const MARK: u64 = 1800;
 
+/// Where a garment is read once the drape has had every chance to finish, in
+/// substeps.
+///
+/// Thirty-three simulated seconds, and long past the moment a tube with
+/// nothing holding it on has slid down the body and heaped on the ground — the
+/// shipped block does that by about 12,200. A garment still worn here is worn
+/// because something holds it.
+pub const LONG: u64 = 20_000;
+
 /// Substeps a drape is given to come to rest in.
 ///
 /// The trouser front is the slowest of these scenes, quiet at 20,780; this
@@ -101,20 +110,51 @@ fn points_of(session: &Session) -> Vec<[f32; 3]> {
     session.snapshot().positions.as_chunks::<3>().0.to_vec()
 }
 
+/// The frame after the sim thread has run `substeps` substeps.
+///
+/// # Panics
+/// If the sim thread never gets that far.
+pub fn at_substep(session: &Session, substeps: u64) -> Vec<[f32; 3]> {
+    let deadline = Instant::now() + PATIENCE;
+    while Instant::now() < deadline && session.snapshot().substeps < substeps {
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert!(
+        session.snapshot().substeps >= substeps,
+        "the sim thread never reached {substeps} substeps"
+    );
+    points_of(session)
+}
+
 /// The frame after the sim thread has run [`MARK`] substeps.
 ///
 /// # Panics
 /// If the sim thread never reaches [`MARK`] substeps.
 pub fn at_mark(session: &Session) -> Vec<[f32; 3]> {
+    at_substep(session, MARK)
+}
+
+/// The frame the drape declares itself at rest on, and the substep it happened
+/// at; `None` when it is still moving at `budget`.
+///
+/// Declared and not proven: the sleep test is known to fire early, so a scene
+/// that has to be read at rest is read at a fixed substep as well.
+///
+/// # Panics
+/// If the sim thread never runs `budget` substeps, which means it is stuck
+/// rather than busy.
+pub fn rest_by(session: &Session, budget: u64) -> Option<(Vec<[f32; 3]>, u64)> {
     let deadline = Instant::now() + PATIENCE;
-    while Instant::now() < deadline && session.snapshot().substeps < MARK {
+    while Instant::now() < deadline {
+        if session.settled() {
+            return Some((points_of(session), session.snapshot().substeps));
+        }
+        if session.snapshot().substeps >= budget {
+            return None;
+        }
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert!(
-        session.snapshot().substeps >= MARK,
-        "the sim thread never reached {MARK} substeps"
-    );
-    points_of(session)
+    panic!("the sim thread never reached {budget} substeps");
 }
 
 /// The frame the drape goes quiet on, and the substep it happened at.
@@ -124,18 +164,7 @@ pub fn at_mark(session: &Session) -> Vec<[f32; 3]> {
 /// floor landed means something is keeping it moving rather than that there
 /// is nothing to come to rest on.
 pub fn at_rest(session: &Session) -> (Vec<[f32; 3]>, u64) {
-    let deadline = Instant::now() + PATIENCE;
-    while Instant::now() < deadline {
-        if session.settled() {
-            return (points_of(session), session.snapshot().substeps);
-        }
-        assert!(
-            session.snapshot().substeps < REST,
-            "the drape was still moving after {REST} substeps"
-        );
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    panic!("the sim thread never settled inside {PATIENCE:?}");
+    rest_by(session, REST).unwrap_or_else(|| panic!("still moving after {REST} substeps"))
 }
 
 /// Whether the drape goes to sleep inside `budget` substeps.
@@ -144,17 +173,7 @@ pub fn at_rest(session: &Session) -> (Vec<[f32; 3]>, u64) {
 /// If the sim thread never runs that many substeps, which means it is stuck
 /// rather than busy.
 pub fn parks_by(session: &Session, budget: u64) -> bool {
-    let deadline = Instant::now() + PATIENCE;
-    while Instant::now() < deadline {
-        if session.settled() {
-            return true;
-        }
-        if session.snapshot().substeps >= budget {
-            return false;
-        }
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    panic!("the sim thread never reached {budget} substeps");
+    rest_by(session, budget).is_some()
 }
 
 /// What watching a whole drape found.

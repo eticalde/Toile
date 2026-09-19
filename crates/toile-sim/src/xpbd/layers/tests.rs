@@ -4,11 +4,10 @@
 )]
 
 use super::*;
-use crate::xpbd::contact::Floor;
 use crate::xpbd::crossings::self_crossings;
 use crate::xpbd::metrics::position_hash;
 use crate::xpbd::sdf::SdfGrid;
-use crate::xpbd::solver::substep;
+use crate::xpbd::solver::{Stage, substep};
 
 /// Simulated seconds per substep, as the engine runs it.
 const DT: f32 = 1.0 / 600.0;
@@ -115,9 +114,9 @@ fn one_layer_of_cloth_never_collides_with_itself() {
     let mut layers = Layers::of(&tris, &cons, &Seams::default(), watched.len());
     let (sdf, seams) = (nowhere(), Seams::default());
     for _ in 0..STEPS {
-        substep(&mut alone, &cons, &seams, &sdf, Floor::none(), None, DT);
+        substep(&mut alone, &cons, &seams, &Stage::around(&sdf), None, DT);
         let on = Some(&mut layers);
-        substep(&mut watched, &cons, &seams, &sdf, Floor::none(), on, DT);
+        substep(&mut watched, &cons, &seams, &Stage::around(&sdf), on, DT);
     }
     assert_eq!(
         layers.contacts(),
@@ -155,9 +154,9 @@ fn a_fold_stops_falling_through_itself() {
     let (sdf, seams) = (nowhere(), Seams::default());
     let (mut loose, mut kept) = (0usize, 0usize);
     for step in 0..STEPS {
-        substep(&mut open, &cons, &seams, &sdf, Floor::none(), None, DT);
+        substep(&mut open, &cons, &seams, &Stage::around(&sdf), None, DT);
         let on = Some(&mut layers);
-        substep(&mut held, &cons, &seams, &sdf, Floor::none(), on, DT);
+        substep(&mut held, &cons, &seams, &Stage::around(&sdf), on, DT);
         if step % WATCH == 0 {
             loose = loose.max(self_crossings(&open, &tris));
             kept = kept.max(self_crossings(&held, &tris));
@@ -226,11 +225,11 @@ fn a_seam_is_not_a_collision_with_itself() {
     let mut knows_not = Layers::of(&tris, &cons, &Seams::default(), n);
     let sdf = nowhere();
     for _ in 0..STEPS {
-        substep(&mut plain, &cons, &seams, &sdf, Floor::none(), None, DT);
+        substep(&mut plain, &cons, &seams, &Stage::around(&sdf), None, DT);
         let on = Some(&mut knows);
-        substep(&mut aware, &cons, &seams, &sdf, Floor::none(), on, DT);
+        substep(&mut aware, &cons, &seams, &Stage::around(&sdf), on, DT);
         let off = Some(&mut knows_not);
-        substep(&mut blind, &cons, &seams, &sdf, Floor::none(), off, DT);
+        substep(&mut blind, &cons, &seams, &Stage::around(&sdf), off, DT);
     }
     assert_eq!(knows.contacts(), 0, "the seam was left to close in peace");
     assert_eq!(

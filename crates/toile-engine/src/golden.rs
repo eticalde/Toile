@@ -1,4 +1,4 @@
-use toile_sim::xpbd::{self, Floor, Seams};
+use toile_sim::xpbd::{self, Seams, Stage};
 
 use crate::demo;
 use crate::draft::{Draft, block};
@@ -197,19 +197,13 @@ pub fn drape_on_anny_hash() -> u64 {
     let mut state = crate::couture::drop_state(&pipe, body.release_height());
     let cons = pipe.constraints(crate::couture::COMPLIANCE);
 
-    // No floor, though this body stands on one. A golden pins the arithmetic
-    // the solver has always run; the ground belongs to the scene a person is
-    // looking at, not to the one the bits are taken in.
+    // No floor, though this body stands on one, and the pull the solver has
+    // always had. A golden pins the arithmetic the solver has always run; the
+    // ground belongs to the scene a person is looking at, not to the one the
+    // bits are taken in.
+    let stage = Stage::around(body.field());
     for _ in 0..SUBSTEPS {
-        xpbd::substep(
-            &mut state,
-            &cons,
-            &no_seams,
-            body.field(),
-            Floor::none(),
-            None,
-            DT,
-        );
+        xpbd::substep(&mut state, &cons, &no_seams, &stage, None, DT);
     }
     xpbd::position_hash(&state)
 }
@@ -232,9 +226,10 @@ pub fn drape_bodice_hash() -> u64 {
     let mut state = demo::drop_state(&pipe);
     let mut cons = pipe.constraints(1.0e-8);
     let sdf = demo::avatar_sdf();
+    let stage = Stage::around(&sdf);
 
     for _ in 0..SUBSTEPS {
-        xpbd::substep(&mut state, &cons, &no_seams, &sdf, Floor::none(), None, DT);
+        xpbd::substep(&mut state, &cons, &no_seams, &stage, None, DT);
     }
     contour[demo::SHOULDER_POINT][0] += 0.02;
     let rests = pipe
@@ -242,7 +237,7 @@ pub fn drape_bodice_hash() -> u64 {
         .expect("the golden moves a point, never the node count");
     cons.rest.copy_from_slice(rests);
     for _ in 0..SUBSTEPS {
-        xpbd::substep(&mut state, &cons, &no_seams, &sdf, Floor::none(), None, DT);
+        xpbd::substep(&mut state, &cons, &no_seams, &stage, None, DT);
     }
     xpbd::position_hash(&state)
 }

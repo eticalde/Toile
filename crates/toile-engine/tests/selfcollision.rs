@@ -5,7 +5,7 @@ use std::time::Instant;
 use toile_engine::body::{BodyMesh, Collider, Phenotype, bake, body_mesh};
 use toile_engine::couture::{self, COMPLIANCE, ShapePipeline};
 use toile_engine::draft::{Draft, block};
-use toile_sim::xpbd::{self, Floor, Layers, SdfGrid, Seams, State};
+use toile_sim::xpbd::{self, Floor, Layers, SdfGrid, Seams, Stage, State};
 
 /// Simulated seconds per substep, as the engine runs it.
 const DT: f32 = 1.0 / 600.0;
@@ -74,13 +74,14 @@ fn drape(pipe: &ShapePipeline, body: &Collider, sdf: &SdfGrid, mut held: Option<
     let cons = pipe.constraints(COMPLIANCE);
     let seams = Seams::default();
     let floor = body.ground().map_or(Floor::none(), Floor::at);
+    let stage = Stage::around(sdf).on(floor);
     let mut state = couture::drop_state(pipe, body.release_height());
 
     let (mut worst, mut last) = (0usize, 0usize);
     for _ in 0..STEPS / WATCH {
         for _ in 0..WATCH {
             let on = held.as_mut();
-            xpbd::substep(&mut state, &cons, &seams, sdf, floor, on, DT);
+            xpbd::substep(&mut state, &cons, &seams, &stage, on, DT);
         }
         last = xpbd::self_crossings(&state, &pipe.tris);
         worst = worst.max(last);
@@ -104,14 +105,15 @@ fn cost(body: &Collider, sdf: &SdfGrid) -> (f64, f64, usize, usize) {
     let cons = pipe.constraints(COMPLIANCE);
     let seams = Seams::default();
     let floor = body.ground().map_or(Floor::none(), Floor::at);
+    let stage = Stage::around(sdf).on(floor);
     let mut state = couture::drop_state(&pipe, body.release_height());
     for _ in 0..STEPS {
-        xpbd::substep(&mut state, &cons, &seams, sdf, floor, None, DT);
+        xpbd::substep(&mut state, &cons, &seams, &stage, None, DT);
     }
 
     let started = Instant::now();
     for _ in 0..TIMED {
-        xpbd::substep(&mut state, &cons, &seams, sdf, floor, None, DT);
+        xpbd::substep(&mut state, &cons, &seams, &stage, None, DT);
     }
     let loose = started.elapsed().as_secs_f64() * 1000.0 / TIMED as f64;
 
@@ -119,7 +121,7 @@ fn cost(body: &Collider, sdf: &SdfGrid) -> (f64, f64, usize, usize) {
     let started = Instant::now();
     for _ in 0..TIMED {
         let on = Some(&mut layers);
-        xpbd::substep(&mut state, &cons, &seams, sdf, floor, on, DT);
+        xpbd::substep(&mut state, &cons, &seams, &stage, on, DT);
     }
     let held = started.elapsed().as_secs_f64() * 1000.0 / TIMED as f64;
     (loose, held, pipe.pos2d.len(), pipe.tris.len() / 3)

@@ -1,4 +1,4 @@
-use super::state::State;
+use super::state::{Seams, State};
 
 /// FNV-1a over the bits of every position — the determinism golden.
 ///
@@ -24,6 +24,23 @@ pub fn kinetic_energy(state: &State) -> f32 {
         e += state.vx[i] * state.vx[i] + state.vy[i] * state.vy[i] + state.vz[i] * state.vz[i];
     }
     e * 0.5
+}
+
+/// The widest a sewn pair stands open, in metres; zero when nothing is sewn.
+///
+/// The widest and not the mean, because what a caller wants to know is
+/// whether the product is shut, and a garment with one seam still gaping is
+/// not shut however well the rest of it came together.
+pub fn seam_gap(state: &State, seams: &Seams) -> f32 {
+    let mut worst = 0.0f32;
+    for k in 0..seams.len() {
+        let (ia, ib) = (seams.a[k] as usize, seams.b[k] as usize);
+        let dx = state.px[ib] - state.px[ia];
+        let dy = state.py[ib] - state.py[ia];
+        let dz = state.pz[ib] - state.pz[ia];
+        worst = worst.max(dx * dx + dy * dy + dz * dz);
+    }
+    worst.sqrt()
 }
 
 /// Largest particle speed, in metres per second.

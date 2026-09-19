@@ -67,9 +67,10 @@ fn sewn(a: u32, b: u32) -> Seams {
 #[test]
 fn a_stale_generation_is_an_error_not_a_warm_start() {
     let (old, new) = meshes();
-    let stale: Vec<f32> = old.constraints(COMPLIANCE).rest;
+    let held = old.constraints(COMPLIANCE);
+    let (stale, firm) = (held.rest, held.compliance);
     let mut sim = sim(&old);
-    assert_eq!(sim.apply_rests(1, &stale, Seams::default()), Ok(()));
+    assert_eq!(sim.apply_rests(1, &stale, &firm, Seams::default()), Ok(()));
 
     let swap = Box::new(MeshSwap::new(&old.pos2d, &old.tris, &new, COMPLIANCE));
     let edges = swap.cons.rest.len();
@@ -79,7 +80,7 @@ fn a_stale_generation_is_an_error_not_a_warm_start() {
 
     // The rest update that was in flight when the swap landed.
     assert_eq!(
-        sim.apply_rests(1, &stale, Seams::default()),
+        sim.apply_rests(1, &stale, &firm, Seams::default()),
         Err(StaleMessage::Generation { applied: 2, got: 1 })
     );
     assert_eq!(sim.cons.rest.len(), edges, "the new mesh kept its rests");
@@ -92,8 +93,8 @@ fn rest_lengths_for_another_mesh_are_refused_by_count() {
     let (old, new) = meshes();
     let mut sim = sim(&new);
     let expected = sim.cons.rest.len();
-    let stale = old.constraints(COMPLIANCE).rest;
-    let refused = sim.apply_rests(1, &stale, Seams::default());
+    let held = old.constraints(COMPLIANCE);
+    let refused = sim.apply_rests(1, &held.rest, &held.compliance, Seams::default());
     assert_eq!(
         refused,
         Err(StaleMessage::RestCount {
@@ -139,9 +140,9 @@ fn a_seam_past_the_end_of_the_state_is_refused() {
     let (old, _) = meshes();
     let mut sim = sim(&old);
     let held = old.pos2d.len();
-    let rests = old.constraints(COMPLIANCE).rest;
+    let firm = old.constraints(COMPLIANCE);
     assert_eq!(
-        sim.apply_rests(1, &rests, sewn(0, held as u32)),
+        sim.apply_rests(1, &firm.rest, &firm.compliance, sewn(0, held as u32)),
         Err(StaleMessage::SeamRange {
             vertex: held as u32,
             len: held,

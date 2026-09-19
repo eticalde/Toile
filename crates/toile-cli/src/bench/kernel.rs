@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use toile_sim::xpbd::{self, DistanceConstraints, Floor, SdfGrid, Seams, State};
+use toile_sim::xpbd::{self, DistanceConstraints, SdfGrid, Seams, Stage, State};
 
 use super::scene::{DT, Lcg, same_bits, shuffle};
 
@@ -117,7 +117,7 @@ pub fn build(target: usize) -> Scene {
 /// One substep of the reference scalar path over the benchmark scene.
 fn step(s: &mut Scene, seams: &Seams) {
     let (state, cons, sdf) = (&mut s.state, &s.cons, &s.sdf);
-    xpbd::substep(state, cons, seams, sdf, Floor::none(), None, DT);
+    xpbd::substep(state, cons, seams, &Stage::around(sdf), None, DT);
 }
 
 /// Milliseconds per timed substep, and the final position hash.

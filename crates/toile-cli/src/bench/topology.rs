@@ -6,7 +6,7 @@ use toile_engine::demo;
 use toile_engine::draft::{Command, Draft, Identity, PieceKey, Point, SegmentEdit, block};
 use toile_engine::session::Session;
 use toile_mesh::transfer;
-use toile_sim::xpbd::{self, Floor, Seams};
+use toile_sim::xpbd::{self, Seams, Stage};
 
 use super::scene::{DT, same_bits, seconds, settle};
 
@@ -41,8 +41,7 @@ fn swap() -> Swap {
             &mut state,
             &cons_a,
             &no_seams,
-            &sdf,
-            Floor::none(),
+            &Stage::around(&sdf),
             None,
             DT,
         );
@@ -70,8 +69,7 @@ fn swap() -> Swap {
         &mut state_b,
         &cons_b,
         &no_seams,
-        &sdf,
-        Floor::none(),
+        &Stage::around(&sdf),
         None,
         DT,
     );

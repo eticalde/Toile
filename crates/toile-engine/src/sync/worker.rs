@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, Seams, State};
+use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, Seams, Stage, State};
 
 use super::handle::Scene;
 use super::report::{Snapshot, StaleMessage};
@@ -65,9 +65,10 @@ impl Sim {
 
     /// Hot-swaps the rest state and what is sewn to what, and wakes the sim.
     ///
-    /// The two arrive together because a shape edit moves both: the rest
-    /// lengths because the cloth changed shape, and the seams because an
-    /// anchor is a node of that same contour.
+    /// The three arrive together because a shape edit moves all of them: the
+    /// rest lengths because the cloth changed shape, the compliances because
+    /// an elastic is a stretch of that same contour pulling harder than the
+    /// cloth around it, and the seams because an anchor is one of its nodes.
     ///
     /// # Errors
     /// `StaleMessage` when the message was compiled against a mesh the solver
@@ -77,10 +78,11 @@ impl Sim {
         &mut self,
         generation: u64,
         rests: &[f32],
+        compliance: &[f32],
         seams: Seams,
     ) -> Result<(), StaleMessage> {
         self.fresh(generation)?;
-        if rests.len() != self.cons.rest.len() {
+        if rests.len() != self.cons.rest.len() || compliance.len() != self.cons.compliance.len() {
             return Err(StaleMessage::RestCount {
                 expected: self.cons.rest.len(),
                 got: rests.len(),
@@ -88,6 +90,7 @@ impl Sim {
         }
         holds(&seams, self.state.len())?;
         self.cons.rest.copy_from_slice(rests);
+        self.cons.compliance.copy_from_slice(compliance);
         self.seams = seams;
         self.wake(generation);
         Ok(())
@@ -200,22 +203,32 @@ impl Sim {
     /// thread's own substeps rather than from the last edit: a product is let
     /// go with its seams open, and that is the one moment they need to be
     /// soft. A later edit moves the cloth, not the pieces apart.
+    ///
+    /// Gravity waits for the same moment. While the pieces are still being
+    /// pulled together the garment hangs weightless, and it is let fall the
+    /// substep its seams are shut — see [`couture::closing`]. A product with
+    /// nothing sewn never enters the phase and falls from the first substep,
+    /// exactly as it always has.
     pub(super) fn tick(&mut self) {
         let inv_n = 1.0 / self.state.len() as f32;
         let mut e_avg = 0.0f32;
         for _ in 0..self.substeps_per_tick {
+            let mut stage = Stage::around(&self.scene.sdf).on(self.scene.floor);
             if !self.seams.is_empty() {
                 (self.seams.compliance, self.seams.max_step) = couture::sewing_at(self.substeps);
+                let gap = xpbd::seam_gap(&self.state, &self.seams);
+                if couture::closing(self.substeps, gap) {
+                    stage = stage.weightless();
+                }
             }
+            // No layers: the drape a person watches does not collide with
+            // itself yet. The pass exists and is proven, and what it costs per
+            // substep is the whole reason it is not switched on here.
             xpbd::substep(
                 &mut self.state,
                 &self.cons,
                 &self.seams,
-                &self.scene.sdf,
-                self.scene.floor,
-                // The drape a person watches does not collide with itself
-                // yet. The pass exists and is proven, and what it costs per
-                // substep is the whole reason it is not switched on here.
+                &stage,
                 None,
                 self.dt,
             );

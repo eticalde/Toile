@@ -250,5 +250,6 @@ mod asking;
 mod bench;
 mod roads;
 mod studio;
+mod tape;
 mod typed;
 mod whole;
