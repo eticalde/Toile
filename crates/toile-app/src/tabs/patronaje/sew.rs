@@ -1,124 +1,56 @@
-use eframe::egui::{Key, Pos2};
-use toile_engine::draft::{
-    Command, Draft, EdgeRange, Identity, PieceKey, PointKey, Seam, SeamOrientation,
-};
+mod run;
+
+use eframe::egui::{Key, Pos2, Vec2};
+pub use run::{APART, LAST, Pick, Spread, facing, holds, line_of, shifted, spread, stretch, under};
+use toile_engine::draft::{Command, Identity, Seam, SeamKey};
 
 use super::arrange::Arranged;
 use super::gesture::{Gesture, Input, Mods, Stack};
-use super::layout::Laid;
-use super::pick::{EDGE_PT, away};
+use super::pick::EDGE_PT;
 use super::state::Tool;
-use super::tract::{self, Tract};
 use super::view::View;
 
 /// The name one seam sewn leaves in the undo stack.
 pub const SEW: &str = "coser";
 
-/// One piece's tracts where the whole product draws them, in centimetres of
-/// the mat and not of the piece.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Spread {
-    /// The piece.
-    pub piece: PieceKey,
-    /// Its tracts in contour order, moved to where the overview laid it.
-    pub tracts: Vec<Tract>,
-}
+/// The name a tract added to a sewn side, or taken off one, leaves there.
+pub const RESIDE: &str = "ajustar un lado de la costura";
 
-/// One tract picked as a side of a seam.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Pick {
-    /// The piece the tract belongs to.
-    pub piece: PieceKey,
-    /// The node it leaves.
-    pub from: PointKey,
-    /// The node it runs to.
-    pub to: PointKey,
-}
-
-/// The first side in hand, between the two presses that make a seam.
+/// The first side in hand, between the presses that make a seam.
 ///
 /// Nothing has reached the document yet, which is what lets Escape, or a
-/// second press on the same tract, let go of it with no entry to unwind.
+/// second press on the same side, let go of it with no entry to unwind.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Sewing {
-    /// The tract already picked.
+    /// The run of tracts already picked.
     pub first: Pick,
-    /// Where the pointer last was, while it slides the mat with a tract held.
+    /// Where the pointer last was, while it slides the mat with a side held.
     pub pan: Option<Pos2>,
 }
 
-impl Pick {
-    /// The stretch of contour the pick names, node to node.
-    pub fn range(self) -> EdgeRange {
-        EdgeRange::between(self.piece, self.from, self.to)
-    }
+/// The whole product as one frame worked it out, lent to every event of it.
+#[derive(Debug, Clone, Copy)]
+pub struct Seen<'a> {
+    /// Every piece's tracts where the overview drew them.
+    pub spread: &'a [Spread],
+    /// Where the document lies on the glass.
+    pub view: View,
+    /// The seam chosen, which is the one a shift-press lengthens while no
+    /// side is in hand.
+    pub chosen: Option<(SeamKey, Seam)>,
 }
 
-/// Every piece's tracts, moved to where the overview draws the piece.
-pub fn spread(draft: &Draft, laid: &[Laid]) -> Vec<Spread> {
-    laid.iter()
-        .map(|it| {
-            let mut tracts = tract::of(draft, it.piece);
-            for at in tracts.iter_mut().flat_map(|tract| tract.line.iter_mut()) {
-                *at = [at[0] + it.shift[0], at[1] + it.shift[1]];
-            }
-            Spread {
-                piece: it.piece,
-                tracts,
-            }
-        })
-        .collect()
-}
-
-/// The tract a pick names, as the mat draws it now; nothing once its piece or
-/// its node has gone.
-pub fn tract_of(spread: &[Spread], pick: Pick) -> Option<&Tract> {
-    let on = spread.iter().find(|it| it.piece == pick.piece)?;
-    on.tracts
-        .iter()
-        .find(|tract| tract.node == pick.from && tract.to == pick.to)
-}
-
-/// The tract within `reach` centimetres of a place on the mat, the nearest
-/// when several are; between two as near, the one drawn on top.
-pub fn under(at: [f64; 2], spread: &[Spread], reach: f64) -> Option<Pick> {
-    let mut best: Option<(f64, Pick)> = None;
-    for it in spread {
-        let Some(found) = tract::nearest(at, &it.tracts, &[]) else {
-            continue;
-        };
-        if found.away < reach && best.is_none_or(|(kept, _)| found.away <= kept) {
-            let tract = &it.tracts[found.from];
-            let pick = Pick {
-                piece: it.piece,
-                from: tract.node,
-                to: tract.to,
-            };
-            best = Some((found.away, pick));
-        }
-    }
-    best.map(|(_, pick)| pick)
-}
-
-/// Which way round two tracts are sewn, from how they lie on the mat.
+/// A seam taken out and put back under its own key as `to`, for the caller to
+/// play as one entry.
 ///
-/// Pieces laid side by side the same way up are sewn top to top and bottom to
-/// bottom, whichever way each contour happens to run past the seam. So the
-/// ends that lie nearest each other are the ends that meet: when pairing head
-/// with head is the shorter reach the sides run aligned, and otherwise they
-/// run opposed. It is a first answer, and the inspector flips it.
-pub fn facing(a: &Tract, b: &Tract) -> SeamOrientation {
-    let ends = |tract: &Tract| Some((*tract.line.first()?, *tract.line.last()?));
-    let (Some((head_a, tail_a)), Some((head_b, tail_b))) = (ends(a), ends(b)) else {
-        return SeamOrientation::Aligned;
+/// The document has no edit that rewrites a seam, and it does not need one:
+/// the key is what everything else knows the seam by, and it survives.
+pub fn resewn(key: SeamKey, to: Seam) -> Vec<Command> {
+    let back = Command::AddSeam {
+        identity: Identity::Restored(key),
+        seam: to,
     };
-    let aligned = away(head_a, head_b) + away(tail_a, tail_b);
-    let opposed = away(head_a, tail_b) + away(tail_a, head_b);
-    if opposed < aligned {
-        SeamOrientation::Opposed
-    } else {
-        SeamOrientation::Aligned
-    }
+    vec![Command::RemoveSeam { seam: key }, back]
 }
 
 /// Reduces one input event against the whole product with the sewing tool in
@@ -130,11 +62,10 @@ pub fn facing(a: &Tract, b: &Tract) -> SeamOrientation {
 pub fn update(
     gesture: Gesture,
     event: Input,
-    spread: &[Spread],
-    view: View,
+    seen: &Seen<'_>,
 ) -> (Gesture, Vec<Command>, Arranged) {
     match (gesture, event) {
-        (held, Input::Down(at, mods)) => press(first_of(&held), at, mods, spread, view),
+        (held, Input::Down(at, mods)) => press(first_of(&held), at, mods, seen),
         (Gesture::Pan { from }, Input::Move(at, _)) => slid(Gesture::Pan { from: at }, at - from),
         (
             Gesture::Sewing(Sewing {
@@ -152,18 +83,18 @@ pub fn update(
     }
 }
 
-/// A press: on a tract it picks a side, and on the second side it sews; on
-/// the bare mat, or with space held, it slides the product and keeps the side
-/// already picked.
+/// A press: on a tract it picks a side, and on the second side it sews; with
+/// shift it adds the tract to the side in hand, or takes it off, and with no
+/// side in hand does the same to the chosen seam; on the bare mat, or with
+/// space held, it slides the product and keeps the side already picked.
 fn press(
     first: Option<Pick>,
     at: Pos2,
     mods: Mods,
-    spread: &[Spread],
-    view: View,
+    seen: &Seen<'_>,
 ) -> (Gesture, Vec<Command>, Arranged) {
-    let reach = EDGE_PT / view.scale().max(f64::EPSILON);
-    let found = under(view.to_document(at), spread, reach).filter(|_| !mods.space);
+    let reach = EDGE_PT / seen.view.scale().max(f64::EPSILON);
+    let found = under(seen.view.to_document(at), seen.spread, reach).filter(|_| !mods.space);
     let Some(second) = found else {
         let slide = first.map_or(Gesture::Pan { from: at }, |first| holding(first, Some(at)));
         return quiet(slide);
@@ -172,25 +103,82 @@ fn press(
         chosen: Some(second.piece),
         ..Arranged::default()
     };
-    let Some(first) = first else {
-        return (holding(second, None), Vec::new(), chosen);
-    };
-    // The same tract again puts it down: a tract is not sewn to itself, and
-    // the press has to mean something.
-    let sides = tract_of(spread, first).zip(tract_of(spread, second));
-    let Some((a, b)) = sides.filter(|_| first != second) else {
+    match (first, seen.chosen) {
+        (Some(first), _) if mods.shift => match shifted(seen.spread, first, second) {
+            Ok(Some(run)) => (holding(run, None), Vec::new(), chosen),
+            Ok(None) => quiet(Gesture::Idle),
+            Err(why) => refused(holding(first, None), why),
+        },
+        (None, Some((key, seam))) if mods.shift => resided(key, &seam, second, seen.spread),
+        (None, _) => (holding(second, None), Vec::new(), chosen),
+        (Some(first), _) => sewn(first, second, seen.spread, chosen),
+    }
+}
+
+/// The second side pressed: the seam itself, as one entry.
+///
+/// A tract of the side already in hand puts that side down instead: a stretch
+/// is not sewn to a part of itself, and the press has to mean something.
+fn sewn(
+    first: Pick,
+    second: Pick,
+    spread: &[Spread],
+    chosen: Arranged,
+) -> (Gesture, Vec<Command>, Arranged) {
+    let lines = line_of(spread, first).zip(line_of(spread, second));
+    let Some((a, b)) = lines.filter(|_| !holds(spread, first, second)) else {
         return quiet(Gesture::Idle);
     };
-    let seam = Seam::plain(first.range(), second.range(), facing(a, b));
     let command = Command::AddSeam {
         identity: Identity::New,
-        seam,
+        seam: Seam::plain(first.range(), second.range(), facing(&a, &b)),
     };
     let said = Arranged {
         stack: Some(Stack::Once(SEW)),
         ..chosen
     };
     (Gesture::Idle, vec![command], said)
+}
+
+/// A shift-press with no side in hand and a seam chosen: the tract goes onto
+/// whichever side of that seam it continues, or comes off the end of the side
+/// it belongs to, as one entry.
+///
+/// The side picked last is asked first, because that is the one the hand has
+/// just left; which way the seam runs is the person's to say and is kept.
+fn resided(
+    key: SeamKey,
+    seam: &Seam,
+    tract: Pick,
+    spread: &[Spread],
+) -> (Gesture, Vec<Command>, Arranged) {
+    let mut why = APART;
+    for second in [true, false] {
+        let range = if second { seam.b } else { seam.a };
+        let Some(run) = Pick::of(range) else {
+            continue;
+        };
+        let to = match shifted(spread, run, tract) {
+            Ok(Some(run)) => run.range(),
+            Ok(None) => return refused(Gesture::Idle, LAST),
+            Err(apart) if apart == APART => continue,
+            Err(other) => {
+                why = other;
+                break;
+            }
+        };
+        let to = if second {
+            Seam { b: to, ..*seam }
+        } else {
+            Seam { a: to, ..*seam }
+        };
+        let said = Arranged {
+            stack: Some(Stack::Once(RESIDE)),
+            ..Arranged::default()
+        };
+        return (Gesture::Idle, resewn(key, to), said);
+    }
+    refused(Gesture::Idle, why)
 }
 
 /// A key pressed with no side in hand.
@@ -223,7 +211,7 @@ fn holding(first: Pick, pan: Option<Pos2>) -> Gesture {
     Gesture::Sewing(Sewing { first, pan })
 }
 
-fn slid(gesture: Gesture, pan: eframe::egui::Vec2) -> (Gesture, Vec<Command>, Arranged) {
+fn slid(gesture: Gesture, pan: Vec2) -> (Gesture, Vec<Command>, Arranged) {
     let said = Arranged {
         pan,
         ..Arranged::default()
@@ -235,5 +223,14 @@ fn quiet(gesture: Gesture) -> (Gesture, Vec<Command>, Arranged) {
     (gesture, Vec::new(), Arranged::default())
 }
 
+/// Nothing done, and the reason said where the person will read it.
+fn refused(gesture: Gesture, why: &'static str) -> (Gesture, Vec<Command>, Arranged) {
+    let said = Arranged {
+        refused: Some(why),
+        ..Arranged::default()
+    };
+    (gesture, Vec::new(), said)
+}
+
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;

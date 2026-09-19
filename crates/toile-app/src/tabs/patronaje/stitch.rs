@@ -1,9 +1,8 @@
 use eframe::egui::{Align2, FontId, Painter, Pos2, Shape, Stroke, Vec2};
-use toile_engine::draft::{Doc, EdgeRange, Seam, SeamKey, SeamOrientation};
+use toile_engine::draft::SeamKey;
 
-use super::pick::away;
 use super::sew::{self, Pick, Spread};
-use super::tract::Tract;
+use super::thread::Thread;
 use super::view::View;
 use crate::theme::Theme;
 
@@ -23,7 +22,8 @@ const OFFSET: f32 = 13.0;
 ///
 /// Both sides wear the same thread and the same number, which is the number
 /// the inspector lists the seam under, so the two halves read as one seam
-/// however far apart the pieces lie. The arrowheads are the pairing itself:
+/// however far apart the pieces lie, and a side of several tracts is one line
+/// and so one thread. The arrowheads are the pairing itself:
 /// each side is drawn in the direction it is walked while the two are sewn,
 /// and the dot is where that walk begins, so a seam that would sew the pieces
 /// twisted shows its two sides running against each other on the mat. The
@@ -32,19 +32,15 @@ const OFFSET: f32 = 13.0;
 pub fn seams(
     p: &Painter,
     theme: &Theme,
-    doc: &Doc,
-    spread: &[Spread],
+    threads: &[Thread],
     (view, chosen): (View, Option<SeamKey>),
 ) {
-    for (index, (key, seam)) in doc.seams.iter().enumerate() {
-        let Some([a, b]) = sides(spread, seam) else {
-            continue;
-        };
-        let lit = chosen == Some(key);
-        let [a, b] = [a, b].map(|side| on_glass(&side, view));
+    for it in threads {
+        let lit = chosen == Some(it.seam);
+        let [a, b] = [0, 1].map(|side| on_glass(&it.sides[side], view));
         for side in [&a, &b] {
             thread(p, theme, side, lit);
-            number(p, theme, side, index + 1, lit);
+            number(p, theme, side, it.ordinal, lit);
         }
         if lit {
             let reach = Stroke::new(1.0, theme.seam.gamma_multiply(FAINT));
@@ -65,100 +61,16 @@ pub fn picking(
     view: View,
     (first, over): (Option<Pick>, Option<Pick>),
 ) {
-    if let Some(tract) = over
+    if let Some(line) = over
         .filter(|&it| Some(it) != first)
-        .and_then(|it| sew::tract_of(spread, it))
+        .and_then(|it| sew::line_of(spread, it))
     {
         let ink = Stroke::new(THREAD[0], theme.seam.gamma_multiply(FAINT));
-        p.add(Shape::line(on_glass(&tract.line, view), ink));
+        p.add(Shape::line(on_glass(&line, view), ink));
     }
-    if let Some(tract) = first.and_then(|it| sew::tract_of(spread, it)) {
-        thread(p, theme, &on_glass(&tract.line, view), true);
+    if let Some(line) = first.and_then(|it| sew::line_of(spread, it)) {
+        thread(p, theme, &on_glass(&line, view), true);
     }
-}
-
-/// The two sides of a seam as lines on the mat, each in the direction the
-/// pairing walks it: side A head to tail, side B the same way when the seam
-/// is aligned and tail to head when it is opposed.
-pub fn sides(spread: &[Spread], seam: &Seam) -> Option<[Vec<[f64; 2]>; 2]> {
-    let of = |range: EdgeRange| {
-        let piece = range.piece()?;
-        let on = spread.iter().find(|it| it.piece == piece)?;
-        let line = stretch(&on.tracts, range);
-        (line.len() >= 2).then_some(line)
-    };
-    let (a, mut b) = (of(seam.a)?, of(seam.b)?);
-    if seam.orientation == SeamOrientation::Opposed {
-        b.reverse();
-    }
-    Some([a, b])
-}
-
-/// The line a stretch of contour draws, from its head anchor to its tail.
-///
-/// The anchors' fractions are honoured, so a seam that starts part way along a
-/// tract is drawn from there and not from the node behind it. A tail behind
-/// its head on the same tract goes the long way round, as the contour runs. A
-/// stretch whose two ends are one place draws nothing: the engine pairs
-/// nothing along it, and a thread round the whole piece would say it did.
-fn stretch(tracts: &[Tract], at: EdgeRange) -> Vec<[f64; 2]> {
-    let Some(start) = tracts.iter().position(|it| it.node == at.head.from) else {
-        return Vec::new();
-    };
-    if at.head.from == at.tail.from {
-        if at.tail.t.to_bits() == at.head.t.to_bits() {
-            return Vec::new();
-        }
-        if at.tail.t > at.head.t {
-            return cut(&tracts[start].line, at.head.t, at.tail.t);
-        }
-    }
-    let mut out = cut(&tracts[start].line, at.head.t, 1.0);
-    for step in 1..=tracts.len() {
-        let tract = &tracts[(start + step) % tracts.len()];
-        if tract.node == at.tail.from {
-            if at.tail.t > 0.0 {
-                out.extend(cut(&tract.line, 0.0, at.tail.t));
-            }
-            return out;
-        }
-        out.extend(tract.line.iter().copied());
-    }
-    Vec::new()
-}
-
-/// The part of a line between two fractions of its own length.
-fn cut(line: &[[f64; 2]], from: f64, to: f64) -> Vec<[f64; 2]> {
-    let total: f64 = line.windows(2).map(|pair| away(pair[0], pair[1])).sum();
-    if total <= f64::EPSILON || (from <= 0.0 && to >= 1.0) {
-        return line.to_vec();
-    }
-    let (lo, hi) = (from.clamp(0.0, 1.0) * total, to.clamp(0.0, 1.0) * total);
-    let mut out = Vec::new();
-    let mut along = 0.0;
-    for pair in line.windows(2) {
-        let span = away(pair[0], pair[1]);
-        let at = |arc: f64| {
-            let t = if span > 0.0 {
-                (arc - along) / span
-            } else {
-                0.0
-            };
-            [0, 1].map(|k| pair[0][k] + (pair[1][k] - pair[0][k]) * t)
-        };
-        if lo >= along && lo <= along + span {
-            out.push(at(lo));
-        }
-        if along + span > lo && along + span < hi {
-            out.push(pair[1]);
-        }
-        if hi >= along && hi <= along + span {
-            out.push(at(hi));
-            break;
-        }
-        along += span;
-    }
-    out
 }
 
 fn on_glass(line: &[[f64; 2]], view: View) -> Vec<Pos2> {
@@ -229,6 +141,3 @@ fn place(line: &[Pos2], arc: f32) -> Option<(Pos2, Vec2)> {
     }
     last
 }
-
-#[cfg(test)]
-mod tests;

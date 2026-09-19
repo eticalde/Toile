@@ -66,7 +66,12 @@ fn product(draft: &Draft, state: &State) -> Vec<(String, bool)> {
         }
     }
     let next = match (state.tool, &state.gesture) {
-        (Tool::Sew, Gesture::Sewing(_)) => "coser: pulsa el segundo tramo · Esc suelta",
+        (Tool::Sew, Gesture::Sewing(_)) => {
+            "coser: pulsa el segundo tramo · Mayús alarga el lado · Esc suelta"
+        }
+        (Tool::Sew, _) if state.selection.seam().is_some() => {
+            "coser: pulsa el primer tramo · Mayús ajusta un lado de la costura elegida"
+        }
         (Tool::Sew, _) => "coser: pulsa el primer tramo",
         _ => "doble clic abre una pieza",
     };

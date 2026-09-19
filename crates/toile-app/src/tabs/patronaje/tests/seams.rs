@@ -85,3 +85,67 @@ fn a_seam_the_engine_cannot_pair_says_so_in_the_inspector() {
         "No llega a la tela: los dos extremos caen en el mismo punto."
     ));
 }
+
+/// A press on a seam's thread chooses it as a press on its row does, a second
+/// press lets go of it, and neither takes the piece under the thread in hand
+/// or writes anything.
+#[test]
+fn a_press_on_a_thread_chooses_its_seam_and_moves_nothing() {
+    let shipped = block::trousers();
+    let mut studio = Studio::new(shipped.clone());
+    studio.frame(Vec::new());
+    let (front, back) = front_and_back(studio.doc());
+    let keys: Vec<_> = studio.doc().seams.keys().collect();
+
+    studio.click(on_tract(&studio, back, "rodilla_lat_tras"));
+    studio.frame(Vec::new());
+    assert_eq!(studio.state.selection, Selection::Seam(keys[0]), "side B");
+    assert!(says(&studio, "COSTURA 1"), "the inspector opens on it");
+    studio.click(on_tract(&studio, front, "rodilla_int"));
+    assert_eq!(
+        studio.state.selection,
+        Selection::Seam(keys[1]),
+        "the inseam"
+    );
+    studio.click(on_tract(&studio, front, "rodilla_int"));
+    assert_eq!(studio.state.selection, Selection::None, "pressed again");
+
+    assert_eq!(studio.session.revision(), 0, "no piece was placed");
+    assert!(!studio.session.can_undo());
+    assert_eq!(
+        studio.doc().to_canonical_json(),
+        shipped.to_canonical_json()
+    );
+}
+
+/// Delete unpicks the seam chosen on the mat, as the one entry the panel's
+/// press leaves, and undo sews the same seam back and chooses it again.
+#[test]
+fn delete_unpicks_the_chosen_seam_and_undo_brings_it_back() {
+    let mut studio = Studio::new(block::trousers());
+    studio.frame(Vec::new());
+    let (front, _) = front_and_back(studio.doc());
+    let (key, held) = {
+        let (key, held) = studio.doc().seams.iter().next().expect("sewn");
+        (key, *held)
+    };
+    studio.click(on_tract(&studio, front, "rodilla_lat"));
+    assert_eq!(studio.state.selection, Selection::Seam(key));
+
+    studio.key(Key::Delete, Modifiers::NONE);
+    assert_eq!(studio.doc().seams.len(), 1, "one of the two is gone");
+    assert_eq!(studio.doc().seams.get(key), None);
+    assert_eq!(studio.session.undo_label(), Some("descoser"));
+    assert_eq!(studio.state.selection, Selection::None);
+    studio.key(Key::Delete, Modifiers::NONE);
+    assert_eq!(
+        studio.doc().seams.len(),
+        1,
+        "nothing chosen, nothing unpicked"
+    );
+
+    studio.key(Key::Z, Modifiers::COMMAND);
+    assert_eq!(studio.doc().seams.get(key), Some(&held), "key and all");
+    assert_eq!(studio.state.selection, Selection::Seam(key));
+    assert!(!studio.session.can_undo(), "the unpick was one entry");
+}

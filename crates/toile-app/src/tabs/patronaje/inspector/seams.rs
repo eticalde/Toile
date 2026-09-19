@@ -1,10 +1,10 @@
 use eframe::egui::{self, Color32, Id};
-use toile_engine::draft::{
-    Command, Draft, EdgeRange, Identity, Seam, SeamKey, SeamKind, SeamOrientation,
-};
+use toile_engine::draft::{Command, Draft, EdgeRange, Seam, SeamKey, SeamKind, SeamOrientation};
 use toile_engine::session::SeamFault;
 
+use super::super::sew;
 use super::super::state::{Selection, State};
+use super::super::thread::UNPICK;
 use super::super::wire::Verb;
 use crate::seam::{self, Lengths};
 use crate::theme::Theme;
@@ -13,14 +13,15 @@ use crate::widgets::{
 };
 
 const NONE: &str = "Con la herramienta Coser (S), pulsa un tramo de una pieza y luego el tramo \
-                    al que va cosido. Esc suelta el primero.";
+                    al que va cosido. Mayús + clic alarga el lado con el tramo contiguo. Esc \
+                    suelta el primero.";
 const READ: &str = "Las flechas de la mesa marcan el sentido en que se cosen los dos lados, desde \
                     el punto relleno. Si los dos hilos finos que unen sus extremos se cruzan, la \
-                    prenda sale torcida: invierte el sentido.";
+                    prenda sale torcida: invierte el sentido. Con Coser, Mayús + clic añade a un lado \
+                    el tramo contiguo, o se lo quita por un extremo. Supr descose.";
 const UNPAIRED: &str = "no llega a la tela";
 
 const FLIP: &str = "invertir el sentido de la costura";
-const UNPICK: &str = "descoser";
 
 /// The seams of the product, and the one chosen among them.
 ///
@@ -113,30 +114,23 @@ fn detail(
     plain_note(ui, theme, READ);
 }
 
-/// The seam taken out and put back under its own key the other way round, as
-/// one entry.
-///
-/// The document has no edit that turns a seam over, and it does not need one:
-/// the key is what everything else knows the seam by, and it survives.
+/// The seam put back the other way round, as one entry.
 fn flipped(key: SeamKey, held: &Seam) -> Vec<Verb> {
     let orientation = match held.orientation {
         SeamOrientation::Aligned => SeamOrientation::Opposed,
         SeamOrientation::Opposed => SeamOrientation::Aligned,
     };
-    let seam = Seam {
+    let to = Seam {
         orientation,
         ..*held
     };
-    let back = Command::AddSeam {
-        identity: Identity::Restored(key),
-        seam,
-    };
-    vec![
-        Verb::Begin(FLIP),
-        Verb::Edit(Box::new(Command::RemoveSeam { seam: key })),
-        Verb::Edit(Box::new(back)),
-        Verb::End,
-    ]
+    let edits = sew::resewn(key, to)
+        .into_iter()
+        .map(|command| Verb::Edit(Box::new(command)));
+    std::iter::once(Verb::Begin(FLIP))
+        .chain(edits)
+        .chain([Verb::End])
+        .collect()
 }
 
 /// The two pieces a seam joins, by name.

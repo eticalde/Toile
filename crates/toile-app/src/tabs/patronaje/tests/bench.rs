@@ -50,7 +50,7 @@ impl Bench {
         });
         pass.drop_without_applying_deltas();
         apply(&mut self.session, verbs, &mut self.state.refused);
-        follow(&self.session, &mut self.state, &before);
+        follow::pieces(&self.session, &mut self.state, &before);
     }
 
     /// The pointer arriving, pressing and letting go, a frame each.

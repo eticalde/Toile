@@ -68,6 +68,25 @@ impl Studio {
         self.frame(vec![button(at, false)]);
     }
 
+    /// The same click with shift held from before the pointer arrives until
+    /// after it lets go.
+    ///
+    /// The platform says a modifier went down in an event of its own, and the
+    /// mat reads the keys held off that and not off the button.
+    pub(super) fn shift_click(&mut self, at: Pos2) {
+        self.frame(vec![Event::ModifiersChanged(Modifiers::SHIFT)]);
+        self.frame(vec![Event::PointerMoved(at)]);
+        for pressed in [true, false] {
+            self.frame(vec![Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::SHIFT,
+            }]);
+        }
+        self.frame(vec![Event::ModifiersChanged(Modifiers::NONE)]);
+    }
+
     /// One key pressed with `modifiers` held.
     pub(super) fn key(&mut self, key: Key, modifiers: Modifiers) {
         self.frame(vec![Event::Key {

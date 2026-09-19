@@ -1,13 +1,14 @@
 use eframe::egui::{self, Align2, CursorIcon, FontId, Painter, Rect, Response, Stroke, vec2};
-use toile_engine::draft::{Draft, PieceKey};
+use toile_engine::draft::{Draft, PieceKey, Seam, SeamKey};
 
-use super::gesture::Gesture;
+use super::gesture::{Gesture, Input};
 use super::layout::{self, Laid};
 use super::pick::EDGE_PT;
 use super::sew::{self, Pick, Spread};
 use super::state::{State, Tool};
+use super::thread::Thread;
 use super::wire::{self, Verb};
-use super::{arrange, canvas, marks, stitch};
+use super::{arrange, canvas, marks, stitch, thread};
 use crate::theme::Theme;
 use crate::widgets::fill;
 
@@ -33,10 +34,11 @@ pub fn show(
     // Flattened once a frame, for the seams drawn along the tracts and for
     // the press that picks one.
     let spread = sew::spread(draft, &laid);
+    let threads = thread::of(draft.doc(), &spread);
     canvas::frame_once(state, layout::bounds(&laid), rect);
     // A side picked on a piece that has since left the table names nothing.
     if let Gesture::Sewing(held) = &state.gesture
-        && sew::tract_of(&spread, held.first).is_none()
+        && sew::line_of(&spread, held.first).is_none()
     {
         state.gesture = Gesture::Idle;
     }
@@ -48,13 +50,27 @@ pub fn show(
     };
     if state.ask.is_none() {
         wire::view_keys(ui, resp, state);
-        reduce(ui, resp, (&laid, &spread), state, verbs);
+        let seams = &draft.doc().seams;
+        let chosen = state.selection.seam();
+        let mat = Mat {
+            laid: &laid,
+            spread: &spread,
+            threads: &threads,
+            chosen: chosen.and_then(|key| Some((key, *seams.get(key)?))),
+        };
+        reduce(ui, resp, &mat, state, verbs);
         if resp.double_clicked()
             && let Some(piece) = over(state)
         {
             state.open(piece);
         }
-        grip(ui, state, over(state), aim(resp, &spread, state));
+        let reach = EDGE_PT / state.view.scale().max(f64::EPSILON);
+        let pressable = aim(resp, &spread, state).is_some()
+            || (state.tool != Tool::Sew
+                && resp.hover_pos().is_some_and(|at| {
+                    thread::under(state.view.to_document(at), &threads, reach).is_some()
+                }));
+        grip(ui, state, over(state), pressable);
     }
     let over = over(state);
     fill(painter, theme, rect);
@@ -66,7 +82,7 @@ pub fn show(
         piece(painter, theme, draft, (it, cut), state, over);
     }
     let lit = (state.view, state.selection.seam());
-    stitch::seams(painter, theme, draft.doc(), &spread, lit);
+    stitch::seams(painter, theme, &threads, lit);
     if state.tool == Tool::Sew {
         let first = match &state.gesture {
             Gesture::Sewing(held) => Some(held.first),
@@ -87,22 +103,44 @@ fn aim(resp: &Response, spread: &[Spread], state: &State) -> Option<Pick> {
     sew::under(at, spread, reach)
 }
 
+/// The whole product as one frame worked it out, lent to every event of it.
+struct Mat<'a> {
+    laid: &'a [Laid],
+    spread: &'a [Spread],
+    threads: &'a [Thread],
+    /// The seam chosen as the frame began, as the document holds it.
+    chosen: Option<(SeamKey, Seam)>,
+}
+
 /// Runs this frame's events through the whole product's reducers, in the order
-/// they happened: the one that sews while that tool is in hand, the one that
-/// arranges the pieces otherwise.
-fn reduce(
-    ui: &egui::Ui,
-    resp: &Response,
-    (laid, spread): (&[Laid], &[Spread]),
-    state: &mut State,
-    verbs: &mut Vec<Verb>,
-) {
+/// they happened: the seams' own first, then the one that sews while that tool
+/// is in hand or the one that arranges the pieces otherwise.
+fn reduce(ui: &egui::Ui, resp: &Response, mat: &Mat<'_>, state: &mut State, verbs: &mut Vec<Verb>) {
     for event in wire::events_of(ui, resp) {
+        let pressed = matches!(event, Input::Down(..));
         let held = std::mem::take(&mut state.gesture);
-        let (next, commands, said) = if state.tool == Tool::Sew {
-            sew::update(held, event, spread, state.view)
-        } else {
-            arrange::update(held, event, laid, state.view)
+        // Narrowed per event: an earlier event of this frame may have let go
+        // of the seam the frame began with.
+        let chosen = mat
+            .chosen
+            .filter(|(key, _)| state.selection.seam() == Some(*key));
+        let reach = thread::Reach {
+            threads: mat.threads,
+            view: state.view,
+            tool: state.tool,
+            chosen: chosen.map(|(key, _)| key),
+        };
+        let (next, commands, said) = match thread::update(&held, &event, &reach) {
+            Some(answer) => answer,
+            None if state.tool == Tool::Sew => {
+                let seen = sew::Seen {
+                    spread: mat.spread,
+                    view: state.view,
+                    chosen,
+                };
+                sew::update(held, event, &seen)
+            }
+            None => arrange::update(held, event, mat.laid, state.view),
         };
         state.gesture = next;
         wire::stacked(said.stack, commands, verbs);
@@ -112,19 +150,34 @@ fn reduce(
         if let Some(tool) = said.tool {
             state.tool = tool;
         }
+        if let Some(select) = said.select {
+            state.choose(select);
+        }
+        // A press either is refused or is not, so it is the press that takes
+        // the last refusal off the bar. The bar is drawn before the mat and a
+        // refusal sends nothing to the sim, so nothing else would ask for the
+        // frame that says it.
+        if pressed || said.refused.is_some() {
+            let now = said.refused.map(str::to_owned);
+            if state.refused != now {
+                ui.ctx().request_repaint();
+            }
+            state.refused = now;
+        }
         state.view.pan(said.pan);
     }
 }
 
-/// The hand the pointer shows: closed while it carries a piece, open over one
-/// it could take, and a finger over a tract the sewing tool would pick.
-fn grip(ui: &egui::Ui, state: &State, over: Option<PieceKey>, aim: Option<Pick>) {
-    if state.tool == Tool::Sew {
-        if aim.is_some() {
-            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
-        }
-    } else if matches!(state.gesture, Gesture::Arrange(_)) {
+/// The hand the pointer shows: closed while it carries a piece, a finger over
+/// a line a press would pick — a tract with the sewing tool, a seam's thread
+/// without it — and open over a piece it could take.
+fn grip(ui: &egui::Ui, state: &State, over: Option<PieceKey>, pressable: bool) {
+    if matches!(state.gesture, Gesture::Arrange(_)) {
         ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
+    } else if pressable {
+        ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+    } else if state.tool == Tool::Sew {
+        // The sewing tool takes no piece in hand, so it shows no hand for one.
     } else if over.is_some() {
         ui.ctx().set_cursor_icon(CursorIcon::Grab);
     }
