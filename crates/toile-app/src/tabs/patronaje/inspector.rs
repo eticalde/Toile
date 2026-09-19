@@ -1,5 +1,6 @@
 mod cite;
 pub(super) mod elastic;
+pub(super) mod seams;
 mod tape;
 mod variables;
 pub(super) mod write;
@@ -7,11 +8,12 @@ pub(super) mod write;
 use cite::Cite;
 use eframe::egui;
 pub(super) use elastic::Grip;
-use toile_engine::draft::{Axis, Defect, Draft, EvalError, PieceKey, PointKey};
+use toile_engine::draft::{Axis, Defect, Draft, EvalError, PieceKey, PointKey, SeamKey};
+use toile_engine::session::SeamFault;
 use write::Asked;
 
 use super::curve::{self, Side};
-use super::state::State;
+use super::state::{Scope, State};
 use super::wire::Verb;
 use crate::file::Action;
 use crate::theme::Theme;
@@ -32,11 +34,14 @@ const FOOT_H: f32 = 74.0;
 /// confirmed is one named entry of the history, never a fold into whatever
 /// gesture happened to be open; a rail dragged is one entry too, held open
 /// across the frames of the drag. The names belong to the product and not to a
-/// piece, so a product with no piece drawn yet lists them too.
+/// piece, so a product with no piece drawn yet lists them too. So do the
+/// seams, which are listed over the whole product, where both sides of one
+/// can be seen; `faults` are the ones the engine could not pair onto the cloth.
 pub fn show(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: Option<&Draft>,
+    faults: &[(SeamKey, SeamFault)],
     piece: Option<PieceKey>,
     state: &mut State,
 ) -> Vec<Verb> {
@@ -53,6 +58,9 @@ pub fn show(
                     asked = chosen(ui, theme, draft, piece, (state, &cite), &mut verbs);
                 } else {
                     unchosen(ui, theme);
+                }
+                if state.scope == Scope::Product && piece.is_some() {
+                    seams::show(ui, theme, draft, faults, (&mut *state, &mut verbs));
                 }
                 asked = tape::measures(ui, theme, draft, state, &cite).or(asked);
                 asked = variables::variables(ui, theme, draft, state, &cite).or(asked);

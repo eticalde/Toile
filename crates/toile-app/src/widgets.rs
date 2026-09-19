@@ -13,7 +13,10 @@ pub use control::{
 };
 use eframe::egui::CornerRadius;
 pub use field::{Editable, Edited, field_row, formula_row};
-pub use panel::{footer_note, list_row_icon, list_row_noted, section, section_with, tree_row};
+pub use panel::{
+    alert_note, footer_note, list_row_icon, list_row_named, list_row_noted, plain_note, section,
+    section_with, tree_row,
+};
 pub use slider::{Track, track};
 
 /// Horizontal breathing room inside a side panel, in points.

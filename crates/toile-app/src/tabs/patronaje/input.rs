@@ -164,6 +164,12 @@ fn idle(key: Key, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, 
         (Key::V, false, _) => tool(Tool::Select),
         (Key::P, false, _) => tool(Tool::Point),
         (Key::C, false, _) => tool(Tool::Curve),
+        // Sewing joins two pieces, so its key leaves this one for the whole
+        // product, where both can be seen.
+        (Key::S, false, _) => Feedback {
+            overview: true,
+            ..tool(Tool::Sew)
+        },
         _ => Feedback::default(),
     };
     (Gesture::Idle, Vec::new(), feedback)

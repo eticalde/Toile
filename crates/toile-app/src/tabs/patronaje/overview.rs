@@ -4,9 +4,10 @@ use toile_engine::draft::{Draft, PieceKey};
 use super::gesture::Gesture;
 use super::layout::{self, Laid};
 use super::pick::EDGE_PT;
-use super::state::State;
+use super::sew::{self, Pick, Spread};
+use super::state::{State, Tool};
 use super::wire::{self, Verb};
-use super::{arrange, canvas, marks, tract};
+use super::{arrange, canvas, marks, stitch};
 use crate::theme::Theme;
 use crate::widgets::fill;
 
@@ -16,8 +17,9 @@ const FIRST: &str = "Dibuja la primera con «+ Pieza», en el panel Producto.";
 /// The whole product on the mat: every piece at once, where it was placed or
 /// where the overview lines it up, to be chosen, moved and opened.
 ///
-/// Nothing here reaches a node. A press takes a piece in hand, and a double
-/// click opens it on its own, which is where its nodes are edited.
+/// Nothing here reaches a node. A press takes a piece in hand, or with the
+/// sewing tool a tract of one, and a double click opens a piece on its own,
+/// which is where its nodes are edited.
 pub fn show(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -28,7 +30,16 @@ pub fn show(
 ) {
     let rect = resp.rect;
     let laid = layout::of(draft);
+    // Flattened once a frame, for the seams drawn along the tracts and for
+    // the press that picks one.
+    let spread = sew::spread(draft, &laid);
     canvas::frame_once(state, layout::bounds(&laid), rect);
+    // A side picked on a piece that has since left the table names nothing.
+    if let Gesture::Sewing(held) = &state.gesture
+        && sew::tract_of(&spread, held.first).is_none()
+    {
+        state.gesture = Gesture::Idle;
+    }
     let over = |state: &State| {
         let reach = EDGE_PT / state.view.scale().max(f64::EPSILON);
         resp.hover_pos()
@@ -37,13 +48,13 @@ pub fn show(
     };
     if state.ask.is_none() {
         wire::view_keys(ui, resp, state);
-        reduce(ui, resp, &laid, state, verbs);
+        reduce(ui, resp, (&laid, &spread), state, verbs);
         if resp.double_clicked()
             && let Some(piece) = over(state)
         {
             state.open(piece);
         }
-        grip(ui, state, over(state));
+        grip(ui, state, over(state), aim(resp, &spread, state));
     }
     let over = over(state);
     fill(painter, theme, rect);
@@ -51,30 +62,68 @@ pub fn show(
     if laid.is_empty() {
         empty(painter, theme, rect);
     }
-    for it in &laid {
-        piece(painter, theme, draft, it, state, over);
+    for (it, cut) in laid.iter().zip(&spread) {
+        piece(painter, theme, draft, (it, cut), state, over);
+    }
+    let lit = (state.view, state.selection.seam());
+    stitch::seams(painter, theme, draft.doc(), &spread, lit);
+    if state.tool == Tool::Sew {
+        let first = match &state.gesture {
+            Gesture::Sewing(held) => Some(held.first),
+            _ => None,
+        };
+        let hands = (first, aim(resp, &spread, state));
+        stitch::picking(painter, theme, &spread, state.view, hands);
     }
 }
 
-/// Runs this frame's events through the whole product's reducer, in the order
-/// they happened.
-fn reduce(ui: &egui::Ui, resp: &Response, laid: &[Laid], state: &mut State, verbs: &mut Vec<Verb>) {
+/// The tract a press would pick, while the sewing tool is in hand.
+fn aim(resp: &Response, spread: &[Spread], state: &State) -> Option<Pick> {
+    if state.tool != Tool::Sew {
+        return None;
+    }
+    let reach = EDGE_PT / state.view.scale().max(f64::EPSILON);
+    let at = state.view.to_document(resp.hover_pos()?);
+    sew::under(at, spread, reach)
+}
+
+/// Runs this frame's events through the whole product's reducers, in the order
+/// they happened: the one that sews while that tool is in hand, the one that
+/// arranges the pieces otherwise.
+fn reduce(
+    ui: &egui::Ui,
+    resp: &Response,
+    (laid, spread): (&[Laid], &[Spread]),
+    state: &mut State,
+    verbs: &mut Vec<Verb>,
+) {
     for event in wire::events_of(ui, resp) {
         let held = std::mem::take(&mut state.gesture);
-        let (next, commands, said) = arrange::update(held, event, laid, state.view);
+        let (next, commands, said) = if state.tool == Tool::Sew {
+            sew::update(held, event, spread, state.view)
+        } else {
+            arrange::update(held, event, laid, state.view)
+        };
         state.gesture = next;
         wire::stacked(said.stack, commands, verbs);
         if let Some(piece) = said.chosen {
             state.active = Some(piece);
+        }
+        if let Some(tool) = said.tool {
+            state.tool = tool;
         }
         state.view.pan(said.pan);
     }
 }
 
 /// The hand the pointer shows: closed while it carries a piece, open over one
-/// it could take.
-fn grip(ui: &egui::Ui, state: &State, over: Option<PieceKey>) {
-    if matches!(state.gesture, Gesture::Arrange(_)) {
+/// it could take, and a finger over a tract the sewing tool would pick.
+fn grip(ui: &egui::Ui, state: &State, over: Option<PieceKey>, aim: Option<Pick>) {
+    if state.tool == Tool::Sew {
+        if aim.is_some() {
+            ui.ctx().set_cursor_icon(CursorIcon::PointingHand);
+        }
+    } else if matches!(state.gesture, Gesture::Arrange(_)) {
         ui.ctx().set_cursor_icon(CursorIcon::Grabbing);
     } else if over.is_some() {
         ui.ctx().set_cursor_icon(CursorIcon::Grab);
@@ -87,7 +136,7 @@ fn piece(
     p: &Painter,
     theme: &Theme,
     draft: &Draft,
-    it: &Laid,
+    (it, cut): (&Laid, &Spread),
     state: &State,
     over: Option<PieceKey>,
 ) {
@@ -111,10 +160,8 @@ fn piece(
     };
     let width = if lit { 2.0 } else { 1.5 };
     let line = Stroke::new(width, ink);
-    // Flattened here and not in `layout`, which every frame of every gesture
-    // walks: only the drawing needs the tracts, and only to find the held ones.
-    let tracts = tract::of(draft, it.piece);
-    let at = (it.piece, tracts.as_slice(), it.shift);
+    // The spread's tracts already lie where the overview put the piece.
+    let at = (it.piece, cut.tracts.as_slice(), [0.0, 0.0]);
     marks::elastics(p, theme, draft.doc(), at, state.view);
     canvas::paper_and_outline(p, &it.outline, state.view, &grounds, line);
     let held = draft.doc().pieces.get(it.piece);

@@ -27,12 +27,14 @@ pub struct Theme {
     pub muted: Color32,
     /// Text drawn on top of `accent`.
     pub on_accent: Color32,
-    /// Selection, seams, primary actions.
+    /// Selection and primary actions.
     pub accent: Color32,
     /// Measurements, dimensions and guide lines.
     pub measure: Color32,
     /// A stretch of contour an elastic holds in: the tape sewn along it.
     pub elastic: Color32,
+    /// Two stretches of contour sewn to each other: the thread between them.
+    pub seam: Color32,
     /// Warnings and the point being dragged.
     pub alert: Color32,
     /// Fill of a pattern piece; carries its own alpha.
@@ -64,10 +66,14 @@ impl Theme {
             on_accent: Color32::from_rgb(26, 20, 16),
             accent: Color32::from_rgb(212, 162, 76),
             measure: Color32::from_rgb(98, 184, 173),
-            // Its own hue, and far from the other four: an elastic stretch is
-            // read against the brass of a selection, the teal of a tape and
-            // the thread red of a fault, all on the one drawing.
+            // Its own hue, and far from the others: an elastic stretch is read
+            // against the brass of a selection, the teal of a tape and the
+            // thread red of a fault, all on the one drawing.
             elastic: Color32::from_rgb(178, 141, 201),
+            // Basting blue. A seam lies along the same outlines a selection
+            // lights in brass and an elastic tapes in violet, and has to be
+            // told from both at a glance.
+            seam: Color32::from_rgb(110, 160, 232),
             alert: Color32::from_rgb(226, 97, 79),
             paper: Color32::from_rgba_unmultiplied(239, 231, 218, 18),
             outline: Color32::from_rgb(239, 231, 218),

@@ -12,7 +12,9 @@ use crate::pattern;
 use crate::tabs::{UNNAMED, Workspace, right_panel};
 use crate::theme::Theme;
 use crate::viewport::{Avatar, Viewport};
-use crate::widgets::{PAD, button_ghost_icon, field_row, footer_note, readout, section_with};
+use crate::widgets::{
+    PAD, alert_note, button_ghost_icon, field_row, footer_note, readout, section_with,
+};
 
 /// Gap between the 2D and 3D halves, in points.
 const SPLIT_GAP: f32 = 12.0;
@@ -166,14 +168,14 @@ fn inspector(ui: &mut egui::Ui, theme: &Theme, session: &Session) {
     }
     for seam in &rows {
         if let Some(complaint) = seam.complaint.as_deref() {
-            mismatch(ui, theme, complaint);
+            alert_note(ui, theme, complaint);
         }
     }
     // A seam the engine could not pair is not draping at all, which is a
     // louder thing than two sides that do not close, and is said the same way.
     if let Some(draft) = session.draft() {
         for why in seams::refused(draft, session.seam_faults()) {
-            mismatch(ui, theme, &why);
+            alert_note(ui, theme, &why);
         }
     }
     let draped = draped(session);
@@ -244,20 +246,6 @@ fn seam_row(ui: &mut egui::Ui, theme: &Theme, seam: &seams::Row) {
         FontId::monospace(11.0),
         ink,
     );
-}
-
-/// Says in words what the warning mark on the seam row only hints at.
-fn mismatch(ui: &mut egui::Ui, theme: &Theme, complaint: &str) {
-    let margin = egui::Margin {
-        left: 12,
-        right: 12,
-        top: 6,
-        bottom: 10,
-    };
-    egui::Frame::new().inner_margin(margin).show(ui, |ui| {
-        let body = egui::RichText::new(complaint).monospace().size(11.0);
-        ui.label(body.color(theme.alert));
-    });
 }
 
 /// The seam between the two halves of the split, ruled on both sides.

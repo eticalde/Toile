@@ -16,8 +16,10 @@ mod pick;
 mod precision;
 mod report;
 mod ruler;
+mod sew;
 mod snap;
 mod state;
+mod stitch;
 mod tools;
 mod tract;
 mod tree;
@@ -27,11 +29,11 @@ mod wire;
 use eframe::egui;
 pub use report::status;
 pub use state::State;
-use toile_engine::draft::{Command, Draft, PieceKey};
+use toile_engine::draft::{Command, Draft, PieceKey, SeamKey};
 use toile_engine::session::Session;
 
 use self::gesture::Gesture;
-use self::state::{Scope, Tool};
+use self::state::{Scope, Selection, Tool};
 use self::wire::Verb;
 use crate::file::Action;
 use crate::tabs::{Workspace, left_panel, right_panel};
@@ -58,6 +60,7 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
     // edit: what an edit adds or takes away is what the mat follows.
     let active = active_piece(draft, patronaje.active, session.piece());
     let before = draft.map(|d| d.doc().piece_keys()).unwrap_or_default();
+    let sewn = seam_keys(session);
     patronaje.active = active;
     let state = &mut *patronaje;
     let mut verbs = Vec::new();
@@ -81,8 +84,9 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
         }
         asked
     }));
+    let faults = session.seam_faults();
     let asked = right_panel(ui, theme, |ui| {
-        inspector::show(ui, theme, draft, active, state)
+        inspector::show(ui, theme, draft, faults, active, state)
     });
     // The panel brackets its own entries: a field confirmed is one of its own
     // under its own name, and a rail dragged holds one open across frames. A
@@ -94,6 +98,7 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
     verbs.extend(canvas::show(ui, theme, draft, active, state));
     let said = apply(session, verbs, &mut patronaje.refused);
     let moved = follow(session, patronaje, &before);
+    follow_seams(session, patronaje, &sewn);
     if said || moved {
         // The bars are drawn before the tabs, so what this run has to say
         // reaches the status bar on the frame after it. Nothing else asks for
@@ -124,11 +129,14 @@ fn active_piece(
 /// What the product tree's plea does to the tab, and the edits it asks for.
 ///
 /// A new drawing and the whole product wait for the mat to be free of every
-/// gesture but a drawing, which they walk away from: any other gesture may
-/// hold the undo stack open, and a view left behind would leave that entry
-/// open with it.
+/// gesture but a drawing or a side picked for a seam, which they walk away
+/// from: any other gesture may hold the undo stack open, and a view left
+/// behind would leave that entry open with it.
 fn plead(state: &mut State, plea: tree::Plea, has_document: bool) -> Vec<Verb> {
-    let free = matches!(state.gesture, Gesture::Idle | Gesture::Drawing { .. });
+    let free = matches!(
+        state.gesture,
+        Gesture::Idle | Gesture::Drawing { .. } | Gesture::Sewing(_)
+    );
     match plea {
         // A drawing already in progress starts over: the row was pressed to
         // start one.
@@ -206,6 +214,34 @@ fn follow(session: &Session, state: &mut State, before: &[PieceKey]) -> bool {
         state.overview();
     }
     after != before
+}
+
+/// The seams the product holds, in key order.
+fn seam_keys(session: &Session) -> Vec<SeamKey> {
+    session
+        .draft()
+        .map(|d| d.doc().seams.keys().collect())
+        .unwrap_or_default()
+}
+
+/// Keeps the chosen seam one that exists: a seam that has just arrived, sewn
+/// or brought back by an undo, is the one chosen, so the inspector opens on
+/// its lengths and on the press that turns it over; a chosen seam that has
+/// gone leaves nothing chosen.
+fn follow_seams(session: &Session, state: &mut State, before: &[SeamKey]) {
+    let after = seam_keys(session);
+    if state.scope != Scope::Product {
+        return;
+    }
+    if let Some(&fresh) = after.iter().find(|key| !before.contains(key)) {
+        state.choose(Selection::Seam(fresh));
+    } else if state
+        .selection
+        .seam()
+        .is_some_and(|key| !after.contains(&key))
+    {
+        state.choose(Selection::None);
+    }
 }
 
 /// Plays what the panels asked for, in the order they asked for it, and

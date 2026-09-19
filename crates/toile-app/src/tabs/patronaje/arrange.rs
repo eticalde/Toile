@@ -4,6 +4,7 @@ use toile_engine::draft::{Command, PieceKey, Placement};
 use super::gesture::{Gesture, Input, Mods, Stack};
 use super::layout::{self, Laid};
 use super::pick::EDGE_PT;
+use super::state::Tool;
 use super::view::View;
 
 /// The name one drag of a piece leaves in the undo stack.
@@ -38,6 +39,8 @@ pub struct Arranged {
     pub chosen: Option<PieceKey>,
     /// Where the undo stack moves.
     pub stack: Option<Stack>,
+    /// The tool the event puts in hand, when it changes it.
+    pub tool: Option<Tool>,
 }
 
 /// Reduces one input event against the whole product.
@@ -74,6 +77,14 @@ pub fn update(
         (Gesture::Idle, Input::Key(Key::Z, mods)) if mods.command => {
             rest(Some(if mods.shift { Stack::Redo } else { Stack::Undo }))
         }
+        (Gesture::Idle, Input::Key(Key::S, mods)) if !mods.command => (
+            Gesture::Idle,
+            Vec::new(),
+            Arranged {
+                tool: Some(Tool::Sew),
+                ..Arranged::default()
+            },
+        ),
         (held, _) => (held, Vec::new(), Arranged::default()),
     }
 }

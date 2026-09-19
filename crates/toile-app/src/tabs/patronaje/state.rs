@@ -1,5 +1,6 @@
-use std::collections::BTreeSet;
+mod selection;
 
+pub use selection::Selection;
 use toile_engine::draft::{Axis, PieceKey, PointKey, VariableKey};
 
 use super::gesture::{Ask, Gesture};
@@ -8,66 +9,11 @@ use super::snap::{SnapConfig, Snapped};
 use super::view::View;
 use crate::file::Action;
 
-/// What the inspector is pointed at.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub enum Selection {
-    /// The piece as a whole.
-    #[default]
-    None,
-    /// Nodes of it, in key order.
-    Points(BTreeSet<PointKey>),
-    /// The tract leaving one node.
-    Edge(PointKey),
-}
-
-impl Selection {
-    /// The selection one node on its own makes.
-    pub fn point(key: PointKey) -> Selection {
-        Selection::Points(BTreeSet::from([key]))
-    }
-
-    /// The set of nodes chosen, when nodes are what is chosen.
-    pub fn chosen(&self) -> Option<&BTreeSet<PointKey>> {
-        match self {
-            Selection::Points(keys) => Some(keys),
-            Selection::None | Selection::Edge(_) => None,
-        }
-    }
-
-    /// The nodes chosen, in key order; nothing when none are.
-    pub fn points(&self) -> impl Iterator<Item = PointKey> + '_ {
-        self.chosen().into_iter().flatten().copied()
-    }
-
-    /// How many nodes are chosen.
-    pub fn count(&self) -> usize {
-        self.chosen().map_or(0, BTreeSet::len)
-    }
-
-    /// The one node chosen, when exactly one is.
-    pub fn only(&self) -> Option<PointKey> {
-        let keys = self.chosen()?;
-        match keys.len() {
-            1 => keys.first().copied(),
-            _ => None,
-        }
-    }
-
-    /// Whether `key` is one of the nodes chosen.
-    pub fn holds(&self, key: PointKey) -> bool {
-        self.chosen().is_some_and(|keys| keys.contains(&key))
-    }
-
-    /// The node the chosen tract leaves, when a tract is chosen.
-    pub fn edge(&self) -> Option<PointKey> {
-        match self {
-            Selection::Edge(key) => Some(*key),
-            Selection::None | Selection::Points(_) => None,
-        }
-    }
-}
-
 /// The tool in hand: what a press on the mat does to the piece in front.
+///
+/// Every tool but `Sew` works on the one piece in front; `Sew` works across
+/// pieces, so it is held only over the whole product and put down on the way
+/// into a piece.
 ///
 /// Only editing tools live here. Drawing a new piece is not a tool but an
 /// explicit act — "+ Pieza" in the product tree — so a stray press never grows
@@ -83,6 +29,8 @@ pub enum Tool {
     Point,
     /// Bend a straight tract, and pull the handles of a bent one.
     Curve,
+    /// Sew one tract to another, on the whole product where both can be seen.
+    Sew,
 }
 
 /// How much of the product the mat puts in front of the person.
@@ -206,13 +154,37 @@ impl State {
     /// A drawing in progress stays on the mat, now over the piece the person
     /// asked for, so walking away from it leaves them there.
     pub fn open(&mut self, piece: PieceKey) {
-        if let Gesture::Drawing { back_to, .. } = &mut self.gesture {
-            *back_to = Scope::Piece;
+        match &mut self.gesture {
+            Gesture::Drawing { back_to, .. } => *back_to = Scope::Piece,
+            // A tract picked for a seam is a matter of view and holds nothing
+            // open, so it is simply let go of.
+            Gesture::Sewing(_) => self.gesture = Gesture::Idle,
+            _ => {}
+        }
+        if self.tool == Tool::Sew {
+            self.tool = Tool::Select;
         }
         self.active = Some(piece);
         self.scope = Scope::Piece;
         self.choose(Selection::None);
         self.frame = true;
+    }
+
+    /// Takes the sewing tool in hand, going back to the whole product for it.
+    ///
+    /// Asked from a piece it waits for the mat to be free, as the way back to
+    /// the product does: a gesture or a question may hold the undo stack
+    /// open, and the view left behind would leave that entry open with it.
+    pub fn sew(&mut self) {
+        let free =
+            self.ask.is_none() && matches!(self.gesture, Gesture::Idle | Gesture::Drawing { .. });
+        if self.scope == Scope::Piece {
+            if !free {
+                return;
+            }
+            self.overview();
+        }
+        self.tool = Tool::Sew;
     }
 
     /// Goes back to the whole product, framed.
