@@ -14,7 +14,7 @@ use toile_engine::body::{Collider, bake};
 use toile_engine::draft::block;
 use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
-use watch::{LANDED, REST, at_rest, buried, footing, parks_by, reference, span, touching};
+use watch::{LANDED, LONG, at_rest, buried, footing, parks_by, reference, span, touching};
 
 /// How close to the ground the whole garment lies once it has parked, in
 /// metres, for a scene that came to rest on the floor rather than on the body.
@@ -122,12 +122,12 @@ fn the_startup_scene_does_not_bury_the_garment_in_the_body() {
 /// go over an adult came down on the crown, hung while friction lost to
 /// gravity, slid off and then fell for ever, so nothing over a body ever went
 /// quiet. Now the same panel lands on the plane the body stands on and stops
-/// there: the startup bodice parks at about 7,100 substeps with every one of
+/// there: the startup bodice parks at about 39,300 substeps with every one of
 /// its particles within a couple of centimetres of the floor.
 ///
 /// What it did not buy is a garment that stays on. Nothing holds a bodice at
 /// the shoulders of a body it was dropped over, so at rest it is a heap around
-/// the feet — 16 of its 12,540 particles within a cell of the skin. An elastic
+/// the feet — 7 of its 12,540 particles within a cell of the skin. An elastic
 /// exists now and places a garment where it belongs, and it does not change
 /// this reading: measured in `worn`, a waistband grips and then creeps down at
 /// a rate its own tension cannot alter. Whoever gives friction that tension to
@@ -136,12 +136,15 @@ fn the_startup_scene_does_not_bury_the_garment_in_the_body() {
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
 fn a_drape_over_a_body_parks_on_the_ground_and_not_yet_on_the_body() {
-    // The sphere half is not scenery: it is the physics reference, it has no
-    // floor, and it still parks on its own — which is what says the budget
-    // below measures a drape that settles rather than one nothing watches.
+    // The sphere half is the contrast, and it says sleep is not handed out to
+    // whatever is slow. A bodice balanced on a ball with no floor under it is
+    // never at rest: it slides sideways at a few millimetres a second and
+    // gathering, and leaves the ball at about 23,000 substeps to fall for
+    // ever. A mean of the energy called that slide parked at 2,280.
     assert!(
-        parks_by(&Session::demo_bodice(), REST),
-        "the demo bodice stopped parking on the sphere inside {REST} substeps"
+        !parks_by(&Session::demo_bodice(), LONG),
+        "the demo bodice went to sleep on the sphere inside {LONG} substeps. If \
+         something now holds it there, this is the assertion to invert"
     );
 
     let mesh = reference();

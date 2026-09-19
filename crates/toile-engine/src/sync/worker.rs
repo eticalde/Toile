@@ -4,16 +4,8 @@ use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, Seams, Stage, St
 
 use super::handle::Scene;
 use super::report::{Snapshot, StaleMessage};
+use super::sleep::Sleep;
 use crate::couture::{self, MeshSwap, onto};
-
-/// Sleep threshold on mean kinetic energy per vertex, about 2 mm/s RMS: one
-/// loose vertex fluttering must not keep the whole garment awake.
-const SLEEP_ENERGY_PER_VERT: f32 = 2.0e-6;
-
-/// Consecutive quiet ticks required before sleeping. More than one, because a
-/// kinetic-damping zero leaves velocities at zero without the cloth actually
-/// being at equilibrium.
-const QUIET_TICKS_TO_SLEEP: u32 = 3;
 
 /// The simulation, owned exclusively by its thread.
 pub(super) struct Sim {
@@ -27,8 +19,7 @@ pub(super) struct Sim {
     damper: KineticDamper,
     generation: u64,
     substeps: u64,
-    quiet_ticks: u32,
-    converged: bool,
+    sleep: Sleep,
     refused: Option<StaleMessage>,
 }
 
@@ -53,14 +44,13 @@ impl Sim {
             damper: KineticDamper::new(),
             generation: 0,
             substeps: 0,
-            quiet_ticks: 0,
-            converged: false,
+            sleep: Sleep::default(),
             refused: None,
         }
     }
 
     pub(super) fn converged(&self) -> bool {
-        self.converged
+        self.sleep.asleep()
     }
 
     /// Hot-swaps the rest state and what is sewn to what, and wakes the sim.
@@ -192,12 +182,11 @@ impl Sim {
     /// Takes a message in and puts the cloth back in motion.
     fn wake(&mut self, generation: u64) {
         self.generation = generation;
-        self.converged = false;
-        self.quiet_ticks = 0;
+        self.sleep.wake();
         self.damper.reset();
     }
 
-    /// Advances one tick and updates the convergence verdict.
+    /// Advances one tick and asks whether the drape may sleep after it.
     ///
     /// The sewing tightens as the drape runs, and it is counted from the
     /// thread's own substeps rather than from the last edit: a product is let
@@ -210,8 +199,7 @@ impl Sim {
     /// nothing sewn never enters the phase and falls from the first substep,
     /// exactly as it always has.
     pub(super) fn tick(&mut self) {
-        let inv_n = 1.0 / self.state.len() as f32;
-        let mut e_avg = 0.0f32;
+        self.sleep.mark(&self.state);
         for _ in 0..self.substeps_per_tick {
             let mut stage = Stage::around(&self.scene.sdf).on(self.scene.floor);
             if !self.seams.is_empty() {
@@ -233,14 +221,9 @@ impl Sim {
                 self.dt,
             );
             self.substeps += 1;
-            e_avg = self.damper.observe(&mut self.state) * inv_n;
+            self.damper.observe(&mut self.state);
         }
-        if e_avg < SLEEP_ENERGY_PER_VERT {
-            self.quiet_ticks += 1;
-        } else {
-            self.quiet_ticks = 0;
-        }
-        self.converged = self.quiet_ticks >= QUIET_TICKS_TO_SLEEP;
+        self.sleep.judge(&self.state);
     }
 
     pub(super) fn publish(&self) -> Arc<Snapshot> {
@@ -256,7 +239,7 @@ impl Sim {
         Arc::new(Snapshot {
             generation: self.generation,
             substeps: self.substeps,
-            converged: self.converged,
+            converged: self.sleep.asleep(),
             positions,
             normals,
             refused: self.refused,
