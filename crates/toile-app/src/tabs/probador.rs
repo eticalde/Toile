@@ -1,4 +1,5 @@
 mod icons;
+mod note;
 mod seams;
 
 use eframe::egui::{self, Align2, FontId, Rect, Sense, Stroke, Vec2, pos2, vec2};
@@ -7,7 +8,6 @@ use icons::{check_icon, pause_icon, play_icon, reset_icon, warn_icon};
 use toile_engine::draft::BodyMesh;
 use toile_engine::session::Session;
 
-use crate::fitting::Fitting;
 use crate::pattern;
 use crate::tabs::{UNNAMED, Workspace, right_panel};
 use crate::theme::Theme;
@@ -60,8 +60,9 @@ impl State {
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
-    let body = body_note(w.fitting);
-    sub_bar(ui, theme, w.session, &body);
+    let body = note::cost(w.fitting);
+    let crossed = w.fitting.crossings.as_ref().and_then(note::crossed);
+    sub_bar(ui, theme, w.session, &body, crossed.as_deref());
     right_panel(ui, theme, |ui| inspector(ui, theme, w.session));
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let full = ui.available_size();
@@ -113,7 +114,7 @@ fn standing(session: &Session, mesh: &BodyMesh, theme: &Theme) -> Avatar {
 /// a swapped mesh and a shutdown, and nothing else: there is no pause to ask
 /// for, no resume, and no starting state to go back to. They keep their room
 /// so that the phase which builds them moves nothing on this bar.
-fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session, body: &str) {
+fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session, body: &str, crossed: Option<&str>) {
     egui::Panel::top("probador-subbar")
         .exact_size(SUBBAR_H)
         .frame(
@@ -127,6 +128,12 @@ fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session, body: &str) {
                     readout(ui, theme, "maniquí", named, 150.0);
                 }
                 readout(ui, theme, "cuerpo", body, 170.0);
+                // In the ink of any other readout: it is something known about
+                // the body, and the body was baked and is draped on all the
+                // same.
+                if let Some(crossed) = crossed {
+                    readout(ui, theme, "cruces", crossed, 190.0);
+                }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;
                     button_ghost_icon(ui, theme, "Reiniciar", reset_icon);
@@ -179,23 +186,6 @@ fn inspector(ui: &mut egui::Ui, theme: &Theme, session: &Session) {
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         footer_note(ui, theme, NOTE);
     });
-}
-
-/// What the body on the stand cost, and where it came from.
-///
-/// The bake runs on its own thread and the drape is never held up waiting for
-/// it, so a person who moves a measurement sees the body change before the
-/// field behind it does. This is the whole of the report, and it belongs on
-/// the bar that names the body rather than in a dialog nobody asked for.
-fn body_note(fitting: &Fitting) -> String {
-    if let Some(why) = fitting.refused.as_deref() {
-        return why.to_owned();
-    }
-    match &fitting.cost {
-        Some(cost) if cost.cached => "en caché".to_owned(),
-        Some(cost) => format!("horneado en {:.0} ms", cost.ms),
-        None => "horneando…".to_owned(),
-    }
 }
 
 /// The body the document on the table resolves against, by name.

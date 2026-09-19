@@ -21,7 +21,8 @@ pub(super) fn edge_key(a: u32, b: u32) -> u64 {
 /// they do, the nearest sheet to a point need not be the sheet that bounds
 /// it, and the sign follows the nearest. Catching that means the triangles
 /// against each other rather than the half-edges against themselves, which
-/// is a different pass and a far costlier one.
+/// is a different pass: [`super::crossings`], and it reports where this one
+/// refuses.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Manifold {
     /// Vertices in the mesh.

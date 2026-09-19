@@ -5,7 +5,7 @@ use toile_anny::{BodyMesh, Station};
 use toile_sim::xpbd::SdfGrid;
 
 use super::{bits, brute};
-use crate::body::bake::{BAND, CELL, Lattice, inspect, sdf};
+use crate::body::bake::{BAND, CELL, Lattice, SOLE_DEPTH, inspect, sdf};
 use crate::body::{NO_LEVERS, Phenotype, body_mesh};
 use crate::golden::REFERENCE;
 
@@ -172,15 +172,14 @@ fn the_band_agrees_with_a_brute_force_distance_over_the_whole_body() {
 /// so what is asked here is the winding number, which counts how often the
 /// skin wraps the point rather than which piece of it is closest.
 ///
-/// Whoever moves these numbers has a choice to make rather than a constant to
-/// re-pin: mend the soles where the mesh is baked, teach the bake to see a
-/// crossing, or write down that four voxels buried in a sole are a price
-/// worth paying.
+/// The four are a price accepted: they are buried where the solver never
+/// holds a particle, and the body the app opens with is not to be refused
+/// over them. What watches for the same defect where cloth does go is
+/// [`crate::body::bake::crossings`], which the tests beside this one hold to
+/// these same numbers.
 #[test]
 #[ignore = "release-only: this bakes millions of voxels"]
 fn the_default_bodys_soles_bake_four_voxels_of_flesh_as_air() {
-    // How deep a slab off the underside of a body counts as its soles.
-    const SOLES: f64 = 0.03;
     // The voxels the default body loses, in the grid its own box makes.
     const LOST: [[usize; 3]; 4] = [[76, 9, 60], [77, 9, 60], [169, 9, 60], [170, 9, 60]];
 
@@ -202,20 +201,21 @@ fn the_default_bodys_soles_bake_four_voxels_of_flesh_as_air() {
 
     let reference = body_mesh(&REFERENCE, &NO_LEVERS);
     assert_eq!(
-        brute::crossings(&mesh.positions, &soles(mesh, SOLES)),
+        brute::crossings(&mesh.positions, &soles(mesh)),
         52,
         "pairs of sole triangles the default body passes through itself"
     );
     assert_eq!(
-        brute::crossings(&reference.positions, &soles(&reference, SOLES)),
+        brute::crossings(&reference.positions, &soles(&reference)),
         0,
         "and the body the goldens are taken against crosses none, which is \
          why its pinned field is clean and this one is not"
     );
 }
 
-/// The triangles with a vertex within `depth` of the body's lowest point.
-fn soles(mesh: &BodyMesh, depth: f64) -> Vec<[u32; 3]> {
+/// The triangles with a vertex in the slab of the soles.
+pub(super) fn soles(mesh: &BodyMesh) -> Vec<[u32; 3]> {
+    let depth = f64::from(SOLE_DEPTH);
     let floor = mesh
         .positions
         .as_chunks::<3>()

@@ -5,10 +5,34 @@ use crossbeam_channel::{Receiver, Sender, TryRecvError, unbounded};
 use toile_anny::BodyMesh;
 
 use super::Collider;
-use super::bake::BakeError;
+use super::bake::{self, BakeError, Crossings};
 
 #[cfg(test)]
 mod tests;
+
+/// What the oven is asked to make of a body.
+///
+/// Two orders and not one that does both, because somebody is waiting for the
+/// field and nobody is waiting to hear where a body crosses itself: the field
+/// goes back the moment it exists, and the looking-over is asked for after
+/// it. It is also all that is asked of a body whose field was on the disk,
+/// since a cache entry is voxels and nothing else.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Order {
+    /// The field the drape falls on.
+    Bake,
+    /// Where the body passes through itself.
+    Inspect,
+}
+
+/// What came of an order.
+pub enum Made {
+    /// The field, or what stopped it from being baked.
+    Field(Result<Collider, BakeError>),
+    /// Where the body passes through itself. A report, and never a reason a
+    /// field was not baked.
+    Crossings(Crossings),
+}
 
 /// A body on its way to the oven.
 pub struct Job {
@@ -16,16 +40,18 @@ pub struct Job {
     pub key: u64,
     /// The body to bake.
     pub mesh: BodyMesh,
+    /// What is wanted of it.
+    pub order: Order,
 }
 
 /// A body that came out of the oven.
 pub struct Baked {
     /// The key it was sent under.
     pub key: u64,
-    /// How long the bake took, in milliseconds.
+    /// How long the order took, in milliseconds.
     pub ms: f64,
-    /// The field, or what stopped it from being baked.
-    pub field: Result<Collider, BakeError>,
+    /// What was ordered.
+    pub made: Made,
 }
 
 /// The bake, on a thread of its own.
@@ -144,14 +170,17 @@ impl Drop for Oven {
     }
 }
 
-/// Bakes one body and times it.
+/// Fills one order and times it.
 fn bake(job: Job) -> Baked {
-    let Job { key, mesh } = job;
+    let Job { key, mesh, order } = job;
     let t = Instant::now();
-    let field = Collider::bake(&mesh);
+    let made = match order {
+        Order::Bake => Made::Field(Collider::bake(&mesh)),
+        Order::Inspect => Made::Crossings(bake::crossings(&mesh)),
+    };
     Baked {
         key,
         ms: t.elapsed().as_secs_f64() * 1000.0,
-        field,
+        made,
     }
 }

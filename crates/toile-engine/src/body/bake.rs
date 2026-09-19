@@ -4,12 +4,14 @@ use toile_sim::xpbd::SdfGrid;
 use self::pseudo::Pseudo;
 
 mod band;
+mod crossing;
 mod fill;
 mod manifold;
 mod pseudo;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
+pub use crossing::{Crossing, Crossings, Place, SOLE_DEPTH, crossings};
 pub use manifold::{Manifold, inspect};
 
 /// The spacing between samples, in metres.
