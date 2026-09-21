@@ -5,6 +5,7 @@
 
 mod band;
 mod listing;
+mod own;
 
 use toile_engine::body::Collider;
 use toile_engine::draft::{Doc, Persona, Snapshot};
@@ -14,6 +15,7 @@ use super::super::stand::Stand;
 use super::super::tests::{drag, product, resolved, written};
 use super::{People, Plea, act};
 use crate::band::Band;
+use crate::config::Prefs;
 use crate::library::shelf::Shelf;
 use crate::library::tests::Scratch;
 use crate::library::today::today;
@@ -46,10 +48,12 @@ fn ana(session: &Session) -> Persona {
 }
 
 /// Everything one library flow touches: a scratch library, the app's read of
-/// it, the product on the table and the tab over it.
+/// it, preferences kept beside it, the product on the table and the tab over
+/// it.
 struct Table {
     scratch: Scratch,
     shelf: Shelf,
+    prefs: Prefs,
     session: Session,
     stand: Stand,
     band: Band,
@@ -67,9 +71,11 @@ impl Table {
             .expect("Ana is filed");
         assert_eq!(stem, ANA);
         let shelf = Shelf::over(Some(scratch.library()));
+        let prefs = Prefs::load_from(&scratch.beside("prefs.json"));
         Table {
             scratch,
             shelf,
+            prefs,
             session,
             stand,
             band: Band::default(),
@@ -85,6 +91,7 @@ impl Table {
             &mut self.shelf,
             &mut self.band,
             &mut self.people,
+            &mut self.prefs,
         );
     }
 

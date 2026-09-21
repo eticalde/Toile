@@ -112,9 +112,11 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     {
         st.stand.step(session, redo);
     }
+    let own = w.prefs.default_persona.as_deref();
     let plea = left_panel(ui, theme, |ui| {
         identity::panel(ui, theme, session, &mut st.stand);
-        people::panel(ui, theme, w.shelf, &mut st.people, Stand::kept(session))
+        let kept = Stand::kept(session);
+        people::panel(ui, theme, w.shelf, &mut st.people, kept, own)
     });
     if let Some(plea) = plea {
         people::act(
@@ -124,6 +126,7 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
             w.shelf,
             w.band,
             &mut st.people,
+            w.prefs,
         );
         ui.ctx().request_repaint();
     }

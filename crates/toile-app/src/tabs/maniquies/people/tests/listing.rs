@@ -20,7 +20,7 @@ fn look(shelf: &Shelf, people: &mut People) -> Option<Plea> {
         };
         let pass = ctx.run_ui(input, |ui| {
             let plea = left_panel(ui, &theme, |ui| {
-                panel(ui, &theme, shelf, people, Kept::InProduct)
+                panel(ui, &theme, shelf, people, Kept::InProduct, None)
             });
             asked = asked.take().or(plea);
         });

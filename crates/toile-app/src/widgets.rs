@@ -9,13 +9,13 @@ pub use canvas::{canvas_label, fill, grid, mat_canvas};
 pub use cite::{Mention, Named, measure_row, named_formula_row};
 pub use control::{
     button_ghost, button_ghost_icon, button_icon, button_named, button_primary, button_secondary,
-    cycle, readout,
+    check_named, cycle, readout,
 };
 use eframe::egui::CornerRadius;
 pub use field::{Editable, Edited, field_row, formula_row};
 pub use panel::{
-    alert_note, footer_note, list_row_icon, list_row_named, list_row_noted, plain_note, section,
-    section_with, tree_row,
+    alert_note, footer_note, list_row_icon, list_row_named, plain_note, section, section_with,
+    tree_row,
 };
 pub use slider::{Track, track};
 

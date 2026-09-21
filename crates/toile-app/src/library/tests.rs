@@ -43,6 +43,12 @@ impl Scratch {
         self.root.join("personas")
     }
 
+    /// A file in the scratch folder beside the library, such as the
+    /// preferences the app keeps next to it.
+    pub(crate) fn beside(&self, name: &str) -> PathBuf {
+        self.root.join(name)
+    }
+
     pub(crate) fn file(&self, stem: &str) -> PathBuf {
         self.folder().join(format!("{stem}.{PERSONA_EXT}"))
     }

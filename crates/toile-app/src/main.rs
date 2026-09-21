@@ -205,6 +205,7 @@ impl eframe::App for App {
             maniquies: &mut self.maniquies,
             shelf: &mut self.shelf,
             band: &mut self.band,
+            prefs: &mut self.prefs,
             fitting: &mut self.fitting,
         };
         self.tab.show(ui, &mut workspace);

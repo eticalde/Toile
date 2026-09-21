@@ -1,3 +1,6 @@
+mod own;
+mod rows;
+
 use eframe::egui;
 use toile_engine::draft::PersonaError;
 use toile_engine::session::Session;
@@ -5,19 +8,13 @@ use toile_engine::session::Session;
 use super::identity::note;
 use super::stand::{Saved, Stand, Wrote};
 use crate::band::Band;
+use crate::config::Prefs;
 use crate::library::shelf::Shelf;
 use crate::library::today::today;
-use crate::library::{LibraryError, Listed, PERSONA_EXT};
+use crate::library::{LibraryError, Listed};
 use crate::tabs::Kept;
 use crate::theme::Theme;
-use crate::widgets::{PAD, button_secondary, list_row_noted, section_with};
-
-/// How many rows the list shows before it scrolls, so a long library cannot
-/// push the two buttons out of the panel.
-const ROWS: f32 = 6.0;
-
-/// The height of one row, as the panel widgets lay it out.
-const ROW_H: f32 = 26.0;
+use crate::widgets::{PAD, button_secondary, section_with};
 
 /// What the section says of a library nobody has been saved to.
 const EMPTY: &str = "Aún no hay nadie en la biblioteca. «Guardar en biblioteca» guarda aquí el \
@@ -32,6 +29,9 @@ const NO_FOLDER: &str = "El sistema no indica una carpeta de datos, así que no 
 pub enum Plea {
     /// Put a copy of the person filed under this stem on the stand.
     Use(String),
+    /// Make the person filed under this stem the one new products are cut
+    /// for, or stop, when she already is.
+    ToggleDefault(String),
     /// Save the body on the stand to the library.
     Save,
 }
@@ -60,62 +60,85 @@ impl People {
 /// The people in the library, under the body's own controls: a row per file
 /// with the day of the person's current session, then the two ways a body
 /// crosses between the library and the stand.
+///
+/// `own` is the stem new products are cut for, from the preferences. Its row
+/// says so, and stays listed, marked gone, once the file has left the
+/// library, so the preference can still be seen and let go of.
 pub fn panel(
     ui: &mut egui::Ui,
     theme: &Theme,
     shelf: &Shelf,
     people: &mut People,
     kept: Kept,
+    own: Option<&str>,
 ) -> Option<Plea> {
     let listed = shelf.listed();
     let count = listed.map_or_else(|_| String::new(), |all| all.len().to_string());
     section_with(ui, theme, "Biblioteca", &count);
     if shelf.library().is_none() {
         note(ui, theme.muted, NO_FOLDER);
+        own::line(ui, theme, shelf, own);
         return None;
     }
-    let mut plea = None;
-    match listed {
-        Err(why) => note(
-            ui,
-            theme.alert,
-            &format!("no se pudo leer la biblioteca: {why}"),
-        ),
-        Ok([]) => note(ui, theme.muted, EMPTY),
-        Ok(all) => {
-            egui::ScrollArea::vertical()
-                .id_salt("biblioteca")
-                .max_height(ROW_H * ROWS)
-                .auto_shrink([false, true])
-                .show(ui, |ui| {
-                    for listed in all {
-                        let picked = people.picked.as_deref() == Some(listed.stem.as_str());
-                        if row(ui, theme, listed, picked).clicked() {
-                            people.picked = Some(listed.stem.clone());
-                        }
-                    }
-                });
+    let all = match listed {
+        Err(why) => {
+            let why = format!("no se pudo leer la biblioteca: {why}");
+            note(ui, theme.alert, &why);
+            &[]
         }
-    }
-    let picked = listed.ok().and_then(|all| {
-        all.iter()
-            .find(|each| people.picked.as_ref() == Some(&each.stem))
-    });
-    match picked.map(|listed| (&listed.stem, &listed.persona)) {
-        Some((stem, Ok(_))) => {
-            if button(ui, theme, use_label(kept)) {
-                plea = Some(Plea::Use(stem.clone()));
-            }
+        Ok([]) => {
+            note(ui, theme.muted, EMPTY);
+            &[]
         }
-        Some((_, Err(why))) => note(ui, theme.alert, &why.to_string()),
-        None => {}
-    }
+        Ok(all) => all,
+    };
+    let gone = own.filter(|stem| listed.is_ok() && !all.iter().any(|each| each.stem == *stem));
+    rows::list(ui, theme, (all, gone), people, own);
+    own::line(ui, theme, shelf, own);
+    let mut plea = actions(ui, theme, all, people, kept, own);
     ui.add_space(4.0);
     if button(ui, theme, "Guardar en biblioteca") {
         plea = Some(Plea::Save);
     }
     if let Some((text, bad)) = people.said() {
         note(ui, if bad { theme.alert } else { theme.muted }, text);
+    }
+    plea
+}
+
+/// What the picked row offers: a copy of the person, and the choice of her as
+/// the one new products are cut for.
+///
+/// A file that does not read, or a default person gone from the library, can
+/// no longer be used, and is offered only the way out of being the default:
+/// a person nobody can copy could never be made it.
+fn actions(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    all: &[Listed],
+    people: &People,
+    kept: Kept,
+    own: Option<&str>,
+) -> Option<Plea> {
+    let stem = people.picked.as_deref()?;
+    let is_own = own == Some(stem);
+    let found = all.iter().find(|each| each.stem == stem);
+    let mut plea = None;
+    let usable = match found.map(|listed| &listed.persona) {
+        Some(Ok(_)) => {
+            if button(ui, theme, use_label(kept)) {
+                plea = Some(Plea::Use(stem.to_owned()));
+            }
+            true
+        }
+        Some(Err(why)) => {
+            note(ui, theme.alert, &why.to_string());
+            false
+        }
+        None => false,
+    };
+    if (usable || is_own) && own::toggle(ui, theme, is_own) {
+        plea = Some(Plea::ToggleDefault(stem.to_owned()));
     }
     plea
 }
@@ -129,6 +152,7 @@ pub fn act(
     shelf: &mut Shelf,
     band: &mut Band,
     people: &mut People,
+    prefs: &mut Prefs,
 ) {
     people.said = None;
     match plea {
@@ -140,6 +164,7 @@ pub fn act(
                 people.said = Some((gone, true));
             }
         }
+        Plea::ToggleDefault(stem) => own::choose(prefs, &stem),
         Plea::Save => {
             let Some(library) = shelf.library() else {
                 return;
@@ -155,24 +180,6 @@ pub fn act(
             band.recheck(shelf, session);
         }
     }
-}
-
-/// One file of the library: the person's name and the day of her current
-/// session, or the file's own name when it does not read as anyone.
-fn row(ui: &mut egui::Ui, theme: &Theme, listed: &Listed, picked: bool) -> egui::Response {
-    let Ok(persona) = &listed.persona else {
-        let file = format!("{}.{PERSONA_EXT}", listed.stem);
-        return list_row_noted(ui, theme, &file, picked, ("ilegible", theme.alert));
-    };
-    let name = if persona.name.trim().is_empty() {
-        &listed.stem
-    } else {
-        &persona.name
-    };
-    let day = persona
-        .current()
-        .map_or("", |current| current.date.as_str());
-    list_row_noted(ui, theme, name, picked, (day, theme.muted))
 }
 
 /// A panel-wide action button, answering whether it was pressed.

@@ -52,6 +52,9 @@ uncatalogued = "uncatalogued"
 trama = "trama"
 # "product", as in the resolved product of a draft.
 producto = "producto"
+# "products", in the mannequin tab's choice of whom new products are cut for.
+# crates/toile-app/src/tabs/maniquies/people/own.rs
+productos = "productos"
 # "defects".
 defectos = "defectos"
 # "history", the undo panel's heading.

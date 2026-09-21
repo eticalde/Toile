@@ -51,19 +51,10 @@ pub fn list_row_icon(
 
 /// One entry carrying a right-aligned mono note, such as a date, in the ink
 /// handed with it. A long label is cut where the note begins, not run under it.
-pub fn list_row_noted(
-    ui: &mut Ui,
-    theme: &Theme,
-    label: &str,
-    selected: bool,
-    note: (&str, Color32),
-) -> Response {
-    row(ui, theme, (label, selected), PAD, true, Some(note), None)
-}
-
-/// The same noted entry under an identity the caller names, so a press aimed
-/// from outside the panel finds the row by what it lists and not by where the
-/// rows above happened to leave it.
+///
+/// Drawn under an identity the caller names, so a press aimed from outside the
+/// panel finds the row by what it lists and not by where the rows above
+/// happened to leave it.
 pub fn list_row_named(
     ui: &mut Ui,
     theme: &Theme,
