@@ -3,7 +3,7 @@ use eframe::egui::{
     StrokeKind, Ui, Vec2, pos2, vec2,
 };
 
-use super::CORNER;
+use super::{CORNER, PAD};
 use crate::theme::Theme;
 
 /// The smaller glyph a button carries before its label.
@@ -146,6 +146,59 @@ fn ghost(ui: &mut Ui, theme: &Theme, label: &str, glyph_w: f32) -> Rect {
         pos2(left + glyph_w / 2.0, rect.center().y),
         Vec2::splat(glyph_w),
     )
+}
+
+/// A choice that is on or off, under an identity the caller names: a box,
+/// ticked while the choice is on, before a label wrapped to the room the panel
+/// has.
+///
+/// Wrapped rather than cut short, since a panel is narrow and a choice has to
+/// say in full what it chooses. The whole row answers a press, not the box
+/// alone.
+pub fn check_named(ui: &mut Ui, theme: &Theme, id: Id, label: &str, on: bool) -> Response {
+    let font = FontId::proportional(12.0);
+    let ink = if on { theme.ink } else { theme.ink_soft };
+    let lead = PAD + GLYPH + 8.0;
+    let wrap = (ui.available_width() - lead - PAD).max(GLYPH);
+    let text = ui
+        .painter()
+        .layout(label.to_owned(), font.clone(), ink, wrap);
+    let line = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font, ink)
+        .size()
+        .y;
+    let (_, rect) = ui.allocate_space(vec2(ui.available_width(), text.size().y + 10.0));
+    let resp = ui.interact(rect, id, Sense::click());
+    let p = ui.painter();
+    if resp.hovered() {
+        p.rect_filled(rect, 0.0, theme.accent.gamma_multiply(0.07));
+    }
+    let top = rect.top() + 5.0;
+    let square = Rect::from_min_size(
+        pos2(rect.left() + PAD, top + (line - GLYPH) / 2.0),
+        Vec2::splat(GLYPH),
+    );
+    if on {
+        p.rect_filled(square, CORNER, theme.accent);
+        tick(p, square, theme.on_accent);
+    } else {
+        p.rect_stroke(
+            square,
+            CORNER,
+            Stroke::new(1.0, theme.muted),
+            StrokeKind::Inside,
+        );
+    }
+    p.galley(pos2(rect.left() + lead, top), text, ink);
+    resp
+}
+
+/// The mark inside a box that is on.
+fn tick(p: &Painter, r: Rect, color: Color32) {
+    let at = |x: f32, y: f32| r.min + vec2(r.width() * x, r.height() * y);
+    let path = vec![at(0.22, 0.52), at(0.42, 0.72), at(0.78, 0.3)];
+    p.add(Shape::line(path, Stroke::new(1.6, color)));
 }
 
 /// Either weight with a 12 pt glyph before the label, painted by the caller

@@ -62,4 +62,20 @@ impl Shelf {
             .as_ref()
             .ok()
     }
+
+    /// What the interface calls the person filed under `stem`, when her file
+    /// read the last time.
+    pub fn name_of<'a>(&'a self, stem: &'a str) -> Option<&'a str> {
+        self.persona(stem).map(|persona| shown(stem, persona))
+    }
+}
+
+/// What the interface calls a person: her name, or the stem of her file when
+/// she was left unnamed, so that no row and no sentence names nobody.
+pub fn shown<'a>(stem: &'a str, persona: &'a Persona) -> &'a str {
+    if persona.name.trim().is_empty() {
+        stem
+    } else {
+        &persona.name
+    }
 }

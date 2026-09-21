@@ -1,4 +1,5 @@
 mod autosave;
+mod fresh;
 
 use std::path::{Path, PathBuf};
 
@@ -50,6 +51,15 @@ impl crate::App {
         self.install(blank);
     }
 
+    /// Puts a new product on the table: cut for the person the preferences
+    /// name when the library holds her, blank otherwise.
+    fn install_fresh(&mut self) {
+        let (fitting, loose) = (&mut self.fitting, self.maniquies.loose());
+        let own = self.prefs.default_persona.as_deref();
+        let table = fresh::table(own, &self.shelf, |doc| fitting.body_for(doc, loose));
+        self.install(table);
+    }
+
     /// Puts a session on the table.
     ///
     /// A session is a new mesh, which the viewer was not sized for, so its GPU
@@ -67,7 +77,12 @@ impl crate::App {
     pub(crate) fn act(&mut self, action: Action) {
         match action {
             // Ask the name first; the table is cleared only once it is given.
-            Action::New if self.discardable() => self.new_product = Some(String::new()),
+            // The library is read now, so the person the dialog names is the
+            // one the product is cut for.
+            Action::New if self.discardable() => {
+                self.shelf.refresh();
+                self.new_product = Some(String::new());
+            }
             Action::New => {}
             Action::Example => self.start(Some(File::example())),
             Action::Open => self.open_file(),
@@ -80,12 +95,15 @@ impl crate::App {
         }
     }
 
-    /// Puts a fresh blank product on the table and gives it a home on disk at
-    /// once, so there is nothing to remember to save. When it cannot be
-    /// written, it opens under its name in memory until saved by hand, and
-    /// the bar says so.
+    /// Puts a fresh product on the table and gives it a home on disk at once,
+    /// so there is nothing to remember to save. When it cannot be written, it
+    /// opens under its name in memory until saved by hand, and the bar says
+    /// so.
+    ///
+    /// `title` names the product — its file and the bar — and never its body,
+    /// which keeps the name its person has in the library.
     fn create_named(&mut self, title: String) {
-        self.install_blank();
+        self.install_fresh();
         let now = self.session.revision();
         if let Some(path) = self.place_new(&title) {
             self.prefs.remember(&path);
@@ -114,10 +132,16 @@ impl crate::App {
     ///
     /// Enter or "Crear" makes the product; Escape or "Cancelar" walks away. An
     /// empty name cannot make one: a product is named, even before it is saved.
+    /// When the product will be cut for the installation's own person, the
+    /// dialog names her under the field, so the name typed is plainly the
+    /// product's and not the body's.
     pub(crate) fn new_product_dialog(&mut self, ctx: &egui::Context) {
         let Some(mut name) = self.new_product.take() else {
             return;
         };
+        let own = self.prefs.default_persona.as_deref();
+        let body = own.and_then(|stem| self.shelf.name_of(stem));
+        let muted = self.theme.muted;
         let mut decided = None;
         egui::Modal::new(egui::Id::new("nuevo-producto")).show(ctx, |ui| {
             ui.set_width(320.0);
@@ -126,6 +150,11 @@ impl crate::App {
             ui.label("Nombre del producto");
             let field = ui.text_edit_singleline(&mut name);
             field.request_focus();
+            if let Some(body) = body {
+                ui.add_space(6.0);
+                let said = format!("Maniquí: {body}, de la biblioteca");
+                ui.label(egui::RichText::new(said).size(11.0).color(muted));
+            }
             ui.add_space(12.0);
             let ready = !name.trim().is_empty();
             if field.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) && ready {

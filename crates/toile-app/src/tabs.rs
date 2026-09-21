@@ -146,6 +146,9 @@ pub struct Workspace<'a> {
     pub maniquies: &'a mut maniquies::State,
     pub shelf: &'a mut crate::library::shelf::Shelf,
     pub band: &'a mut crate::band::Band,
+    /// The installation's preferences, where the mannequin tab keeps the
+    /// person new products are cut for.
+    pub prefs: &'a mut crate::config::Prefs,
     /// The body the product is being fitted to, which the fitting room draws
     /// behind the cloth and the solver collides against.
     pub fitting: &'a mut crate::fitting::Fitting,

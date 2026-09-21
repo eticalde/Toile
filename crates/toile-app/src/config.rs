@@ -5,6 +5,10 @@ use serde::{Deserialize, Serialize};
 
 /// The schema version of the preferences file, bumped when its shape changes
 /// so an older build refuses a file it would read wrong instead of guessing.
+///
+/// A new optional field is not a new shape: an older build passes over a key
+/// it does not know and reads everything else right, where a bump would make
+/// it throw the window and the recent files away with it.
 const VERSION: u32 = 1;
 
 /// How many recent patterns to keep.
@@ -37,6 +41,18 @@ pub struct Prefs {
     pub recents: Vec<PathBuf>,
     /// The folder the file dialog should open in next.
     pub last_dir: Option<PathBuf>,
+    /// The library stem of the person a new product is cut for.
+    ///
+    /// A preference of this installation, never of Toile: with none, or with
+    /// a stem the library does not hold, a new product starts as it always
+    /// did. Left out of the file while unset, so a file written before it
+    /// existed reads and writes back byte for byte.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_persona: Option<String>,
+    /// The file these were read from, and the one `save` writes back to.
+    /// `None` writes nowhere.
+    #[serde(skip)]
+    file: Option<PathBuf>,
 }
 
 /// The file as it sits on disk: the version alongside the preferences, so a
@@ -49,29 +65,34 @@ struct Stored {
 }
 
 impl Prefs {
-    /// Reads the preferences, or the defaults when there is nothing to read.
-    ///
-    /// Any fault — no config directory, no file, unreadable, or a version this
-    /// build does not know — yields the defaults. Preferences never stop the
-    /// app from starting.
+    /// Reads the preferences from the platform's config directory, or the
+    /// defaults when there is nothing to read.
     pub fn load() -> Prefs {
-        let Some(path) = path() else {
-            return Prefs::default();
-        };
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            return Prefs::default();
-        };
-        match serde_json::from_str::<Stored>(&text) {
-            Ok(stored) if stored.version == VERSION => stored.prefs,
-            _ => Prefs::default(),
-        }
+        path().map_or_else(Prefs::default, |file| Prefs::load_from(&file))
     }
 
-    /// Writes the preferences, creating the config directory if it is missing.
+    /// Reads the preferences kept in `file`, which `save` then writes back.
+    ///
+    /// Any fault — no file, unreadable, or a version this build does not know
+    /// — yields the defaults. Preferences never stop the app from starting.
+    pub fn load_from(file: &Path) -> Prefs {
+        let stored = std::fs::read_to_string(file)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Stored>(&text).ok());
+        let mut prefs = match stored {
+            Some(stored) if stored.version == VERSION => stored.prefs,
+            _ => Prefs::default(),
+        };
+        prefs.file = Some(file.to_path_buf());
+        prefs
+    }
+
+    /// Writes the preferences back to their file, creating its folder if it is
+    /// missing.
     ///
     /// Best-effort: a failure to write leaves the app running with what it has.
     pub fn save(&self) {
-        let Some(path) = path() else {
+        let Some(path) = &self.file else {
             return;
         };
         if let Some(dir) = path.parent() {
@@ -82,8 +103,19 @@ impl Prefs {
             prefs: self.clone(),
         };
         if let Ok(text) = serde_json::to_string_pretty(&stored) {
-            let _ = std::fs::write(&path, text);
+            let _ = std::fs::write(path, text);
         }
+    }
+
+    /// Makes the person filed under `stem` the one new products are cut for,
+    /// taking the place from whoever had it; the person who already had it
+    /// gives it up instead, and new products start blank again.
+    pub fn toggle_default(&mut self, stem: &str) {
+        self.default_persona = if self.default_persona.as_deref() == Some(stem) {
+            None
+        } else {
+            Some(stem.to_owned())
+        };
     }
 
     /// Records a pattern as the most recent, and its folder as the last used.
@@ -101,12 +133,12 @@ impl Prefs {
 }
 
 /// The preferences file, under the platform's config directory for Toile.
+///
+/// A test build names no file, so no test can read or write the real
+/// preferences: every test keeps its own in a scratch folder.
 fn path() -> Option<PathBuf> {
-    Some(
-        base_dir(Base::Config, |name| std::env::var_os(name))?
-            .join(APP)
-            .join("prefs.json"),
-    )
+    let base = base_dir(Base::Config, |name| std::env::var_os(name)).filter(|_| !cfg!(test))?;
+    Some(base.join(APP).join("prefs.json"))
 }
 
 /// The folder the library of people is kept in, under the platform's data
@@ -189,47 +221,4 @@ fn base_dir(base: Base, var: impl Fn(&str) -> Option<OsString>) -> Option<PathBu
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// An environment holding only `pairs`.
-    fn env(pairs: &[(&'static str, &'static str)]) -> impl Fn(&str) -> Option<OsString> {
-        let pairs = pairs.to_vec();
-        move |name| {
-            pairs
-                .iter()
-                .find(|(key, _)| *key == name)
-                .map(|(_, value)| OsString::from(value))
-        }
-    }
-
-    #[test]
-    fn with_no_home_there_is_no_base_directory() {
-        assert_eq!(base_dir(Base::Config, env(&[])), None);
-        assert_eq!(base_dir(Base::Data, env(&[])), None);
-    }
-
-    #[cfg(target_os = "macos")]
-    #[test]
-    fn on_macos_settings_and_data_share_application_support() {
-        let home = env(&[("HOME", "/Users/ana"), ("XDG_DATA_HOME", "/elsewhere")]);
-        let support = PathBuf::from("/Users/ana/Library/Application Support");
-        assert_eq!(base_dir(Base::Config, &home), Some(support.clone()));
-        assert_eq!(base_dir(Base::Data, &home), Some(support));
-    }
-
-    #[cfg(not(target_os = "macos"))]
-    #[test]
-    fn elsewhere_data_follows_xdg_and_falls_back_under_home() {
-        let bare = env(&[("HOME", "/home/ana")]);
-        let data = base_dir(Base::Data, &bare);
-        assert_eq!(data, Some(PathBuf::from("/home/ana/.local/share")));
-        let config = base_dir(Base::Config, &bare);
-        assert_eq!(config, Some(PathBuf::from("/home/ana/.config")));
-        let set = env(&[("HOME", "/home/ana"), ("XDG_DATA_HOME", "/datos")]);
-        assert_eq!(base_dir(Base::Data, &set), Some(PathBuf::from("/datos")));
-        let relative = env(&[("HOME", "/home/ana"), ("XDG_DATA_HOME", "datos")]);
-        let ignored = base_dir(Base::Data, &relative);
-        assert_eq!(ignored, Some(PathBuf::from("/home/ana/.local/share")));
-    }
-}
+mod tests;
