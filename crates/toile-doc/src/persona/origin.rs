@@ -34,6 +34,15 @@ impl Origin {
                 .all(|byte| matches!(byte, b'a'..=b'z' | b'0'..=b'9' | b'_' | b'-'))
     }
 
+    /// The stem a library files a person of this name under when no one has
+    /// it yet; a taken stem is the library's to number.
+    ///
+    /// It lives with the format because every program that files a person has
+    /// to name the file the way the app looks for it.
+    pub fn stem_of(name: &str) -> String {
+        super::slug::of(name)
+    }
+
     /// Refuses a link Toile could not have written.
     pub(crate) fn check(&self) -> Result<(), DocError> {
         if !Origin::is_stem(&self.persona) {

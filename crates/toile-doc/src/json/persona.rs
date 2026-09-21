@@ -10,6 +10,12 @@ use crate::{Persona, PersonaError, Snapshot};
 /// other file.
 pub const VERSION: u32 = 1;
 
+/// The extension a library file carries after its stem.
+///
+/// Part of the format rather than of the app, so that every program filing a
+/// person writes the name the app will list.
+pub const EXTENSION: &str = "toile-persona";
+
 /// A library file: the version, and the person beside it.
 #[derive(Serialize)]
 struct Written<'a> {

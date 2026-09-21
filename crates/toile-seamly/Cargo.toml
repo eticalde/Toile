@@ -1,0 +1,27 @@
+[package]
+name = "toile-seamly"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+# Pinned, not caret, like toile-engine's: a Seamly angle becomes a coordinate
+# through this crate's sin, cos and atan2, and one file has to evaluate to the
+# same bits on every machine. A bump is a change of imported geometry.
+libm = "=0.2.16"
+# A read-only tree: objects cite each other by id across the whole file, so a
+# pull parser would have us buffer the document by hand anyway.
+roxmltree = "0.21.1"
+thiserror = "2"
+# The product the pattern is translated into.
+toile-doc = { path = "../toile-doc" }
+
+# Tests only: the owner's evaluator writes its answer as JSON, and
+# `float_roundtrip` reads each number back to the bit it was written from.
+[dev-dependencies]
+serde_json = { version = "1", features = ["float_roundtrip"] }
+
+[lints]
+workspace = true

@@ -15,6 +15,7 @@ toile-anny = { path = "../toile-anny" }
 toile-engine = { path = "../toile-engine" }
 toile-doc = { path = "../toile-doc" }
 toile-mesh = { path = "../toile-mesh" }
+toile-seamly = { path = "../toile-seamly" }
 toile-sim = { path = "../toile-sim" }
 # Only the anny-bake subcommand needs it, to read the CC0 `.target.gz`
 # morph targets — toile-anny itself stays dependency-free.

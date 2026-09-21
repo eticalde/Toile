@@ -2671,6 +2671,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e27ee8bb91ca0adcf0ecb116293afa12d393f9c2b9b9cd54d33e8078fe19839"
 
 [[package]]
+name = "roxmltree"
+version = "0.21.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1964b10c76125c36f8afe190065a4bf9a87bf324842c05701330bba9f1cacbb"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3191,6 +3200,7 @@ dependencies = [
  "toile-doc",
  "toile-engine",
  "toile-mesh",
+ "toile-seamly",
  "toile-sim",
 ]
 
@@ -3233,6 +3243,17 @@ version = "0.1.0"
 dependencies = [
  "spade",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "toile-seamly"
+version = "0.1.0"
+dependencies = [
+ "libm",
+ "roxmltree",
+ "serde_json",
+ "thiserror 2.0.20",
+ "toile-doc",
 ]
 
 [[package]]

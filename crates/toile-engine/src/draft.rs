@@ -21,9 +21,9 @@ pub use toile_doc::formula::{EvalError, Formula, Lookup, SyntaxError};
 pub use toile_doc::{
     Applied, Axis, Binding, BodyShape, ChangeClass, Command, ContourNode, Doc, DocError,
     EdgeAnchor, EdgeRange, Elastic, ElasticKey, Grain, Handle, Handles, History, Identity,
-    MannequinKey, MeasureSet, NotchCount, Origin, Persona, PersonaError, Piece, PieceKey,
-    Placement, Point, PointKey, SAMPLES, Seam, SeamKey, SeamKind, SeamOrientation, Segment,
-    SegmentEdit, Side, Snapshot, Variable, VariableKey, Winding,
+    MannequinKey, MeasureSet, NotchCount, Origin, PERSONA_EXTENSION, Persona, PersonaError, Piece,
+    PieceKey, Placement, Point, PointKey, SAMPLES, Seam, SeamKey, SeamKind, SeamOrientation,
+    Segment, SegmentEdit, Side, Snapshot, Variable, VariableKey, Winding,
 };
 pub use toile_geom::curve;
 pub use toile_geom::validate::ContourFault;

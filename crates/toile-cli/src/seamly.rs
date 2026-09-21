@@ -1,0 +1,223 @@
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+
+use toile_doc::{DocError, Origin, Persona, PersonaError};
+use toile_engine::draft::Draft;
+use toile_engine::export::{ExportError, to_svg};
+use toile_seamly::{Measurements, Pattern, Product, import};
+
+use self::args::{Asked, Wanted};
+
+/// What the command line asks for.
+mod args;
+/// Resolving the product in the engine and comparing it with the pattern.
+mod check;
+/// Filing a person in the user's library.
+mod library;
+/// The import report, as a person reads it.
+mod report;
+#[cfg(test)]
+mod tests;
+
+/// Runs `toile seamly`: a Seamly pattern in, a Toile product out, with the
+/// report of what the translation did and the product drawn as an SVG.
+///
+/// The pattern names its measurement file relative to itself, and that is
+/// the body the product resolves against, named after the file. Asked for a
+/// person, the body is filed in the library under that name and the product
+/// carries it as a linked copy. Nothing is written over an existing file: the
+/// owner's folder and library are theirs.
+pub fn run(args: &[String]) {
+    let result = args::parse(args).and_then(|asked| migrate(&asked));
+    match result {
+        Ok(lines) => lines.iter().for_each(|line| println!("{line}")),
+        Err(why) => eprintln!("{why}"),
+    }
+}
+
+/// Where the report and the drawing go, beside the product.
+fn beside(output: &Path) -> (PathBuf, PathBuf) {
+    let stem = output
+        .file_stem()
+        .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+    let report = output.with_file_name(format!("{stem} - importado a Toile.md"));
+    (report, output.with_extension("svg"))
+}
+
+/// Imports the pattern, checks the product, and writes it with its report and
+/// drawing, and the person when asked; the lines to print when it all went
+/// well. Every refusal comes before the first write.
+fn migrate(asked: &Asked) -> Result<Vec<String>, String> {
+    let (input, output) = (asked.input.as_path(), asked.output.as_path());
+    let (report_path, svg_path) = beside(output);
+    for path in [output, report_path.as_path(), svg_path.as_path()] {
+        if path.exists() {
+            return Err(format!("«{}» ya existe: no se sobrescribe", path.display()));
+        }
+    }
+    let wanted = asked
+        .persona
+        .as_ref()
+        .map(|wanted| (wanted, Origin::stem_of(&wanted.name)));
+    if let Some((wanted, stem)) = &wanted
+        && library::path(&wanted.library, stem).exists()
+    {
+        return Err(library::taken(&wanted.library, stem));
+    }
+    let (pattern, body, measured) = read(input)?;
+    if pattern.blocks.iter().all(|block| block.pieces.is_empty()) {
+        return Err(format!(
+            "«{}» no tiene piezas: no hay nada que importar a Toile",
+            input.display()
+        ));
+    }
+    let mut product = import(&pattern, &body, &file_stem(&measured))
+        .map_err(|why| format!("no se pudo importar: {why}"))?;
+    let persona = match &wanted {
+        Some((wanted, stem)) => Some(link(&mut product, wanted, stem, &measured)?),
+        None => None,
+    };
+    let check = check::check(&product, &pattern, &body)
+        .map_err(|why| format!("no se pudo comprobar el producto: {why}"))?;
+    if !check.defects.is_empty() {
+        return Err(format!(
+            "el producto no resuelve limpio: {}",
+            check.defects.join("; ")
+        ));
+    }
+    let draft = Draft::from_doc(product.doc.clone())
+        .map_err(|why| format!("el producto no resuelve: {why}"))?;
+    let svg = to_svg(&draft).map_err(|ExportError::Empty| {
+        "ninguna pieza del patrón resuelve a un contorno que dibujar".to_owned()
+    })?;
+    let filed = wanted
+        .as_ref()
+        .map(|(wanted, stem)| library::path(&wanted.library, stem));
+    let files = report::Files {
+        source: input,
+        product: output,
+        svg: &svg_path,
+        persona: filed.as_deref(),
+    };
+    let text = report::write(&product, &check, &files, &pattern.comments);
+    let mut written = Vec::new();
+    // First, so that a library folder that cannot be written leaves nothing
+    // behind and a second run starts clean.
+    if let (Some((wanted, stem)), Some((_, json))) = (&wanted, &persona) {
+        written.push(library::file(&wanted.library, stem, json)?);
+    }
+    create(output, &product.doc.to_canonical_json())?;
+    create(&report_path, &text)?;
+    create(&svg_path, &svg)?;
+    written.extend([output.to_owned(), report_path, svg_path]);
+    let person = persona.as_ref().map(|(persona, _)| persona);
+    Ok(summary(&product, &check, person, &written))
+}
+
+/// The pattern, its body, and the path of the body's file.
+fn read(input: &Path) -> Result<(Pattern, Measurements, PathBuf), String> {
+    let text = std::fs::read_to_string(input)
+        .map_err(|why| format!("no se pudo leer «{}»: {why}", input.display()))?;
+    let pattern = Pattern::parse(&text)
+        .map_err(|why| format!("«{}» no es un patrón legible: {why}", input.display()))?;
+    let relative = pattern
+        .measurements
+        .as_deref()
+        .ok_or("el patrón no nombra un archivo de medidas")?;
+    let path = input.parent().unwrap_or(Path::new(".")).join(relative);
+    let text = std::fs::read_to_string(&path)
+        .map_err(|why| format!("no se pudo leer «{}»: {why}", path.display()))?;
+    let body = Measurements::parse(&text).map_err(|why| {
+        format!(
+            "«{}» no es un archivo de medidas legible: {why}",
+            path.display()
+        )
+    })?;
+    Ok((pattern, body, path))
+}
+
+/// The name a body takes from its file: the file's stem.
+fn file_stem(path: &Path) -> String {
+    path.file_stem()
+        .map_or_else(|| "cuerpo".to_owned(), |s| s.to_string_lossy().into_owned())
+}
+
+/// Builds the person the product's body becomes, links the product to her,
+/// and returns her with the text of her library file.
+fn link(
+    product: &mut Product,
+    wanted: &Wanted,
+    stem: &str,
+    measured: &Path,
+) -> Result<(Persona, String), String> {
+    let source = measured
+        .file_name()
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    let persona = product.persona(&wanted.name, &wanted.taken, &source);
+    let json = persona.to_canonical_json().map_err(|why| match why {
+        PersonaError::Invalid(DocError::NotADay(day)) => {
+            format!("--tomada «{day}» no es una fecha escrita AAAA-MM-DD")
+        }
+        other => format!("la persona «{}» no se puede guardar: {other}", wanted.name),
+    })?;
+    product
+        .link(&persona, stem)
+        .map_err(|why| format!("no se pudo vincular el producto a «{}»: {why}", wanted.name))?;
+    Ok((persona, json))
+}
+
+/// Writes a file that must not exist yet.
+fn create(path: &Path, text: &str) -> Result<(), String> {
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .map_err(|why| format!("no se pudo crear «{}»: {why}", path.display()))?;
+    file.write_all(text.as_bytes())
+        .map_err(|why| format!("no se pudo escribir «{}»: {why}", path.display()))
+}
+
+fn summary(
+    product: &Product,
+    check: &check::Check,
+    persona: Option<&Persona>,
+    written: &[PathBuf],
+) -> Vec<String> {
+    let report = &product.report;
+    let curves: usize = report.pieces.iter().map(|p| p.curves.len()).sum();
+    let mut lines = vec![
+        format!(
+            "{} piezas · {} puntos · {} curvas · {} piquetes · cuerpo «{}»",
+            report.pieces.len(),
+            product.doc.points.len(),
+            curves,
+            product.doc.notches.len(),
+            report.body
+        ),
+        format!(
+            "paridad con el patrón: {} puntos, peor {:.1e} cm",
+            check.points, check.worst
+        ),
+    ];
+    for note in &report.frozen {
+        if let Some(drift) = check.drift.get(&note.frozen) {
+            lines.push(format!(
+                "congelado «{}»: se desvía {drift:.4} cm con el cuerpo crecido",
+                note.name
+            ));
+        }
+    }
+    if let Some(taken) = persona.and_then(Persona::current) {
+        lines.push(format!(
+            "persona «{}», medición del {}: el producto lleva una copia vinculada",
+            report.body, taken.date
+        ));
+    }
+    lines.extend(
+        written
+            .iter()
+            .map(|path| format!("escrito: {}", path.display())),
+    );
+    lines
+}

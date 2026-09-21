@@ -1,6 +1,5 @@
 mod atomic;
 pub mod shelf;
-mod slug;
 #[cfg(test)]
 pub(crate) mod tests;
 pub mod today;
@@ -8,12 +7,11 @@ pub mod today;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
 
+/// The extension a person is kept under.
+pub use toile_engine::draft::PERSONA_EXTENSION as PERSONA_EXT;
 use toile_engine::draft::{Origin, Persona, PersonaError, Snapshot};
 
 use self::atomic::Staged;
-
-/// The extension a person is kept under.
-pub const PERSONA_EXT: &str = "toile-persona";
 
 /// The people a user keeps, one file each, in one folder.
 ///
@@ -150,7 +148,7 @@ impl Library {
     /// the disk is touched, and `Io` when the file cannot be written.
     pub fn create(&self, persona: &Persona) -> Result<String, LibraryError> {
         let text = persona.to_canonical_json().map_err(LibraryError::Refused)?;
-        let base = slug::of(&persona.name);
+        let base = Origin::stem_of(&persona.name);
         fs::create_dir_all(&self.dir).map_err(|why| io_error("crear", &self.dir, why))?;
         let staged = Staged::write(&self.dir, &base, &text)
             .map_err(|why| io_error("escribir", &self.dir, why))?;

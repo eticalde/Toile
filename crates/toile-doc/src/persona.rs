@@ -1,6 +1,7 @@
 mod error;
 pub(crate) mod fingerprint;
 mod origin;
+mod slug;
 
 use std::collections::BTreeMap;
 

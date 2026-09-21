@@ -84,9 +84,8 @@ fn latin(c: char) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
-    use toile_engine::draft::Origin;
-
     use super::*;
+    use crate::Origin;
 
     #[test]
     fn a_spanish_name_folds_to_its_bare_letters() {

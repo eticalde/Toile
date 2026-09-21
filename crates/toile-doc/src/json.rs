@@ -8,7 +8,7 @@ mod store;
 mod writer;
 
 pub use error::FormatError;
-pub use persona::VERSION as PERSONA_VERSION;
+pub use persona::{EXTENSION as PERSONA_EXTENSION, VERSION as PERSONA_VERSION};
 use serde::{Deserialize, Serialize};
 use writer::Canonical;
 

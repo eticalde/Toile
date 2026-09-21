@@ -87,7 +87,7 @@ done
 #    or half the English language. Each file is read up to its own test
 #    module: a test may measure with whatever it likes.
 BANNED='\.(powf|powi|sin|cos|tan|asin|acos|atan|atan2|exp|exp2|ln|log2|log10|sinh|cosh|tanh|hypot)[[:space:]]*\('
-GEOMETRY='crates/toile-sim/src crates/toile-engine/src crates/toile-anny/src crates/toile-mesh/src'
+GEOMETRY='crates/toile-sim/src crates/toile-engine/src crates/toile-anny/src crates/toile-mesh/src crates/toile-seamly/src'
 for f in $(find $GEOMETRY -name '*.rs' | grep -v -e '/tests/' -e 'tests\.rs$' -e '/export/'); do
   hits=$(awk '/#\[cfg\(test\)\]/ { exit } { print FNR": "$0 }' "$f" | grep -E "$BANNED" | head -3)
   [ -n "$hits" ] && say "$f: trascendente de std en la geometría (§determinismo)
@@ -96,7 +96,7 @@ done
 
 # 6b. And libm is the exception only where an angle or a ramp earns it: a new
 #     file reaching for it is a new way for two machines to disagree.
-LIBM_EARNED='body/bake/pseudo\.rs|couture/seam\.rs|couture/place\.rs'
+LIBM_EARNED='body/bake/pseudo\.rs|couture/seam\.rs|couture/place\.rs|toile-seamly/src/eval/angle\.rs'
 for f in $(grep -rlE --include='*.rs' 'libm::' crates | grep -v -e '/tests/' -e 'tests\.rs$'); do
   echo "$f" | grep -qE "$LIBM_EARNED" ||
     say "$f: libm:: fuera de donde está justificado (§determinismo)"

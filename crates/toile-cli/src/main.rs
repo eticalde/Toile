@@ -4,6 +4,7 @@ mod anny_bake;
 mod asset;
 mod bench;
 mod doc;
+mod seamly;
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -12,6 +13,7 @@ fn main() {
         Some("asset") => asset::run(&args[2..]),
         Some("bench") => bench::run(&args[2..]),
         Some("doc") => doc::run(&args[2..]),
+        Some("seamly") => seamly::run(&args[2..]),
         Some("drape") => {
             let t = std::time::Instant::now();
             let hash = toile_engine::golden::drape_bodice_hash();
@@ -27,7 +29,7 @@ fn main() {
         _ => {
             println!("toile {}", env!("CARGO_PKG_VERSION"));
             println!(
-                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · doc [RUTA] [--resolve-with NOMBRE]"
+                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · doc [RUTA] [--resolve-with NOMBRE] · seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada AAAA-MM-DD --biblioteca DIR]"
             );
         }
     }

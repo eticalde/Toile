@@ -23,6 +23,10 @@ extend-exclude = [
     "README.md",
     # Generated, and its contents are upstream crate names rather than prose.
     "Cargo.lock",
+    # The owner's own Seamly pattern and body, copied byte for byte but for the
+    # body's personal details: Spanish notes and point names that are data to
+    # read, not text to correct.
+    "crates/toile-seamly/tests/fixtures/",
 ]
 
 [default]

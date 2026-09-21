@@ -1,0 +1,35 @@
+# Seamly measurement names and the Toile catalogue names they stand for.
+#
+# The owner decided, for the mannequin plan, that the names Seamly gives its
+# measurements live in a data file of their own and nowhere in the code, so an
+# audit of the licence of the source tree meets none of them. This is that
+# file: the importer reads it and nothing else to rename a body's measurements.
+#
+# Format: one mapping per line, the Seamly name, a tab, the Toile name. Lines
+# starting with '#' and blank lines are ignored. Each Toile name must be one of
+# MeasureSet::CATALOGUE, and each side may appear on one line only; a test
+# holds the file to both.
+#
+# Provenance: every Seamly name here was read in the owner's own measurement
+# file, never in Seamly's sources. A row is added only where both names mean
+# the same measurement taken the same way, which is why most of the owner's
+# measurements have none. Those stay out of the imported body and are listed
+# in the import report.
+#
+#   height            stature, standing, to the floor (Toile: the body's height)
+#   waist_circ        girth at the waist
+#   hip_circ          girth at the hip
+#   leg_crotch_to_floor
+#                     down the inside of the leg from the fork to the floor,
+#                     which is what Toile's inseam measures
+#   neck_mid_circ     neck girth at mid-neck, where Toile cuts its neck ring
+#   bust_circ         girth at the bust
+#   shoulder_tip_to_shoulder_tip_b
+#                     across the back from one shoulder point to the other
+height	estatura
+waist_circ	cintura
+hip_circ	cadera
+leg_crotch_to_floor	entrepierna
+neck_mid_circ	cuello
+bust_circ	pecho
+shoulder_tip_to_shoulder_tip_b	hombros
