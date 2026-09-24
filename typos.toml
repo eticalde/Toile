@@ -82,3 +82,9 @@ doble = "doble"
 # "elbow", one of the parts of the body the fitting bar names a crossing at.
 # crates/toile-app/src/tabs/probador/note.rs
 codo = "codo"
+# "is sewn", in the notch section's note on what a notch is for.
+# crates/toile-app/src/tabs/patronaje/inspector/notch.rs
+cose = "cose"
+# "is done", in the internal-line section's note on what each kind means.
+# crates/toile-app/src/tabs/patronaje/inspector/inner.rs
+hace = "hace"

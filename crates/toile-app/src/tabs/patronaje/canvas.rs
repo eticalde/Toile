@@ -3,12 +3,14 @@ use toile_engine::draft::{Draft, PieceKey, PointKey};
 
 use super::curve::Bend;
 use super::gesture::{self, Gesture};
+use super::inner::{self, Drawn, Tick};
 use super::state::{Scope, State};
 use super::tract::Tract;
 use super::view::{self, View};
 use super::wire::{self, Verb};
 use super::{
-    caption, curve, dimension, empty, marks, overview, paper, pick, precision, ruler, snap, tract,
+    caption, chalk, curve, dimension, empty, marks, overview, paper, pick, precision, ruler, snap,
+    tract,
 };
 use crate::theme::Theme;
 use crate::widgets::{fill, grid};
@@ -69,6 +71,7 @@ fn detail(
     };
     let drawing = draft.zip(piece);
     let (tracts, bends) = drawn(drawing);
+    let (lines, ticks) = marked(drawing, &tracts);
     frame_once(state, view::bounds(nodes), rect);
     if state.ask.is_none() {
         wire::view_keys(ui, resp, state);
@@ -85,6 +88,7 @@ fn detail(
                 nodes,
                 tracts: &tracts,
                 bends: &bends,
+                lines: &lines,
             };
             wire::reduce(ui, resp, &table, state, verbs);
         }
@@ -115,6 +119,10 @@ fn detail(
             &[theme.paper],
             line,
         );
+        // Over the paper and the cut line: a fold, a topstitch or a pocket
+        // mouth is a mark on the piece and not something under it.
+        chalk::lines(painter, theme, &lines, (state.view, state.selection.line()));
+        chalk::notches(painter, theme, &ticks, state.view);
         dimension::show(painter, theme, draft, piece, state, over);
         marks::bends(painter, theme, &bends, state, over);
         marks::nodes(painter, theme, draft, piece, state, over);
@@ -138,6 +146,9 @@ fn detail(
             }
             marks::drawing(painter, theme, state.view, pending, *rubber);
         }
+        Gesture::Tracing(held) => {
+            chalk::tracing(painter, theme, state.view, &held.pending, held.rubber);
+        }
         Gesture::Idle | Gesture::Pan { .. } | Gesture::Arrange(_) | Gesture::Sewing(_) => {}
     }
 }
@@ -146,6 +157,18 @@ fn detail(
 fn drawn(drawing: Option<(&Draft, PieceKey)>) -> (Vec<Tract>, Vec<Bend>) {
     match drawing {
         Some((draft, piece)) => (tract::of(draft, piece), curve::bends(draft, piece)),
+        None => (Vec::new(), Vec::new()),
+    }
+}
+
+/// The marks the piece wears inside its outline: its internal lines and its
+/// notches, both empty when the table is.
+fn marked(drawing: Option<(&Draft, PieceKey)>, tracts: &[Tract]) -> (Vec<Drawn>, Vec<Tick>) {
+    match drawing {
+        Some((draft, piece)) => (
+            inner::of(draft, piece, tracts, [0.0, 0.0]),
+            inner::ticks(draft, piece, tracts),
+        ),
         None => (Vec::new(), Vec::new()),
     }
 }

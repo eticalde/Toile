@@ -1,6 +1,7 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
 mod body;
+mod inner;
 mod parity;
 mod persona;
 mod shape;

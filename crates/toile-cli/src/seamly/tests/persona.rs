@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use toile_doc::{FORMAT_VERSION_LINKED, Origin, Persona, Snapshot};
+use toile_doc::{FORMAT_VERSION_INTERNAL, Origin, Persona, Snapshot};
 use toile_engine::draft::Doc;
 
 use super::super::args::{Asked, Wanted, parse};
@@ -8,6 +8,10 @@ use super::super::migrate;
 use super::{PATTERN, folder};
 
 fn asked(input: &Path, output: PathBuf, library: &Path) -> Asked {
+    filing(input, output, library, false)
+}
+
+fn filing(input: &Path, output: PathBuf, library: &Path, existing: bool) -> Asked {
     Asked {
         input: input.to_owned(),
         output,
@@ -15,6 +19,7 @@ fn asked(input: &Path, output: PathBuf, library: &Path) -> Asked {
             name: "Etienne".to_owned(),
             taken: "2026-09-05".to_owned(),
             library: library.to_owned(),
+            existing,
         }),
     }
 }
@@ -54,7 +59,7 @@ fn a_person_is_filed_as_the_app_files_her_and_the_product_carries_her_link() {
 
     let written = std::fs::read_to_string(&output).expect("the product is written");
     let doc = Doc::from_json(&written).expect("a Toile file");
-    assert_eq!(doc.format_version(), FORMAT_VERSION_LINKED);
+    assert_eq!(doc.format_version(), FORMAT_VERSION_INTERNAL);
     assert_eq!(doc.to_canonical_json(), written);
     let body = doc.measures().expect("one body");
     assert_eq!(body.name, "Etienne");
@@ -89,9 +94,65 @@ fn a_person_already_in_the_library_is_never_written_over_and_nothing_else_is_wri
     let refused = migrate(&asked(&input, elsewhere.clone(), &library)).expect_err("refused");
     assert!(refused.contains("ya hay una persona"), "{refused}");
     assert!(refused.contains("etienne.toile-persona"), "{refused}");
+    assert!(refused.contains("--vincular"), "{refused}");
     assert_eq!(std::fs::read(&filed).expect("still there"), before);
     assert!(!elsewhere.exists());
     assert!(!input.with_file_name("otra.svg").exists());
+    std::fs::remove_dir_all(root).expect("the scratch folder goes");
+}
+
+/// Asked to link, the run reads the library's own person, links the product to
+/// the measuring she carries, and writes not one byte of the library.
+#[test]
+fn a_second_run_links_the_product_to_the_person_already_filed_and_leaves_her_alone() {
+    let (root, input) = folder("persona-link");
+    let library = root.join("personas");
+    let first = input.with_extension("toile");
+    migrate(&asked(&input, first.clone(), &library)).expect("the first run files her");
+    let filed = library.join("etienne.toile-persona");
+    let before = std::fs::read(&filed).expect("filed");
+    let product = std::fs::read_to_string(&first).expect("written");
+
+    let again = input.with_file_name("otra vez.toile");
+    let lines = migrate(&filing(&input, again.clone(), &library, true)).expect("links");
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.contains("ya en la biblioteca, que no se toca")),
+        "{lines:?}"
+    );
+    assert!(lines.iter().all(|line| !line.contains("etienne.toile")));
+    assert_eq!(std::fs::read(&filed).expect("still there"), before);
+    // The same person, so the same product: linking twice is the same link.
+    assert_eq!(std::fs::read_to_string(&again).expect("written"), product);
+    let report = std::fs::read_to_string(input.with_file_name("otra vez - importado a Toile.md"))
+        .expect("the report is written");
+    assert!(report.contains("la biblioteca no se toca"), "{report}");
+    std::fs::remove_dir_all(root).expect("the scratch folder goes");
+}
+
+/// The two ways of naming a person are not interchangeable: linking needs her
+/// there, filing needs her absent, and a day that is not her newest measuring
+/// is refused before anything is written.
+#[test]
+fn linking_needs_the_person_and_the_day_she_was_last_measured() {
+    let (root, input) = folder("persona-link-refused");
+    let library = root.join("personas");
+    let output = input.with_extension("toile");
+
+    let empty = migrate(&filing(&input, output.clone(), &library, true)).expect_err("refused");
+    assert!(empty.contains("no hay ninguna persona"), "{empty}");
+    assert!(empty.contains("--vincular"), "{empty}");
+    assert!(!output.exists());
+
+    migrate(&asked(&input, output.clone(), &library)).expect("files her");
+    let mut wrong = filing(&input, input.with_file_name("otra.toile"), &library, true);
+    if let Some(person) = wrong.persona.as_mut() {
+        "2026-09-06".clone_into(&mut person.taken);
+    }
+    let refused = migrate(&wrong).expect_err("refused");
+    assert!(refused.contains("2026-09-05"), "{refused}");
+    assert!(!input.with_file_name("otra.toile").exists());
     std::fs::remove_dir_all(root).expect("the scratch folder goes");
 }
 
@@ -162,10 +223,25 @@ fn the_person_flags_go_together_in_any_order_and_without_them_nothing_changes() 
         ("Ana María", "2026-09-05")
     );
     assert_eq!(wanted.library, PathBuf::from("lib"));
+    assert!(!wanted.existing, "filing her is what no flag asks for");
+    let linking = args(&[
+        "a.sm2d",
+        "--persona",
+        "Ana",
+        "--tomada",
+        "2026-09-05",
+        "--biblioteca",
+        "lib",
+        "--vincular",
+    ])
+    .expect("the four flags together");
+    assert!(linking.persona.expect("a person").existing);
     for wrong in [
         &["a.sm2d", "--persona", "Ana"][..],
         &["a.sm2d", "--persona", "--tomada", "2026-09-05"],
         &["a.sm2d", "--otra"],
+        // Linking says which person to link to, so it cannot stand alone.
+        &["a.sm2d", "--vincular"],
         &[],
     ] {
         assert!(args(wrong).is_err(), "{wrong:?}");

@@ -22,7 +22,7 @@ pub(super) fn stretch(doc: &Doc, range: EdgeRange) -> Result<(), DocError> {
 /// a NaN, so the writer spells one `null` and the product that saved cleanly
 /// refuses to open again. A fraction past the end of its tract is refused
 /// beside it, since a stretch that runs off the contour is not a stretch.
-fn anchored(doc: &Doc, anchor: EdgeAnchor) -> Result<(), DocError> {
+pub(super) fn anchored(doc: &Doc, anchor: EdgeAnchor) -> Result<(), DocError> {
     let held = doc
         .pieces
         .get(anchor.piece)

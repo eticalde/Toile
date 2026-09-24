@@ -1,12 +1,12 @@
 use std::collections::BTreeSet;
 
 use eframe::egui::{Key, Pos2};
-use toile_engine::draft::{Command, PointKey};
+use toile_engine::draft::{Command, LineKey, PointKey};
 
 use super::gesture::{self, EditContext, Feedback, Gesture, Input, Mods, Stack};
 use super::pick::EDGE_PT;
 use super::state::{Selection, Tool};
-use super::tract;
+use super::{inner, trace, tract};
 
 mod bend;
 mod drag;
@@ -38,6 +38,8 @@ pub fn update(
             },
             event,
         ) => draw::update(pending, rubber, back_to, &event, ctx),
+        // And while a line is being traced, so does every event of that.
+        (Gesture::Tracing(held), event) => trace::update(held, &event, ctx),
         (_, Input::Down(at, mods)) => press(at, mods, ctx),
         (Gesture::Pan { from }, Input::Move(at, _)) => (
             Gesture::Pan { from: at },
@@ -67,12 +69,16 @@ pub fn update(
     }
 }
 
-/// A press: on a node it takes the selection in hand, on a handle it pulls a
-/// tangent, on a straight tract with the Curve tool it bends one, on the mat
-/// it sweeps a band, and with space held it slides the drawing instead.
+/// A press: with the Line tool it opens a tracing, on a node it takes the
+/// selection in hand, on a handle it pulls a tangent, on an internal line it
+/// chooses that line, on a straight tract with the Curve tool it bends one, on
+/// the mat it sweeps a band, and with space held it slides the drawing instead.
 fn press(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, Feedback) {
     if mods.space {
         return (Gesture::Pan { from: at }, Vec::new(), Feedback::default());
+    }
+    if ctx.tool == Tool::Trace {
+        return trace::begin(at, ctx);
     }
     // A press never begins a piece: drawing runs only inside the `Drawing`
     // gesture, which "+ Pieza" opens deliberately. A press here takes what is
@@ -84,6 +90,16 @@ fn press(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>,
         return bend::grab(key, at, mods, ctx);
     }
     let cm = ctx.view.to_document(at);
+    // After the nodes and the handles, and before the contour: an internal line
+    // is drawn over the paper, so a press on one is aimed at it rather than at
+    // whatever tract happens to run beneath. Only the choosing tool answers it,
+    // the way only the sewing tool answers a press on a thread — a press with
+    // Punto or Curva in hand is aimed at the contour.
+    if ctx.tool == Tool::Select
+        && let Some(line) = inner::under(cm, ctx.lines, reach(ctx, EDGE_PT))
+    {
+        return chosen(line, ctx);
+    }
     let found = tract::nearest(cm, ctx.tracts, &[]).filter(|it| it.away < reach(ctx, EDGE_PT));
     let Some(found) = found else {
         return (
@@ -114,6 +130,20 @@ fn press(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>,
     )
 }
 
+/// A press on an internal line: it is chosen, and let go of when it was the
+/// line already chosen, the way a press on a seam's thread reads.
+fn chosen(line: LineKey, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, Feedback) {
+    let select = if ctx.selection.line() == Some(line) {
+        Selection::None
+    } else {
+        Selection::Line(line)
+    };
+    rest(Feedback {
+        select: Some(select),
+        ..Feedback::default()
+    })
+}
+
 /// Letting go of a marquee: every node inside the band is chosen.
 ///
 /// A band that caught nothing changes nothing: the press has already said what
@@ -134,7 +164,13 @@ fn swept(from: [f64; 2], to: [f64; 2], ctx: &EditContext<'_>) -> (Gesture, Vec<C
 /// A key pressed with nothing in hand.
 fn idle(key: Key, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, Feedback) {
     if matches!(key, Key::Delete | Key::Backspace) {
-        return node::remove(ctx);
+        // A chosen line is what Delete takes, and it is asked first: with a
+        // line chosen no node is, so the other reading would delete
+        // nothing at all.
+        return match ctx.selection.line() {
+            Some(line) => inner::erased(line),
+            None => node::remove(ctx),
+        };
     }
     let feedback = match (key, mods.command, mods.shift) {
         // With nothing chosen there is nothing on the piece left to let go
@@ -164,6 +200,7 @@ fn idle(key: Key, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, 
         (Key::V, false, _) => tool(Tool::Select),
         (Key::P, false, _) => tool(Tool::Point),
         (Key::C, false, _) => tool(Tool::Curve),
+        (Key::L, false, _) => tool(Tool::Trace),
         // Sewing joins two pieces, so its key leaves this one for the whole
         // product, where both can be seen.
         (Key::S, false, _) => Feedback {
@@ -189,7 +226,7 @@ fn rest(feedback: Feedback) -> (Gesture, Vec<Command>, Feedback) {
 }
 
 /// A budget in screen points, as a distance in centimetres.
-fn reach(ctx: &EditContext<'_>, budget: f64) -> f64 {
+pub(super) fn reach(ctx: &EditContext<'_>, budget: f64) -> f64 {
     budget / ctx.view.scale().max(f64::EPSILON)
 }
 
@@ -206,6 +243,6 @@ mod select;
 #[cfg(test)]
 mod square;
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 #[cfg(test)]
 mod typing;

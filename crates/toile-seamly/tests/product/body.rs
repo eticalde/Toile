@@ -134,6 +134,10 @@ fn the_helper_variables_are_the_back_yoke_and_the_lengths_its_formulas_cite() {
         })
         .collect();
     points.dedup();
+    // The first seven are corners of the back and the points its corners are
+    // built on. The rest are places of internal lines: the fly topstitch, and
+    // the back pocket's flap, slit and bag guide, which hang off the same yoke
+    // heading and so need the same square root written down once.
     assert_eq!(
         points,
         [
@@ -143,7 +147,20 @@ fn the_helper_variables_are_the_back_yoke_and_the_lengths_its_formulas_cite() {
             "bk_dart_dir",
             "bk_yoke_side",
             "bk_yoke_cb",
-            "bk_crotch_tip"
+            "bk_crotch_tip",
+            "ff_top",
+            "bp_ref",
+            "bp_f1",
+            "bp_f2",
+            "bp_fs2",
+            "bp_fc2",
+            "bp_fs1",
+            "bp_fc1",
+            "bp_s0",
+            "bp_sl",
+            "bp_sr",
+            "bp_sbl",
+            "bp_sbr"
         ]
     );
 }

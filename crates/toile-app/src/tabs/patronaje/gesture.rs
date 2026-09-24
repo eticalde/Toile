@@ -6,9 +6,11 @@ use toile_engine::draft::{Axis, Binding, Doc, PieceKey, PointKey};
 
 use super::arrange::Arrange;
 use super::curve::Bend;
+use super::inner::Drawn;
 use super::sew::Sewing;
 use super::snap::{SnapConfig, Snapped};
 use super::state::{Scope, Selection, Tool};
+use super::trace::Tracing;
 use super::tract::Tract;
 use super::view::View;
 use crate::bind;
@@ -52,6 +54,8 @@ pub enum Gesture {
     Arrange(Arrange),
     /// One tract picked for a seam, waiting for the tract it is sewn to.
     Sewing(Sewing),
+    /// Drawing a line inside a piece, place by place.
+    Tracing(Tracing),
 }
 
 /// The nodes taken in hand, as the gesture holds them.
@@ -212,6 +216,8 @@ pub struct EditContext<'a> {
     pub tracts: &'a [Tract],
     /// Its bent tracts, resolved: every handle of the piece and where it sits.
     pub bends: &'a [Bend],
+    /// The lines drawn inside it, where the mat draws them.
+    pub lines: &'a [Drawn],
     /// What is chosen right now, which is what a press takes in hand.
     pub selection: Selection,
     /// The tool in hand.

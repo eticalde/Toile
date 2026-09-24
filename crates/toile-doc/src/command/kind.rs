@@ -2,8 +2,9 @@ use std::collections::BTreeMap;
 
 use crate::{
     Axis, Binding, BodyShape, Dart, DartKey, DartWedge, EdgeAnchor, Elastic, ElasticKey, Grain,
-    Identity, MannequinKey, MeasureSet, Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey,
-    Placement, Point, PointKey, Seam, SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
+    Identity, InternalLine, LineEdit, LineKey, LineKind, MannequinKey, MeasureSet, Notch, NotchKey,
+    Origin, Piece, PieceKey, Pin, PinKey, Placement, Point, PointKey, Seam, SeamKey, SegmentEdit,
+    Symmetry, SymmetryKey, VariableKey,
 };
 
 /// A reversible edit to the document.
@@ -114,6 +115,21 @@ pub enum Command {
     SetElasticRatio { elastic: ElasticKey, to: f64 },
     /// Writes how hard it holds it.
     SetElasticStrength { elastic: ElasticKey, to: f64 },
+    /// Draws a line on a piece that the pattern does not cut.
+    ///
+    /// The line travels as an edit rather than as an `InternalLine`, for the
+    /// reason `SetSegment` does: a span that bends hangs on two handles that
+    /// are points of the document, and drawing the line is what creates them.
+    AddLine {
+        identity: Identity<InternalLine>,
+        line: Box<LineEdit>,
+    },
+    /// Takes that line off the piece.
+    RemoveLine { line: LineKey },
+    /// Writes what an internal line is for.
+    SetLineKind { line: LineKey, to: LineKind },
+    /// Names an internal line, or takes its name away.
+    LabelLine { line: LineKey, to: Option<String> },
     /// Marks a contour, and the facing contour with it.
     AddNotch {
         identity: Identity<Notch>,
@@ -157,122 +173,4 @@ pub enum Command {
     SetPin { identity: Identity<Pin>, pin: Pin },
     /// Lets it go.
     ClearPin { pin: PinKey },
-}
-
-/// What an edit costs the derivation downstream of it.
-///
-/// The class is the budget: a shape edit re-derives rest lengths on the spot,
-/// a topology edit re-meshes off the interface thread, metadata costs nothing
-/// and a simulation edit is a message to the solver.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChangeClass {
-    /// The contour keeps its nodes and moves.
-    Shape,
-    /// The contour gains or loses nodes, or a piece does.
-    Topology,
-    /// Nothing the solver reads has changed.
-    Metadata,
-    /// Only the simulation has anything to do.
-    Sim,
-}
-
-/// What applying a command left behind.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Applied {
-    /// The command that undoes it.
-    pub inverse: Command,
-    /// The pieces the edit changed, in key order.
-    pub touched: Vec<PieceKey>,
-    /// What the derivation has to redo.
-    pub class: ChangeClass,
-}
-
-impl Command {
-    /// What this edit costs downstream.
-    ///
-    /// The match has no wildcard: a command added without a row here does not
-    /// compile, which is what keeps the budgets honest.
-    pub fn class(&self) -> ChangeClass {
-        match self {
-            Command::MovePoint { .. }
-            | Command::SetBinding { .. }
-            | Command::SetVariable { .. }
-            | Command::SetMeasure { .. }
-            // A refresh carries a phenotype too, but it is priced by its tape,
-            // which is what the pattern resolves against.
-            | Command::RefreshMannequin { .. }
-            | Command::ResolveWith { .. }
-            // The whole of an elastic is a rest length. The drawing does not
-            // move and no node is gained, so the cloth of the piece is
-            // re-derived where it stands and the drape carries on.
-            | Command::AddElastic { .. }
-            | Command::RemoveElastic { .. }
-            | Command::SetElasticRatio { .. }
-            | Command::SetElasticStrength { .. } => ChangeClass::Shape,
-            Command::InsertNode { .. }
-            | Command::RemoveNode { .. }
-            | Command::SetSegment { .. }
-            | Command::SetSamples { .. }
-            | Command::AddPiece { .. }
-            | Command::RemovePiece { .. }
-            | Command::AddSeam { .. }
-            | Command::RemoveSeam { .. }
-            | Command::AddNotch { .. }
-            | Command::MoveNotch { .. }
-            | Command::RemoveNotch { .. }
-            | Command::AddDart { .. }
-            | Command::RemoveDart { .. }
-            | Command::AddSymmetry { .. }
-            | Command::RemoveSymmetry { .. } => ChangeClass::Topology,
-            // A body that is added, renamed or removed is never the one the
-            // pattern resolves against at that moment, so no formula moves.
-            Command::AddMannequin { .. }
-            | Command::RemoveMannequin { .. }
-            | Command::RenameMannequin { .. }
-            | Command::RenamePiece { .. }
-            | Command::SetGrain { .. }
-            // Where a piece sits on the overview is layout: no contour, mesh
-            // or drape is derived from it.
-            | Command::PlacePiece { .. }
-            | Command::LabelPoint { .. }
-            | Command::ShowLabel { .. } => ChangeClass::Metadata,
-            // The phenotype shapes the body and nothing the pattern resolves.
-            // Nothing drapes on that body yet — the cloth still falls on the
-            // sphere — so today no consumer answers this class for it.
-            Command::SetPhenotype { .. } | Command::SetPin { .. } | Command::ClearPin { .. } => {
-                ChangeClass::Sim
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn moving_a_notch_is_topology_because_it_forces_a_boundary_vertex() {
-        let command = Command::MoveNotch {
-            notch: NotchKey::new(0, 0),
-            to: EdgeAnchor::at_node(PieceKey::new(0, 0), PointKey::new(0, 0)),
-        };
-        assert_eq!(command.class(), ChangeClass::Topology);
-    }
-
-    #[test]
-    fn choosing_another_body_is_a_change_of_shape() {
-        let command = Command::ResolveWith {
-            mannequin: MannequinKey::new(1, 0),
-        };
-        assert_eq!(command.class(), ChangeClass::Shape);
-    }
-
-    #[test]
-    fn naming_a_point_costs_the_solver_nothing() {
-        let command = Command::LabelPoint {
-            point: PointKey::new(0, 0),
-            to: Some("cadera_lat".to_owned()),
-        };
-        assert_eq!(command.class(), ChangeClass::Metadata);
-    }
 }

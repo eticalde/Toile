@@ -23,6 +23,21 @@ pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
             ("cm".to_owned(), false),
         ];
     }
+    // A line being traced is the same kind of promise, and the same two keys
+    // finish or abandon it, so it is said in the same place.
+    if let Gesture::Tracing(held) = &state.gesture {
+        return vec![
+            (
+                format!("trazando línea · {} lugares", held.pending.len()),
+                false,
+            ),
+            (
+                "Enter cierra · Esc cancela · Retroceso deshace".to_owned(),
+                false,
+            ),
+            ("cm".to_owned(), false),
+        ];
+    }
     let draft = session.draft();
     let mut cells = match (draft, state.scope) {
         (Some(draft), Scope::Product) => product(draft, state),

@@ -1,4 +1,6 @@
-use crate::{Axis, Command, ElasticKey, MannequinKey, NotchKey, PieceKey, PointKey, VariableKey};
+use crate::{
+    Axis, Command, ElasticKey, LineKey, MannequinKey, NotchKey, PieceKey, PointKey, VariableKey,
+};
 
 /// Whether one edit stands for an earlier edit of the same gesture.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +29,8 @@ enum Field<'a> {
     ElasticRatio(ElasticKey),
     ElasticStrength(ElasticKey),
     NotchPlace(NotchKey),
+    LinePurpose(LineKey),
+    LineName(LineKey),
     PieceName(PieceKey),
     Grain(PieceKey),
     Placement(PieceKey),
@@ -76,6 +80,8 @@ impl Command {
                 Some(Field::ElasticStrength(*elastic))
             }
             Command::MoveNotch { notch, .. } => Some(Field::NotchPlace(*notch)),
+            Command::SetLineKind { line, .. } => Some(Field::LinePurpose(*line)),
+            Command::LabelLine { line, .. } => Some(Field::LineName(*line)),
             Command::RenamePiece { piece, .. } => Some(Field::PieceName(*piece)),
             Command::SetGrain { piece, .. } => Some(Field::Grain(*piece)),
             Command::PlacePiece { piece, .. } => Some(Field::Placement(*piece)),
@@ -99,6 +105,11 @@ impl Command {
             | Command::RemoveSeam { .. }
             | Command::AddElastic { .. }
             | Command::RemoveElastic { .. }
+            // Drawing a line creates the handles of every span that bends, so
+            // it belongs with the edits that never fold: a second drawing
+            // folded onto it would strand the keys the first one issued.
+            | Command::AddLine { .. }
+            | Command::RemoveLine { .. }
             | Command::AddNotch { .. }
             | Command::RemoveNotch { .. }
             | Command::AddDart { .. }

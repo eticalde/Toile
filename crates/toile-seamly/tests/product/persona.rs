@@ -1,4 +1,4 @@
-use toile_doc::{Doc, FORMAT_VERSION_LINKED, Persona, Snapshot};
+use toile_doc::{Doc, FORMAT_VERSION_INTERNAL, Persona, Snapshot};
 
 use super::product;
 
@@ -35,18 +35,19 @@ fn a_linked_product_carries_the_person_fingerprint_and_asks_for_the_link_version
         persona.current().map(Snapshot::fingerprint).as_ref()
     );
     assert_eq!(origin.fnv, body.fingerprint());
-    assert_eq!(product.doc.format_version(), FORMAT_VERSION_LINKED);
+    // The link no longer decides the version: the pattern's internal lines
+    // already ask for a higher one, and the stamp is the highest anything in
+    // the document needs.
+    assert_eq!(product.doc.format_version(), FORMAT_VERSION_INTERNAL);
     let written = product.doc.to_canonical_json();
     assert_eq!(
         Doc::from_json(&written).map(|d| d.to_canonical_json()),
         Ok(written.clone())
     );
-    // Only the body changed: the pieces and the points are the unlinked ones.
+    // Only the body changed: the pieces, the points and the lines are the
+    // unlinked ones, stamp included.
     let head = |text: &str| text[..text.find("\"mannequins\"").expect("bodies")].to_owned();
-    assert_eq!(
-        head(&written).replacen("\"toile\": 3", "\"toile\": 1", 1),
-        head(&unlinked)
-    );
+    assert_eq!(head(&written), head(&unlinked));
     assert!(
         !written.contains("SENTINEL"),
         "the personal block reached the product"

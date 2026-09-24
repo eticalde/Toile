@@ -1,5 +1,7 @@
-use toile_doc::Winding;
-use toile_seamly::{Evaluation, Frozen, Measurements, Pattern, SplineLength, import};
+use toile_doc::{LineKind, Winding};
+use toile_seamly::{
+    Carried, Evaluation, Frozen, Measurements, Pattern, Refusal, SplineLength, import,
+};
 
 use super::{distance, resolve};
 
@@ -29,6 +31,12 @@ const PATTERN: &str = r##"<?xml version="1.0" encoding="UTF-8"?>
             <point id="13" idObject="3" type="modeling"/>
             <point id="15" idObject="5" type="modeling"/>
             <arc id="17" idObject="7" type="modeling"/>
+            <path cut="false" id="18" lineType="solidLine" name="marca sola" type="2">
+                <nodes><node idObject="12" type="NodePoint"/></nodes>
+            </path>
+            <path cut="true" id="19" lineType="dashLine" name="abertura" type="2">
+                <nodes><node idObject="11" type="NodePoint"/><node idObject="13" type="NodePoint"/></nodes>
+            </path>
         </modeling>
         <pieces>
             <piece id="20" name="CUT" seamAllowance="false" width="0" version="2">
@@ -39,6 +47,7 @@ const PATTERN: &str = r##"<?xml version="1.0" encoding="UTF-8"?>
                     <node idObject="13" type="NodePoint"/>
                     <node idObject="15" type="NodePoint"/>
                 </nodes>
+                <iPaths><record path="18"/><record path="19"/></iPaths>
             </piece>
             <piece id="21" name="ARC" seamAllowance="false" width="0" version="2">
                 <data letter="B" quantity="1" onFold="false"/>
@@ -110,4 +119,56 @@ fn a_cut_corner_follows_its_curve_at_a_frozen_parameter_and_an_arc_is_cut_in_spa
             assert!(distance(at, want) <= 1e-9, "{:?}", product.sources[&key]);
         }
     }
+}
+
+/// A path the product cannot draw is said out loud, and one the file says the
+/// cutter opens the cloth along becomes a slit whose two places are corners.
+#[test]
+fn a_path_of_one_place_is_reported_and_a_cut_one_is_a_slit_between_two_corners() {
+    let (pattern, body) = inputs(80.0);
+    let product = import(&pattern, &body, "sintético").expect("the pattern imports");
+    let cut = product.doc.piece_named("CUT").expect("imported");
+    let notes = &product
+        .report
+        .pieces
+        .iter()
+        .find(|note| note.name == "CUT")
+        .expect("reported")
+        .internal;
+    assert_eq!(notes.len(), 2);
+    assert_eq!(notes[0].name, "marca sola");
+    assert_eq!(notes[0].carried, Carried::Refused(Refusal::OnePlace));
+    assert_eq!(
+        notes[1].carried,
+        Carried::Line {
+            kind: LineKind::Slit,
+            places: 2,
+            anchored: 2,
+            curves: 0,
+            stray: 0.0,
+        }
+    );
+
+    // Only the second one is in the document, and it is drawn on nothing but
+    // the contour: a slit between two corners adds no point at all.
+    let lines: Vec<_> = product.doc.lines.iter().map(|(_, line)| line).collect();
+    assert_eq!(lines.len(), 1);
+    assert_eq!(lines[0].label.as_deref(), Some("abertura"));
+    assert_eq!(lines[0].piece, cut);
+    assert!(lines[0].kind.opens_the_cloth());
+    let anchors: Vec<_> = lines[0]
+        .vertices()
+        .map(|place| place.anchor().expect("both places are corners"))
+        .collect();
+    assert!(anchors.iter().all(|anchor| anchor.piece == cut));
+    let held = product.doc.pieces.get(cut).expect("live");
+    let labels: Vec<Option<String>> = anchors
+        .iter()
+        .map(|anchor| product.doc.label_of(cut, anchor.from))
+        .collect();
+    assert_eq!(
+        labels,
+        [Some("A".to_owned()), Some("C".to_owned())],
+        "{held:?}"
+    );
 }

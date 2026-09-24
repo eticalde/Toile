@@ -1,5 +1,5 @@
 use toile_doc::{
-    Command, Doc, EdgeRange, Elastic, FORMAT_VERSION_ELASTIC, FormatError, History, Identity, block,
+    Command, Doc, EdgeRange, Elastic, FORMAT_VERSION_ELASTIC, History, Identity, block,
 };
 
 use super::placement::placed;
@@ -17,7 +17,7 @@ fn band(doc: &Doc) -> Command {
 }
 
 /// The shipped block with that elastic on it, stamped `version`.
-fn elasticated(version: u32) -> String {
+pub(super) fn elasticated(version: u32) -> String {
     let mut doc = block::trousers();
     band(&doc)
         .apply(&mut doc)
@@ -96,31 +96,4 @@ fn an_elastic_put_on_and_undone_takes_the_file_to_version_5_and_back() {
     );
     history.redo(&mut doc).expect("the slot is free");
     assert_eq!(doc.to_canonical_json(), file);
-}
-
-/// A build cannot know what a later field means, so it refuses the file for its
-/// version rather than open it and drop that field on the next save.
-#[test]
-fn a_version_6_document_is_refused_loudly() {
-    for later in [
-        restamped(SHIPPED, 6),
-        restamped(&shaped(2), 6),
-        placed(SHIPPED, 6),
-        elasticated(6),
-    ] {
-        let error = Doc::from_json(&later).expect_err("this build reads up to version 5");
-        assert_eq!(
-            error,
-            FormatError::UnknownVersion {
-                found: 6,
-                newest: 5
-            }
-        );
-        assert!(
-            error
-                .to_string()
-                .contains("version 6; this build reads versions 1 to 5"),
-            "{error}"
-        );
-    }
 }

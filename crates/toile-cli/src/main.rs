@@ -29,7 +29,7 @@ fn main() {
         _ => {
             println!("toile {}", env!("CARGO_PKG_VERSION"));
             println!(
-                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · doc [RUTA] [--resolve-with NOMBRE] · seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada AAAA-MM-DD --biblioteca DIR]"
+                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · doc [RUTA] [--resolve-with NOMBRE] · seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada AAAA-MM-DD --biblioteca DIR [--vincular]]"
             );
         }
     }

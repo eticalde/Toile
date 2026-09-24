@@ -55,8 +55,11 @@ pub fn show(
 /// the caption's own ink: leaving the piece then would leave the entry open.
 fn trail(ui: &mut egui::Ui, theme: &Theme, at: Pos2, rest: &str, state: &mut State) {
     let font = FontId::monospace(11.0);
-    let live =
-        state.ask.is_none() && matches!(state.gesture, Gesture::Idle | Gesture::Drawing { .. });
+    let live = state.ask.is_none()
+        && matches!(
+            state.gesture,
+            Gesture::Idle | Gesture::Drawing { .. } | Gesture::Tracing(_)
+        );
     let size = ui
         .painter()
         .layout_no_wrap(PRODUCT.to_owned(), font.clone(), theme.muted)

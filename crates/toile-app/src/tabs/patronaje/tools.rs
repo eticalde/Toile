@@ -10,7 +10,7 @@ use crate::widgets::{CORNER, PAD, section};
 /// The tools: the name, the icon that stands for it, and whether the program
 /// can already do it. A tile that cannot is drawn dead and answers nothing,
 /// because a button that lies is worse than a gap.
-const TOOLS: [(&str, &str, bool); 8] = [
+const TOOLS: [(&str, &str, bool); 9] = [
     ("Seleccionar", "3 2 13 8 8.8 9 7 13 3 2", true),
     ("Punto", "o 8 8 2.5", true),
     (
@@ -18,6 +18,7 @@ const TOOLS: [(&str, &str, bool); 8] = [
         "2 13 5 12 8 9 11 4 14 3; 2 13 5 9; o 5 9 1.3",
         true,
     ),
+    ("Línea", "3 2 13 2 13 14 3 14 3 2; 5 8 8 8; 10 8 12 8", true),
     ("Pinza", "3 3 8 13 13 3", false),
     ("Piquete", "2 9 14 9; 8 9 8 5", false),
     ("Espejo", "8 2 8 14; 5 5 2 8 5 11; 11 5 14 8 11 11", false),
@@ -36,6 +37,7 @@ fn tool_of(name: &str) -> Option<Tool> {
         "Seleccionar" => Some(Tool::Select),
         "Punto" => Some(Tool::Point),
         "Curva" => Some(Tool::Curve),
+        "Línea" => Some(Tool::Trace),
         "Coser" => Some(Tool::Sew),
         _ => None,
     }
@@ -102,7 +104,7 @@ fn take(state: &mut State, tool: Tool) {
         state.sew();
         return;
     }
-    if matches!(state.gesture, Gesture::Sewing(_)) {
+    if matches!(state.gesture, Gesture::Sewing(_) | Gesture::Tracing(_)) {
         state.gesture = Gesture::Idle;
     }
     state.tool = tool;
@@ -216,15 +218,19 @@ mod tests {
             dimensions: true,
             ..State::default()
         };
-        let expected = [Ready, Ready, Held, Absent, Absent, Absent, Held, Ready];
+        let expected = [
+            Ready, Ready, Held, Ready, Absent, Absent, Absent, Held, Ready,
+        ];
         assert_eq!(weights(&piece), expected);
         let whole = State {
             scope: Scope::Product,
-            ..piece
+            ..piece.clone()
         };
         assert_eq!(
             weights(&whole),
-            [Held, Absent, Absent, Absent, Absent, Absent, Absent, Ready],
+            [
+                Held, Absent, Absent, Absent, Absent, Absent, Absent, Absent, Ready
+            ],
             "a tool for one piece looks dead while every piece is on the mat"
         );
         let sewing = State {
@@ -233,8 +239,21 @@ mod tests {
         };
         assert_eq!(
             weights(&sewing),
-            [Ready, Absent, Absent, Absent, Absent, Absent, Absent, Held],
+            [
+                Ready, Absent, Absent, Absent, Absent, Absent, Absent, Absent, Held
+            ],
             "with the sewing tool in hand its tile is the one lit"
+        );
+        let tracing = State {
+            tool: Tool::Trace,
+            ..piece.clone()
+        };
+        assert_eq!(
+            weights(&tracing),
+            [
+                Ready, Ready, Ready, Held, Absent, Absent, Absent, Held, Ready
+            ],
+            "with the line tool in hand its tile is the one lit"
         );
     }
 }

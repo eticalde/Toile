@@ -1,5 +1,5 @@
 use super::FormatError;
-use crate::{Arena, Doc, DocError, EdgeAnchor, EdgeRange, Key};
+use crate::{Arena, Doc, DocError, EdgeAnchor, EdgeRange, Key, LineVertex};
 
 /// Checks that no tract asks to be flattened at a count no tract can carry.
 ///
@@ -30,6 +30,20 @@ pub(super) fn samplings(doc: &Doc) -> Result<(), FormatError> {
 pub(super) fn elastics(doc: &Doc) -> Result<(), FormatError> {
     for (_, elastic) in doc.elastics.iter() {
         elastic.check().map_err(FormatError::Elastic)?;
+    }
+    Ok(())
+}
+
+/// Checks that every internal line is one a piece could be drawn with.
+///
+/// The same rule the edit answers to, asked again of the file, because the file
+/// is the other way in: a hand-typed run through one place is not a line, an
+/// anchor on another piece's contour is drawn on cloth that is not there, and a
+/// fraction of `1.5` walks off the end of its tract. Refused here rather than
+/// dropped, so the pattern that opens is the pattern that was written.
+pub(super) fn lines(doc: &Doc) -> Result<(), FormatError> {
+    for (_, line) in doc.lines.iter() {
+        line.check().map_err(FormatError::InternalLine)?;
     }
     Ok(())
 }
@@ -76,6 +90,18 @@ pub(super) fn references(doc: &Doc) -> Result<(), FormatError> {
             live(&doc.notches, mate)?;
         }
     }
+    for (_, drawn) in doc.lines.iter() {
+        live(&doc.pieces, drawn.piece)?;
+        for vertex in drawn.vertices() {
+            match vertex {
+                LineVertex::Contour(at) => anchor(doc, at)?,
+                LineVertex::Free { point } => live(&doc.points, point)?,
+            }
+        }
+        for handle in drawn.handles() {
+            live(&doc.points, handle)?;
+        }
+    }
     for (_, dart) in doc.darts.iter() {
         live(&doc.points, dart.apex)?;
         live(&doc.points, dart.legs.0)?;
@@ -115,7 +141,9 @@ fn live<T>(arena: &Arena<T>, key: Key<T>) -> Result<(), FormatError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{Elastic, MannequinKey, PointKey, block};
+    use crate::{
+        Elastic, InternalLine, LineKind, LineSpan, MannequinKey, PieceKey, PointKey, block,
+    };
 
     /// A hand-edited elastic is named rather than handed to the solver: a
     /// ratio of `1e9` throws a chain four hundred thousand kilometres long,
@@ -149,6 +177,54 @@ mod tests {
         let mut held = doc.clone();
         held.elastics.insert(Elastic::new(at, 0.85, 10.0));
         assert_eq!(elastics(&held), Ok(()), "and a waistband passes");
+    }
+
+    /// A hand-edited line is named rather than drawn: a run through one place
+    /// is a dot, an anchor on another piece's contour is cloth that is not
+    /// there, and a fraction of `1.5` walks off the end of its tract.
+    #[test]
+    fn an_internal_line_no_piece_could_be_drawn_with_is_named() {
+        let doc = block::trouser_front();
+        let front = doc.piece_named(block::FRONT).expect("the block draws one");
+        let node = doc
+            .shows_label(front, "cintura_cf")
+            .expect("the block names it");
+        let head = LineVertex::Contour(EdgeAnchor::at_node(front, node));
+        let drawn = |piece, head, spans| InternalLine {
+            piece,
+            kind: LineKind::Fold,
+            label: None,
+            head,
+            spans,
+        };
+        let span = |to| LineSpan {
+            to,
+            segment: crate::Segment::Line,
+            samples: 1,
+        };
+        let elsewhere = LineVertex::Contour(EdgeAnchor::at_node(PieceKey::new(9, 0), node));
+        let past_the_end = LineVertex::Contour(EdgeAnchor {
+            piece: front,
+            from: node,
+            t: 1.5,
+        });
+        assert_eq!(lines(&doc), Ok(()), "the block draws none");
+        for bad in [
+            drawn(front, head, Vec::new()),
+            drawn(front, head, vec![span(elsewhere)]),
+            drawn(front, head, vec![span(past_the_end)]),
+        ] {
+            let mut edited = doc.clone();
+            edited.lines.insert(bad);
+            let error = lines(&edited).expect_err("no piece is drawn with that");
+            assert!(
+                error.to_string().starts_with("the pattern draws"),
+                "{error}"
+            );
+        }
+        let mut held = doc.clone();
+        held.lines.insert(drawn(front, head, vec![span(head)]));
+        assert_eq!(lines(&held), Ok(()), "and a fold passes");
     }
 
     #[test]

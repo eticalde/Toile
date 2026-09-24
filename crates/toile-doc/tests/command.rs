@@ -242,8 +242,9 @@ fn an_edit_whose_tool_has_not_arrived_is_an_error_not_a_panic() {
         Command::RemoveDart {
             dart: DartKey::new(0, 0),
         },
-        Command::RemoveNotch {
+        Command::MoveNotch {
             notch: NotchKey::new(0, 0),
+            to: EdgeAnchor::at_node(front(&doc), node(&doc, "cintura_cf")),
         },
     ] {
         assert_eq!(

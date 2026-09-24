@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 /// How the command is called, for every message that has to say it.
 pub const USAGE: &str = "uso: toile seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada \
-                         AAAA-MM-DD --biblioteca DIR]";
+                         AAAA-MM-DD --biblioteca DIR [--vincular]]";
 
 /// What `toile seamly` was asked to do.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +15,8 @@ pub struct Asked {
     pub persona: Option<Wanted>,
 }
 
-/// The person the body becomes in the user's library.
+/// The person the body becomes in the user's library, or the one it is a copy
+/// of.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Wanted {
     /// Her name, as the library shows it.
@@ -24,6 +25,15 @@ pub struct Wanted {
     pub taken: String,
     /// The library's folder.
     pub library: PathBuf,
+    /// Whether she is already in the library and the product is only to be
+    /// linked to her.
+    ///
+    /// Asked for rather than guessed from finding a file of that name. Filing
+    /// a person and linking to one already filed are two different things —
+    /// the first writes the library, the second promises not to — and a run
+    /// that silently did the other one would be a run whose author could not
+    /// tell which had happened.
+    pub existing: bool,
 }
 
 /// Reads the arguments, or says why they make no sense.
@@ -33,12 +43,19 @@ pub struct Wanted {
 pub fn parse(args: &[String]) -> Result<Asked, String> {
     let mut paths = Vec::new();
     let (mut name, mut taken, mut library) = (None, None, None);
+    let mut existing = false;
     let mut rest = args.iter();
     while let Some(arg) = rest.next() {
         let slot = match arg.as_str() {
             "--persona" => &mut name,
             "--tomada" => &mut taken,
             "--biblioteca" => &mut library,
+            "--vincular" => {
+                if std::mem::replace(&mut existing, true) {
+                    return Err(format!("«{arg}» aparece dos veces\n{USAGE}"));
+                }
+                continue;
+            }
             flag if flag.starts_with("--") => {
                 return Err(format!("no existe la opción «{flag}»\n{USAGE}"));
             }
@@ -64,6 +81,12 @@ pub fn parse(args: &[String]) -> Result<Asked, String> {
         _ => return Err(USAGE.to_owned()),
     };
     let persona = match (name, taken, library) {
+        (None, None, None) if existing => {
+            return Err(format!(
+                "--vincular dice a qué persona vincular el producto, así que va con --persona, \
+                 --tomada y --biblioteca\n{USAGE}"
+            ));
+        }
         (None, None, None) => None,
         (Some(name), _, _) if name.trim().is_empty() => {
             return Err("el nombre de la persona no puede quedar vacío".to_owned());
@@ -72,6 +95,7 @@ pub fn parse(args: &[String]) -> Result<Asked, String> {
             name,
             taken,
             library: PathBuf::from(library),
+            existing,
         }),
         _ => {
             return Err(format!(

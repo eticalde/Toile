@@ -77,6 +77,12 @@ pub enum DocError {
     /// An elastic whose two ends sit on different pieces.
     #[error("an elastic has to start and end on one piece")]
     SplitElastic,
+    /// An internal line anchored to the contour of a piece it is not drawn on.
+    #[error("an internal line is drawn on one piece, and anchors only to it")]
+    SplitInternalLine,
+    /// An internal line that runs through fewer than two places.
+    #[error("an internal line runs from one place to another, so it needs two")]
+    ShortLine,
     /// A ratio no elastic holds a stretch to, which is where the numbers JSON
     /// cannot spell land as well.
     #[error(

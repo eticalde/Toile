@@ -11,8 +11,12 @@ use super::{Frozen, Product};
 use crate::eval::env::SPLINE;
 use crate::{Block, Construction, Error, Id, ObjectKind, Piece};
 
+/// The internal lines a piece is drawn with and not cut on.
+mod inner;
 /// The points and the pieces of the document.
 mod piece;
+/// Putting a point of the pattern into the document, and remembering it.
+mod place;
 
 /// One piece of the pattern and the outline the translation walked for it.
 pub(super) struct Walked<'p> {

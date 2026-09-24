@@ -11,7 +11,7 @@ const GLYPH: f32 = 12.0;
 
 /// Caption plus a boxed value: something the app knows, with nothing to press.
 pub fn readout(ui: &mut Ui, theme: &Theme, caption: &str, value: &str, width: f32) {
-    boxed(ui, theme, caption, value, width, None);
+    boxed(ui, theme, caption, value, width, None, None);
 }
 
 /// The same box over a value a press takes to the next one in order.
@@ -20,7 +20,21 @@ pub fn readout(ui: &mut Ui, theme: &Theme, caption: &str, value: &str, width: f3
 /// choose from, this app opens no menu anywhere, and a press here does not
 /// choose: it steps. The mark is what the press really does.
 pub fn cycle(ui: &mut Ui, theme: &Theme, caption: &str, value: &str, width: f32) -> Response {
-    boxed(ui, theme, caption, value, width, Some(cycle_mark))
+    boxed(ui, theme, caption, value, width, Some(cycle_mark), None)
+}
+
+/// The same step under an identity the caller names, so a press aimed from
+/// outside the panel finds the box by what it steps and not by where the rows
+/// above it happened to leave it.
+pub fn cycle_named(
+    ui: &mut Ui,
+    theme: &Theme,
+    id: Id,
+    caption: &str,
+    value: &str,
+    width: f32,
+) -> Response {
+    boxed(ui, theme, caption, value, width, Some(cycle_mark), Some(id))
 }
 
 /// Caption, boxed value, and the mark that says how the box answers a press.
@@ -34,6 +48,7 @@ fn boxed(
     value: &str,
     width: f32,
     mark: Option<fn(&Painter, Pos2, Color32)>,
+    named: Option<Id>,
 ) -> Response {
     ui.horizontal(|ui| {
         ui.label(
@@ -45,7 +60,10 @@ fn boxed(
         );
         let live = mark.is_some();
         let sense = if live { Sense::click() } else { Sense::hover() };
-        let (rect, resp) = ui.allocate_exact_size(vec2(width, 24.0), sense);
+        // Taking the room and interacting with it are two steps, so a name the
+        // caller gave stands in for the one the layout would have issued.
+        let (auto, rect) = ui.allocate_space(vec2(width, 24.0));
+        let resp = ui.interact(rect, named.unwrap_or(auto), sense);
         let p = ui.painter();
         // The border lifts under the pointer only where a press does
         // something: a box that answers nothing may not brighten as if it did.

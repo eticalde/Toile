@@ -8,7 +8,7 @@ use super::sew::{self, Pick, Spread};
 use super::state::{State, Tool};
 use super::thread::Thread;
 use super::wire::{self, Verb};
-use super::{arrange, canvas, marks, stitch, thread};
+use super::{arrange, canvas, chalk, inner, marks, stitch, thread};
 use crate::theme::Theme;
 use crate::widgets::fill;
 
@@ -217,6 +217,16 @@ fn piece(
     let at = (it.piece, cut.tracts.as_slice(), [0.0, 0.0]);
     marks::elastics(p, theme, draft.doc(), at, state.view);
     canvas::paper_and_outline(p, &it.outline, state.view, &grounds, line);
+    // The spread's tracts already lie where the overview put the piece, so only
+    // a place bound to a free point of the document needs that offset.
+    let lines = inner::of(draft, it.piece, &cut.tracts, it.shift);
+    chalk::lines(p, theme, &lines, (state.view, state.selection.line()));
+    chalk::notches(
+        p,
+        theme,
+        &inner::ticks(draft, it.piece, &cut.tracts),
+        state.view,
+    );
     let held = draft.doc().pieces.get(it.piece);
     let (Some(held), Some(bbox)) = (held, layout::bounds(std::slice::from_ref(it))) else {
         return;

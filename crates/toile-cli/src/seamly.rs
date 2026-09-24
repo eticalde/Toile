@@ -60,10 +60,13 @@ fn migrate(asked: &Asked) -> Result<Vec<String>, String> {
         .persona
         .as_ref()
         .map(|wanted| (wanted, Origin::stem_of(&wanted.name)));
-    if let Some((wanted, stem)) = &wanted
-        && library::path(&wanted.library, stem).exists()
-    {
-        return Err(library::taken(&wanted.library, stem));
+    if let Some((wanted, stem)) = &wanted {
+        let there = library::path(&wanted.library, stem).exists();
+        match (wanted.existing, there) {
+            (false, true) => return Err(library::taken(&wanted.library, stem)),
+            (true, false) => return Err(library::missing(&wanted.library, stem)),
+            _ => {}
+        }
     }
     let (pattern, body, measured) = read(input)?;
     if pattern.blocks.iter().all(|block| block.pieces.is_empty()) {
@@ -75,7 +78,7 @@ fn migrate(asked: &Asked) -> Result<Vec<String>, String> {
     let mut product = import(&pattern, &body, &file_stem(&measured))
         .map_err(|why| format!("no se pudo importar: {why}"))?;
     let persona = match &wanted {
-        Some((wanted, stem)) => Some(link(&mut product, wanted, stem, &measured)?),
+        Some((wanted, stem)) => Some(person(&mut product, wanted, stem, &measured)?),
         None => None,
     };
     let check = check::check(&product, &pattern, &body)
@@ -93,25 +96,27 @@ fn migrate(asked: &Asked) -> Result<Vec<String>, String> {
     })?;
     let filed = wanted
         .as_ref()
-        .map(|(wanted, stem)| library::path(&wanted.library, stem));
+        .map(|(wanted, stem)| (library::path(&wanted.library, stem), !wanted.existing));
     let files = report::Files {
         source: input,
         product: output,
         svg: &svg_path,
-        persona: filed.as_deref(),
+        persona: filed.as_ref().map(|(at, new)| (at.as_path(), *new)),
     };
     let text = report::write(&product, &check, &files, &pattern.comments);
     let mut written = Vec::new();
     // First, so that a library folder that cannot be written leaves nothing
     // behind and a second run starts clean.
-    if let (Some((wanted, stem)), Some((_, json))) = (&wanted, &persona) {
+    if let (Some((wanted, stem)), Some((_, Some(json)))) = (&wanted, &persona) {
         written.push(library::file(&wanted.library, stem, json)?);
     }
     create(output, &product.doc.to_canonical_json())?;
     create(&report_path, &text)?;
     create(&svg_path, &svg)?;
     written.extend([output.to_owned(), report_path, svg_path]);
-    let person = persona.as_ref().map(|(persona, _)| persona);
+    let person = persona
+        .as_ref()
+        .map(|(persona, json)| (persona, json.is_some()));
     Ok(summary(&product, &check, person, &written))
 }
 
@@ -143,14 +148,35 @@ fn file_stem(path: &Path) -> String {
         .map_or_else(|| "cuerpo".to_owned(), |s| s.to_string_lossy().into_owned())
 }
 
-/// Builds the person the product's body becomes, links the product to her,
-/// and returns her with the text of her library file.
-fn link(
+/// The person the product's body becomes a copy of, and the text to file her
+/// under when this run is the one that files her.
+///
+/// Asked to link, nothing is built and nothing is written: the library's own
+/// person is read and the product is linked to the measuring she already
+/// carries. Her newest measuring has to be the day asked for, because that is
+/// the one a copy takes — linking to her while naming another day would put a
+/// date in the product that no measuring of hers answers to.
+fn person(
     product: &mut Product,
     wanted: &Wanted,
     stem: &str,
     measured: &Path,
-) -> Result<(Persona, String), String> {
+) -> Result<(Persona, Option<String>), String> {
+    if wanted.existing {
+        let persona = library::read(&wanted.library, stem)?;
+        let taken = persona
+            .current()
+            .ok_or_else(|| format!("«{}» no tiene ninguna medición", wanted.name))?;
+        if taken.date != wanted.taken {
+            return Err(format!(
+                "«{}» tiene como medición más reciente la del {}, no la del {}: el producto \
+                 llevaría una copia de aquélla",
+                wanted.name, taken.date, wanted.taken
+            ));
+        }
+        linked(product, &persona, stem, wanted)?;
+        return Ok((persona, None));
+    }
     let source = measured
         .file_name()
         .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
@@ -161,10 +187,20 @@ fn link(
         }
         other => format!("la persona «{}» no se puede guardar: {other}", wanted.name),
     })?;
+    linked(product, &persona, stem, wanted)?;
+    Ok((persona, Some(json)))
+}
+
+/// Makes the product's body a linked copy of `persona`.
+fn linked(
+    product: &mut Product,
+    persona: &Persona,
+    stem: &str,
+    wanted: &Wanted,
+) -> Result<(), String> {
     product
-        .link(&persona, stem)
-        .map_err(|why| format!("no se pudo vincular el producto a «{}»: {why}", wanted.name))?;
-    Ok((persona, json))
+        .link(persona, stem)
+        .map_err(|why| format!("no se pudo vincular el producto a «{}»: {why}", wanted.name))
 }
 
 /// Writes a file that must not exist yet.
@@ -181,18 +217,21 @@ fn create(path: &Path, text: &str) -> Result<(), String> {
 fn summary(
     product: &Product,
     check: &check::Check,
-    persona: Option<&Persona>,
+    persona: Option<(&Persona, bool)>,
     written: &[PathBuf],
 ) -> Vec<String> {
     let report = &product.report;
     let curves: usize = report.pieces.iter().map(|p| p.curves.len()).sum();
     let mut lines = vec![
         format!(
-            "{} piezas · {} puntos · {} curvas · {} piquetes · cuerpo «{}»",
+            "{} piezas · {} puntos · {} curvas · {} piquetes · {} líneas internas · formato {} · \
+             cuerpo «{}»",
             report.pieces.len(),
             product.doc.points.len(),
             curves,
             product.doc.notches.len(),
+            product.doc.lines.iter().count(),
+            product.doc.format_version(),
             report.body
         ),
         format!(
@@ -208,9 +247,14 @@ fn summary(
             ));
         }
     }
-    if let Some(taken) = persona.and_then(Persona::current) {
+    if let Some((taken, filed)) = persona.and_then(|(who, filed)| Some((who.current()?, filed))) {
+        let how = if filed {
+            "archivada por esta importación"
+        } else {
+            "ya en la biblioteca, que no se toca"
+        };
         lines.push(format!(
-            "persona «{}», medición del {}: el producto lleva una copia vinculada",
+            "persona «{}», medición del {} ({how}): el producto lleva una copia vinculada",
             report.body, taken.date
         ));
     }

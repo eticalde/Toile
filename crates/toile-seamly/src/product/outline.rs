@@ -1,6 +1,14 @@
-use super::source::{Curve, End, Source};
+use super::source::Source;
 use super::translate::{Coords, Translator};
-use crate::{Block, Error, Id, NodeKind, ObjectKind, Piece};
+use crate::{Block, Error, Id, InternalPath, Piece};
+
+/// A walk finished: a piece's closed contour, or an internal line's open run.
+mod finish;
+/// The places and the curves a list of path nodes walks through.
+mod steps;
+
+pub(crate) use finish::Run;
+use steps::steps;
 
 /// How close, in centimetres, two points of the imported body must be to be
 /// taken for the same place when their formulas are compared.
@@ -42,152 +50,60 @@ enum Step {
     Bend(Bend),
 }
 
+/// What a walk makes of two consecutive places that meet on the imported body
+/// and nowhere in their formulas.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Coincide {
+    /// Refuse the walk. Merging them would cost a contour a tract on the
+    /// strength of a coincidence that holds for one body only, and keeping
+    /// both would leave a corner no cloth turns at.
+    Refuse,
+    /// Keep both. A drawn line joins them by a span of no length, which is
+    /// what the file wrote and costs a drawing nothing: no cloth is cut along
+    /// an internal line, so no claim about the two has to be made at all.
+    Keep,
+}
+
 /// A piece's outline as a closed run of tracts, in the file's walking order.
-///
-/// Each node contributes its points and curves, walked backwards where the
-/// file says to reverse it. A point the walk reaches twice in a row — a node
-/// and the curve that starts on it — is one vertex, and so is the last one if
-/// it closes on the first. A curve whose handles sit on its ends is the
-/// straight line it traces.
 pub(crate) fn walk(
     tr: &mut Translator<'_>,
     block: &Block,
     piece: &Piece,
 ) -> Result<Vec<Tract>, Error> {
-    let mut steps = Vec::new();
-    for node in &piece.outline {
-        let id = node.object;
-        match node.kind {
-            NodeKind::Point => steps.push(Step::Vertex(vertex(tr, id)?)),
-            NodeKind::Spline => {
-                let ObjectKind::Spline(spline) = &tr.object(id)?.1.kind else {
-                    return Err(Error::Product(format!("object {id} is not a spline")));
-                };
-                let (start, end) = (vertex(tr, spline.start)?, vertex(tr, spline.end)?);
-                let points = tr.spline(id)?;
-                curve(
-                    &mut steps,
-                    [start, end],
-                    points,
-                    Curve::Spline(id),
-                    node.reverse,
-                );
-            }
-            NodeKind::SplinePath => {
-                let ObjectKind::SplinePath(through) = &tr.object(id)?.1.kind else {
-                    return Err(Error::Product(format!("object {id} is not a spline path")));
-                };
-                let segments = tr.path(id)?;
-                let mut order: Vec<usize> = (0..segments.len()).collect();
-                if node.reverse {
-                    order.reverse();
-                }
-                for segment in order {
-                    let ends = [
-                        vertex(tr, through[segment].point)?,
-                        vertex(tr, through[segment + 1].point)?,
-                    ];
-                    let curve_id = Curve::PathSegment { path: id, segment };
-                    curve(
-                        &mut steps,
-                        ends,
-                        segments[segment].clone(),
-                        curve_id,
-                        node.reverse,
-                    );
-                }
-            }
-            NodeKind::Arc => {
-                let spans = tr.arc(id)?;
-                let count = spans.len();
-                let mut order: Vec<usize> = (0..count).collect();
-                if node.reverse {
-                    order.reverse();
-                }
-                for index in order {
-                    let span = spans[index].clone();
-                    let end = |at: usize, coords: Coords| Vertex {
-                        coords,
-                        point: None,
-                        source: Source::ArcPoint {
-                            arc: id,
-                            index: at,
-                            spans: count,
-                        },
-                    };
-                    let ends = [
-                        end(index, span.start.clone()),
-                        end(index + 1, span.end.clone()),
-                    ];
-                    let points = [span.start, span.out, span.into, span.end];
-                    let curve_id = Curve::ArcSpan {
-                        arc: id,
-                        index,
-                        spans: count,
-                    };
-                    curve(&mut steps, ends, points, curve_id, node.reverse);
-                }
-            }
-        }
-    }
-    let steps = collapse(tr, block, &piece.name, steps)?;
-    tracts(&piece.name, steps)
+    let steps = steps(tr, &piece.outline)?;
+    let steps = collapse(tr, block, &piece.name, steps, Coincide::Refuse)?;
+    finish::closed(tr, &piece.name, steps)
 }
 
-fn vertex(tr: &mut Translator<'_>, id: Id) -> Result<Vertex, Error> {
-    Ok(Vertex {
-        coords: tr.define(id)?,
-        point: Some(id),
-        source: Source::Point(id),
-    })
+/// An internal path as an open run of places, in the file's walking order.
+///
+/// The same walk a contour is made of, finished differently: a line has two
+/// ends, so the place it stops at is never folded back onto the place it
+/// started from. A pocket slit drawn as a loop closes because its author drew
+/// it closed, and dropping that last place would leave it open.
+///
+/// Two places the formulas cannot prove are one are both kept, where a contour
+/// refuses them: the file's own node list said to go from the one to the other,
+/// and going nowhere at all is the truest reading of that when the two meet.
+pub(crate) fn line(
+    tr: &mut Translator<'_>,
+    block: &Block,
+    path: &InternalPath,
+) -> Result<Run, Error> {
+    let steps = steps(tr, &path.nodes)?;
+    let steps = collapse(tr, block, &path.name, steps, Coincide::Keep)?;
+    finish::open(&path.name, steps)
 }
 
-/// Pushes a curve and its two ends, in walking order.
-fn curve(
-    steps: &mut Vec<Step>,
-    [a, b]: [Vertex; 2],
-    points: [Coords; 4],
-    id: Curve,
-    reverse: bool,
-) {
-    let [start, out, into, end] = points;
-    let straight = out == start && into == end;
-    let first = (
-        out,
-        Source::Handle {
-            curve: id,
-            end: End::First,
-        },
-    );
-    let last = (
-        into,
-        Source::Handle {
-            curve: id,
-            end: End::Last,
-        },
-    );
-    let (a, b, first, last) = if reverse {
-        (b, a, last, first)
-    } else {
-        (a, b, first, last)
-    };
-    steps.push(Step::Vertex(a));
-    if !straight {
-        steps.push(Step::Bend(Bend {
-            out: first,
-            into: last,
-        }));
-    }
-    steps.push(Step::Vertex(b));
-}
-
-/// Merges consecutive vertices that are one place, and names the ones an
-/// arc produced after the construction point they stand on.
+/// Merges consecutive vertices that are one place — a node and the curve that
+/// starts on it — and names the ones an arc produced after the construction
+/// point they stand on.
 fn collapse(
     tr: &mut Translator<'_>,
     block: &Block,
-    piece: &str,
+    walked: &str,
     steps: Vec<Step>,
+    coincide: Coincide,
 ) -> Result<Vec<Step>, Error> {
     let mut out: Vec<Step> = Vec::with_capacity(steps.len());
     for step in steps {
@@ -198,7 +114,7 @@ fn collapse(
             other => other,
         };
         if let (Some(Step::Vertex(held)), Step::Vertex(next)) = (out.last_mut(), &step)
-            && same(tr, piece, held, next)?
+            && same(tr, walked, held, next, coincide)?
         {
             if held.point.is_none() {
                 *held = next.clone();
@@ -207,20 +123,21 @@ fn collapse(
         }
         out.push(step);
     }
-    if let (Some(Step::Vertex(first)), Some(Step::Vertex(last))) = (out.first(), out.last())
-        && out.len() > 1
-        && same(tr, piece, first, last)?
-    {
-        out.pop();
-    }
     Ok(out)
 }
 
 /// Whether two vertices are one place: the same point, or the same formulas.
 ///
-/// Two vertices that meet on the imported body but not in their formulas
-/// would meet only on that body, so they are refused rather than merged.
-fn same(tr: &Translator<'_>, piece: &str, a: &Vertex, b: &Vertex) -> Result<bool, Error> {
+/// Two vertices that meet on the imported body but not in their formulas meet
+/// only as far as the translation can tell, so they are never merged on that
+/// strength; what a walk does with the pair instead is its own to say.
+fn same(
+    tr: &Translator<'_>,
+    walked: &str,
+    a: &Vertex,
+    b: &Vertex,
+    coincide: Coincide,
+) -> Result<bool, Error> {
     if (a.point.is_some() && a.point == b.point) || a.coords == b.coords {
         return Ok(true);
     }
@@ -228,9 +145,10 @@ fn same(tr: &Translator<'_>, piece: &str, a: &Vertex, b: &Vertex) -> Result<bool
     else {
         return Ok(false);
     };
-    if (pa[0] - pb[0]).abs() <= SAME_PLACE && (pa[1] - pb[1]).abs() <= SAME_PLACE {
+    let meet = (pa[0] - pb[0]).abs() <= SAME_PLACE && (pa[1] - pb[1]).abs() <= SAME_PLACE;
+    if meet && coincide == Coincide::Refuse {
         return Err(Error::Product(format!(
-            "in `{piece}`, two consecutive corners meet on the imported body but not by construction"
+            "in `{walked}`, two consecutive places meet on the imported body but not by construction"
         )));
     }
     Ok(false)
@@ -257,30 +175,4 @@ fn named(tr: &mut Translator<'_>, block: &Block, vertex: Vertex) -> Vertex {
         }
     }
     vertex
-}
-
-fn tracts(piece: &str, steps: Vec<Step>) -> Result<Vec<Tract>, Error> {
-    let broken = || {
-        Error::Product(format!(
-            "the outline of `{piece}` does not alternate corners and curves"
-        ))
-    };
-    let mut out = Vec::new();
-    let mut steps = steps.into_iter().peekable();
-    while let Some(step) = steps.next() {
-        let Step::Vertex(from) = step else {
-            return Err(broken());
-        };
-        let bend = match steps.next_if(|next| matches!(next, Step::Bend(_))) {
-            Some(Step::Bend(bend)) => Some(bend),
-            _ => None,
-        };
-        out.push(Tract { from, bend });
-    }
-    if out.len() < 3 {
-        return Err(Error::Product(format!(
-            "the outline of `{piece}` has fewer than three corners"
-        )));
-    }
-    Ok(out)
 }

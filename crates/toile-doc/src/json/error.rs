@@ -46,6 +46,9 @@ pub enum FormatError {
     /// An elastic holding its stretch to numbers no elastic holds.
     #[error("an elastic in the pattern holds a stretch to numbers no elastic holds: {0}")]
     Elastic(#[source] DocError),
+    /// An internal line no piece could be drawn with.
+    #[error("the pattern draws an internal line no piece could be drawn with: {0}")]
+    InternalLine(#[source] DocError),
 }
 
 impl FormatError {

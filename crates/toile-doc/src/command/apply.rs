@@ -1,20 +1,24 @@
 mod curve;
 mod elastic;
 mod join;
+mod line;
 mod mannequin;
 mod name;
+mod notch;
 mod range;
 mod topology;
 
 use curve::{set_samples, set_segment};
 use elastic::{add_elastic, remove_elastic, set_ratio, set_strength};
 use join::{add_seam, remove_seam};
+use line::{add_line, label_line, remove_line, set_kind};
 use mannequin::{
     add_mannequin, refresh_mannequin, remove_mannequin, rename_mannequin, resolve_with,
     set_measure, set_phenotype,
 };
 pub(crate) use name::Naming;
 use name::{label_point, rename_piece, show_label};
+use notch::{add_notch, remove_notch};
 use topology::{add_piece, insert_node, remove_node, remove_piece};
 
 use crate::{
@@ -36,7 +40,8 @@ impl Command {
     /// `NoSuchNode` for a node no contour runs through, `Occupied` for a key
     /// another entry still holds, `Sampling` for a flattening no tract can be
     /// asked for, `Shared` for a point another piece still draws itself with,
-    /// `SplitSeamSide` or `SplitElastic` for a stretch whose ends disagree on
+    /// `ShortLine` for a line through fewer than two places, `SplitSeamSide`,
+    /// `SplitElastic` or `SplitInternalLine` for a run whose ends disagree on
     /// their piece, and `NotYetImplemented` for an edit whose tool has not
     /// been built yet.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
@@ -97,9 +102,17 @@ impl Command {
             Command::RemoveElastic { elastic } => remove_elastic(doc, elastic),
             Command::SetElasticRatio { elastic, to } => set_ratio(doc, elastic, to),
             Command::SetElasticStrength { elastic, to } => set_strength(doc, elastic, to),
-            Command::AddNotch { .. }
-            | Command::MoveNotch { .. }
-            | Command::RemoveNotch { .. }
+            Command::AddLine { identity, line } => add_line(doc, identity, *line),
+            Command::RemoveLine { line } => remove_line(doc, line),
+            Command::SetLineKind { line, to } => set_kind(doc, line, to),
+            Command::LabelLine { line, to } => label_line(doc, line, to),
+            Command::AddNotch {
+                identity,
+                notch,
+                mate,
+            } => add_notch(doc, identity, notch, mate),
+            Command::RemoveNotch { notch } => remove_notch(doc, notch),
+            Command::MoveNotch { .. }
             | Command::AddDart { .. }
             | Command::RemoveDart { .. }
             | Command::AddSymmetry { .. }

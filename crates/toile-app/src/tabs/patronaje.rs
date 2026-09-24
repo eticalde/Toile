@@ -1,11 +1,13 @@
 mod arrange;
 mod canvas;
 mod caption;
+mod chalk;
 mod curve;
 mod dimension;
 mod empty;
 mod follow;
 mod gesture;
+mod inner;
 mod input;
 mod inspector;
 mod layout;
@@ -23,6 +25,7 @@ mod state;
 mod stitch;
 mod thread;
 mod tools;
+mod trace;
 mod tract;
 mod tree;
 mod view;
@@ -63,6 +66,7 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
     let active = active_piece(draft, patronaje.active, session.piece());
     let before = draft.map(|d| d.doc().piece_keys()).unwrap_or_default();
     let sewn = follow::seam_keys(session);
+    let traced = follow::line_keys(session);
     patronaje.active = active;
     let state = &mut *patronaje;
     let mut verbs = Vec::new();
@@ -101,6 +105,7 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
     let said = apply(session, verbs, &mut patronaje.refused);
     let moved = follow::pieces(session, patronaje, &before);
     follow::seams(session, patronaje, &sewn);
+    follow::lines(session, patronaje, &traced);
     if said || moved {
         // The bars are drawn before the tabs, so what this run has to say
         // reaches the status bar on the frame after it. Nothing else asks for
@@ -137,7 +142,7 @@ fn active_piece(
 fn plead(state: &mut State, plea: tree::Plea, has_document: bool) -> Vec<Verb> {
     let free = matches!(
         state.gesture,
-        Gesture::Idle | Gesture::Drawing { .. } | Gesture::Sewing(_)
+        Gesture::Idle | Gesture::Drawing { .. } | Gesture::Sewing(_) | Gesture::Tracing(_)
     );
     match plea {
         // A drawing already in progress starts over: the row was pressed to

@@ -29,6 +29,8 @@ pub enum Tool {
     Point,
     /// Bend a straight tract, and pull the handles of a bent one.
     Curve,
+    /// Draw a line inside the piece that the pattern does not cut on.
+    Trace,
     /// Sew one tract to another, on the whole product where both can be seen.
     Sew,
 }
@@ -156,9 +158,10 @@ impl State {
     pub fn open(&mut self, piece: PieceKey) {
         match &mut self.gesture {
             Gesture::Drawing { back_to, .. } => *back_to = Scope::Piece,
-            // A tract picked for a seam is a matter of view and holds nothing
-            // open, so it is simply let go of.
-            Gesture::Sewing(_) => self.gesture = Gesture::Idle,
+            // A tract picked for a seam and a line half traced are matters of
+            // view and hold nothing open, so they are simply let go of. A
+            // tracing belongs to the piece it was begun on, and this leaves it.
+            Gesture::Sewing(_) | Gesture::Tracing(_) => self.gesture = Gesture::Idle,
             _ => {}
         }
         if self.tool == Tool::Sew {
@@ -176,8 +179,11 @@ impl State {
     /// the product does: a gesture or a question may hold the undo stack
     /// open, and the view left behind would leave that entry open with it.
     pub fn sew(&mut self) {
-        let free =
-            self.ask.is_none() && matches!(self.gesture, Gesture::Idle | Gesture::Drawing { .. });
+        let free = self.ask.is_none()
+            && matches!(
+                self.gesture,
+                Gesture::Idle | Gesture::Drawing { .. } | Gesture::Tracing(_)
+            );
         if self.scope == Scope::Piece {
             if !free {
                 return;
@@ -192,7 +198,7 @@ impl State {
     /// A drawing in progress is walked away from, the way Escape leaves it:
     /// nothing of it has reached the document, so there is nothing to unwind.
     pub fn overview(&mut self) {
-        if matches!(self.gesture, Gesture::Drawing { .. }) {
+        if matches!(self.gesture, Gesture::Drawing { .. } | Gesture::Tracing(_)) {
             self.gesture = Gesture::Idle;
             self.caught = None;
         }

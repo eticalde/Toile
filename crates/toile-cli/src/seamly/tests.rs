@@ -5,10 +5,13 @@ use toile_engine::draft::{Doc, Draft};
 use toile_engine::session::Session;
 use toile_seamly::{Frozen, Measurements, Pattern, Product, import};
 
+use self::inner::drawn_lines;
 use super::args::Asked;
 use super::check::{PARITY, check};
 use super::migrate;
 
+/// The internal lines, from the written file through the engine to the drawing.
+mod inner;
 /// Filing the body as a person in the library, and the product's link.
 mod persona;
 
@@ -95,16 +98,21 @@ fn an_evaluator_trusting_the_written_lengths_misplaces_the_back_waist() {
     let (pattern, body) = inputs();
     let found = check(&product, &pattern, &body).expect("the product resolves");
     let trusting = found.trusting.expect("every spline writes a length");
-    assert_eq!(
-        trusting.points,
-        [
-            "bk_dart_a",
-            "bk_dart_tip",
-            "bk_dart_b",
-            "bk_waist_cb",
-            "bk_waist_side"
-        ]
-    );
+    // A stale written length reaches the back waist and its dart, the back
+    // yoke, the internal lines drawn off that yoke — the flap, the pocket slit
+    // and the bag guide — and the fly's cut point, which the fly topstitch is
+    // drawn to.
+    assert_eq!(trusting.points.len(), 32, "{:?}", trusting.points);
+    for label in [
+        "bk_dart_tip",
+        "bk_waist_side",
+        "bk_yoke_cb",
+        "ff_hook",
+        "bp_stl",
+        "bp_bgr",
+    ] {
+        assert!(trusting.points.iter().any(|at| at == label), "{label}");
+    }
     assert!(
         trusting.worst > 5e-4 && trusting.worst < 7e-4,
         "{}",
@@ -139,10 +147,10 @@ fn migrating_writes_the_product_its_report_and_its_drawing_and_never_overwrites(
         persona: None,
     };
     let lines = migrate(&asked).expect("the owner's pattern migrates");
-    assert!(
-        lines.iter().any(|l| l.starts_with("10 piezas")),
-        "{lines:?}"
-    );
+    let summary = lines.first().expect("a first line").clone();
+    assert!(summary.starts_with("10 piezas"), "{summary}");
+    assert!(summary.contains("25 líneas internas"), "{summary}");
+    assert!(summary.contains("formato 6"), "{summary}");
     let report = input.with_file_name("Baggy Jeans [Muller] - importado a Toile.md");
     let svg = input.with_extension("svg");
     let text = std::fs::read_to_string(&report).expect("the report is written");
@@ -154,22 +162,22 @@ fn migrating_writes_the_product_its_report_and_its_drawing_and_never_overwrites(
         "con el nombre del archivo de medidas",
         "### Notas del patrón (26)",
         "sin contar la firma que Seamly",
+        "## Líneas internas (25)",
+        "No quedó ningún trayecto interno fuera del producto.",
     ] {
         assert!(text.contains(needle), "the report lacks {needle}");
     }
     stale_lengths(&text);
     comments_by_place_only(&text);
+    // One row per path in the table of lines, each naming its Seamly stroke.
     assert_eq!(
         text.matches("| continuo |").count() + text.matches("| discontinuo |").count(),
         25
     );
     let written = std::fs::read_to_string(&output).expect("the product is written");
-    assert_eq!(Doc::from_json(&written).map(|doc| doc.pieces.len()), Ok(10));
-    assert!(
-        std::fs::read_to_string(&svg)
-            .expect("drawn")
-            .starts_with("<?xml")
-    );
+    let doc = Doc::from_json(&written).expect("a Toile file");
+    assert_eq!((doc.pieces.len(), doc.lines.iter().count()), (10, 25));
+    drawn_lines(&std::fs::read_to_string(&svg).expect("drawn"), &doc);
     let again = migrate(&asked).expect_err("nothing is written twice");
     assert!(again.contains("ya existe"), "{again}");
     assert_eq!(

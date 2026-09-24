@@ -3,7 +3,9 @@
     reason = "a notch, an offset and a depth are numbers the file writes and the product keeps"
 )]
 
-use toile_doc::{Doc, Grain, Segment, Winding};
+use std::collections::BTreeSet;
+
+use toile_doc::{Doc, Grain, LineVertex, PointKey, Segment, Winding};
 
 use super::{pattern, product};
 
@@ -49,7 +51,22 @@ fn the_contours_count_the_corners_and_curves_the_outlines_draw() {
     }
     let corners: usize = product.report.pieces.iter().map(|p| p.nodes).sum();
     let curves: usize = product.report.pieces.iter().map(|p| p.curves.len()).sum();
-    assert_eq!(product.doc.points.len(), corners + 2 * curves);
+    // Every point of the product is drawn by something: a corner, a corner's
+    // handle, a place of an internal line, or one of that line's handles. The
+    // contours alone no longer account for them all, and nothing is stray.
+    let mut cited: BTreeSet<PointKey> = BTreeSet::new();
+    for (_, piece) in product.doc.pieces.iter() {
+        for node in &piece.contour {
+            cited.insert(node.point);
+            cited.extend(node.segment.handles().into_iter().flat_map(|(a, b)| [a, b]));
+        }
+    }
+    assert_eq!(cited.len(), corners + 2 * curves);
+    for (_, line) in product.doc.lines.iter() {
+        cited.extend(line.vertices().filter_map(LineVertex::point));
+        cited.extend(line.handles());
+    }
+    assert_eq!(cited.len(), product.doc.points.len());
 }
 
 #[test]
@@ -134,9 +151,19 @@ fn a_straight_spline_is_a_straight_tract_and_a_curve_is_flattened_finely_enough(
     );
 }
 
+/// An along-line point on a horizontal or vertical line takes the sense that
+/// line has for the imported body: the waistband's two corners, and the places
+/// of the internal lines drawn on the waistband and the chain strip.
 #[test]
-fn only_the_waistband_s_along_line_points_take_their_direction_from_the_body() {
-    assert_eq!(product().report.directions, ["wb_cf", "wb_side"]);
+fn the_along_line_points_that_take_their_direction_from_the_body_are_the_waistband_s_and_its_lines()
+{
+    assert_eq!(
+        product().report.directions,
+        [
+            "wb_cf", "wb_side", "wb_l1a", "wb_l1b", "wb_l2a", "wb_l2b", "wb_l3a", "wb_l3b",
+            "wb_l4a", "cs_u1", "cs_u2", "cs_g0"
+        ]
+    );
 }
 
 #[test]

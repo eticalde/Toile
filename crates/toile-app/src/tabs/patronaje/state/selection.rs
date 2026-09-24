@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use toile_engine::draft::{PointKey, SeamKey};
+use toile_engine::draft::{LineKey, PointKey, SeamKey};
 
 /// What the inspector is pointed at.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -14,6 +14,8 @@ pub enum Selection {
     Edge(PointKey),
     /// One seam of the product, chosen on the whole of it.
     Seam(SeamKey),
+    /// One line drawn inside a piece and not cut on.
+    Line(LineKey),
 }
 
 impl Selection {
@@ -26,7 +28,7 @@ impl Selection {
     pub fn chosen(&self) -> Option<&BTreeSet<PointKey>> {
         match self {
             Selection::Points(keys) => Some(keys),
-            Selection::None | Selection::Edge(_) | Selection::Seam(_) => None,
+            Selection::None | Selection::Edge(_) | Selection::Seam(_) | Selection::Line(_) => None,
         }
     }
 
@@ -58,7 +60,19 @@ impl Selection {
     pub fn edge(&self) -> Option<PointKey> {
         match self {
             Selection::Edge(key) => Some(*key),
-            Selection::None | Selection::Points(_) | Selection::Seam(_) => None,
+            Selection::None | Selection::Points(_) | Selection::Seam(_) | Selection::Line(_) => {
+                None
+            }
+        }
+    }
+
+    /// The internal line chosen, when a line is what is chosen.
+    pub fn line(&self) -> Option<LineKey> {
+        match self {
+            Selection::Line(key) => Some(*key),
+            Selection::None | Selection::Points(_) | Selection::Edge(_) | Selection::Seam(_) => {
+                None
+            }
         }
     }
 
@@ -66,7 +80,9 @@ impl Selection {
     pub fn seam(&self) -> Option<SeamKey> {
         match self {
             Selection::Seam(key) => Some(*key),
-            Selection::None | Selection::Points(_) | Selection::Edge(_) => None,
+            Selection::None | Selection::Points(_) | Selection::Edge(_) | Selection::Line(_) => {
+                None
+            }
         }
     }
 }

@@ -2,7 +2,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
-use toile_doc::PERSONA_EXTENSION;
+use toile_doc::{PERSONA_EXTENSION, Persona};
 
 /// The file `stem` names in the library kept in `dir`.
 pub fn path(dir: &Path, stem: &str) -> PathBuf {
@@ -12,10 +12,31 @@ pub fn path(dir: &Path, stem: &str) -> PathBuf {
 /// Why a stem already taken is not written over.
 pub fn taken(dir: &Path, stem: &str) -> String {
     format!(
-        "ya hay una persona en la biblioteca con el archivo «{}»: no se sobrescribe; elige otro \
-         nombre con --persona",
+        "ya hay una persona en la biblioteca con el archivo «{}»: no se sobrescribe; añade \
+         --vincular para vincular el producto a ella, o elige otro nombre con --persona",
         path(dir, stem).display()
     )
+}
+
+/// Why a stem that names nothing cannot be linked to.
+pub fn missing(dir: &Path, stem: &str) -> String {
+    format!(
+        "no hay ninguna persona en la biblioteca con el archivo «{}»: quita --vincular y se archiva \
+         con las medidas del patrón",
+        path(dir, stem).display()
+    )
+}
+
+/// The person `stem` names in the library kept in `dir`.
+///
+/// Read whole and parsed by the very reader the app uses, so a file the app
+/// would refuse is refused here too instead of half-read into a link.
+pub fn read(dir: &Path, stem: &str) -> Result<Persona, String> {
+    let target = path(dir, stem);
+    let text = fs::read_to_string(&target)
+        .map_err(|why| format!("no se pudo leer «{}»: {why}", target.display()))?;
+    Persona::from_json(&text)
+        .map_err(|why| format!("«{}» no es una persona legible: {why}", target.display()))
 }
 
 /// Files `text` in the library kept in `dir` as the person under `stem`, whole

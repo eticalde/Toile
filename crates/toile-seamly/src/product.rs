@@ -24,8 +24,8 @@ mod source;
 mod translate;
 
 pub use report::{
-    FrozenNote, HelperKind, HelperNote, InternalNote, LengthNote, Measure, NotchNote, PieceNote,
-    Report, VariableNote,
+    Carried, FrozenNote, HelperKind, HelperNote, InternalNote, LengthNote, Measure, NotchNote,
+    PieceNote, Refusal, Report, VariableNote,
 };
 pub use source::{Curve, End, Source};
 

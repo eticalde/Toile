@@ -27,6 +27,8 @@ pub mod formula;
 mod json;
 /// The stable identity of a document entity.
 mod key;
+/// A run of places a piece is drawn with and not cut on.
+mod line;
 /// The measurements a pattern resolves against.
 mod measure;
 /// A mark on a contour and the mark it answers to.
@@ -61,12 +63,14 @@ pub use error::DocError;
 pub use json::{
     FormatError, PERSONA_EXTENSION, PERSONA_VERSION, VERSION as FORMAT_VERSION,
     VERSION_ELASTIC as FORMAT_VERSION_ELASTIC, VERSION_EXTENDED as FORMAT_VERSION_EXTENDED,
-    VERSION_LINKED as FORMAT_VERSION_LINKED, VERSION_PLACED as FORMAT_VERSION_PLACED,
+    VERSION_INTERNAL as FORMAT_VERSION_INTERNAL, VERSION_LINKED as FORMAT_VERSION_LINKED,
+    VERSION_PLACED as FORMAT_VERSION_PLACED,
 };
 pub use key::{
-    DartKey, ElasticKey, Identity, Key, MannequinKey, NotchKey, PieceKey, PinKey, PointKey,
-    SeamKey, SymmetryKey, VariableKey,
+    DartKey, ElasticKey, Identity, Key, LineKey, MannequinKey, NotchKey, PieceKey, PinKey,
+    PointKey, SeamKey, SymmetryKey, VariableKey,
 };
+pub use line::{InternalLine, LineEdit, LineKind, LineSpan, LineVertex, SpanEdit};
 pub use measure::{BodyShape, MeasureSet};
 pub use notch::{Notch, NotchCount};
 pub use persona::{Origin, Persona, PersonaError, Snapshot};

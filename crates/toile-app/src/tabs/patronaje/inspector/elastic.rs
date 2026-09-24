@@ -191,9 +191,9 @@ fn rails(
     footer_note(ui, theme, HELD);
 }
 
-/// One press of the section, set in from the panel's edge like every other
-/// control on it.
-fn press(ui: &mut egui::Ui, theme: &Theme, id: Id, label: &str) -> bool {
+/// One press of a section of the panel, set in from its edge like every other
+/// control on it, under an identity the caller names.
+pub(super) fn press(ui: &mut egui::Ui, theme: &Theme, id: Id, label: &str) -> bool {
     ui.add_space(6.0);
     let pressed = ui
         .horizontal(|ui| {

@@ -15,17 +15,19 @@ pub fn pieces(out: &mut String, product: &Product) {
     );
     let _ = writeln!(
         out,
-        "| pieza | esquinas | curvas | sentido | piquetes |\n|---|---:|---:|---|---:|"
+        "| pieza | esquinas | curvas | sentido | piquetes | líneas internas |\n\
+         |---|---:|---:|---|---:|---:|"
     );
     for piece in &report.pieces {
         let _ = writeln!(
             out,
-            "| {} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {} | {} |",
             piece.name,
             piece.nodes,
             piece.curves.len(),
             winding(piece.winding),
-            piece.notches.len()
+            piece.notches.len(),
+            piece.internal.len()
         );
     }
     let _ = writeln!(
@@ -86,7 +88,7 @@ pub fn missing(out: &mut String, product: &Product, comments: &[Comment]) {
     let _ = writeln!(out);
     folds(out, &report.pieces);
     notches(out, &report.pieces);
-    internal(out, &report.pieces);
+    strokes(out, &report.pieces);
     let _ = writeln!(out, "### Hilo y posición\n");
     let _ = writeln!(
         out,
@@ -123,8 +125,8 @@ pub fn missing(out: &mut String, product: &Product, comments: &[Comment]) {
     let (constructed, needed) = report.construction;
     let _ = writeln!(
         out,
-        "- {} de los {constructed} puntos de construcción no entran: son de trayectos internos o \
-         de trazos auxiliares que ninguna esquina necesita.\n",
+        "- {} de los {constructed} puntos de construcción no entran: son de trazos auxiliares que \
+         ni una esquina ni una línea interna necesita.\n",
         constructed.saturating_sub(needed)
     );
     notes(out, comments);
@@ -211,27 +213,21 @@ fn notches(out: &mut String, pieces: &[PieceNote]) {
     let _ = writeln!(out);
 }
 
-fn internal(out: &mut String, pieces: &[PieceNote]) {
+/// What the product keeps of a line beyond where it runs and what it is for.
+///
+/// Nothing yet: Seamly's colour and weight say how a line is printed, which is
+/// the drawing's business and not the pattern's, and the app strokes a line
+/// from what it is for instead.
+fn strokes(out: &mut String, pieces: &[PieceNote]) {
     let count: usize = pieces.iter().map(|p| p.internal.len()).sum();
     if count == 0 {
         return;
     }
-    let _ = writeln!(out, "### Trayectos internos ({count})\n");
+    let _ = writeln!(out, "### El trazo de una línea interna\n");
     let _ = writeln!(
         out,
-        "Toile todavía no tiene líneas internas: ranuras, pespuntes, dobleces y marcas se quedan \
-         en el patrón de Seamly.\n"
+        "Los {count} trayectos internos entran al producto —los cuenta «Líneas internas»—, pero su \
+         color y su grosor no: Toile dibuja una línea según para qué sirve, y de qué color se \
+         imprime es cosa del dibujo, no del patrón.\n"
     );
-    let _ = writeln!(out, "| pieza | trayecto | trazo |\n|---|---|---|");
-    for piece in pieces {
-        for path in &piece.internal {
-            let stroke = match path.line_type.as_str() {
-                "solidLine" => "continuo",
-                "dashLine" => "discontinuo",
-                other => other,
-            };
-            let _ = writeln!(out, "| {} | {} | {stroke} |", piece.name, path.name);
-        }
-    }
-    let _ = writeln!(out);
 }

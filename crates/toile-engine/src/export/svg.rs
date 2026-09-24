@@ -1,3 +1,5 @@
+/// The lines a piece is drawn with and not cut on.
+mod inner;
 mod mark;
 
 use std::fmt::Write;
@@ -85,7 +87,8 @@ fn header(out: &mut String, sheet: [f64; 4]) {
     );
 }
 
-/// One piece: its cut line, its grain line, and the names it carries.
+/// One piece: its cut line, the lines drawn inside it, its grain line, and the
+/// names it carries.
 fn group(out: &mut String, draft: &Draft, piece: PieceKey) {
     let Some(held) = draft.doc().pieces.get(piece) else {
         return;
@@ -94,6 +97,7 @@ fn group(out: &mut String, draft: &Draft, piece: PieceKey) {
     let _ = writeln!(out, "  <g>");
     let _ = writeln!(out, "    <title>{}</title>", escape(&held.name));
     contour(out, &cut);
+    inner::lines(out, draft, piece);
     mark::grain(out, &cut, held.grain.radians());
     mark::names(out, draft, piece, &nodes(draft, piece), &held.name);
     let _ = writeln!(out, "  </g>");

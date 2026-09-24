@@ -33,7 +33,7 @@ pub use mapping::{measurement_pairs, seamly_measurement, toile_measurement};
 pub use measure::{Measurement, Measurements};
 pub use path::{InternalPath, NodeKind, Notch, PathNode, Piece};
 pub use product::{
-    Curve, End, FrozenNote, HelperKind, HelperNote, InternalNote, LengthNote, Measure, NotchNote,
-    PieceNote, Product, Report, Source, VariableNote, import,
+    Carried, Curve, End, FrozenNote, HelperKind, HelperNote, InternalNote, LengthNote, Measure,
+    NotchNote, PieceNote, Product, Refusal, Report, Source, VariableNote, import,
 };
 pub use sym::Frozen;

@@ -2,15 +2,16 @@ use std::collections::BTreeSet;
 
 use toile_doc::{
     Command, ContourNode, Doc, EdgeAnchor, Grain, Identity, Notch, Piece, PieceKey, Placement,
-    Point, PointKey, Segment, Winding,
+    PointKey, Segment, Winding,
 };
 
 use super::super::outline::Tract;
-use super::super::report::{InternalNote, NotchNote, PieceNote};
+use super::super::report::{NotchNote, PieceNote};
 use super::super::samples;
 use super::super::source::Source;
 use super::super::translate::{Coords, Translator};
-use super::{Placed, Walked, binding};
+use super::place::{at, insert, label, locate, shown};
+use super::{Placed, Walked, inner};
 use crate::{Error, Xy};
 
 /// Puts one piece into the document: its corners, its handles, the piece
@@ -21,11 +22,7 @@ pub(super) fn place(
     walked: &Walked<'_>,
     placed: &mut Placed,
 ) -> Result<PieceNote, Error> {
-    let Walked {
-        block,
-        piece,
-        tracts,
-    } = walked;
+    let Walked { piece, tracts, .. } = walked;
     let labels = labels(tr, tracts)?;
     let mut taken = BTreeSet::new();
     for label in labels.iter().flatten() {
@@ -84,16 +81,9 @@ pub(super) fn place(
     .map_err(|refused| Error::Product(format!("`{}`: {refused}", piece.name)))?;
     let key = applied.touched[0];
     let notches = notches(tr, doc, piece, key, placed)?;
-    let internal = piece
-        .internal_paths
-        .iter()
-        .filter_map(|id| block.internal_paths.iter().find(|path| path.id == *id))
-        .map(|path| InternalNote {
-            name: path.name.clone(),
-            line_type: path.line_type.clone(),
-            cut: path.cut,
-        })
-        .collect();
+    // After the piece, because a place of a line that is a corner of it is
+    // addressed as a node of the contour the piece has only just gained.
+    let internal = inner::draw(tr, doc, walked, key, placed)?;
     Ok(PieceNote {
         name: piece.name.clone(),
         letter: piece.letter.clone(),
@@ -112,30 +102,7 @@ pub(super) fn place(
 
 /// The name each corner shows: its construction point's, when it is one.
 fn labels(tr: &Translator<'_>, tracts: &[Tract]) -> Result<Vec<Option<String>>, Error> {
-    tracts
-        .iter()
-        .map(|tract| {
-            tract
-                .from
-                .point
-                .map(|id| tr.point_name(id).map(str::to_owned))
-                .transpose()
-        })
-        .collect()
-}
-
-/// A corner's name, or its place in the contour when it has none.
-fn shown(labels: &[Option<String>], index: usize) -> String {
-    labels[index]
-        .clone()
-        .unwrap_or_else(|| format!("P{}", index + 1))
-}
-
-/// Where the imported body puts a point of the product.
-fn locate(tr: &Translator<'_>, source: Source) -> Result<Xy, Error> {
-    source
-        .locate(tr.reference)
-        .ok_or_else(|| Error::Product(format!("{source:?} has no place on the imported body")))
+    tracts.iter().map(|tract| label(tr, &tract.from)).collect()
 }
 
 /// The document point a corner is: the one its construction point already
@@ -175,34 +142,6 @@ fn handle(
 ) -> Result<PointKey, Error> {
     let point = at(coords, label)?.named(label);
     Ok(insert(doc, point, coords, *source, placed))
-}
-
-fn at(coords: &Coords, what: &str) -> Result<Point, Error> {
-    Ok(Point::at(
-        binding(&coords.x.source(), what)?,
-        binding(&coords.y.source(), what)?,
-    ))
-}
-
-fn insert(
-    doc: &mut Doc,
-    point: Point,
-    coords: &Coords,
-    source: Source,
-    placed: &mut Placed,
-) -> PointKey {
-    let key = doc.points.insert(point);
-    placed.sources.insert(key, source);
-    let frozen: BTreeSet<_> = coords
-        .x
-        .frozen()
-        .union(coords.y.frozen())
-        .copied()
-        .collect();
-    if !frozen.is_empty() {
-        placed.frozen.insert(key, frozen);
-    }
-    key
 }
 
 /// The piece's notches, each at the corner the file cuts it at, and what the

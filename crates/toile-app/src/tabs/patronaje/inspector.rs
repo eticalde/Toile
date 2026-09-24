@@ -1,5 +1,7 @@
 mod cite;
 pub(super) mod elastic;
+pub(super) mod inner;
+pub(super) mod notch;
 pub(super) mod seams;
 mod tape;
 mod variables;
@@ -61,6 +63,11 @@ pub fn show(
                 }
                 if state.scope == Scope::Product && piece.is_some() {
                     seams::show(ui, theme, draft, faults, (&mut *state, &mut verbs));
+                }
+                // The lines drawn inside a piece are listed where a piece is
+                // open on its own, which is the one scope that edits them.
+                if let Some(piece) = piece.filter(|_| state.scope == Scope::Piece) {
+                    inner::show(ui, theme, draft, piece, (&mut *state, &mut verbs));
                 }
                 asked = tape::measures(ui, theme, draft, state, &cite).or(asked);
                 asked = variables::variables(ui, theme, draft, state, &cite).or(asked);
@@ -191,7 +198,8 @@ fn tract(
     field_row(ui, theme, "largo", &length, "cm");
     let (state, cite) = writing;
     let asked = write::samples(ui, theme, draft, (piece, from), (&mut *state, cite));
-    elastic::show(ui, theme, doc, (piece, from, to), (state, verbs));
+    elastic::show(ui, theme, doc, (piece, from, to), (state, &mut *verbs));
+    notch::show(ui, theme, doc, (piece, from), verbs);
     asked
 }
 

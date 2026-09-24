@@ -1,31 +1,38 @@
 use eframe::egui::{Pos2, vec2};
-use toile_engine::draft::{Binding, Draft, PieceKey, PointKey, block};
+use toile_engine::draft::{Binding, Doc, Draft, PieceKey, PointKey, block};
 
 use super::*;
 use crate::tabs::patronaje::curve::{self, Bend};
+use crate::tabs::patronaje::inner::Drawn;
 use crate::tabs::patronaje::snap::{SnapConfig, SnapKind};
 use crate::tabs::patronaje::tract::{self, Tract};
 use crate::tabs::patronaje::view::View;
 
 /// The block on the table, with its contour already resolved.
-pub(super) struct Table {
-    pub(super) draft: Draft,
-    piece: PieceKey,
-    pub(super) nodes: Vec<(PointKey, [f64; 2])>,
+pub(in crate::tabs::patronaje) struct Table {
+    pub(in crate::tabs::patronaje) draft: Draft,
+    pub(in crate::tabs::patronaje) piece: PieceKey,
+    pub(in crate::tabs::patronaje) nodes: Vec<(PointKey, [f64; 2])>,
     tracts: Vec<Tract>,
     bends: Vec<Bend>,
+    lines: Vec<Drawn>,
 }
 
-pub(super) fn table() -> Table {
-    let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
-    let piece = draft
-        .doc()
-        .piece_named(block::FRONT)
-        .expect("the block draws one piece");
+pub(in crate::tabs::patronaje) fn table() -> Table {
+    table_of(block::trouser_front())
+}
+
+/// Any product on the table, worked out the way one frame of the mat works it
+/// out: the piece in front is the first it holds.
+pub(in crate::tabs::patronaje) fn table_of(doc: Doc) -> Table {
+    let draft = Draft::from_doc(doc).expect("the product resolves");
+    let piece = draft.doc().piece_keys()[0];
+    let tracts = tract::of(&draft, piece);
     Table {
         nodes: draft.points_cm(piece).to_vec(),
-        tracts: tract::of(&draft, piece),
         bends: curve::bends(&draft, piece),
+        lines: inner::of(&draft, piece, &tracts, [0.0, 0.0]),
+        tracts,
         draft,
         piece,
     }
@@ -34,18 +41,23 @@ pub(super) fn table() -> Table {
 impl Table {
     /// The context a gesture reduces against, with the snap in whatever state
     /// the test needs it and nothing chosen.
-    pub(super) fn context(&self, snap: SnapConfig) -> EditContext<'_> {
+    pub(in crate::tabs::patronaje) fn context(&self, snap: SnapConfig) -> EditContext<'_> {
         self.holding(snap, Selection::None)
     }
 
     /// The same, with `chosen` already in hand.
-    pub(super) fn holding(&self, snap: SnapConfig, chosen: Selection) -> EditContext<'_> {
+    pub(in crate::tabs::patronaje) fn holding(
+        &self,
+        snap: SnapConfig,
+        chosen: Selection,
+    ) -> EditContext<'_> {
         EditContext {
             doc: self.draft.doc(),
             piece: self.piece,
             nodes: &self.nodes,
             tracts: &self.tracts,
             bends: &self.bends,
+            lines: &self.lines,
             selection: chosen,
             tool: Tool::Select,
             view: View::default(),
@@ -53,14 +65,28 @@ impl Table {
         }
     }
 
+    /// The same context with `tool` in hand and the snap put out, which is what
+    /// a tool's own reducer is asked against.
+    pub(in crate::tabs::patronaje) fn wielding(&self, tool: Tool) -> EditContext<'_> {
+        EditContext {
+            tool,
+            ..self.context(free())
+        }
+    }
+
+    /// The lines the mat drew for the piece in front.
+    pub(in crate::tabs::patronaje) fn drawn(&self) -> &[Drawn] {
+        &self.lines
+    }
+
     /// Where a node sits on the glass.
-    pub(super) fn on_glass(&self, node: usize) -> Pos2 {
+    pub(in crate::tabs::patronaje) fn on_glass(&self, node: usize) -> Pos2 {
         View::default().to_screen(self.nodes[node].1)
     }
 }
 
 /// The snap put out, so a test moves by exactly what it says.
-pub(super) fn free() -> SnapConfig {
+pub(in crate::tabs::patronaje) fn free() -> SnapConfig {
     SnapConfig {
         on: false,
         ..SnapConfig::default()

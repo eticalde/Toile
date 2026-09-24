@@ -51,6 +51,15 @@ pub const VERSION_PLACED: u32 = 4;
 /// file into a different garment.
 pub const VERSION_ELASTIC: u32 = 5;
 
+/// The format version of a document in which a piece carries an internal line.
+///
+/// Under the elastic's rule it takes the next number. A build that reads
+/// version 5 predates the internal line, so it would open the product, drop
+/// every fold, topstitch, pocket mouth, buttonhole and mark, and save back a
+/// pattern that cannot be cut from paper — with nothing on screen to say a
+/// line was ever there.
+pub const VERSION_INTERNAL: u32 = 6;
+
 /// A file: the version, and the pattern under it.
 #[derive(Serialize)]
 struct Written<'a> {
@@ -73,14 +82,21 @@ impl Doc {
     ///
     /// A pure function of what the document carries, never of the file it was
     /// read from, so one document still has exactly one text: the highest
-    /// number any body, piece or elastic in it needs.
+    /// number any body, piece, elastic or internal line in it needs.
     pub fn format_version(&self) -> u32 {
         let bodies = self.mannequins.iter().map(|(_, set)| set.format_version());
         let pieces = self.pieces.iter().map(|(_, piece)| piece.format_version());
-        // An elastic has no older spelling to fall back to, so one of them is
-        // enough to make the whole document ask for its version.
+        // Neither an elastic nor an internal line has an older spelling to fall
+        // back to, so one of either is enough to make the whole document ask
+        // for its version.
         let elastic = (!self.elastics.is_empty()).then_some(VERSION_ELASTIC);
-        bodies.chain(pieces).chain(elastic).max().unwrap_or(VERSION)
+        let lines = (!self.lines.is_empty()).then_some(VERSION_INTERNAL);
+        bodies
+            .chain(pieces)
+            .chain(elastic)
+            .chain(lines)
+            .max()
+            .unwrap_or(VERSION)
     }
 
     /// The document as canonical JSON, ending in a newline.
@@ -112,14 +128,14 @@ impl Doc {
     /// JSON, JSON that stops early, a missing or unknown version, a shape that
     /// is not a pattern's, a key that leads nowhere, a tract asking to be
     /// flattened at a count no tract can carry, a link to the library Toile
-    /// could not have written, or an elastic holding a stretch to numbers no
-    /// elastic holds.
+    /// could not have written, an elastic holding a stretch to numbers no
+    /// elastic holds, or an internal line no piece could be drawn with.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = version(text)?;
-        if !(u64::from(VERSION)..=u64::from(VERSION_ELASTIC)).contains(&found) {
+        if !(u64::from(VERSION)..=u64::from(VERSION_INTERNAL)).contains(&found) {
             return Err(FormatError::UnknownVersion {
                 found,
-                newest: VERSION_ELASTIC,
+                newest: VERSION_INTERNAL,
             });
         }
         let loaded: Loaded =
@@ -128,6 +144,7 @@ impl Doc {
         check::samplings(&loaded.doc)?;
         check::origins(&loaded.doc)?;
         check::elastics(&loaded.doc)?;
+        check::lines(&loaded.doc)?;
         Ok(loaded.doc)
     }
 }
@@ -158,7 +175,10 @@ fn version(text: &str) -> Result<u64, FormatError> {
 #[cfg(test)]
 mod tests {
     use crate::json::FormatError;
-    use crate::{Command, Doc, EdgeRange, Elastic, Identity, MeasureSet, block};
+    use crate::{
+        Command, Doc, EdgeAnchor, EdgeRange, Elastic, Identity, LineEdit, LineKind, LineVertex,
+        MeasureSet, block,
+    };
 
     #[test]
     fn a_file_begins_with_the_format_and_its_version() {
@@ -184,6 +204,31 @@ mod tests {
             Doc::from_json("{\"toile\": \"1\", \"doc\": {}}"),
             Err(FormatError::NoHeader)
         );
+    }
+
+    /// A file is the other way into the document, so the rule that refuses a
+    /// line at the command has to meet one that arrives by file as well.
+    #[test]
+    fn an_internal_line_the_file_carries_is_checked_before_the_pattern_opens() {
+        let mut doc = block::trouser_front();
+        let front = doc.piece_named(block::FRONT).expect("the block draws one");
+        let named = |label| doc.shows_label(front, label).expect("the block names it");
+        let place = |from| LineVertex::Contour(EdgeAnchor::at_node(front, from));
+        let edit = LineEdit::new(front, LineKind::Fold, place(named("cintura_cf")))
+            .to(place(named("cintura_lat")));
+        Command::AddLine {
+            identity: Identity::New,
+            line: Box::new(edit),
+        }
+        .apply(&mut doc)
+        .expect("both places are nodes of the front");
+        let written = doc.to_canonical_json();
+        assert_eq!(Doc::from_json(&written), Ok(doc));
+
+        let edited = written.replace("\"t\": 0\n", "\"t\": 1.5\n");
+        assert_ne!(edited, written, "the fixture moved under the test");
+        let error = Doc::from_json(&edited).expect_err("no tract answers for that fraction");
+        assert!(matches!(error, FormatError::InternalLine(_)), "{error}");
     }
 
     /// A hand-edited elastic is refused the way a hand-edited sampling is.

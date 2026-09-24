@@ -3,7 +3,7 @@ use toile_engine::couture::HOLDS_ITS_RATIO;
 use toile_engine::draft::{Doc, Elastic, ElasticKey};
 
 use super::super::elastic::{put_on_id, ratio_id, strength_id, take_off_id};
-use super::desk::{Desk, hem, hip};
+use super::desk::{Desk, bytes, hem, hip};
 
 /// The one elastic the product holds, with its key.
 fn only(desk: &Desk) -> (ElasticKey, Elastic) {
@@ -14,15 +14,6 @@ fn only(desk: &Desk) -> (ElasticKey, Elastic) {
         .map(|(key, held)| (key, *held))
         .next()
         .expect("the arena holds one")
-}
-
-/// What the product's file says right now.
-fn bytes(desk: &Desk) -> String {
-    desk.session
-        .draft()
-        .expect("a product is open")
-        .doc()
-        .to_canonical_json()
 }
 
 /// A tract with an elastic already on it, at the length it was drawn.

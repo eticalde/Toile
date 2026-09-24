@@ -5,9 +5,9 @@
 )]
 
 use toile_doc::{
-    Binding, Dart, Doc, EdgeAnchor, EdgeRange, FoldDirection, Grain, MeasureSet, Notch, NotchCount,
-    Piece, PieceKey, Pin, Point, PointKey, Seam, SeamKind, SeamOrientation, Segment, Symmetry,
-    SymmetryKind, Variable, Winding,
+    Binding, Dart, Doc, EdgeAnchor, EdgeRange, FoldDirection, Grain, InternalLine, LineKind,
+    LineSpan, LineVertex, MeasureSet, Notch, NotchCount, Piece, PieceKey, Pin, Point, PointKey,
+    Seam, SeamKind, SeamOrientation, Segment, Symmetry, SymmetryKind, Variable, Winding,
 };
 
 /// A document carrying one of every entity the model declares.
@@ -52,6 +52,7 @@ fn everything() -> Doc {
 
     seams(&mut doc, front, back, &points);
     marks(&mut doc, front, back, &points);
+    drawn(&mut doc, front, &points);
     doc.symmetries.insert(Symmetry {
         axis: (points[0], points[3]),
         kind: SymmetryKind::Mirror,
@@ -112,6 +113,41 @@ fn marks(doc: &mut Doc, front: PieceKey, back: PieceKey, points: &[PointKey]) {
     });
 }
 
+/// A pocket mouth on the front: one end on the contour, one loose, and a span
+/// that bends on two handles of its own.
+fn drawn(doc: &mut Doc, front: PieceKey, points: &[PointKey]) {
+    let loose = doc.points.insert(Point::at(3.5, 7.25));
+    let handles = (
+        doc.points.insert(Point::at(3.0, 6.0)),
+        doc.points.insert(Point::at(3.25, 7.0)),
+    );
+    doc.lines.insert(InternalLine {
+        piece: front,
+        kind: LineKind::Slit,
+        label: Some("ranura pill".to_owned()),
+        head: LineVertex::Contour(EdgeAnchor {
+            piece: front,
+            from: points[0],
+            t: 0.75,
+        }),
+        spans: vec![
+            LineSpan {
+                to: LineVertex::free(loose),
+                segment: Segment::Cubic {
+                    out: handles.0,
+                    into: handles.1,
+                },
+                samples: 9,
+            },
+            LineSpan {
+                to: LineVertex::Contour(EdgeAnchor::at_node(front, points[2])),
+                segment: Segment::Line,
+                samples: 1,
+            },
+        ],
+    });
+}
+
 #[test]
 fn every_entity_the_model_declares_survives_the_file() {
     let doc = everything();
@@ -139,6 +175,11 @@ fn a_kind_is_written_as_a_tag_beside_the_fields_it_carries() {
         "\"count\": \"triple\"",
         "\"fold\": \"toward_start\"",
         "\"kind\": \"mirror\"",
+        "\"kind\": \"slit\"",
+        "\"label\": \"ranura pill\"",
+        "\"kind\": \"contour\"",
+        "\"kind\": \"free\"",
+        "\"samples\": 9",
         "\"winding\": \"ccw\"",
         "\"radians\": 0.25",
         "\"tolerance\": 0.75",

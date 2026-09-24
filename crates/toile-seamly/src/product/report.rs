@@ -1,4 +1,4 @@
-use toile_doc::Winding;
+use toile_doc::{LineKind, Winding};
 
 use crate::{Frozen, Xy};
 
@@ -132,7 +132,7 @@ pub struct PieceNote {
     pub winding: Winding,
     /// The notches, which the product carries by place and count only.
     pub notches: Vec<NotchNote>,
-    /// The internal paths, which the product has no place for.
+    /// The internal paths drawn on it, in the order the piece cites them.
     pub internal: Vec<InternalNote>,
     /// The layout offset the file gives the piece.
     pub placement: Xy,
@@ -149,7 +149,7 @@ pub struct NotchNote {
     pub length: f64,
 }
 
-/// An internal path of the pattern.
+/// An internal path of the pattern, and what the product made of it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct InternalNote {
     /// Its name.
@@ -158,4 +158,35 @@ pub struct InternalNote {
     pub line_type: String,
     /// The file's `cut` flag.
     pub cut: bool,
+    /// The line the product drew, or why it drew none.
+    pub carried: Carried,
+}
+
+/// What the product made of an internal path.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Carried {
+    /// The line the product drew, and what it is made of.
+    Line {
+        /// What the product drew it as.
+        kind: LineKind,
+        /// The places it runs through.
+        places: usize,
+        /// How many of those sit on the contour of the piece rather than on a
+        /// point of their own.
+        anchored: usize,
+        /// How many of its spans bend.
+        curves: usize,
+        /// How far the worst of those bends strays from the curve once
+        /// flattened, in centimetres; zero for a line of straight spans.
+        stray: f64,
+    },
+    /// Why the product drew none.
+    Refused(Refusal),
+}
+
+/// Why an internal path of the pattern became no line of the product.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refusal {
+    /// The walk reaches one place only, and a line runs between two.
+    OnePlace,
 }

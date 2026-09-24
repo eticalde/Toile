@@ -1,4 +1,4 @@
-use toile_engine::draft::{PieceKey, SeamKey};
+use toile_engine::draft::{LineKey, PieceKey, SeamKey};
 use toile_engine::session::Session;
 
 use super::state::{Scope, Selection, State};
@@ -48,6 +48,36 @@ pub fn seams(session: &Session, state: &mut State, before: &[SeamKey]) {
     } else if state
         .selection
         .seam()
+        .is_some_and(|key| !after.contains(&key))
+    {
+        state.choose(Selection::None);
+    }
+}
+
+/// The internal lines the product holds, in key order.
+pub fn line_keys(session: &Session) -> Vec<LineKey> {
+    session
+        .draft()
+        .map(|d| d.doc().lines.keys().collect())
+        .unwrap_or_default()
+}
+
+/// Keeps the chosen internal line one that exists: a line just traced, or one
+/// an undo has brought back, is the one chosen, so the inspector opens on its
+/// kind; a chosen line that has gone leaves nothing chosen.
+///
+/// Only over a piece on its own, which is where a line is drawn and edited. On
+/// the whole product the lines are there to be seen and nothing else.
+pub fn lines(session: &Session, state: &mut State, before: &[LineKey]) {
+    let after = line_keys(session);
+    if state.scope != Scope::Piece {
+        return;
+    }
+    if let Some(&fresh) = after.iter().find(|key| !before.contains(key)) {
+        state.choose(Selection::Line(fresh));
+    } else if state
+        .selection
+        .line()
         .is_some_and(|key| !after.contains(&key))
     {
         state.choose(Selection::None);

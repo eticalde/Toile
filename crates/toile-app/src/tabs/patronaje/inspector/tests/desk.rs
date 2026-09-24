@@ -160,3 +160,23 @@ pub(super) fn hem() -> (Desk, PointKey) {
     desk.frame(Vec::new());
     (desk, point)
 }
+
+/// Any product on a tall desk, open on the first piece it holds with nothing
+/// chosen: the state a piece's own detail opens in.
+pub(super) fn piece_open(doc: Doc) -> (Desk, PieceKey) {
+    let piece = doc.piece_keys()[0];
+    let mut desk = Desk::tall(doc);
+    desk.state.scope = Scope::Piece;
+    desk.state.active = Some(piece);
+    desk.frame(Vec::new());
+    (desk, piece)
+}
+
+/// What the product's file says right now.
+pub(super) fn bytes(desk: &Desk) -> String {
+    desk.session
+        .draft()
+        .expect("a product is open")
+        .doc()
+        .to_canonical_json()
+}

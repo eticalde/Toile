@@ -7,6 +7,8 @@ use super::check::{Check, PARITY};
 
 /// The body and the variables.
 mod body;
+/// The internal lines the pieces are drawn with.
+mod inner;
 /// The spline lengths the file wrote, beside the curves'.
 mod lengths;
 /// The pieces, and what the product has no place for.
@@ -17,8 +19,9 @@ pub struct Files<'a> {
     pub source: &'a Path,
     pub product: &'a Path,
     pub svg: &'a Path,
-    /// The person filed in the library, if the body became one.
-    pub persona: Option<&'a Path>,
+    /// The person the body is a copy of, and whether this run filed her rather
+    /// than finding her already in the library.
+    pub persona: Option<(&'a Path, bool)>,
 }
 
 fn name(path: &Path) -> String {
@@ -43,12 +46,14 @@ pub fn write(product: &Product, check: &Check, files: &Files<'_>, comments: &[Co
         name(files.product),
         name(files.svg)
     );
-    if let Some(persona) = files.persona {
-        let _ = writeln!(
-            out,
-            "Persona: `{}`, en la biblioteca de Toile.\n",
-            name(persona)
-        );
+    if let Some((persona, filed)) = files.persona {
+        let how = if filed {
+            "archivada en tu biblioteca de Toile por esta importación"
+        } else {
+            "que ya estaba en tu biblioteca de Toile: el producto se vincula a ella y la \
+             biblioteca no se toca"
+        };
+        let _ = writeln!(out, "Persona: `{}`, {how}.\n", name(persona));
     }
     summary(&mut out, product, check);
     rules(&mut out);
@@ -58,6 +63,7 @@ pub fn write(product: &Product, check: &Check, files: &Files<'_>, comments: &[Co
     directions(&mut out, product);
     lengths::lengths(&mut out, product, check);
     pieces::pieces(&mut out, product);
+    inner::lines(&mut out, product);
     pieces::missing(&mut out, product, comments);
     out
 }
@@ -67,13 +73,17 @@ fn summary(out: &mut String, product: &Product, check: &Check) {
     let curves: usize = report.pieces.iter().map(|p| p.curves.len()).sum();
     let corners: usize = report.pieces.iter().map(|p| p.nodes).sum();
     let _ = writeln!(out, "## Resumen\n");
+    let points = product.doc.points.len();
     let _ = writeln!(
         out,
-        "- {} piezas, {} puntos ({corners} esquinas y {} manijas de curva), {curves} curvas y {} piquetes.",
+        "- {} piezas, {points} puntos ({corners} esquinas del contorno y {} manijas de sus curvas; \
+         los otros {} son lugares y manijas de las líneas internas), {curves} curvas, {} piquetes y \
+         {} líneas internas.",
         report.pieces.len(),
-        product.doc.points.len(),
         2 * curves,
-        product.doc.notches.len()
+        points.saturating_sub(corners + 2 * curves),
+        product.doc.notches.len(),
+        product.doc.lines.iter().count()
     );
     let linked = if body::link(product).is_some() {
         ", copia vinculada de la persona de ese nombre en la biblioteca"
@@ -114,7 +124,8 @@ fn summary(out: &mut String, product: &Product, check: &Check) {
     let _ = writeln!(
         out,
         "- De los {constructed} puntos de construcción del patrón, el producto escribe {needed} \
-         como fórmulas: los que son esquinas o sostienen una.\n"
+         como fórmulas: los que son esquina, lugar de una línea interna, o sostienen a uno de \
+         ésos.\n"
     );
 }
 
@@ -179,10 +190,10 @@ fn frozen(out: &mut String, product: &Product, check: &Check) {
             Frozen::CutParameter(_) if note.reaches.is_empty() => {
                 let _ = writeln!(
                     out,
-                    "- **`{}`**: punto cortado sobre una curva, en t = {:.9}. No está en ninguna \
-                     pieza —sólo en un trayecto interno, que no se importa—, así que el producto no \
-                     lo lleva. Si entrara, su t quedaría fijo: seguiría sobre la curva, pero a otro \
-                     largo del que pide su fórmula. Desviación que tendría: {drift}.",
+                    "- **`{}`**: punto cortado sobre una curva, en t = {:.9}. Ninguna esquina ni \
+                     línea interna lo necesita, así que el producto no lo lleva. Si entrara, su t \
+                     quedaría fijo: seguiría sobre la curva, pero a otro largo del que pide su \
+                     fórmula. Desviación que tendría: {drift}.",
                     note.name, note.value
                 );
             }
