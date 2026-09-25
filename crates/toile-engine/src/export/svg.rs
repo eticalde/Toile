@@ -1,21 +1,16 @@
-/// The lines a piece is drawn with and not cut on.
-mod inner;
+/// Every run of ink inside a piece, as a path.
+mod ink;
 mod mark;
-/// How a document number and a document name reach the sheet. Three modules
-/// write into the same drawing, so the millimetre, the two decimals and the
-/// escaping have to be the same in all three or the file is not one drawing.
-mod units;
+/// Text as XML takes it, which is the one part of the drawing's dialect the
+/// printed sheet cannot share: a PDF escapes its own strings its own way.
+mod xml;
 
 use std::fmt::Write;
 
-use self::units::{escape, mm};
-use crate::draft::{Draft, PieceKey, PointKey};
-
-/// Blank paper left around the pattern, in millimetres.
-const MARGIN: f64 = 10.0;
-
-/// The weight of a cut line, in millimetres.
-const CUT: f64 = 0.3;
+use self::xml::escape;
+use super::drawn;
+use super::units::{self, CUT, INK, MARGIN, TITLE, box_of, number};
+use crate::draft::{Draft, PieceKey};
 
 /// What stops a pattern from being written as a drawing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -30,8 +25,8 @@ pub enum ExportError {
 /// One user unit is one millimetre and the sheet declares itself in
 /// millimetres, so the drawing measures on a ruler what the pattern says it
 /// measures: the side seam of the base block is 104.6 cm in any program that
-/// reads SVG. Each piece is one group — its cut line, its grain line and the
-/// names it carries — so a piece can be moved or hidden on its own.
+/// reads SVG. Each piece is one group — the line it is cut on and everything
+/// drawn inside it — so a piece can be moved or hidden on its own.
 ///
 /// # Errors
 /// `ExportError::Empty` when no piece of the document resolves to a contour.
@@ -60,7 +55,7 @@ fn sheet(draft: &Draft, pieces: &[PieceKey]) -> Option<[f64; 4]> {
     let mut low = [f64::INFINITY; 2];
     let mut high = [f64::NEG_INFINITY; 2];
     for &piece in pieces {
-        let (piece_low, piece_high) = mark::box_of(millimetres(draft, piece));
+        let (piece_low, piece_high) = box_of(millimetres(draft, piece));
         for axis in 0..2 {
             low[axis] = low[axis].min(piece_low[axis]);
             high[axis] = high[axis].max(piece_high[axis]);
@@ -79,7 +74,7 @@ fn sheet(draft: &Draft, pieces: &[PieceKey]) -> Option<[f64; 4]> {
 
 /// The opening of the file, where the true scale is declared.
 fn header(out: &mut String, sheet: [f64; 4]) {
-    let [x, y, w, h] = sheet.map(mm);
+    let [x, y, w, h] = sheet.map(number);
     out.push_str("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     let _ = writeln!(
         out,
@@ -88,19 +83,17 @@ fn header(out: &mut String, sheet: [f64; 4]) {
     );
 }
 
-/// One piece: its cut line, the lines drawn inside it, its grain line, and the
-/// names it carries.
+/// One piece: its cut line, and everything drawn inside it.
 fn group(out: &mut String, draft: &Draft, piece: PieceKey) {
     let Some(held) = draft.doc().pieces.get(piece) else {
         return;
     };
-    let cut = millimetres(draft, piece);
+    let drawn = drawn::of(draft, piece);
     let _ = writeln!(out, "  <g>");
     let _ = writeln!(out, "    <title>{}</title>", escape(&held.name));
-    contour(out, &cut);
-    inner::lines(out, draft, piece);
-    mark::grain(out, &cut, held.grain.radians());
-    mark::names(out, draft, piece, &nodes(draft, piece), &held.name);
+    contour(out, &millimetres(draft, piece));
+    ink::runs(out, &drawn.runs);
+    mark::names(out, corner(draft, piece), &drawn.names, &held.name);
     let _ = writeln!(out, "  </g>");
 }
 
@@ -109,13 +102,13 @@ fn contour(out: &mut String, outline: &[[f64; 2]]) {
     let mut path = String::new();
     for (rank, &[x, y]) in outline.iter().enumerate() {
         let verb = if rank == 0 { 'M' } else { 'L' };
-        let _ = write!(path, "{verb} {} {} ", mm(x), mm(y));
+        let _ = write!(path, "{verb} {} {} ", number(x), number(y));
     }
     path.push('Z');
     let _ = writeln!(
         out,
-        "    <path d=\"{path}\" fill=\"none\" stroke=\"#000000\" stroke-width=\"{}\"/>",
-        mm(CUT)
+        "    <path d=\"{path}\" fill=\"none\" stroke=\"{INK}\" stroke-width=\"{}\"/>",
+        number(CUT)
     );
 }
 
@@ -133,22 +126,19 @@ fn millimetres(draft: &Draft, piece: PieceKey) -> Vec<[f64; 2]> {
         .collect()
 }
 
-/// A piece's nodes in millimetres, in contour order, each still carrying the
-/// key that names it.
+/// Where the name of a piece goes: over the top left of the box around its
+/// nodes, in millimetres.
 ///
-/// The names go beside the nodes and not beside the flattening, so a curved
-/// tract does not scatter a label over every sample it was cut into. The key
-/// travels with the place because the two are made together: the flattening is
-/// the same `[f64; 2]` sequence, five times longer on the shipped trouser
-/// front, and it is in this caller's own scope — pairing them here is what
-/// stops it from being handed over instead and every label landing on a curve
-/// sample of the sheet somebody cuts cloth from.
-fn nodes(draft: &Draft, piece: PieceKey) -> Vec<(PointKey, [f64; 2])> {
-    draft
-        .points_cm(piece)
-        .iter()
-        .map(|&(key, at)| (key, units::millimetres(at)))
-        .collect()
+/// The nodes and not the flattening, so that a curve bulging past the two nodes
+/// it hangs between cannot push the name off the piece it names.
+fn corner(draft: &Draft, piece: PieceKey) -> [f64; 2] {
+    let (low, _) = box_of(
+        draft
+            .points_cm(piece)
+            .iter()
+            .map(|&(_, at)| units::millimetres(at)),
+    );
+    [low[0], low[1] - TITLE / 2.0]
 }
 
 #[cfg(test)]
@@ -200,7 +190,7 @@ mod tests {
         let written = to_svg(&draft).expect("the block draws");
         for &(_, [x, y]) in draft.points_cm(piece).iter().take(3) {
             let [x, y] = units::millimetres([x, y]);
-            let vertex = format!("{} {}", mm(x), mm(y));
+            let vertex = format!("{} {}", number(x), number(y));
             assert!(written.contains(&vertex), "{vertex} missing from {written}");
         }
     }

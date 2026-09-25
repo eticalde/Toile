@@ -1,4 +1,4 @@
-use toile_engine::draft::{Command, Doc, Draft, LineKind, LineVertex, PointKey};
+use toile_engine::draft::{Command, Doc, Draft, LineKind, LineVertex, NotchCount, PointKey};
 use toile_seamly::{Evaluation, Measurements, SplineLength, seamly_measurement};
 
 use super::super::check::{GROWTH, PARITY};
@@ -90,13 +90,23 @@ fn wider(draft: &mut Draft, body: &Measurements) -> Measurements {
 /// A drawing that lost them would be a sheet of paper nobody can cut a pair of
 /// jeans from, which is the whole reason the lines were carried over.
 pub(super) fn drawn_lines(svg: &str, doc: &Doc) {
+    // A grain line is an arrow, and an arrow is a shaft and four barbs.
+    const GRAIN: usize = 5;
+
     assert!(svg.starts_with("<?xml"), "{svg}");
     let paths = svg.matches("<path ").count();
     let pieces = doc.pieces.len();
+    let single = doc
+        .notches
+        .iter()
+        .filter(|(_, notch)| notch.count == NotchCount::Single)
+        .count();
+    assert_eq!(doc.lines.len(), 25);
+    assert_eq!(single, doc.notches.len(), "the draft marks single notches");
     assert_eq!(
         paths,
-        2 * pieces + 25,
-        "a cut line and a grain line each, and twenty-five drawn ones"
+        pieces * (1 + GRAIN) + doc.lines.len() + single,
+        "a cut line and a grain arrow each, every drawn line, and every notch"
     );
     for (_, line) in doc.lines.iter() {
         let name = line.label.as_deref().expect("the author named it");

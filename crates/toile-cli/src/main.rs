@@ -3,7 +3,9 @@
 mod anny_bake;
 mod asset;
 mod bench;
+mod create;
 mod doc;
+mod pdf;
 mod seamly;
 
 fn main() {
@@ -13,6 +15,7 @@ fn main() {
         Some("asset") => asset::run(&args[2..]),
         Some("bench") => bench::run(&args[2..]),
         Some("doc") => doc::run(&args[2..]),
+        Some("pdf") => pdf::run(&args[2..]),
         Some("seamly") => seamly::run(&args[2..]),
         Some("drape") => {
             let t = std::time::Instant::now();
@@ -35,7 +38,7 @@ fn main() {
         _ => {
             println!("toile {}", env!("CARGO_PKG_VERSION"));
             println!(
-                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · drape-sewn · doc [RUTA] [--resolve-with NOMBRE] · seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada AAAA-MM-DD --biblioteca DIR [--vincular]]"
+                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · drape-sewn · doc [RUTA] [--resolve-with NOMBRE] · pdf [RUTA] [SALIDA.pdf] [--pieza NOMBRE] [--papel a4|carta] · seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada AAAA-MM-DD --biblioteca DIR [--vincular]]"
             );
         }
     }

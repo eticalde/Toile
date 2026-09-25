@@ -1,5 +1,3 @@
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use toile_doc::{DocError, Origin, Persona, PersonaError};
@@ -8,6 +6,7 @@ use toile_engine::export::{ExportError, to_svg};
 use toile_seamly::{Measurements, Pattern, Product, import};
 
 use self::args::{Asked, Wanted};
+use crate::create;
 
 /// What the command line asks for.
 mod args;
@@ -53,7 +52,7 @@ fn migrate(asked: &Asked) -> Result<Vec<String>, String> {
     let (report_path, svg_path) = beside(output);
     for path in [output, report_path.as_path(), svg_path.as_path()] {
         if path.exists() {
-            return Err(format!("«{}» ya existe: no se sobrescribe", path.display()));
+            return Err(create::taken(path));
         }
     }
     let wanted = asked
@@ -110,9 +109,9 @@ fn migrate(asked: &Asked) -> Result<Vec<String>, String> {
     if let (Some((wanted, stem)), Some((_, Some(json)))) = (&wanted, &persona) {
         written.push(library::file(&wanted.library, stem, json)?);
     }
-    create(output, &product.doc.to_canonical_json())?;
-    create(&report_path, &text)?;
-    create(&svg_path, &svg)?;
+    create::file(output, product.doc.to_canonical_json().as_bytes())?;
+    create::file(&report_path, text.as_bytes())?;
+    create::file(&svg_path, svg.as_bytes())?;
     written.extend([output.to_owned(), report_path, svg_path]);
     let person = persona
         .as_ref()
@@ -201,17 +200,6 @@ fn linked(
     product
         .link(persona, stem)
         .map_err(|why| format!("no se pudo vincular el producto a «{}»: {why}", wanted.name))
-}
-
-/// Writes a file that must not exist yet.
-fn create(path: &Path, text: &str) -> Result<(), String> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(path)
-        .map_err(|why| format!("no se pudo crear «{}»: {why}", path.display()))?;
-    file.write_all(text.as_bytes())
-        .map_err(|why| format!("no se pudo escribir «{}»: {why}", path.display()))
 }
 
 fn summary(

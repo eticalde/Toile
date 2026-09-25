@@ -9,7 +9,7 @@ use toile_engine::draft::{
     Command, Doc, Draft, EdgeRange, Identity, LineEdit, LineKind, MeasureSet, Piece, PieceKey,
     Point, PointKey, Symmetry, VertexEdit, Winding, block,
 };
-use toile_engine::export::to_svg;
+use toile_engine::export::{A4, to_pdf, to_svg};
 
 /// The waistband of a baggy-jeans draft, as its own formulas write it.
 ///
@@ -204,6 +204,31 @@ fn the_exported_sheet_is_the_cloth_and_carries_both_halves_of_a_mark() {
     let flat = to_svg(&drawn).expect("the band draws");
     assert_eq!(flat.matches("M 500.00 70.00").count(), 1, "{flat}");
     assert!(!flat.contains("1170.00"), "{flat}");
+}
+
+/// The paper is counted for what the cloth measures, not for what the drawn
+/// half does.
+///
+/// Three sheets of A4 hold the drawn half and six hold the band, so a printer
+/// counting the half would hand back something a person could tape up, cut and
+/// sew, and only then find to be half a waistband. The sheet says the
+/// ninety-five centimetres out loud as well, in the one line a ruler can check.
+#[test]
+fn the_sheets_are_counted_for_the_cloth_and_not_for_the_drawn_half() {
+    let (folded, piece) = drafted(true);
+    let whole = to_pdf(&folded, piece, A4).expect("a band ninety-five centimetres wide tiles");
+    assert_eq!(whole.grid, [6, 1]);
+    assert_eq!(whole.sheets, 6);
+    let said = String::from_utf8_lossy(&whole.bytes).into_owned();
+    assert!(
+        said.contains("La pieza entera mide 95.0 cm de ancho"),
+        "{said}"
+    );
+
+    let (drawn, piece) = drafted(false);
+    let half = to_pdf(&drawn, piece, A4).expect("the drawn half tiles too");
+    assert_eq!(half.grid, [3, 1]);
+    assert_eq!(drawn.cloth_cm(piece).len(), 6);
 }
 
 /// A piece nobody folded is what it was before folds existed, through every
