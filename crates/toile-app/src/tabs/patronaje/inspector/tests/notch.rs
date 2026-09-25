@@ -3,9 +3,12 @@
     reason = "a notch is cut at the fraction the press wrote, exactly"
 )]
 
-use toile_engine::draft::{Notch, NotchCount, NotchKey};
+use eframe::egui::{Key, Modifiers};
+use toile_engine::draft::{Notch, NotchCount, NotchKey, PointKey};
 
+use super::super::super::state::Field;
 use super::super::notch::{put_on_id, take_off_id};
+use super::super::write::id_of;
 use super::desk::{Desk, bytes, hem, hip};
 
 /// The one notch the product carries, with its key.
@@ -84,6 +87,74 @@ fn the_notch_comes_off_in_one_entry_and_undo_cuts_it_again() {
     let (again, after) = only(&desk);
     assert_eq!(again, key, "the same notch, under its own key");
     assert_eq!(after, before);
+}
+
+/// Replaces what the «a lo largo» box of `node`'s tract holds with `text`, and
+/// confirms it with Enter.
+fn write_along(desk: &mut Desk, node: PointKey, text: &str) {
+    desk.click(desk.centre(id_of(&Field::Along(node))));
+    desk.key(Key::A, Modifiers::COMMAND);
+    desk.text(text);
+    desk.key(Key::Enter, Modifiers::NONE);
+}
+
+/// The fraction typed into the row moves the mark, in one entry of its own.
+///
+/// This is the one way a mark cut at a node is moved without aiming at it, and
+/// the mark the pointer cannot tell from a node is the one every import writes.
+#[test]
+fn the_fraction_typed_into_the_row_moves_the_mark_in_one_entry() {
+    let (mut desk, key) = cut();
+    let node = desk.state.selection.edge().expect("a tract is chosen");
+    write_along(&mut desk, node, "80");
+    let (_, held) = only(&desk);
+    assert_eq!(held.at.t, 0.8, "the percentage is the fraction");
+    assert_eq!(held.at.from, node, "on the tract it was cut into");
+    assert_eq!(desk.entries(), 2, "the press that cut it, and this");
+    assert_eq!(desk.session.undo_label(), Some("mover piquete"));
+
+    desk.session.undo().expect("the step back");
+    desk.frame(Vec::new());
+    assert_eq!(only(&desk).1.at.t, 0.5, "one confirmation, one step back");
+    assert_eq!(key, only(&desk).0, "and the same mark throughout");
+}
+
+/// A number no tract can answer for never reaches the document, and the box
+/// goes on holding what was typed so the missed character can be fixed.
+#[test]
+fn a_fraction_off_the_end_of_the_tract_is_refused_in_the_row() {
+    let (mut desk, _) = cut();
+    let node = desk.state.selection.edge().expect("a tract is chosen");
+    let revision = desk.session.revision();
+    write_along(&mut desk, node, "140");
+    assert_eq!(desk.session.revision(), revision, "nothing was written");
+    assert_eq!(only(&desk).1.at.t, 0.5, "the mark did not move");
+    let edit = desk.state.editing.clone().expect("the box keeps its text");
+    assert_eq!(edit.buffer, "140");
+    assert_eq!(edit.of, Field::Along(node));
+}
+
+/// A click in and out of the row writes nothing at all.
+///
+/// The box comes up with the mark's own fraction already in it and a box
+/// confirms what it holds when the focus leaves, so without a word about it the
+/// panel would leave an entry in the history for a mark nobody moved.
+#[test]
+fn a_click_in_and_out_of_the_row_leaves_the_mark_and_the_history_alone() {
+    let (mut desk, _) = cut();
+    let node = desk.state.selection.edge().expect("a tract is chosen");
+    let entries = desk.entries();
+    let opened = bytes(&desk);
+    desk.click(desk.centre(id_of(&Field::Along(node))));
+    desk.click(desk.centre(take_off_id(only(&desk).0)));
+    desk.session.undo().expect("the removal steps back");
+    desk.frame(Vec::new());
+    assert_eq!(
+        desk.entries(),
+        entries,
+        "the press that cut it, and nothing"
+    );
+    assert_eq!(bytes(&desk), opened, "the bytes are the bytes it held");
 }
 
 /// The section is drawn for a tract and for nothing else.

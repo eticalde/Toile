@@ -1,10 +1,10 @@
 use toile_engine::draft::{
     Command, Draft, InternalLine, LineKey, LineKind, LineSpan, LineVertex, NotchCount, NotchKey,
-    PieceKey, curve,
+    PieceKey, PointKey, curve,
 };
 
 use super::gesture::{Feedback, Gesture, Stack};
-use super::pick::{away, nearest_on};
+use super::pick::{self, away, nearest_on};
 use super::state::Selection;
 use super::tract::{self, Tract};
 
@@ -29,6 +29,13 @@ pub struct Drawn {
     /// The run as a line on the mat; empty when a place of it resolves
     /// nowhere.
     pub run: Vec<[f64; 2]>,
+    /// Its places off the contour, where the mat draws them, in run order.
+    ///
+    /// These are the ones a hand can take hold of and move: each is a point of
+    /// the document with two bindings of its own. A place on the contour is not
+    /// here — it is a node key and a fraction along the tract leaving it, so
+    /// moving it is a question about the contour and not about a point.
+    pub loose: Vec<(PointKey, [f64; 2])>,
 }
 
 /// One notch as the mat draws it.
@@ -64,6 +71,7 @@ pub fn of(draft: &Draft, piece: PieceKey, tracts: &[Tract], shift: [f64; 2]) -> 
             label: held.label.clone(),
             places: held.spans.len() + 1,
             run: run(draft, tracts, held, shift),
+            loose: loose(draft, held, shift),
         })
         .collect()
 }
@@ -112,6 +120,33 @@ pub fn under(at: [f64; 2], drawn: &[Drawn], reach: f64) -> Option<LineKey> {
     best.map(|(_, line)| line)
 }
 
+/// The place of the chosen line a press takes hold of, when one is under it.
+///
+/// Only the chosen line's places answer: a press that hunted every place of
+/// every line would take hold of a mark nobody was looking at. Within a reach
+/// and the nearest of them, which is the ladder's first rung — a place is
+/// caught the way a node is.
+///
+/// Only its places off the contour, too, and no edit slides an anchored one. An
+/// anchor is a node key and a fraction along the tract leaving it, so sliding
+/// it would want a command of its own, with its own inverse and its own folding
+/// — and rubbing the line out and tracing it again already moves it, in one
+/// entry, with the tool the hand is holding. The day a pattern needs a pocket
+/// mouth nudged along its seam without being redrawn, that edit is the one to
+/// write.
+pub fn grip(at: [f64; 2], drawn: &[Drawn], line: LineKey, reach: f64) -> Option<PointKey> {
+    let it = drawn.iter().find(|it| it.line == line)?;
+    pick::nearest_node(at, &it.loose, &[], reach).map(|(key, _)| key)
+}
+
+/// Where one of these lines puts a place of its own, whichever line holds it.
+pub fn at(drawn: &[Drawn], point: PointKey) -> Option<[f64; 2]> {
+    drawn
+        .iter()
+        .flat_map(|it| it.loose.iter().copied())
+        .find_map(|(key, place)| (key == point).then_some(place))
+}
+
 /// Rubbing one line out, as the one entry a press or a key leaves.
 pub fn erased(line: LineKey) -> (Gesture, Vec<Command>, Feedback) {
     (
@@ -157,6 +192,17 @@ fn run(draft: &Draft, tracts: &[Tract], held: &InternalLine, shift: [f64; 2]) ->
         out.push(to);
     }
     out
+}
+
+/// The line's places off the contour, where the mat draws them.
+///
+/// A place that resolves nowhere is left out rather than drawn at the origin:
+/// the run says so in its own way, by drawing nothing at all.
+fn loose(draft: &Draft, held: &InternalLine, shift: [f64; 2]) -> Vec<(PointKey, [f64; 2])> {
+    held.vertices()
+        .filter_map(LineVertex::point)
+        .filter_map(|key| Some((key, moved(draft.resolved(key)?, shift))))
+        .collect()
 }
 
 /// Where one place of a line falls on the mat, and nothing when it falls

@@ -52,6 +52,11 @@ pub enum Field {
     Coordinate(PointKey, Axis),
     /// How finely the tract leaving one node is flattened.
     Samples(PointKey),
+    /// How far along the tract leaving one node its notch is cut.
+    ///
+    /// Named for the tract and not for the mark, the way the row is: the panel
+    /// edits the first notch the chosen tract carries.
+    Along(PointKey),
     /// One measurement of the body the pattern resolves against.
     Measure(String),
     /// One of the pattern's own quantities.
@@ -223,7 +228,7 @@ impl State {
         self.selection = selection;
         let shown = match self.editing.as_ref().map(|edit| &edit.of) {
             Some(Field::Coordinate(point, _)) => self.selection.only() == Some(*point),
-            Some(Field::Samples(node)) => self.selection.edge() == Some(*node),
+            Some(Field::Samples(node) | Field::Along(node)) => self.selection.edge() == Some(*node),
             Some(Field::Measure(_) | Field::Variable(_)) | None => true,
         };
         if !shown {

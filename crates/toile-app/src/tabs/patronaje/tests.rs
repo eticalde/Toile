@@ -248,7 +248,9 @@ fn the_active_piece_prefers_the_chosen_then_the_draping_then_the_first() {
 
 mod asking;
 mod bench;
+mod folding;
 mod inner;
+mod marks;
 mod roads;
 mod runs;
 mod seams;

@@ -176,7 +176,7 @@ fn topology(doc: &Doc) -> Vec<Command> {
         Command::AddSymmetry {
             identity: Identity::New,
             symmetry: Symmetry {
-                axis: (point, point),
+                axis: range,
                 kind: SymmetryKind::Fold,
             },
         },
@@ -238,14 +238,18 @@ fn pinning_costs_the_derivation_nothing() {
 #[test]
 fn an_edit_whose_tool_has_not_arrived_is_an_error_not_a_panic() {
     let mut doc = block::trouser_front();
+    let mirrored = Command::AddSymmetry {
+        identity: Identity::New,
+        symmetry: Symmetry {
+            axis: EdgeRange::between(front(&doc), node(&doc, "cintura_cf"), node(&doc, "tiro_cf")),
+            kind: SymmetryKind::Mirror,
+        },
+    };
     for command in [
         Command::RemoveDart {
             dart: DartKey::new(0, 0),
         },
-        Command::MoveNotch {
-            notch: NotchKey::new(0, 0),
-            to: EdgeAnchor::at_node(front(&doc), node(&doc, "cintura_cf")),
-        },
+        mirrored,
     ] {
         assert_eq!(
             command.clone().apply(&mut doc),

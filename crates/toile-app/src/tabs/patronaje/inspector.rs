@@ -1,5 +1,6 @@
 mod cite;
 pub(super) mod elastic;
+pub(super) mod fold;
 pub(super) mod inner;
 pub(super) mod notch;
 pub(super) mod seams;
@@ -15,6 +16,7 @@ use toile_engine::session::SeamFault;
 use write::Asked;
 
 use super::curve::{self, Side};
+use super::layout;
 use super::state::{Scope, State};
 use super::wire::Verb;
 use crate::file::Action;
@@ -189,21 +191,23 @@ fn tract(
     let index = nodes.iter().position(|&(key, _)| key == from)?;
     let to = nodes[(index + 1) % nodes.len()].0;
     let doc = draft.doc();
-    let ends = (
-        doc.label_of(piece, from).unwrap_or_default(),
-        doc.label_of(piece, to).unwrap_or_default(),
-    );
-    section(ui, theme, &format!("Borde {} → {}", ends.0, ends.1));
+    let name = |key: PointKey| doc.label_of(piece, key).unwrap_or_default();
+    section(ui, theme, &format!("Borde {} → {}", name(from), name(to)));
     let length = format!("{:.1}", draft.run_length_cm(piece, from, to));
     field_row(ui, theme, "largo", &length, "cm");
+    let edge = (piece, from, to);
     let (state, cite) = writing;
     let asked = write::samples(ui, theme, draft, (piece, from), (&mut *state, cite));
-    elastic::show(ui, theme, doc, (piece, from, to), (state, &mut *verbs));
-    notch::show(ui, theme, doc, (piece, from), verbs);
+    elastic::show(ui, theme, doc, edge, (&mut *state, &mut *verbs));
+    let asked = notch::show(ui, theme, doc, (piece, from), (&mut *state, cite), verbs).or(asked);
+    fold::show(ui, theme, draft, edge, verbs);
     asked
 }
 
 /// What the piece is, when nothing on it is chosen.
+///
+/// Every measurement here is the cloth's and not the drawing's, so a piece
+/// drawn against a fold reads as the piece that comes off the table.
 fn summary(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, piece: PieceKey) {
     let doc = draft.doc();
     let Some(held) = doc.pieces.get(piece) else {
@@ -212,10 +216,17 @@ fn summary(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, piece: PieceKey) {
     section(ui, theme, &held.name);
     let nodes = held.contour.len().to_string();
     field_row(ui, theme, "nodos", &nodes, "");
+    if let Some([left, top, right, bottom]) = layout::extent(draft.cloth_cm(piece)) {
+        field_row(ui, theme, "ancho", &format!("{:.1}", right - left), "cm");
+        field_row(ui, theme, "alto", &format!("{:.1}", bottom - top), "cm");
+    }
     let perimeter = format!("{:.1}", draft.perimeter_cm(piece));
     field_row(ui, theme, "perímetro", &perimeter, "cm");
     let grain = format!("{:.0}", held.grain.radians().to_degrees());
     field_row(ui, theme, "hilo", &grain, "°");
+    if draft.cloth(piece).is_some() {
+        field_row(ui, theme, "doblez", "sí", "");
+    }
 }
 
 /// The ways a pattern leaves the app: the drawing at true scale, and the

@@ -2,12 +2,15 @@ mod ask;
 
 pub use ask::{Ask, AskRow, name};
 use eframe::egui::{Key, Pos2, Rect, Vec2};
-use toile_engine::draft::{Axis, Binding, Doc, PieceKey, PointKey};
+use toile_engine::draft::{Binding, Doc, PieceKey, PointKey};
 
 use super::arrange::Arrange;
 use super::curve::Bend;
-use super::inner::Drawn;
+use super::inner::{Drawn, Tick};
+/// The precision box lives with the box that paints it; a drag carries one.
+pub use super::precision::Typed;
 use super::sew::Sewing;
+use super::slide::Slide;
 use super::snap::{SnapConfig, Snapped};
 use super::state::{Scope, Selection, Tool};
 use super::trace::Tracing;
@@ -56,6 +59,8 @@ pub enum Gesture {
     Sewing(Sewing),
     /// Drawing a line inside a piece, place by place.
     Tracing(Tracing),
+    /// Sliding a notch along the tract it was cut into.
+    Sliding(Slide),
 }
 
 /// The nodes taken in hand, as the gesture holds them.
@@ -120,15 +125,6 @@ pub struct Drag {
     pub free: bool,
     /// The exact value being typed, while the precision box is open.
     pub typed: Option<Typed>,
-}
-
-/// The precision box: which coordinate it writes, and the text so far.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Typed {
-    /// The coordinate the number lands on.
-    pub axis: Axis,
-    /// What has been typed into it.
-    pub buffer: String,
 }
 
 /// One thing that happened to the pointer or the keyboard.
@@ -218,6 +214,8 @@ pub struct EditContext<'a> {
     pub bends: &'a [Bend],
     /// The lines drawn inside it, where the mat draws them.
     pub lines: &'a [Drawn],
+    /// The notches cut into its contour, where the mat draws them.
+    pub ticks: &'a [Tick],
     /// What is chosen right now, which is what a press takes in hand.
     pub selection: Selection,
     /// The tool in hand.

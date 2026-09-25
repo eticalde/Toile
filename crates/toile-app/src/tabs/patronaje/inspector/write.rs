@@ -175,6 +175,13 @@ fn unparsed(of: &Field, text: &str) -> Option<String> {
             let (low, high) = curve::SAMPLE_RANGE;
             counted(text).map_or_else(|| Some(format!("un entero entre {low} y {high}")), |_| None)
         }
+        // A fraction of a tract, in the percentage the row shows: past either
+        // end there is no tract left for the mark to sit on, and the anchor the
+        // document takes would be refused on arrival.
+        Field::Along(_) => match text.parse::<f64>() {
+            Ok(value) if (0.0..=100.0).contains(&value) => None,
+            _ => Some("un porcentaje entre 0 y 100".to_owned()),
+        },
         Field::Coordinate(..) | Field::Variable(_) => {
             let fault: SyntaxError = Binding::parse(text).err()?;
             Some(format!("no parsea en {}: {}", fault.at, fault.kind))

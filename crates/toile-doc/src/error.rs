@@ -80,6 +80,16 @@ pub enum DocError {
     /// An internal line anchored to the contour of a piece it is not drawn on.
     #[error("an internal line is drawn on one piece, and anchors only to it")]
     SplitInternalLine,
+    /// An axis of symmetry whose two ends sit on different pieces.
+    #[error("an axis of symmetry has to start and end on one piece")]
+    SplitSymmetry,
+    /// An axis of symmetry whose two ends name one place, which is a point and
+    /// not a line, and no reflection is defined across it.
+    #[error("an axis of symmetry runs between two places, so its ends cannot be one")]
+    FoldAxis,
+    /// A second axis asked for on a piece that already carries one.
+    #[error("the piece is already drawn against an axis of symmetry")]
+    AlreadySymmetric,
     /// An internal line that runs through fewer than two places.
     #[error("an internal line runs from one place to another, so it needs two")]
     ShortLine,

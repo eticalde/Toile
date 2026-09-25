@@ -8,7 +8,7 @@ use super::sew::{self, Pick, Spread};
 use super::state::{State, Tool};
 use super::thread::Thread;
 use super::wire::{self, Verb};
-use super::{arrange, canvas, chalk, inner, marks, stitch, thread};
+use super::{arrange, canvas, chalk, fold, inner, marks, stitch, thread};
 use crate::theme::Theme;
 use crate::widgets::fill;
 
@@ -216,17 +216,20 @@ fn piece(
     // The spread's tracts already lie where the overview put the piece.
     let at = (it.piece, cut.tracts.as_slice(), [0.0, 0.0]);
     marks::elastics(p, theme, draft.doc(), at, state.view);
+    // The outline is the cloth, so a folded piece takes its real room here;
+    // the crease over it is what says the drawing is half of that.
     canvas::paper_and_outline(p, &it.outline, state.view, &grounds, line);
+    fold::crease(p, theme, (draft, it.piece), (state.view, it.shift));
     // The spread's tracts already lie where the overview put the piece, so only
     // a place bound to a free point of the document needs that offset.
     let lines = inner::of(draft, it.piece, &cut.tracts, it.shift);
+    let ticks = inner::ticks(draft, it.piece, &cut.tracts);
+    let ghosts = fold::mirrored(draft, it.piece, &lines, it.shift);
+    let mirror = fold::reflected(draft, it.piece, &ticks, it.shift);
+    chalk::lines(p, theme, &ghosts, (state.view, None));
+    chalk::notches(p, theme, &mirror, state.view);
     chalk::lines(p, theme, &lines, (state.view, state.selection.line()));
-    chalk::notches(
-        p,
-        theme,
-        &inner::ticks(draft, it.piece, &cut.tracts),
-        state.view,
-    );
+    chalk::notches(p, theme, &ticks, state.view);
     let held = draft.doc().pieces.get(it.piece);
     let (Some(held), Some(bbox)) = (held, layout::bounds(std::slice::from_ref(it))) else {
         return;

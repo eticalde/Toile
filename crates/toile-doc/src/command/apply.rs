@@ -6,6 +6,7 @@ mod mannequin;
 mod name;
 mod notch;
 mod range;
+mod symmetry;
 mod topology;
 
 use curve::{set_samples, set_segment};
@@ -18,7 +19,8 @@ use mannequin::{
 };
 pub(crate) use name::Naming;
 use name::{label_point, rename_piece, show_label};
-use notch::{add_notch, remove_notch};
+use notch::{add_notch, move_notch, remove_notch};
+use symmetry::{add_symmetry, remove_symmetry};
 use topology::{add_piece, insert_node, remove_node, remove_piece};
 
 use crate::{
@@ -34,16 +36,16 @@ impl Command {
     /// `DuplicatePieceName` or `DuplicateMannequinName` for a name already
     /// taken, `UnknownMeasure` for a measurement the body does not carry,
     /// `BodyInUse` for taking away the body the pattern resolves against,
-    /// `NonFinite` for a number the file could not spell, `NotAStem`,
-    /// `NotADay` or `NotAFingerprint` for a link Toile could not have written,
+    /// `NonFinite` for a number the file could not spell, `NotAStem`, `NotADay`
+    /// or `NotAFingerprint` for a link Toile could not have written,
     /// `ElasticRatio` or `ElasticStrength` for a pull no elastic carries,
     /// `NoSuchNode` for a node no contour runs through, `Occupied` for a key
-    /// another entry still holds, `Sampling` for a flattening no tract can be
-    /// asked for, `Shared` for a point another piece still draws itself with,
-    /// `ShortLine` for a line through fewer than two places, `SplitSeamSide`,
-    /// `SplitElastic` or `SplitInternalLine` for a run whose ends disagree on
-    /// their piece, and `NotYetImplemented` for an edit whose tool has not
-    /// been built yet.
+    /// another entry holds, `Sampling` for a flattening no tract can be asked
+    /// for, `Shared` for a point another piece draws itself with, `ShortLine`
+    /// for a line through one place, `SplitSeamSide`, `SplitElastic`,
+    /// `SplitInternalLine` or `SplitSymmetry` for a run whose ends disagree on
+    /// their piece, `FoldAxis` and `AlreadySymmetric` for an axis whose ends
+    /// are one place and a second axis on a piece, and `NotYetImplemented`.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
         self.apply_as(doc, Naming::Checked)
     }
@@ -112,11 +114,14 @@ impl Command {
                 mate,
             } => add_notch(doc, identity, notch, mate),
             Command::RemoveNotch { notch } => remove_notch(doc, notch),
-            Command::MoveNotch { .. }
-            | Command::AddDart { .. }
+            Command::MoveNotch { notch, to } => move_notch(doc, notch, to),
+            Command::AddSymmetry {
+                identity,
+                symmetry: axis,
+            } => add_symmetry(doc, identity, axis),
+            Command::RemoveSymmetry { symmetry } => remove_symmetry(doc, symmetry),
+            Command::AddDart { .. }
             | Command::RemoveDart { .. }
-            | Command::AddSymmetry { .. }
-            | Command::RemoveSymmetry { .. }
             | Command::SetPin { .. }
             | Command::ClearPin { .. } => Err(DocError::NotYetImplemented),
         }

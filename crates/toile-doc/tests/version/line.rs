@@ -1,6 +1,6 @@
 use toile_doc::{
-    Command, Doc, EdgeAnchor, FORMAT_VERSION_INTERNAL, FormatError, History, Identity, LineEdit,
-    LineKind, LineVertex, block,
+    Command, Doc, EdgeAnchor, FORMAT_VERSION_INTERNAL, History, Identity, LineEdit, LineKind,
+    VertexEdit, block,
 };
 
 use super::elastic::elasticated;
@@ -11,8 +11,8 @@ use super::{EMPTY, SHIPPED, header, linked, restamped, rewritten, shaped};
 fn fold(doc: &Doc) -> Command {
     let front = doc.piece_named(block::FRONT).expect("the block draws one");
     let named = |label| doc.shows_label(front, label).expect("the block names it");
-    let head = LineVertex::Contour(EdgeAnchor::at_node(front, named("cintura_cf")));
-    let tail = LineVertex::Contour(EdgeAnchor {
+    let head = VertexEdit::Contour(EdgeAnchor::at_node(front, named("cintura_cf")));
+    let tail = VertexEdit::Contour(EdgeAnchor {
         piece: front,
         from: named("cintura_lat"),
         t: 0.5,
@@ -28,7 +28,7 @@ fn fold(doc: &Doc) -> Command {
 }
 
 /// The shipped block with that fold drawn on it, stamped `version`.
-fn lined(version: u32) -> String {
+pub(super) fn lined(version: u32) -> String {
     let mut doc = block::trousers();
     let edit = fold(&doc);
     edit.apply(&mut doc).expect("both places are on the front");
@@ -113,30 +113,12 @@ fn a_line_drawn_and_undone_takes_the_file_to_version_6_and_back() {
     assert_eq!(doc.to_canonical_json(), file);
 }
 
-/// A build cannot know what a later field means, so it refuses the file for its
-/// version rather than open it and drop that field on the next save.
+/// A version-7 file carries a fold, which this build reads; the refusal a
+/// later stamp earns is the fold's own case, next door.
 #[test]
-fn a_version_7_document_is_refused_loudly() {
-    for later in [
-        restamped(SHIPPED, 7),
-        restamped(&shaped(2), 7),
-        placed(SHIPPED, 7),
-        elasticated(7),
-        lined(7),
-    ] {
-        let error = Doc::from_json(&later).expect_err("this build reads up to version 6");
-        assert_eq!(
-            error,
-            FormatError::UnknownVersion {
-                found: 7,
-                newest: 6
-            }
-        );
-        assert!(
-            error
-                .to_string()
-                .contains("version 7; this build reads versions 1 to 6"),
-            "{error}"
-        );
+fn a_version_7_stamp_on_a_file_with_no_axis_falls_back_to_what_it_carries() {
+    for (file, stamp) in [(restamped(&lined(6), 7), 6), (restamped(SHIPPED, 7), 1)] {
+        let doc = Doc::from_json(&file).expect("this build reads version 7");
+        assert_eq!(doc.format_version(), stamp, "{file}");
     }
 }

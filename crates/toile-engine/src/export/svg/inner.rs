@@ -31,7 +31,12 @@ fn dashes(kind: LineKind) -> Option<&'static str> {
 /// A line one of whose places resolves nowhere is left out rather than drawn
 /// short: a run cut off at the last place that resolved would be a line nobody
 /// drafted, on a sheet somebody cuts cloth from.
+///
+/// On a piece drawn against a fold every line is drawn twice, once on each
+/// half. The sheet is the whole cloth, and a mark drawn on half of it is a mark
+/// the cutter finds on one side of a piece that has it on both.
 pub(super) fn lines(out: &mut String, draft: &Draft, piece: PieceKey) {
+    let cloth = draft.cloth(piece);
     for (_, held) in draft.doc().lines.iter() {
         if held.piece != piece {
             continue;
@@ -39,11 +44,6 @@ pub(super) fn lines(out: &mut String, draft: &Draft, piece: PieceKey) {
         let Some(run) = run(draft, held) else {
             continue;
         };
-        let mut path = String::new();
-        for (rank, [x, y]) in run.iter().copied().enumerate() {
-            let verb = if rank == 0 { 'M' } else { 'L' };
-            let _ = write!(path, "{verb} {} {} ", mm(x), mm(y));
-        }
         let dash = dashes(held.kind)
             .map(|pattern| format!(" stroke-dasharray=\"{pattern}\""))
             .unwrap_or_default();
@@ -52,14 +52,31 @@ pub(super) fn lines(out: &mut String, draft: &Draft, piece: PieceKey) {
             .as_deref()
             .map(|name| format!("<title>{}</title>", escape(name)))
             .unwrap_or_default();
-        let _ = writeln!(
-            out,
-            "    <path d=\"{}\" fill=\"none\" stroke=\"#000000\" stroke-width=\"{}\"{dash}>{title}\
-             </path>",
-            path.trim_end(),
-            mm(DRAWN)
-        );
+        let mirrored = cloth.map(|cloth| {
+            run.iter()
+                .map(|&at| millimetres(cloth.mirror(centimetres(at))))
+                .collect()
+        });
+        for run in std::iter::once(run).chain(mirrored) {
+            path(out, &run, &dash, &title);
+        }
     }
+}
+
+/// One run as a path on the sheet.
+fn path(out: &mut String, run: &[[f64; 2]], dash: &str, title: &str) {
+    let mut data = String::new();
+    for (rank, &[x, y]) in run.iter().enumerate() {
+        let verb = if rank == 0 { 'M' } else { 'L' };
+        let _ = write!(data, "{verb} {} {} ", mm(x), mm(y));
+    }
+    let _ = writeln!(
+        out,
+        "    <path d=\"{}\" fill=\"none\" stroke=\"#000000\" stroke-width=\"{}\"{dash}>{title}\
+         </path>",
+        data.trim_end(),
+        mm(DRAWN)
+    );
 }
 
 /// The line as a polyline in millimetres, and nothing at all when one of its
@@ -133,4 +150,9 @@ fn along(tract: &[[f64; 2]], next: [f64; 2], t: f64) -> Option<[f64; 2]> {
 
 fn millimetres([x, y]: [f64; 2]) -> [f64; 2] {
     [x * super::MM_PER_CM, y * super::MM_PER_CM]
+}
+
+/// The way back, for the one question the cloth answers in its own units.
+fn centimetres([x, y]: [f64; 2]) -> [f64; 2] {
+    [x / super::MM_PER_CM, y / super::MM_PER_CM]
 }

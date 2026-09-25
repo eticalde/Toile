@@ -1,0 +1,263 @@
+#![allow(missing_docs, reason = "a test crate publishes no API surface")]
+#![allow(
+    clippy::float_cmp,
+    reason = "an unfolded piece hands back the very numbers the drawn one did"
+)]
+
+use toile_engine::demo;
+use toile_engine::draft::{
+    Command, Doc, Draft, EdgeRange, Identity, LineEdit, LineKind, MeasureSet, Piece, PieceKey,
+    Point, PointKey, Symmetry, VertexEdit, Winding, block,
+};
+use toile_engine::export::to_svg;
+
+/// The waistband of a baggy-jeans draft, as its own formulas write it.
+///
+/// Half a band on the fold at centre back: four centimetres of button extension
+/// out to `wb_cf`, then half the waistband girth from there to `wb_cb`. Drawn
+/// clockwise on the page, four centimetres deep, with the bottom edge split at
+/// the side seam the way the draft splits it.
+///
+/// The names are the draft's own, so the fixture is the piece and not a
+/// rectangle standing in for one: what folding it does to the width is the
+/// number a person reads off the panel.
+const BAND: [(&str, &str, &str); 6] = [
+    ("wb_1", "36", "7"),
+    ("wb_2", "40 + wbg / 2", "7"),
+    ("wb_cb", "40 + wbg / 2", "11"),
+    ("wb_side", "40 + wbg / 4", "11"),
+    ("wb_cf", "40", "11"),
+    ("wb_0", "36", "11"),
+];
+
+/// The waistband girth the draft resolves the band against, in centimetres.
+const GIRTH: f64 = 87.0;
+
+/// The piece as a document, and the key it took.
+fn band() -> (Doc, PieceKey) {
+    let mut doc = Doc::new(MeasureSet::new("Etienne", [("cintura", 78.0)]));
+    doc.variables
+        .insert(toile_engine::draft::Variable::new("wbg", GIRTH));
+    let nodes: Vec<PointKey> = BAND
+        .iter()
+        .map(|&(label, x, y)| {
+            let at = Point {
+                x: parse(x),
+                y: parse(y),
+                label: Some(label.to_owned()),
+                label_visible: false,
+            };
+            doc.points.insert(at)
+        })
+        .collect();
+    let piece = doc
+        .pieces
+        .insert(Piece::polygon("PRETINA", nodes, Winding::Cw));
+    (doc, piece)
+}
+
+fn parse(source: &str) -> toile_engine::draft::Binding {
+    toile_engine::draft::Binding::parse(source).expect("the draft's own formulas parse")
+}
+
+/// One belt-loop mark on the band: a placement line across its depth.
+fn mark(doc: &mut Doc, piece: PieceKey) {
+    let place = |y| VertexEdit::Free {
+        identity: Identity::New,
+        value: Point::at(50.0, y),
+    };
+    let edit = LineEdit::new(piece, LineKind::Placement, place(7.0)).to(place(11.0));
+    Command::AddLine {
+        identity: Identity::New,
+        line: Box::new(edit),
+    }
+    .apply(doc)
+    .expect("a place of its own needs nothing of the contour");
+}
+
+/// The band on the table, folded on its centre-back edge or drawn as it is,
+/// with one belt-loop mark on it either way.
+fn drafted(folded: bool) -> (Draft, PieceKey) {
+    let (mut doc, piece) = band();
+    mark(&mut doc, piece);
+    if folded {
+        let node = |label: &str| doc.shows_label(piece, label).expect("the band names it");
+        let axis = EdgeRange::between(piece, node("wb_2"), node("wb_cb"));
+        Command::AddSymmetry {
+            identity: Identity::New,
+            symmetry: Symmetry::fold(axis),
+        }
+        .apply(&mut doc)
+        .expect("both ends are nodes of the band");
+    }
+    (Draft::from_doc(doc).expect("the band resolves"), piece)
+}
+
+/// How wide a run of places is, in whatever unit it is written in.
+fn width(at: &[[f64; 2]]) -> f64 {
+    let high = at.iter().map(|p| p[0]).fold(f64::MIN, f64::max);
+    let low = at.iter().map(|p| p[0]).fold(f64::MAX, f64::min);
+    high - low
+}
+
+/// The number the whole card turns on: the drawn half is 47.5 centimetres wide
+/// and the cloth it is cut from is 95.
+///
+/// Not 91, which is what the band measures drawn whole — the four centimetres
+/// of button extension past centre front are mirrored along with everything
+/// else, so a fold puts an extension on the far side as well. A fold reflects
+/// the drawing; it cannot leave one end of it out. That is the very trap a
+/// draft that carries this piece on the fold pays for at the cutting table, and
+/// the reason to draw this particular band whole. The concept is still the
+/// right one: what the fold owes is that Toile sees the cloth, and it does.
+#[test]
+fn folding_the_waistband_doubles_the_width_it_is_cut_at() {
+    let (drawn, piece) = drafted(false);
+    assert!((width(drawn.cloth_cm(piece)) - 47.5).abs() < 1.0e-9);
+    assert_eq!(drawn.cloth_cm(piece), drawn.flat_cm(piece));
+    assert_eq!(drawn.cloth(piece), None);
+
+    let (folded, piece) = drafted(true);
+    assert!(
+        (width(folded.cloth_cm(piece)) - 95.0).abs() < 1.0e-9,
+        "{} cm",
+        width(folded.cloth_cm(piece))
+    );
+    assert!(
+        (width(folded.flat_cm(piece)) - 47.5).abs() < 1.0e-9,
+        "the drawing is still the half"
+    );
+    // The crease is handed back tail first, the way the cloth's own outline
+    // opens on it.
+    let crease = folded.cloth(piece).map(|cloth| cloth.axis);
+    assert_eq!(crease, Some([[83.5, 11.0], [83.5, 7.0]]));
+}
+
+/// The drawn contour keeps every node it had, and the cloth keeps every sample
+/// of the half that is not the crease, twice over minus the two ends.
+#[test]
+fn the_cloth_is_the_drawn_walk_and_its_mirror_and_nothing_of_the_crease() {
+    let (folded, piece) = drafted(true);
+    assert_eq!(folded.points_cm(piece).len(), 6, "six nodes, as drawn");
+    // Five of the six tracts are cloth; the sixth is the crease. The walk
+    // carries its four interior nodes and both ends of the axis, and the mirror
+    // carries the four interior ones again.
+    assert_eq!(folded.cloth_cm(piece).len(), 6 + 4);
+    let perimeter = folded.perimeter_cm(piece);
+    assert!(
+        (perimeter - 2.0 * (47.5 + 4.0 + 47.5)).abs() < 1.0e-9,
+        "{perimeter} cm"
+    );
+}
+
+/// The mesher and the drape take the cloth, so a folded piece drapes as the
+/// piece it is. The witness is the mesh's own width: half a band would give a
+/// panel of cloth half a metre across where the garment needs most of one.
+#[test]
+fn the_mesher_is_handed_the_whole_cloth() {
+    let (folded, piece) = drafted(true);
+    let outline = folded.outline_m(piece);
+    assert!(
+        (width(outline) - 0.95).abs() < 1.0e-9,
+        "{} m",
+        width(outline)
+    );
+    let pipeline = demo::pipeline(outline);
+    let mesh = width(&pipeline.pos2d);
+    assert!((mesh - 0.95).abs() < 1.0e-3, "{mesh} m of mesh");
+    // And the boundary a seam or an elastic is read onto is the cloth's, so it
+    // carries more vertices than the drawing would have given it.
+    let (drawn, _) = drafted(false);
+    let half = demo::pipeline(drawn.outline_m(piece));
+    assert!(
+        pipeline.n_boundary() > half.n_boundary(),
+        "{} against {}",
+        pipeline.n_boundary(),
+        half.n_boundary()
+    );
+}
+
+/// The sheet of paper carries the cloth, at true scale, with every mark drawn
+/// on both halves. A cutter given the drawn half would have to lay the paper on
+/// a fold, and the cut line and the net line are two different places to lay
+/// it.
+#[test]
+fn the_exported_sheet_is_the_cloth_and_carries_both_halves_of_a_mark() {
+    let (folded, _) = drafted(true);
+    let drawing = to_svg(&folded).expect("the band draws");
+    // The far edge of the mirrored half, in millimetres: 36 cm mirrored about
+    // 83.5 lands at 131.
+    assert!(drawing.contains("1310.00"), "{drawing}");
+    assert!(drawing.contains("width=\"970.00mm\""), "{drawing}");
+    // The belt-loop mark at 50 cm, and its mirror at 117.
+    assert!(
+        drawing.contains("M 500.00 70.00 L 500.00 110.00"),
+        "{drawing}"
+    );
+    assert!(
+        drawing.contains("M 1170.00 70.00 L 1170.00 110.00"),
+        "{drawing}"
+    );
+
+    // Drawn whole, the same mark is on the sheet once and only once.
+    let (drawn, _) = drafted(false);
+    let flat = to_svg(&drawn).expect("the band draws");
+    assert_eq!(flat.matches("M 500.00 70.00").count(), 1, "{flat}");
+    assert!(!flat.contains("1170.00"), "{flat}");
+}
+
+/// A piece nobody folded is what it was before folds existed, through every
+/// path the unfold touches: the flattening, the metres the mesher takes, the
+/// perimeter, and the bytes of the sheet.
+#[test]
+fn a_piece_with_no_axis_is_bit_identical_through_every_path() {
+    let draft = Draft::from_doc(block::trousers()).expect("the block resolves");
+    for piece in draft.doc().piece_keys() {
+        assert_eq!(draft.cloth(piece), None);
+        assert_eq!(draft.cloth_cm(piece), draft.flat_cm(piece));
+        let metres: Vec<[f64; 2]> = draft
+            .flat_cm(piece)
+            .iter()
+            .map(|&at| toile_engine::draft::to_metres(at))
+            .collect();
+        assert_eq!(draft.outline_m(piece), metres.as_slice());
+        let cum = draft.node_cum(piece);
+        assert_eq!(draft.perimeter_cm(piece), cum[cum.len() - 1]);
+        let nodes = draft.points_cm(piece);
+        let at = toile_engine::draft::EdgeAnchor {
+            piece,
+            from: nodes[1].0,
+            t: 0.25,
+        };
+        let fraction = draft
+            .anchor_fraction(&at)
+            .expect("the node is on the piece");
+        let along = cum[1] + (cum[2] - cum[1]) * 0.25;
+        assert_eq!(fraction, along / cum[cum.len() - 1]);
+    }
+}
+
+/// A place on the crease is not on the cloth's boundary at all, so nothing can
+/// be sewn or held in there. It is said with a `None` rather than a fraction
+/// that would land somewhere on the mirrored half.
+#[test]
+fn a_place_on_the_crease_anchors_to_nothing() {
+    let (folded, piece) = drafted(true);
+    let node = |label: &str| {
+        folded
+            .doc()
+            .shows_label(piece, label)
+            .expect("the band names it")
+    };
+    let at = |from, t| toile_engine::draft::EdgeAnchor { piece, from, t };
+    // The crease runs from `wb_2` to `wb_cb`, so halfway along the tract
+    // leaving `wb_2` is inside the fold.
+    assert_eq!(folded.anchor_fraction(&at(node("wb_2"), 0.5)), None);
+    // Its two ends are on the cloth: one opens the boundary, the other closes
+    // the drawn walk halfway round it.
+    assert_eq!(folded.anchor_fraction(&at(node("wb_cb"), 0.0)), Some(0.0));
+    let head = folded
+        .anchor_fraction(&at(node("wb_2"), 0.0))
+        .expect("the other end of the crease is cloth");
+    assert!((head - 0.5).abs() < 1.0e-9, "{head}");
+}

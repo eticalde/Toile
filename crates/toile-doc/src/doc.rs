@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Arena, Dart, Elastic, InternalLine, MannequinKey, MeasureSet, Notch, Piece, PieceKey, Pin,
-    Point, PointKey, Seam, Symmetry, Variable, VariableKey,
+    Arena, Dart, EdgeRange, Elastic, InternalLine, MannequinKey, MeasureSet, Notch, Piece,
+    PieceKey, Pin, Point, PointKey, Seam, Symmetry, SymmetryKey, SymmetryKind, Variable,
+    VariableKey,
 };
 
 /// The document: everything a pattern file holds.
@@ -101,6 +102,24 @@ impl Doc {
     /// Every piece, in key order.
     pub fn piece_keys(&self) -> Vec<PieceKey> {
         self.pieces.keys().collect()
+    }
+
+    /// The axis a piece is repeated across, if it carries one.
+    ///
+    /// One at most: a second would be a second reflection, which is a quarter
+    /// piece and not this concept, so the command refuses it and this reads
+    /// the first in key order rather than pretending to choose.
+    pub fn symmetry_of(&self, piece: PieceKey) -> Option<(SymmetryKey, Symmetry)> {
+        self.symmetries
+            .iter()
+            .find(|(_, held)| held.piece() == Some(piece))
+            .map(|(key, held)| (key, *held))
+    }
+
+    /// The stretch of contour a piece is folded on, if it is drawn on a fold.
+    pub fn fold_of(&self, piece: PieceKey) -> Option<EdgeRange> {
+        let (_, held) = self.symmetry_of(piece)?;
+        (held.kind == SymmetryKind::Fold).then_some(held.axis)
     }
 
     /// The name a piece shows for one of its points.

@@ -60,6 +60,15 @@ pub const VERSION_ELASTIC: u32 = 5;
 /// line was ever there.
 pub const VERSION_INTERNAL: u32 = 6;
 
+/// The format version of a document in which a piece is drawn against an axis.
+///
+/// Under the internal line's rule it takes the next number. A build that reads
+/// version 6 predates the axis, so it would open the product, drop the fold,
+/// and cut, mesh, drape and export half a waistband as if it were the whole
+/// one — a piece exactly half the width it says it is, with nothing on screen
+/// to say a fold was ever there.
+pub const VERSION_FOLDED: u32 = 7;
+
 /// A file: the version, and the pattern under it.
 #[derive(Serialize)]
 struct Written<'a> {
@@ -82,7 +91,7 @@ impl Doc {
     ///
     /// A pure function of what the document carries, never of the file it was
     /// read from, so one document still has exactly one text: the highest
-    /// number any body, piece, elastic or internal line in it needs.
+    /// number any body, piece, elastic, internal line or axis in it needs.
     pub fn format_version(&self) -> u32 {
         let bodies = self.mannequins.iter().map(|(_, set)| set.format_version());
         let pieces = self.pieces.iter().map(|(_, piece)| piece.format_version());
@@ -91,10 +100,12 @@ impl Doc {
         // for its version.
         let elastic = (!self.elastics.is_empty()).then_some(VERSION_ELASTIC);
         let lines = (!self.lines.is_empty()).then_some(VERSION_INTERNAL);
+        let folded = (!self.symmetries.is_empty()).then_some(VERSION_FOLDED);
         bodies
             .chain(pieces)
             .chain(elastic)
             .chain(lines)
+            .chain(folded)
             .max()
             .unwrap_or(VERSION)
     }
@@ -129,13 +140,14 @@ impl Doc {
     /// is not a pattern's, a key that leads nowhere, a tract asking to be
     /// flattened at a count no tract can carry, a link to the library Toile
     /// could not have written, an elastic holding a stretch to numbers no
-    /// elastic holds, or an internal line no piece could be drawn with.
+    /// elastic holds, an internal line no piece could be drawn with, or an axis
+    /// no piece can be repeated across.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = version(text)?;
-        if !(u64::from(VERSION)..=u64::from(VERSION_INTERNAL)).contains(&found) {
+        if !(u64::from(VERSION)..=u64::from(VERSION_FOLDED)).contains(&found) {
             return Err(FormatError::UnknownVersion {
                 found,
-                newest: VERSION_INTERNAL,
+                newest: VERSION_FOLDED,
             });
         }
         let loaded: Loaded =
@@ -145,6 +157,7 @@ impl Doc {
         check::origins(&loaded.doc)?;
         check::elastics(&loaded.doc)?;
         check::lines(&loaded.doc)?;
+        check::symmetries(&loaded.doc)?;
         Ok(loaded.doc)
     }
 }
@@ -176,8 +189,8 @@ fn version(text: &str) -> Result<u64, FormatError> {
 mod tests {
     use crate::json::FormatError;
     use crate::{
-        Command, Doc, EdgeAnchor, EdgeRange, Elastic, Identity, LineEdit, LineKind, LineVertex,
-        MeasureSet, block,
+        Command, Doc, EdgeAnchor, EdgeRange, Elastic, Identity, LineEdit, LineKind, MeasureSet,
+        VertexEdit, block,
     };
 
     #[test]
@@ -213,7 +226,7 @@ mod tests {
         let mut doc = block::trouser_front();
         let front = doc.piece_named(block::FRONT).expect("the block draws one");
         let named = |label| doc.shows_label(front, label).expect("the block names it");
-        let place = |from| LineVertex::Contour(EdgeAnchor::at_node(front, from));
+        let place = |from| VertexEdit::Contour(EdgeAnchor::at_node(front, from));
         let edit = LineEdit::new(front, LineKind::Fold, place(named("cintura_cf")))
             .to(place(named("cintura_lat")));
         Command::AddLine {

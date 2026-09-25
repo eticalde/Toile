@@ -7,28 +7,27 @@ use eframe::egui::{Key, Pos2, vec2};
 use toile_engine::draft::{LineEdit, LineKey, PointKey};
 
 use super::*;
-use crate::tabs::patronaje::gesture::Mods;
 use crate::tabs::patronaje::input::tests::{Table, table};
 use crate::tabs::patronaje::state::Tool;
 use crate::tabs::patronaje::view::View;
 
-fn down(at: Pos2) -> Input {
+pub(super) fn down(at: Pos2) -> Input {
     Input::Down(at, Mods::default())
 }
 
-fn key(key: Key) -> Input {
+pub(super) fn key(key: Key) -> Input {
     Input::Key(key, Mods::default())
 }
 
 /// The tracing a gesture holds, out of whatever the reducer answered with.
-fn tracing(gesture: &Gesture) -> &Tracing {
+pub(super) fn tracing(gesture: &Gesture) -> &Tracing {
     match gesture {
         Gesture::Tracing(held) => held,
         other => panic!("a line is being traced: {other:?}"),
     }
 }
 
-/// The line one command carries, and the places it runs through.
+/// The line one command carries, and the nodes its places are anchored to.
 fn drawn(commands: &[Command]) -> (LineEdit, Vec<PointKey>) {
     assert_eq!(commands.len(), 1, "one line, one command: {commands:?}");
     let Command::AddLine { identity, line } = &commands[0] else {
@@ -45,10 +44,18 @@ fn drawn(commands: &[Command]) -> (LineEdit, Vec<PointKey>) {
 /// The tool in hand, and a tracing opened on the block's first node.
 fn opened(table: &Table) -> Gesture {
     let ctx = table.wielding(Tool::Trace);
-    let (gesture, commands, feedback) = begin(table.on_glass(0), &ctx);
+    let (gesture, commands, feedback) = begin(table.on_glass(0), Mods::default(), &ctx);
     assert!(commands.is_empty(), "one place is not a line");
     assert_eq!(feedback.stack, None, "and nothing has reached the history");
     gesture
+}
+
+/// A place inside the paper of the block, well clear of every tract: three
+/// centimetres in from the waist's centre front, which is a corner the contour
+/// turns through, so the place is on cloth and on nothing else.
+pub(super) fn on_the_cloth(table: &Table) -> [f64; 2] {
+    let corner = table.nodes[0].1;
+    [corner[0] + 3.0, corner[1] + 3.0]
 }
 
 /// A press on a node anchors the place at that node, so a line drawn between
@@ -58,20 +65,24 @@ fn a_press_on_a_node_puts_the_place_on_that_node() {
     let table = table();
     let held = tracing(&opened(&table)).clone();
     assert_eq!(held.pending.len(), 1);
-    assert_eq!(held.pending[0].at.from, table.nodes[0].0);
-    assert_eq!(held.pending[0].at.t, 0.0, "on the node, not along a tract");
+    let Spot::On(at) = held.pending[0].at else {
+        panic!("a node is a place on the contour: {:?}", held.pending[0]);
+    };
+    assert_eq!(at.from, table.nodes[0].0);
+    assert_eq!(at.t, 0.0, "on the node, not along a tract");
     assert_eq!(held.rubber, held.pending[0].cm);
 }
 
-/// A press that lands on nothing opens nothing: a line is drawn on the cloth of
-/// a piece, and the bare mat is not cloth.
+/// A press off the cloth opens nothing: a line is drawn on the cloth of a
+/// piece, and the bare mat beyond it is not cloth.
 #[test]
-fn a_press_on_the_bare_mat_opens_no_line() {
+fn a_press_off_the_cloth_opens_no_line() {
     let table = table();
     let ctx = table.wielding(Tool::Trace);
-    // Well outside the block, where no node and no tract is within reach.
+    // Well outside the block, where no node and no tract is within reach and
+    // the paper is nowhere near.
     let away = View::default().to_screen([-200.0, -200.0]);
-    let (gesture, commands, feedback) = begin(away, &ctx);
+    let (gesture, commands, feedback) = begin(away, Mods::default(), &ctx);
     assert_eq!(gesture, Gesture::Idle);
     assert!(commands.is_empty());
     assert_eq!(feedback.select, None, "and nothing is chosen either");
@@ -170,10 +181,12 @@ fn a_press_along_a_tract_anchors_at_the_fraction_it_landed_at() {
     let ctx = table.wielding(Tool::Trace);
     let ends = (table.nodes[0].1, table.nodes[1].1);
     let middle = [0, 1].map(|axis| f64::midpoint(ends.0[axis], ends.1[axis]));
-    let (gesture, _, _) = begin(View::default().to_screen(middle), &ctx);
-    let place = tracing(&gesture).pending[0];
-    assert_eq!(place.at.from, table.nodes[0].0, "the tract's own node");
-    assert!(place.at.t > 0.2 && place.at.t < 0.8, "{}", place.at.t);
+    let (gesture, _, _) = begin(View::default().to_screen(middle), Mods::default(), &ctx);
+    let Spot::On(place) = tracing(&gesture).pending[0].at else {
+        panic!("a tract is a place on the contour");
+    };
+    assert_eq!(place.from, table.nodes[0].0, "the tract's own node");
+    assert!(place.t > 0.2 && place.t < 0.8, "{}", place.t);
 }
 
 /// The pointer moving carries the rubber line, and nothing else.

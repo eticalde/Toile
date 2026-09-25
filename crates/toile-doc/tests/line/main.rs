@@ -1,10 +1,11 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
 mod edits;
+mod places;
 
 use toile_doc::{
     ChangeClass, Command, Doc, DocError, EdgeAnchor, History, Identity, InternalLine, LineEdit,
-    LineKey, LineKind, LineVertex, PieceKey, Point, PointKey, SAMPLES, SegmentEdit, block,
+    LineKey, LineKind, PieceKey, Point, PointKey, SAMPLES, SegmentEdit, VertexEdit, block,
 };
 
 pub(crate) fn front(doc: &Doc) -> PieceKey {
@@ -16,17 +17,18 @@ pub(crate) fn node(doc: &Doc, label: &str) -> PointKey {
         .unwrap_or_else(|| panic!("the block names {label}"))
 }
 
-pub(crate) fn on(doc: &Doc, label: &str, t: f64) -> LineVertex {
-    LineVertex::Contour(EdgeAnchor {
+pub(crate) fn on(doc: &Doc, label: &str, t: f64) -> VertexEdit {
+    VertexEdit::Contour(EdgeAnchor {
         piece: front(doc),
         from: node(doc, label),
         t,
     })
 }
 
-/// A free point of the document, the way a buttonhole's two ends arrive.
-pub(crate) fn loose(doc: &mut Doc, x: f64, y: f64) -> LineVertex {
-    LineVertex::free(doc.points.insert(Point::at(x, y)))
+/// A place of its own on a point the document already carries, the way an
+/// import writes one: the construction names it, so the line only cites it.
+pub(crate) fn loose(doc: &mut Doc, x: f64, y: f64) -> VertexEdit {
+    VertexEdit::Cited(doc.points.insert(Point::at(x, y)))
 }
 
 /// A pocket mouth across the front: one end on the waist, one loose.
@@ -120,7 +122,7 @@ fn a_line_is_anchored_by_the_rule_a_seam_side_answers_to() {
     let stray = PointKey::new(90, 0);
     let back = doc.piece_named(block::BACK).expect("the block draws one");
     let head = on(&doc, "cintura_cf", 0.0);
-    let anchored = |piece, from, t| LineVertex::Contour(EdgeAnchor { piece, from, t });
+    let anchored = |piece, from, t| VertexEdit::Contour(EdgeAnchor { piece, from, t });
 
     for (tail, expected) in [
         (anchored(piece, handle, 0.0), DocError::NoSuchNode),
@@ -133,11 +135,11 @@ fn a_line_is_anchored_by_the_rule_a_seam_side_answers_to() {
             anchored(piece, node(&doc, "cintura_lat"), 1.5),
             DocError::AnchorFraction,
         ),
-        (LineVertex::free(stray), DocError::stale(stray)),
+        (VertexEdit::Cited(stray), DocError::stale(stray)),
     ] {
         let command = Command::AddLine {
             identity: Identity::New,
-            line: Box::new(LineEdit::new(piece, LineKind::Stitch, head).to(tail)),
+            line: Box::new(LineEdit::new(piece, LineKind::Stitch, head.clone()).to(tail)),
         };
         assert_eq!(command.apply(&mut doc), Err(expected));
     }
@@ -197,7 +199,9 @@ fn the_handles_of_a_curved_span_come_back_under_their_own_keys() {
     history
         .edit(&mut doc, Command::RemoveLine { line: key })
         .expect("the line is live");
-    assert_eq!(doc.points.len(), points, "the handles went with it");
+    // The two handles, and the loose place as well: nothing else in the
+    // document named it, so it was the line's own by then.
+    assert_eq!(doc.points.len(), points - 1, "the handles went with it");
     history.undo(&mut doc).expect("every slot is free again");
     assert_eq!(doc, before);
     assert_eq!(drawn(&doc, key).handles().collect::<Vec<_>>(), handles);
@@ -210,8 +214,11 @@ fn a_span_that_bends_is_flattened_by_the_rule_a_tract_answers_to() {
     let tail = loose(&mut doc, 6.0, 9.0);
     let curve = SegmentEdit::cubic(Point::at(2.0, 3.0), Point::at(4.0, 7.0));
     for count in [0, 1, SAMPLES.1 + 1] {
-        let edit =
-            LineEdit::new(front(&doc), LineKind::Stitch, head).curving(tail, curve.clone(), count);
+        let edit = LineEdit::new(front(&doc), LineKind::Stitch, head.clone()).curving(
+            tail.clone(),
+            curve.clone(),
+            count,
+        );
         let command = Command::AddLine {
             identity: Identity::New,
             line: Box::new(edit),

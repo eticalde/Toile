@@ -1,5 +1,5 @@
 use eframe::egui::{Color32, Painter, Pos2, Shape, Stroke, Vec2};
-use toile_engine::draft::{LineKey, LineKind, NotchCount};
+use toile_engine::draft::{LineKey, LineKind, NotchCount, PointKey};
 
 use super::inner::{Drawn, Tick};
 use super::trace::Place;
@@ -12,6 +12,9 @@ const BAR: f32 = 8.0;
 /// How long a notch's cut is drawn, in screen points.
 const CUT: f32 = 10.0;
 
+/// And how wide, which with the ink of a cut line is what a mark is drawn as.
+pub(super) const NOTCH_W: f32 = 1.4;
+
 /// The room between two cuts of a double or triple notch.
 const PITCH: f32 = 3.0;
 
@@ -20,6 +23,9 @@ pub(super) const FAINT: f32 = 0.75;
 
 /// How much wider the line chosen is drawn.
 const LIT: f32 = 0.7;
+
+/// How big the dot on a place of the chosen line is, in screen points.
+const DOT: f32 = 3.0;
 
 /// How a kind of internal line is stroked.
 ///
@@ -89,6 +95,21 @@ pub fn lines(p: &Painter, theme: &Theme, drawn: &[Drawn], (view, chosen): (View,
         if ink.bars {
             ends(p, ink, &run);
         }
+        if lit {
+            places(p, ink, view, &it.loose);
+        }
+    }
+}
+
+/// The places of the chosen line that a hand can take hold of.
+///
+/// Only the chosen line's, because only those answer a press, and in the line's
+/// own ink rather than a node's, so a mark on the cloth is never read as a
+/// corner of the piece. A place anchored to the contour wears none: it is a
+/// fraction of a tract and moving it is a question about the contour.
+fn places(p: &Painter, chalk: Chalk, view: View, loose: &[(PointKey, [f64; 2])]) {
+    for &(_, at) in loose {
+        p.circle_filled(view.to_screen(at), DOT, chalk.ink);
     }
 }
 
@@ -98,7 +119,7 @@ pub fn lines(p: &Painter, theme: &Theme, drawn: &[Drawn], (view, chosen): (View,
 /// lies on is not something the contour says here, and a tick that crosses it
 /// is right either way.
 pub fn notches(p: &Painter, theme: &Theme, ticks: &[Tick], view: View) {
-    let ink = Stroke::new(1.4, theme.outline);
+    let ink = Stroke::new(NOTCH_W, theme.outline);
     for tick in ticks {
         let at = view.to_screen(tick.at);
         let along = Vec2::new(tick.along[0] as f32, tick.along[1] as f32);

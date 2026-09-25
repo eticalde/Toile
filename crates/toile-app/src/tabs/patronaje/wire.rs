@@ -3,7 +3,7 @@ use toile_engine::draft::{Command, Doc, PieceKey, PointKey};
 
 use super::curve::Bend;
 use super::gesture::{EditContext, Gesture, Input, Mods, Stack};
-use super::inner::Drawn;
+use super::inner::{Drawn, Tick};
 use super::state::State;
 use super::tract::Tract;
 use super::{input, modal};
@@ -53,6 +53,8 @@ pub struct Table<'a> {
     pub bends: &'a [Bend],
     /// The lines drawn inside it, where the mat draws them.
     pub lines: &'a [Drawn],
+    /// The notches cut into its contour, where the mat draws them.
+    pub ticks: &'a [Tick],
 }
 
 /// Runs this frame's events through the reducer, in the order they happened.
@@ -77,6 +79,7 @@ pub fn reduce(
             tracts: table.tracts,
             bends: table.bends,
             lines: table.lines,
+            ticks: table.ticks,
             selection: state.selection.clone(),
             tool: state.tool,
             view: state.view,

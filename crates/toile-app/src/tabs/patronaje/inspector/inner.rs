@@ -10,12 +10,16 @@ use crate::widgets::{
     section_with,
 };
 
-const NONE: &str = "Con la herramienta Línea (L), pulsa un punto o un lugar del contorno y luego \
-                    el siguiente. Enter cierra la línea, Esc la abandona y Retroceso quita el \
-                    último lugar. Así se dibuja un doblez, un pespunte, una ranura o un ojal.";
+const NONE: &str = "Con la herramienta Línea (L), pulsa donde sea sobre la pieza —el contorno o la \
+                    tela— y luego el siguiente lugar. Enter cierra la línea, Esc la abandona y \
+                    Retroceso quita el último lugar. Así se dibuja un doblez, un pespunte, una \
+                    ranura o un ojal.";
 const READ: &str = "El tipo dice qué se hace con la línea, y de ahí sale su trazo: el doblez se \
                     plancha, el pespunte se cose, la ranura y el ojal se abren, la posición dice \
                     qué cae ahí y la referencia no lleva nada. Supr borra la línea elegida.";
+const DRAG: &str = "Los lugares sueltos de la línea elegida se arrastran de uno en uno, y llevan \
+                    su fórmula. Un lugar anclado al contorno no: para moverlo se borra la línea y \
+                    se vuelve a trazar.";
 const ADRIFT: &str = "No se dibuja: alguno de sus lugares ya no resuelve. Revisa los puntos y el \
                       contorno que nombra.";
 const UNDRAWN: &str = "sin dibujar";
@@ -77,6 +81,7 @@ fn detail(ui: &mut egui::Ui, theme: &Theme, it: &Drawn, verbs: &mut Vec<Verb>) {
         plain_note(ui, theme, name);
     }
     field_row(ui, theme, "lugares", &it.places.to_string(), "");
+    field_row(ui, theme, "sueltos", &it.loose.len().to_string(), "");
     ui.add_space(6.0);
     ui.horizontal(|ui| {
         ui.add_space(PAD);
@@ -104,6 +109,9 @@ fn detail(ui: &mut egui::Ui, theme: &Theme, it: &Drawn, verbs: &mut Vec<Verb>) {
     ui.add_space(4.0);
     if it.run.len() < 2 {
         alert_note(ui, theme, ADRIFT);
+    }
+    if !it.loose.is_empty() {
+        plain_note(ui, theme, DRAG);
     }
     plain_note(ui, theme, READ);
 }

@@ -1,6 +1,6 @@
 use toile_doc::{
-    Command, Doc, EdgeAnchor, Identity, LineEdit, LineKey, LineKind, LineVertex, PieceKey,
-    PointKey, SegmentEdit,
+    Command, Doc, EdgeAnchor, Identity, LineEdit, LineKey, LineKind, PieceKey, PointKey,
+    SegmentEdit, VertexEdit,
 };
 
 use super::super::outline::{self, Bend, Run, Vertex};
@@ -141,13 +141,18 @@ fn kind(path: &InternalPath) -> LineKind {
 /// would have to name a fraction along a tract, and that fraction is a number
 /// no formula follows — a point of its own, carrying the construction as
 /// formulas, follows a change of body exactly as the pattern does.
+///
+/// The point is written before the line is drawn, and the line cites it,
+/// because the construction is what names it: one construction point becomes
+/// one point of the document however many paths run through it, and a point
+/// several lines share is not one line's to take away.
 fn place(
     tr: &mut Translator<'_>,
     doc: &mut Doc,
     vertex: &Vertex,
     piece: PieceKey,
     placed: &mut Placed,
-) -> Result<LineVertex, Error> {
+) -> Result<VertexEdit, Error> {
     if let Some(id) = vertex.point
         && let Some(&known) = placed.points.get(&id)
         && doc
@@ -155,9 +160,9 @@ fn place(
             .get(piece)
             .is_some_and(|held| held.node_index(known).is_some())
     {
-        return Ok(LineVertex::Contour(EdgeAnchor::at_node(piece, known)));
+        return Ok(VertexEdit::Contour(EdgeAnchor::at_node(piece, known)));
     }
-    Ok(LineVertex::free(point(tr, doc, vertex, placed)?))
+    Ok(VertexEdit::Cited(point(tr, doc, vertex, placed)?))
 }
 
 /// The document point a place is: the one its construction point already

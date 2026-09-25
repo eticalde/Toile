@@ -1,41 +1,17 @@
 use std::collections::BTreeMap;
 
 use toile_doc::formula::EvalError;
-use toile_doc::{Axis, Doc, Piece, Point, PointKey};
+use toile_doc::{Axis, Doc, EdgeAnchor, EdgeRange, Piece, Point, PointKey};
 use toile_geom::{length, validate};
 
-use super::contour;
 use super::defect::Defect;
 use super::env::Env;
+use super::resolved::Resolved;
+use super::{contour, fold};
 
 /// Centimetres in a metre. The document counts in the first, the solver in the
 /// second, and this is the only place the two meet.
 const CM_PER_M: f64 = 100.0;
-
-/// A piece as the rest of the program sees it: its nodes, the line they draw
-/// once the curves are flattened, and that same line in the solver's units.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Resolved {
-    /// The contour nodes in centimetres, y downward, in contour order.
-    pub points: Vec<(PointKey, [f64; 2])>,
-    /// The whole contour flattened, in centimetres with y downward: the line
-    /// the table draws, curves and all.
-    pub flat_cm: Vec<[f64; 2]>,
-    /// The same flattened contour in metres, y upward: what the mesher takes.
-    ///
-    /// The suffix is here because these two are the same type, hold the same
-    /// contour, sit one field apart and differ by a hundred and a sign — not
-    /// because the tree carries a rule that every length is suffixed. It does
-    /// not: `points` above is centimetres and says nothing, and an unsuffixed
-    /// `[f64; 2]` elsewhere may be either unit. Read the suffix as a warning
-    /// about this neighbourhood, never as a guarantee about the rest.
-    pub outline_m: Vec<[f64; 2]>,
-    /// Where each node opens in the flattening, in contour order.
-    pub starts: Vec<usize>,
-    /// Flattened arc length in centimetres up to each node, and round to the
-    /// first, so the last entry is the perimeter.
-    pub cum: Vec<f64>,
-}
 
 /// The metres the solver works in, from the centimetres the document holds.
 ///
@@ -77,38 +53,67 @@ pub fn points(doc: &Doc, env: &Env) -> Resolutions {
     (good, broken)
 }
 
-/// One piece as a closed contour, flattened, in both units.
+/// One piece as a closed contour, flattened, with the cloth it is cut from.
 ///
 /// The arc lengths are measured along the flattened line rather than between
 /// nodes, so a curved tract is as long as the cloth it will need.
 ///
+/// `fold` is the axis the piece is drawn against, when it is drawn against one.
+/// This is the one place in the program that reads it: the unfold happens here
+/// and hangs on the result, so nothing downstream asks whether a piece was
+/// drawn whole or drawn half.
+///
 /// # Errors
 /// Every defect the piece carries: one per coordinate that does not resolve,
-/// handles included, or, when they all do, the fault that stops the flattened
-/// contour from being a simple closed polygon.
+/// handles included; when they all do, the fault that stops the flattened
+/// contour from being a simple closed polygon; and when it folds, an axis with
+/// nothing to mirror or a cloth that lies over itself.
 pub fn piece(
     held: &Piece,
+    fold: Option<EdgeRange>,
     good: &BTreeMap<PointKey, [f64; 2]>,
     broken: &BTreeMap<PointKey, (Axis, EvalError)>,
 ) -> Result<Resolved, Vec<Defect>> {
     let tracts = contour::tracts(held, good, broken)?;
-    let points = tracts.iter().map(|one| (one.node, one.start)).collect();
+    let points: Vec<(PointKey, [f64; 2])> =
+        tracts.iter().map(|one| (one.node, one.start)).collect();
     let (flat_cm, starts) = contour::flatten(&tracts);
-    let outline_m: Vec<[f64; 2]> = flat_cm.iter().map(|&p| to_metres(p)).collect();
-    validate::check_closed(&outline_m).map_err(|fault| vec![Defect::Contour(fault)])?;
+    let drawn_m: Vec<[f64; 2]> = flat_cm.iter().map(|&p| to_metres(p)).collect();
+    validate::check_closed(&drawn_m).map_err(|fault| vec![Defect::Contour(fault)])?;
     let along = length::cumulative(&flat_cm);
-    let cum = starts
+    let cum: Vec<f64> = starts
         .iter()
         .map(|&start| along[start])
         .chain(along.last().copied())
         .collect();
+    let cloth = match fold {
+        None => None,
+        Some(axis) => {
+            let at = |anchor: &EdgeAnchor| arc(&points, &cum, anchor);
+            let (Some(head), Some(tail)) = (at(&axis.head), at(&axis.tail)) else {
+                return Err(vec![Defect::FoldAxis]);
+            };
+            Some(fold::unfold(&flat_cm, &along, head, tail).map_err(|fault| vec![fault])?)
+        }
+    };
     Ok(Resolved {
         points,
         flat_cm,
-        outline_m,
+        drawn_m,
         starts,
         cum,
+        cloth,
     })
+}
+
+/// How far along the drawn contour one place on it falls, in centimetres.
+///
+/// `None` for a node the contour does not run through, which is what a place
+/// nobody can point at is worth.
+pub fn arc(points: &[(PointKey, [f64; 2])], cum: &[f64], at: &EdgeAnchor) -> Option<f64> {
+    let k = points.iter().position(|&(key, _)| key == at.from)?;
+    let (from, to) = (*cum.get(k)?, *cum.get(k + 1)?);
+    Some(from + (to - from) * at.t)
 }
 
 /// A point's two coordinates in centimetres, y downward.
@@ -136,7 +141,7 @@ mod tests {
         let (good, broken) = points(doc, &env);
         let key = doc.piece_named(FRONT).expect("the block draws one piece");
         let held = doc.pieces.get(key).expect("the key is live");
-        piece(held, &good, &broken).expect("the block is a closed contour")
+        piece(held, None, &good, &broken).expect("the block is a closed contour")
     }
 
     /// The length of the run from node `from` to node `to`, in centimetres.
@@ -151,7 +156,7 @@ mod tests {
         // The waist opens the hip curve, so it is a node and the first sample
         // of its own tract at once.
         assert_eq!(front.flat_cm[1], [22.0, 0.0]);
-        assert_eq!(front.outline_m[1], [0.22, -0.0]);
+        assert_eq!(front.drawn_m[1], [0.22, -0.0]);
     }
 
     #[test]
@@ -208,7 +213,7 @@ mod tests {
         assert_eq!(after.points.len(), before.points.len());
         let keys = |of: &Resolved| of.points.iter().map(|&(key, _)| key).collect::<Vec<_>>();
         assert_eq!(keys(&after), keys(&before));
-        assert_ne!(after.outline_m, before.outline_m);
+        assert_ne!(after.drawn_m, before.drawn_m);
         assert!((run(&before, 1, 4) - 104.60).abs() < 0.01);
         assert!((run(&after, 1, 4) - 106.79).abs() < 0.01);
     }
@@ -224,7 +229,7 @@ mod tests {
         let front = doc.piece_named(FRONT).expect("the block draws one piece");
         let held = doc.pieces.get(front).expect("the key is live");
         assert_eq!(
-            piece(held, &good, &broken),
+            piece(held, None, &good, &broken),
             Err(vec![Defect::Binding {
                 point: key,
                 axis: Axis::Y,
@@ -245,7 +250,7 @@ mod tests {
         let env = env::build(&doc).expect("an empty document resolves");
         let (good, broken) = points(&doc, &env);
         assert!(matches!(
-            piece(&held, &good, &broken).expect_err("a bowtie is not a piece")[0],
+            piece(&held, None, &good, &broken).expect_err("a bowtie is not a piece")[0],
             Defect::Contour(validate::ContourFault::SelfIntersects { .. })
         ));
     }
@@ -260,7 +265,7 @@ mod tests {
         let env = env::build(&doc).expect("an empty document resolves");
         let (good, broken) = points(&doc, &env);
         assert_eq!(
-            piece(&held, &good, &broken),
+            piece(&held, None, &good, &broken),
             Err(vec![Defect::NoSuchPoint { point: lost }])
         );
     }

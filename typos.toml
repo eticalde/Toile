@@ -88,3 +88,6 @@ cose = "cose"
 # "is done", in the internal-line section's note on what each kind means.
 # crates/toile-app/src/tabs/patronaje/inspector/inner.rs
 hace = "hace"
+# "patterns", in the fold section's note on how half the trade draws a piece.
+# crates/toile-app/src/tabs/patronaje/inspector/fold.rs
+patrones = "patrones"

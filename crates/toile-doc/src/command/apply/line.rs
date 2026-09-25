@@ -1,15 +1,18 @@
+mod place;
+
+use place::{brought, given_back, own_points, placed, seated};
+
 use super::curve::{install, puts_back, uninstall};
-use super::range::anchored;
 use crate::{
     Applied, ChangeClass, Command, Doc, DocError, Identity, InternalLine, LineEdit, LineKey,
-    LineKind, LineSpan, LineVertex, PointKey, SegmentEdit, SpanEdit,
+    LineKind, LineSpan, Point, PointKey, SegmentEdit, SpanEdit, VertexEdit,
 };
 
 /// Draws a line on a piece that the pattern does not cut.
 ///
-/// Nothing moves until the whole plan is known to fit. A span that bends brings
-/// two handles that become points of the document, and a line half drawn would
-/// leave a document no inverse describes.
+/// Nothing moves until the whole plan is known to fit. A place off the contour
+/// and a span that bends both bring points that become points of the document,
+/// and a line half drawn would leave a document no inverse describes.
 pub(crate) fn add_line(
     doc: &mut Doc,
     identity: Identity<InternalLine>,
@@ -21,8 +24,9 @@ pub(crate) fn add_line(
     if doc.pieces.get(edit.piece).is_none() {
         return Err(DocError::stale(edit.piece));
     }
+    let brought = brought(&edit);
     for vertex in edit.vertices() {
-        placed(doc, vertex)?;
+        placed(doc, vertex, &brought)?;
     }
     fits(doc, identity, &edit)?;
     let LineEdit {
@@ -32,10 +36,14 @@ pub(crate) fn add_line(
         head,
         spans,
     } = edit;
+    // In run order, each place before the handles of the span that reaches it:
+    // the arena issues keys in the order it is asked for them, so this is the
+    // order every drawing of this line repeats.
+    let head = seated(doc, head)?;
     let mut drawn = Vec::with_capacity(spans.len());
     for span in spans {
         drawn.push(LineSpan {
-            to: span.to,
+            to: seated(doc, span.to)?,
             segment: install(doc, span.segment)?,
             samples: span.samples,
         });
@@ -63,20 +71,25 @@ pub(crate) fn add_line(
 
 /// Takes an internal line off the piece it was drawn on.
 ///
-/// The inverse carries the line back under its own key, with every handle its
-/// curved spans hung on under the key and the bindings it had, so a gesture
-/// that rubs a line out and an undo that draws it again leave the document it
-/// started from.
+/// The inverse carries the line back under its own key, with every point of its
+/// own — the handles its curved spans hung on, and the places that sat on no
+/// contour — under the keys and the bindings they had, so a gesture that rubs a
+/// line out and an undo that draws it again leave the document it started from.
+/// A point anything else still names stays where it is: it outlives the line,
+/// so the inverse only cites it.
 pub(crate) fn remove_line(doc: &mut Doc, line: LineKey) -> Result<Applied, DocError> {
     let held = doc
         .lines
         .get(line)
         .ok_or_else(|| DocError::stale(line))?
         .clone();
+    let own = own_points(doc, line, &held);
+    let mut back: Vec<PointKey> = Vec::new();
+    let head = given_back(doc, held.head, &own, &mut back)?;
     let mut spans = Vec::with_capacity(held.spans.len());
     for span in &held.spans {
         spans.push(SpanEdit {
-            to: span.to,
+            to: given_back(doc, span.to, &own, &mut back)?,
             segment: puts_back(doc, span.segment)?,
             samples: span.samples,
         });
@@ -85,11 +98,14 @@ pub(crate) fn remove_line(doc: &mut Doc, line: LineKey) -> Result<Applied, DocEr
     for span in &held.spans {
         uninstall(doc, span.segment)?;
     }
+    for point in own {
+        doc.points.remove(point)?;
+    }
     let edit = LineEdit {
         piece: held.piece,
         kind: held.kind,
         label: held.label,
-        head: held.head,
+        head,
         spans,
     };
     Ok(Applied {
@@ -138,26 +154,12 @@ pub(crate) fn label_line(
     })
 }
 
-/// One place of a line, checked against the document.
-///
-/// A place on the contour answers to the very door a seam side answers to. A
-/// free place only has to be a point the document still carries: a line may
-/// start at a corner, and nothing about a free point is looked up.
-fn placed(doc: &Doc, vertex: LineVertex) -> Result<(), DocError> {
-    match vertex {
-        LineVertex::Contour(anchor) => anchored(doc, anchor),
-        LineVertex::Free { point } => match doc.points.get(point) {
-            Some(_) => Ok(()),
-            None => Err(DocError::stale(point)),
-        },
-    }
-}
-
 /// Checks every key the drawing claims, before anything moves.
 ///
-/// The line's own key and each handle a restored span asks for have to name an
-/// open slot, and no two of them may want the same one: two points landing on
-/// one key is the plan that cannot fit however the arena is arranged.
+/// The line's own key, each handle a restored span asks for and each place that
+/// takes a key back have to name an open slot, and no two of them may want the
+/// same one: two points landing on one key is the plan that cannot fit however
+/// the arena is arranged.
 fn fits(doc: &Doc, identity: Identity<InternalLine>, edit: &LineEdit) -> Result<(), DocError> {
     if let Identity::Restored(key) = identity
         && !doc.lines.is_vacant(key)
@@ -168,25 +170,40 @@ fn fits(doc: &Doc, identity: Identity<InternalLine>, edit: &LineEdit) -> Result<
         });
     }
     let mut taken: Vec<PointKey> = Vec::new();
+    for vertex in edit.vertices() {
+        if let VertexEdit::Free { identity, .. } = vertex {
+            claimed(doc, *identity, &mut taken)?;
+        }
+    }
     for span in &edit.spans {
         let SegmentEdit::Cubic(handles) = &span.segment else {
             continue;
         };
         for handle in [&handles.out, &handles.into] {
-            let Identity::Restored(key) = handle.identity else {
-                continue;
-            };
-            if taken.contains(&key) {
-                return Err(DocError::occupied(key));
-            }
-            if !doc.points.is_vacant(key) {
-                return Err(match doc.points.get(key) {
-                    Some(_) => DocError::occupied(key),
-                    None => DocError::stale(key),
-                });
-            }
-            taken.push(key);
+            claimed(doc, handle.identity, &mut taken)?;
         }
     }
+    Ok(())
+}
+
+/// One key a point on its way in asks for, against the keys already claimed.
+fn claimed(
+    doc: &Doc,
+    identity: Identity<Point>,
+    taken: &mut Vec<PointKey>,
+) -> Result<(), DocError> {
+    let Identity::Restored(key) = identity else {
+        return Ok(());
+    };
+    if taken.contains(&key) {
+        return Err(DocError::occupied(key));
+    }
+    if !doc.points.is_vacant(key) {
+        return Err(match doc.points.get(key) {
+            Some(_) => DocError::occupied(key),
+            None => DocError::stale(key),
+        });
+    }
+    taken.push(key);
     Ok(())
 }

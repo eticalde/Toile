@@ -1,5 +1,7 @@
 use super::range::anchored;
-use crate::{Applied, ChangeClass, Command, Doc, DocError, Identity, Notch, NotchKey, PieceKey};
+use crate::{
+    Applied, ChangeClass, Command, Doc, DocError, EdgeAnchor, Identity, Notch, NotchKey, PieceKey,
+};
 
 /// Marks a contour, and the contour it answers to along with it.
 ///
@@ -41,6 +43,36 @@ pub(crate) fn add_notch(
     Ok(Applied {
         inverse: Command::RemoveNotch { notch: key },
         touched: ordered(touched),
+        class: ChangeClass::Topology,
+    })
+}
+
+/// Slides a notch to another place on a contour.
+///
+/// The place comes through the one door every place on a contour comes through,
+/// so a fraction off the end of its tract or a node no contour runs through is
+/// refused here rather than drawn somewhere nobody asked for. Both pieces are
+/// named as touched, which is the whole cost of a mark that is asked to cross
+/// from one piece to another: the gesture never asks for that — it slides the
+/// mark along the tract it was cut into — but a file and a later tool may, and
+/// the mesh of each piece is then the mesh that has to be rebuilt.
+///
+/// The twin does not follow. Where the facing mark sits is a question about the
+/// facing contour, and moving it unasked would undo a placement somebody made.
+pub(crate) fn move_notch(
+    doc: &mut Doc,
+    notch: NotchKey,
+    to: EdgeAnchor,
+) -> Result<Applied, DocError> {
+    anchored(doc, to)?;
+    let held = doc
+        .notches
+        .get_mut(notch)
+        .ok_or_else(|| DocError::stale(notch))?;
+    let from = std::mem::replace(&mut held.at, to);
+    Ok(Applied {
+        inverse: Command::MoveNotch { notch, to: from },
+        touched: ordered(vec![from.piece, to.piece]),
         class: ChangeClass::Topology,
     })
 }
@@ -128,7 +160,7 @@ fn fits(doc: &Doc, wanted: &[Identity<Notch>]) -> Result<(), DocError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{EdgeAnchor, PointKey, block};
+    use crate::{PointKey, block};
 
     /// The block, its front, and two nodes of it to cut marks at.
     fn front() -> (Doc, PieceKey, [PointKey; 2]) {

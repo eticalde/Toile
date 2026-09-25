@@ -1,5 +1,5 @@
 use super::FormatError;
-use crate::{Arena, Doc, DocError, EdgeAnchor, EdgeRange, Key, LineVertex};
+use crate::{Arena, Doc, DocError, EdgeAnchor, EdgeRange, Key, LineVertex, PieceKey};
 
 /// Checks that no tract asks to be flattened at a count no tract can carry.
 ///
@@ -44,6 +44,28 @@ pub(super) fn elastics(doc: &Doc) -> Result<(), FormatError> {
 pub(super) fn lines(doc: &Doc) -> Result<(), FormatError> {
     for (_, line) in doc.lines.iter() {
         line.check().map_err(FormatError::InternalLine)?;
+    }
+    Ok(())
+}
+
+/// Checks that every axis is one a piece can be repeated across.
+///
+/// The same rule the edit answers to, asked again of the file, and the same
+/// reason: a hand-typed axis across two pieces, or with both ends on one place,
+/// names no line to mirror across, and two axes on one piece are a quarter
+/// piece nothing here unfolds. A mirror is refused with them, since nothing
+/// cuts the second piece yet and a reader that dropped it would cut one.
+pub(super) fn symmetries(doc: &Doc) -> Result<(), FormatError> {
+    let mut folded: Vec<PieceKey> = Vec::new();
+    for (_, held) in doc.symmetries.iter() {
+        held.check().map_err(FormatError::Symmetry)?;
+        let piece = held
+            .piece()
+            .ok_or(FormatError::Symmetry(DocError::SplitSymmetry))?;
+        if folded.contains(&piece) {
+            return Err(FormatError::Symmetry(DocError::AlreadySymmetric));
+        }
+        folded.push(piece);
     }
     Ok(())
 }
@@ -109,8 +131,7 @@ pub(super) fn references(doc: &Doc) -> Result<(), FormatError> {
         live(&doc.seams, dart.seam)?;
     }
     for (_, symmetry) in doc.symmetries.iter() {
-        live(&doc.points, symmetry.axis.0)?;
-        live(&doc.points, symmetry.axis.1)?;
+        range(doc, symmetry.axis)?;
     }
     for (_, pin) in doc.pins.iter() {
         live(&doc.pieces, pin.piece)?;

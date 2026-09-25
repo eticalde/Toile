@@ -54,8 +54,8 @@ fn everything() -> Doc {
     marks(&mut doc, front, back, &points);
     drawn(&mut doc, front, &points);
     doc.symmetries.insert(Symmetry {
-        axis: (points[0], points[3]),
-        kind: SymmetryKind::Mirror,
+        axis: EdgeRange::between(front, points[0], points[3]),
+        kind: SymmetryKind::Fold,
     });
     doc.pins.insert(Pin {
         piece: back,
@@ -174,7 +174,7 @@ fn a_kind_is_written_as_a_tag_beside_the_fields_it_carries() {
         "\"count\": \"double\"",
         "\"count\": \"triple\"",
         "\"fold\": \"toward_start\"",
-        "\"kind\": \"mirror\"",
+        "\"kind\": \"fold\"",
         "\"kind\": \"slit\"",
         "\"label\": \"ranura pill\"",
         "\"kind\": \"contour\"",

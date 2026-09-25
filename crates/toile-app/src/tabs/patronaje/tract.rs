@@ -1,5 +1,6 @@
 use toile_engine::draft::{Draft, PieceKey, PointKey};
 
+use super::layout;
 use super::pick::{Nearest, away, nearest_on};
 
 /// One tract of a contour as the pointer meets it.
@@ -60,6 +61,21 @@ pub fn straight(nodes: &[(PointKey, [f64; 2])]) -> Vec<Tract> {
         .collect()
 }
 
+/// Whether a place falls on the cloth these tracts enclose.
+///
+/// The flattening is what the paper is cut along, so the question is asked the
+/// way the overview asks which piece is under the pointer: even-odd against the
+/// closed outline the tracts lay end to end. Each tract carries the node it
+/// runs to as well, so the outline repeats its nodes; a side of no length
+/// crosses nothing, so the count is the same either way.
+pub fn covers(tracts: &[Tract], at: [f64; 2]) -> bool {
+    let outline: Vec<[f64; 2]> = tracts
+        .iter()
+        .flat_map(|tract| tract.line.iter().copied())
+        .collect();
+    outline.len() >= 3 && layout::inside(&outline, at)
+}
+
 /// The place on any tract nearest `at`.
 ///
 /// The tracts that touch anything in `held` are left out: a node cannot be
@@ -78,6 +94,16 @@ pub fn nearest(at: [f64; 2], tracts: &[Tract], held: &[PointKey]) -> Option<Near
         }
     }
     best
+}
+
+/// How far along one tract the place nearest `at` falls, from zero at its node
+/// to one at the next.
+///
+/// Arc length, and clamped to the tract's two ends by the segment each
+/// candidate is measured against: a gesture held to one tract cannot walk off
+/// it.
+pub fn fraction(tract: &Tract, at: [f64; 2]) -> Option<f64> {
+    on(tract, at, 0).map(|found| found.t)
 }
 
 /// The nearest place on one tract, with the fraction measured along it.

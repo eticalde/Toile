@@ -5,6 +5,7 @@ use toile_doc::{Doc, MeasureSet, block};
 mod elastic;
 mod line;
 mod placement;
+mod symmetry;
 
 /// The base block as it ships, written before any body carried a phenotype.
 const SHIPPED: &str = include_str!("../../../../assets/pantalon-base.toile");
@@ -104,7 +105,7 @@ fn header(version: u32) -> String {
 
 /// `text` with its header claiming `version` instead.
 fn restamped(text: &str, version: u32) -> String {
-    let body = (1..=7)
+    let body = (1..=8)
         .find_map(|stamp| text.strip_prefix(&header(stamp)))
         .expect("the file opens with a header the tests write");
     format!("{}{body}", header(version))

@@ -3,16 +3,19 @@ use std::collections::BTreeSet;
 use eframe::egui::Pos2;
 use toile_engine::draft::{Command, PointKey};
 
-use super::super::curve;
 use super::super::gesture::{
     self, Drag, EditContext, Feedback, Follow, Gesture, Held, Mods, Stack,
 };
 use super::super::pick::{self, NODE_PT};
 use super::super::state::Selection;
+use super::super::{curve, inner};
 use super::{MOVE, reach};
 
 /// What a handle with no name of its own is called in a question.
 const HANDLE: &str = "manija";
+
+/// And what a place of an internal line is called there.
+const PLACE: &str = "lugar";
 
 /// A press on a node: it and whatever else is chosen come into hand.
 pub(super) fn grab(
@@ -125,16 +128,22 @@ pub(super) fn held(ctx: &EditContext<'_>, key: PointKey, follow: Follow) -> Opti
     })
 }
 
-/// Where a point of the piece resolved to: a node of the contour, or a handle
-/// of one of its tracts.
+/// Where a point of the piece resolved to: a node of the contour, a handle of
+/// one of its tracts, or a place of a line drawn on it.
 fn seat(ctx: &EditContext<'_>, key: PointKey) -> Option<[f64; 2]> {
     ctx.nodes
         .iter()
         .find_map(|&(other, at)| (other == key).then_some(at))
         .or_else(|| curve::at(ctx.bends, key))
+        .or_else(|| inner::at(ctx.lines, key))
 }
 
 /// What a point is called in the question a release may ask.
+///
+/// The drawing's own name, then the one its author wrote, then what sort of
+/// point it is: a tangent's handle, or a place of a line. Neither of those is a
+/// node, so neither has a name of the piece's, and "manija" over a buttonhole
+/// would send whoever reads the question looking for a curve.
 fn name_of(ctx: &EditContext<'_>, key: PointKey) -> String {
     ctx.doc
         .label_of(ctx.piece, key)
@@ -144,7 +153,10 @@ fn name_of(ctx: &EditContext<'_>, key: PointKey) -> String {
                 .get(key)
                 .and_then(|point| point.label.clone())
         })
-        .unwrap_or_else(|| HANDLE.to_owned())
+        .unwrap_or_else(|| match curve::at(ctx.bends, key) {
+            Some(_) => HANDLE.to_owned(),
+            None => PLACE.to_owned(),
+        })
 }
 
 /// The node a press lands on, when it lands on one.

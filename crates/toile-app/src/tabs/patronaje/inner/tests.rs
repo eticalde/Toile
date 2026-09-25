@@ -5,7 +5,8 @@
 
 use toile_engine::draft::{
     Command, Doc, EdgeAnchor, Identity, InternalLine, LineEdit, LineKey, LineKind, LineSpan,
-    LineVertex, Notch, NotchCount, PieceKey, Point, PointKey, Segment, SegmentEdit, block,
+    LineVertex, Notch, NotchCount, PieceKey, Point, PointKey, Segment, SegmentEdit, VertexEdit,
+    block,
 };
 
 use super::*;
@@ -22,7 +23,7 @@ pub(in crate::tabs::patronaje) fn drawn(kind: LineKind, ends: [&str; 2]) -> (Doc
         doc.shows_label(piece, label)
             .unwrap_or_else(|| panic!("the block names {label}"))
     };
-    let place = |label| LineVertex::Contour(EdgeAnchor::at_node(piece, node(label)));
+    let place = |label| VertexEdit::Contour(EdgeAnchor::at_node(piece, node(label)));
     let edit = LineEdit::new(piece, kind, place(ends[0])).to(place(ends[1]));
     let key = LineKey::new(doc.lines.issued(), 0);
     Command::AddLine {
@@ -174,7 +175,7 @@ fn a_bending_span_is_flattened_and_still_counts_as_one_step() {
     let (mut doc, _) = drawn(LineKind::Stitch, ["cintura_cf", "cadera_lat"]);
     let piece = doc.piece_named(block::FRONT).expect("the block draws one");
     let node = |label: &str| doc.shows_label(piece, label).expect("named");
-    let place = |label| LineVertex::Contour(EdgeAnchor::at_node(piece, node(label)));
+    let place = |label| VertexEdit::Contour(EdgeAnchor::at_node(piece, node(label)));
     let bow = SegmentEdit::cubic(Point::at(20.0, -8.0), Point::at(30.0, 8.0));
     let edit = LineEdit::new(piece, LineKind::Slit, place("cintura_cf")).curving(
         place("cadera_lat"),

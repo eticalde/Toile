@@ -101,9 +101,15 @@ impl View {
 /// Nothing for a piece with no nodes, which is what a framing of nothing is
 /// worth.
 pub fn bounds(nodes: &[(PointKey, [f64; 2])]) -> Option<Rect> {
-    let (first, _) = nodes.split_first()?;
-    let mut bbox = Rect::from_min_max(place(first.1), place(first.1));
-    for &(_, cm) in nodes {
+    let at: Vec<[f64; 2]> = nodes.iter().map(|&(_, cm)| cm).collect();
+    bounds_of(&at)
+}
+
+/// The box a run of places occupies, in centimetres.
+pub fn bounds_of(at: &[[f64; 2]]) -> Option<Rect> {
+    let (&first, _) = at.split_first()?;
+    let mut bbox = Rect::from_min_max(place(first), place(first));
+    for &cm in at {
         bbox.extend_with(place(cm));
     }
     Some(bbox)

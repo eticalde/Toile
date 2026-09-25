@@ -118,10 +118,14 @@ fn contour(out: &mut String, outline: &[[f64; 2]]) {
     );
 }
 
-/// A piece's cut line in millimetres: the contour with its curves flattened.
+/// A piece's cut line in millimetres: the cloth, with its curves flattened.
+///
+/// The cloth and not the drawing, so a piece drawn against a fold is printed
+/// whole. On a sheet carrying the half, the cut line and the net line are a
+/// centimetre apart and nothing says which one the fold is laid on.
 fn millimetres(draft: &Draft, piece: PieceKey) -> Vec<[f64; 2]> {
     draft
-        .flat_cm(piece)
+        .cloth_cm(piece)
         .iter()
         .map(|&[x, y]| [x * MM_PER_CM, y * MM_PER_CM])
         .collect()

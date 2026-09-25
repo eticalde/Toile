@@ -8,10 +8,10 @@ mod vertex;
 pub use edit::{LineEdit, SpanEdit};
 pub use kind::LineKind;
 use serde::{Deserialize, Serialize};
-pub use vertex::LineVertex;
+pub use vertex::{LineVertex, VertexEdit};
 
 use crate::piece::samples_fit;
-use crate::{DocError, PieceKey, PointKey, Segment};
+use crate::{DocError, EdgeAnchor, PieceKey, PointKey, Segment};
 
 /// A run of places on one piece that the pattern draws and does not cut.
 ///
@@ -61,7 +61,7 @@ pub struct LineSpan {
 /// them from a command carries a `SegmentEdit`; both answer the same three
 /// questions, so both are read as this and the rules are written once.
 struct Step {
-    to: LineVertex,
+    at: Option<EdgeAnchor>,
     bends: bool,
     samples: u16,
 }
@@ -80,15 +80,21 @@ impl InternalLine {
             .flat_map(|(out, into)| [out, into])
     }
 
+    /// Whether the line names `point`: as a place of its own, or as a handle.
+    pub fn cites(&self, point: PointKey) -> bool {
+        self.vertices().any(|vertex| vertex.point() == Some(point))
+            || self.handles().any(|handle| handle == point)
+    }
+
     /// Whether the line is one a piece can be drawn with.
     pub(crate) fn check(&self) -> Result<(), DocError> {
-        checked(self.piece, self.head, self.steps())?;
+        checked(self.piece, self.head.anchor(), self.steps())?;
         self.lone_handles()
     }
 
     fn steps(&self) -> impl Iterator<Item = Step> {
         self.spans.iter().map(|span| Step {
-            to: span.to,
+            at: span.to.anchor(),
             bends: span.segment.bends(),
             samples: span.samples,
         })
@@ -124,11 +130,11 @@ impl LineEdit {
     /// Whether the line this edit draws is one a piece can be drawn with.
     pub(crate) fn check(&self) -> Result<(), DocError> {
         let steps = self.spans.iter().map(|span| Step {
-            to: span.to,
+            at: span.to.anchor(),
             bends: span.segment.bends(),
             samples: span.samples,
         });
-        checked(self.piece, self.head, steps)
+        checked(self.piece, self.head.anchor(), steps)
     }
 }
 
@@ -142,7 +148,7 @@ impl LineEdit {
 /// rule the contour's own tracts answer to.
 fn checked(
     piece: PieceKey,
-    head: LineVertex,
+    head: Option<EdgeAnchor>,
     steps: impl Iterator<Item = Step>,
 ) -> Result<(), DocError> {
     let steps: Vec<Step> = steps.collect();
@@ -154,14 +160,17 @@ fn checked(
         if !samples_fit(step.bends, step.samples) {
             return Err(DocError::sampling(step.samples));
         }
-        drawn_on(piece, step.to)?;
+        drawn_on(piece, step.at)?;
     }
     Ok(())
 }
 
 /// One place of a line, held to the piece the line is drawn on.
-fn drawn_on(piece: PieceKey, vertex: LineVertex) -> Result<(), DocError> {
-    let Some(anchor) = vertex.anchor() else {
+///
+/// A place off the contour answers for nothing here: its point carries two
+/// bindings and no piece, so there is no piece for it to disagree with.
+fn drawn_on(piece: PieceKey, at: Option<EdgeAnchor>) -> Result<(), DocError> {
+    let Some(anchor) = at else {
         return Ok(());
     };
     if anchor.piece != piece {
@@ -274,5 +283,8 @@ mod tests {
         );
         assert_eq!(once.check(), Ok(()));
         assert_eq!(once.handles().count(), 4);
+        assert!(once.cites(PointKey::new(5, 0)), "a handle it hangs on");
+        assert!(once.cites(PointKey::new(2, 0)), "a place of its own");
+        assert!(!once.cites(PointKey::new(9, 0)));
     }
 }

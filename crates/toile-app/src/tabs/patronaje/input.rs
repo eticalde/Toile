@@ -4,14 +4,15 @@ use eframe::egui::{Key, Pos2};
 use toile_engine::draft::{Command, LineKey, PointKey};
 
 use super::gesture::{self, EditContext, Feedback, Gesture, Input, Mods, Stack};
-use super::pick::EDGE_PT;
+use super::pick::{EDGE_PT, NODE_PT};
 use super::state::{Selection, Tool};
-use super::{inner, trace, tract};
+use super::{inner, slide, trace, tract};
 
 mod bend;
 mod drag;
 mod draw;
 mod node;
+mod place;
 mod take;
 
 /// The name a drag leaves in the undo stack.
@@ -62,6 +63,7 @@ pub fn update(
         (Gesture::Drag(held), Input::Up(..)) => drag::release(&held),
         (Gesture::Drag(held), Input::Text(text)) => drag::typing(*held, &text),
         (Gesture::Drag(held), Input::Key(key, mods)) => drag::during(*held, key, mods),
+        (Gesture::Sliding(held), event) => slide::update(held, &event, ctx),
         (Gesture::Pan { .. }, Input::Up(..))
         | (Gesture::Marquee { .. }, Input::Key(Key::Escape, _)) => rest(Feedback::default()),
         (Gesture::Idle, Input::Key(key, mods)) => idle(key, mods, ctx),
@@ -69,16 +71,28 @@ pub fn update(
     }
 }
 
-/// A press: with the Line tool it opens a tracing, on a node it takes the
-/// selection in hand, on a handle it pulls a tangent, on an internal line it
-/// chooses that line, on a straight tract with the Curve tool it bends one, on
-/// the mat it sweeps a band, and with space held it slides the drawing instead.
+/// A press: with the Line tool it opens a tracing, on a notch of the tract
+/// already chosen it takes that mark in hand, on a node it takes the selection,
+/// on a handle it pulls a tangent, on a place of the chosen line or on any
+/// other notch it takes that mark, on an internal line it chooses that line, on
+/// a straight tract with the Curve tool it bends one, on the mat it sweeps a
+/// band, and with space held it slides the drawing instead.
 fn press(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, Feedback) {
     if mods.space {
         return (Gesture::Pan { from: at }, Vec::new(), Feedback::default());
     }
     if ctx.tool == Tool::Trace {
-        return trace::begin(at, ctx);
+        return trace::begin(at, mods, ctx);
+    }
+    let cm = ctx.view.to_document(at);
+    // Before the nodes, and only for the marks of the tract chosen: a notch cut
+    // at a node is drawn under that node's own dot, so which of the two a press
+    // meant cannot be read off where it landed. Choosing the tract is what says
+    // it was the mark.
+    if ctx.tool == Tool::Select
+        && let Some(notch) = slide::on_chosen(cm, ctx, reach(ctx, NODE_PT))
+    {
+        return slide::grab(notch, at, ctx);
     }
     // A press never begins a piece: drawing runs only inside the `Drawing`
     // gesture, which "+ Pieza" opens deliberately. A press here takes what is
@@ -89,12 +103,27 @@ fn press(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>,
     if let Some(key) = bend::handle_at(at, ctx) {
         return bend::grab(key, at, mods, ctx);
     }
-    let cm = ctx.view.to_document(at);
+    // The marks on the cloth before the cloth itself, and each of them within a
+    // node's budget rather than a tract's: a place of the line already chosen
+    // and a notch are small, deliberate targets, and a press that took hold
+    // of a whole tract instead would be aiming past what the hand was on.
+    // Only the choosing tool answers them, the way only the sewing tool
+    // answers a press on a thread — a press with Punto or Curva in hand is
+    // aimed at the contour.
+    if ctx.tool == Tool::Select
+        && let Some(line) = ctx.selection.line()
+        && let Some(key) = inner::grip(cm, ctx.lines, line, reach(ctx, NODE_PT))
+    {
+        return place::grab(key, at, ctx);
+    }
+    if ctx.tool == Tool::Select
+        && let Some(notch) = slide::under(cm, ctx.ticks, reach(ctx, NODE_PT))
+    {
+        return slide::grab(notch, at, ctx);
+    }
     // After the nodes and the handles, and before the contour: an internal line
     // is drawn over the paper, so a press on one is aimed at it rather than at
-    // whatever tract happens to run beneath. Only the choosing tool answers it,
-    // the way only the sewing tool answers a press on a thread — a press with
-    // Punto or Curva in hand is aimed at the contour.
+    // whatever tract happens to run beneath.
     if ctx.tool == Tool::Select
         && let Some(line) = inner::under(cm, ctx.lines, reach(ctx, EDGE_PT))
     {
@@ -236,6 +265,8 @@ mod bending;
 mod curving;
 #[cfg(test)]
 mod drawing;
+#[cfg(test)]
+mod placing;
 #[cfg(test)]
 mod pointing;
 #[cfg(test)]

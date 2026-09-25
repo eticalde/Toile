@@ -81,6 +81,7 @@ impl Table {
             tracts: &self.tracts,
             bends: &self.bends,
             lines: &[],
+            ticks: &[],
             selection: chosen,
             tool,
             view: View::default(),

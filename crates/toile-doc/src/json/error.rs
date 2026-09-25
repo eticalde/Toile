@@ -49,6 +49,9 @@ pub enum FormatError {
     /// An internal line no piece could be drawn with.
     #[error("the pattern draws an internal line no piece could be drawn with: {0}")]
     InternalLine(#[source] DocError),
+    /// An axis no piece can be repeated across.
+    #[error("the pattern draws a piece against an axis it cannot be repeated across: {0}")]
+    Symmetry(#[source] DocError),
 }
 
 impl FormatError {

@@ -2,16 +2,21 @@ mod contour;
 mod defect;
 mod edit;
 mod env;
+mod fold;
 mod history;
+mod measure;
 mod order;
 mod resolve;
+mod resolved;
 
 use std::collections::BTreeMap;
 
 pub use defect::Defect;
 pub use edit::Recompile;
 pub use env::{Env, EnvError};
-pub use resolve::{Resolved, to_document, to_metres};
+pub use fold::Cloth;
+pub use resolve::{to_document, to_metres};
+pub use resolved::Resolved;
 pub use toile_anny::BodyMesh;
 // The one door between the document and the interface. The desktop app
 // depends on this crate and on nothing else of Toile's, so a type reaches it
@@ -24,7 +29,8 @@ pub use toile_doc::{
     InternalLine, LineEdit, LineKey, LineKind, LineSpan, LineVertex, MannequinKey, MeasureSet,
     Notch, NotchCount, NotchKey, Origin, PERSONA_EXTENSION, Persona, PersonaError, Piece, PieceKey,
     Placement, Point, PointKey, SAMPLES, Seam, SeamKey, SeamKind, SeamOrientation, Segment,
-    SegmentEdit, Side, Snapshot, Variable, VariableKey, Winding,
+    SegmentEdit, Side, Snapshot, Symmetry, SymmetryKey, SymmetryKind, Variable, VariableKey,
+    VertexEdit, Winding,
 };
 pub use toile_geom::curve;
 pub use toile_geom::validate::ContourFault;
@@ -100,23 +106,29 @@ impl Draft {
         &self.env
     }
 
-    /// A piece's flattened contour in metres with y upward: what the engine
+    /// The cloth a piece is cut from, in metres with y upward: what the engine
     /// meshes.
     ///
-    /// Empty for a piece that has never resolved. The suffix is the whole
-    /// guard: this and [`Draft::flat_cm`] are the same line in two units and
-    /// the same `[f64; 2]`, a few lines apart, and the unsuffixed name is the
-    /// one a caller reaches for first — the reading that frames a panel a
-    /// hundred times too small, and, going the other way, the write that puts
-    /// metres into a document counting centimetres.
+    /// The whole cloth, so a piece drawn against a fold meshes and drapes as
+    /// the piece it is and not as the half it was drawn as. Empty for a piece
+    /// that has never resolved. The suffix is the whole guard: this and
+    /// [`Draft::flat_cm`] are the same line in two units and the same
+    /// `[f64; 2]`, a few lines apart, and the unsuffixed name is the one a
+    /// caller reaches for first — the reading that frames a panel a hundred
+    /// times too small, and, going the other way, the write that puts metres
+    /// into a document counting centimetres.
     pub fn outline_m(&self, piece: PieceKey) -> &[[f64; 2]] {
         self.pieces
             .get(&piece)
-            .map_or(&[], |held| held.good.outline_m.as_slice())
+            .map_or(&[], |held| held.good.cloth_m())
     }
 
-    /// The same flattened contour in centimetres with y downward: the line the
-    /// table draws, curves and all.
+    /// The drawn contour in centimetres with y downward: the line the table
+    /// draws and the pointer catches, curves and all.
+    ///
+    /// The drawing and not the cloth. On a piece drawn against a fold these are
+    /// two different lines, and this is the half whose nodes a hand can take
+    /// hold of; [`Draft::cloth_cm`] is the whole outline.
     pub fn flat_cm(&self, piece: PieceKey) -> &[[f64; 2]] {
         self.pieces
             .get(&piece)
@@ -146,66 +158,6 @@ impl Draft {
     /// Where a point resolved to, in centimetres.
     pub fn resolved(&self, point: PointKey) -> Option<[f64; 2]> {
         self.points.get(&point).copied()
-    }
-
-    /// A piece's perimeter in centimetres, measured along the flattening.
-    pub fn perimeter_cm(&self, piece: PieceKey) -> f64 {
-        self.pieces
-            .get(&piece)
-            .and_then(|held| held.good.cum.last().copied())
-            .unwrap_or_default()
-    }
-
-    /// Flattened arc length in centimetres up to each node, and round to the
-    /// first again: the table an anchor is resolved against.
-    ///
-    /// Rebuilt with the geometry on every edit and read fresh on every
-    /// derive, which is what keeps a seam on its node instead of on a
-    /// fraction of a perimeter that has since changed length.
-    pub fn node_cum(&self, piece: PieceKey) -> &[f64] {
-        self.pieces
-            .get(&piece)
-            .map_or(&[], |held| held.good.cum.as_slice())
-    }
-
-    /// Where an anchor sits right now, as a fraction of its piece's
-    /// flattened perimeter.
-    ///
-    /// A reading, never a residence: the address a seam stores is the node,
-    /// and this fraction is derived from the fresh node table on every call.
-    /// `None` when the piece is unknown or the node is not on its contour.
-    pub fn anchor_fraction(&self, at: &toile_doc::EdgeAnchor) -> Option<f64> {
-        let cum = self.node_cum(at.piece);
-        if cum.len() < 2 {
-            return None;
-        }
-        let k = self
-            .points_cm(at.piece)
-            .iter()
-            .position(|&(p, _)| p == at.from)?;
-        let total = cum[cum.len() - 1];
-        Some((cum[k] + (cum[k + 1] - cum[k]) * at.t) / total)
-    }
-
-    /// The length in centimetres of the walk from one node to another, the way
-    /// the contour runs.
-    ///
-    /// Zero when either node is not on the piece, which is what a length nobody
-    /// can point at is worth.
-    pub fn run_length_cm(&self, piece: PieceKey, from: PointKey, to: PointKey) -> f64 {
-        let Some(held) = self.pieces.get(&piece) else {
-            return 0.0;
-        };
-        let at = |key: PointKey| held.good.points.iter().position(|&(p, _)| p == key);
-        let (Some(from), Some(to)) = (at(from), at(to)) else {
-            return 0.0;
-        };
-        let cum = &held.good.cum;
-        if to >= from {
-            cum[to] - cum[from]
-        } else {
-            cum[cum.len() - 1] - cum[from] + cum[to]
-        }
     }
 
     /// What is wrong with a piece right now, in contour order.
@@ -271,9 +223,16 @@ impl Draft {
     fn resolve_all(&mut self) -> Result<(), DraftError> {
         self.env = env::build(&self.doc)?;
         let (good, broken) = resolve::points(&self.doc, &self.env);
+        let folds: BTreeMap<PieceKey, EdgeRange> = self
+            .doc
+            .symmetries
+            .iter()
+            .filter(|(_, held)| held.kind == SymmetryKind::Fold)
+            .filter_map(|(_, held)| Some((held.piece()?, held.axis)))
+            .collect();
         for (key, piece) in self.doc.pieces.iter() {
             let held = self.pieces.entry(key).or_default();
-            match resolve::piece(piece, &good, &broken) {
+            match resolve::piece(piece, folds.get(&key).copied(), &good, &broken) {
                 Ok(fresh) => {
                     held.good = fresh;
                     held.defects.clear();

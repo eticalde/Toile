@@ -13,6 +13,14 @@ const UNIT_W: f32 = 26.0;
 /// Height of a row that carries a box over a line of its own.
 const TALL_H: f32 = 50.0;
 
+/// The room a name keeps beside its box however short it is, and the gap
+/// between the two.
+///
+/// Sixteen and six put the box at 34 for a name of one character, which is
+/// where the two coordinate rows keep it.
+const NAME_W: f32 = 16.0;
+const NAME_GAP: f32 = 6.0;
+
 /// Label on the left, mono value box on the right, unit after it when given.
 pub fn field_row(ui: &mut Ui, theme: &Theme, label: &str, value: &str, unit: &str) {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), FIELD_H), Sense::hover());
@@ -77,17 +85,17 @@ pub enum Edited {
 /// answers `Done`.
 pub fn formula_row(ui: &mut Ui, theme: &Theme, id: Id, row: &Editable<'_>) -> Edited {
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), TALL_H), Sense::hover());
-    let boxed = Rect::from_min_max(
-        rect.left_top() + vec2(34.0, 4.0),
-        pos2(rect.right() - PAD, rect.top() + 28.0),
-    );
-    ui.painter().text(
-        pos2(rect.left() + PAD, boxed.center().y),
-        Align2::LEFT_CENTER,
-        row.label,
+    let name = ui.painter().layout_no_wrap(
+        row.label.to_owned(),
         FontId::proportional(12.0),
         theme.ink_soft,
     );
+    let boxed = Rect::from_min_max(
+        rect.left_top() + vec2(gutter(name.size().x), 4.0),
+        pos2(rect.right() - PAD, rect.top() + 28.0),
+    );
+    let at = pos2(rect.left() + PAD, boxed.center().y - name.size().y / 2.0);
+    ui.painter().galley(at, name, theme.ink_soft);
     let under = pos2(boxed.left() + 2.0, boxed.bottom() + 11.0);
     note(ui.painter(), theme, (under, Align2::LEFT_CENTER), row);
     let written = edit_box(ui, theme, id, boxed, row);
@@ -96,6 +104,15 @@ pub fn formula_row(ui: &mut Ui, theme: &Theme, id: Id, row: &Editable<'_>) -> Ed
     // whole row again leaves the next one below that line, not on top of it.
     ui.allocate_rect(rect, Sense::hover());
     written
+}
+
+/// Where the box of a row begins, measured from the row's left edge.
+///
+/// After the name, never under it. The box is painted over whatever the name
+/// runs into, so a name wider than its room is not crowded but erased: «a lo
+/// largo» would read "a l".
+fn gutter(name: f32) -> f32 {
+    PAD + name.max(NAME_W) + NAME_GAP
 }
 
 /// The mono box a row is written in, edged in the accent while it has the
@@ -163,4 +180,18 @@ fn value_box(p: &Painter, theme: &Theme, rect: Rect, value: &str) {
         FontId::monospace(12.0),
         theme.ink,
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The box begins after the name and never under it, and a one-character
+    /// name leaves it where it has always been.
+    #[test]
+    fn the_box_of_a_row_begins_after_its_name() {
+        assert!((gutter(7.3) - 34.0).abs() < f32::EPSILON, "X and Y");
+        let long = 49.2;
+        assert!(gutter(long) >= PAD + long, "«a lo largo» is not run over");
+    }
 }

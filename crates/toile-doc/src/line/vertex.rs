@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{EdgeAnchor, PointKey};
+use crate::{EdgeAnchor, Identity, Point, PointKey};
 
 /// One place an internal line runs through.
 ///
@@ -46,6 +46,60 @@ impl LineVertex {
     }
 }
 
+/// One place of an internal line on its way into the document.
+///
+/// It stands to [`LineVertex`] as `SegmentEdit` stands to `Segment`, and for
+/// the same reason: a free place is a point of the document, so the edit that
+/// draws the line is the edit that creates it and the edit that rubs the line
+/// out takes it away. The point travels in the command rather than its key
+/// alone, which is what lets undo give the very same key back with whatever it
+/// had grown into.
+///
+/// `Cited` is the case a curve has no use for and a line does: a drafting
+/// skeleton names places that outlive any one line — a corner two lines meet
+/// at, a construction point an import already wrote — and a point somebody else
+/// still needs is not the line's to create or to take away.
+#[derive(Debug, Clone, PartialEq)]
+pub enum VertexEdit {
+    /// A place on the contour of the piece the line is drawn on.
+    Contour(EdgeAnchor),
+    /// A place of its own, as the point this drawing puts into the document.
+    Free {
+        /// A key the arena has not issued yet, or the one undo gives back.
+        identity: Identity<Point>,
+        /// The point itself, bindings and name included.
+        value: Point,
+    },
+    /// A place of its own, on a point the document already carries.
+    Cited(PointKey),
+}
+
+impl VertexEdit {
+    /// The place on a contour, when the place sits on one.
+    pub fn anchor(&self) -> Option<EdgeAnchor> {
+        match self {
+            VertexEdit::Contour(anchor) => Some(*anchor),
+            VertexEdit::Free { .. } | VertexEdit::Cited(_) => None,
+        }
+    }
+
+    /// A place of its own, on a point the drawing creates.
+    pub fn free(value: Point) -> VertexEdit {
+        VertexEdit::Free {
+            identity: Identity::New,
+            value,
+        }
+    }
+
+    /// The same, taking back the key the point carried before it was removed.
+    pub fn restored(key: PointKey, value: Point) -> VertexEdit {
+        VertexEdit::Free {
+            identity: Identity::Restored(key),
+            value,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(
@@ -71,6 +125,33 @@ mod tests {
         let free = LineVertex::free(PointKey::new(7, 0));
         assert_eq!(free.point(), Some(PointKey::new(7, 0)));
         assert_eq!(free.anchor(), None);
+    }
+
+    /// A place on its way in answers for the same two places, and says besides
+    /// whether the drawing is the one that creates its point.
+    #[test]
+    fn a_place_on_its_way_in_says_whether_it_brings_its_own_point() {
+        let key = PointKey::new(7, 0);
+        let drawn = VertexEdit::free(Point::at(2.0, 3.0));
+        assert_eq!(drawn.anchor(), None);
+        assert_eq!(
+            drawn,
+            VertexEdit::Free {
+                identity: Identity::New,
+                value: Point::at(2.0, 3.0)
+            }
+        );
+        let back = VertexEdit::restored(key, Point::at(2.0, 3.0));
+        assert_eq!(
+            back,
+            VertexEdit::Free {
+                identity: Identity::Restored(key),
+                value: Point::at(2.0, 3.0)
+            }
+        );
+        assert_eq!(VertexEdit::Cited(key).anchor(), None);
+        let anchor = anchored().anchor().expect("it sits on a contour");
+        assert_eq!(VertexEdit::Contour(anchor).anchor(), Some(anchor));
     }
 
     /// The anchor's own fields sit beside the tag rather than under a second

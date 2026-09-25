@@ -17,7 +17,7 @@ pub struct Laid {
     pub piece: PieceKey,
     /// How far the overview moves it from its own coordinates, in centimetres.
     pub shift: [f64; 2],
-    /// Its flattened outline, moved that far.
+    /// Its cloth, moved that far: the whole outline, unfolded.
     pub outline: Vec<[f64; 2]>,
 }
 
@@ -29,13 +29,16 @@ pub struct Laid {
 /// piece keeps its slot all the same, so taking one piece out of the row never
 /// slides the ones after it under the pointer.
 ///
+/// A piece's slot is as wide as its cloth, so one drawn against a fold takes
+/// the room the cut piece takes and is picked over the whole of it.
+///
 /// The row is worked out afresh on every frame and written nowhere: a product
 /// nobody arranged keeps its bytes however many times it is looked at.
 pub fn of(draft: &Draft) -> Vec<Laid> {
     let mut across = 0.0;
     let mut laid = Vec::new();
     for (piece, held) in draft.doc().pieces.iter() {
-        let own = draft.flat_cm(piece);
+        let own = draft.cloth_cm(piece);
         let (slot, width) = match extent(own) {
             Some([left, top, right, _]) => ([across - left, -top], right - left),
             None => ([across, 0.0], 0.0),
@@ -80,7 +83,7 @@ pub fn under(at: [f64; 2], laid: &[Laid], reach: f64) -> Option<&Laid> {
 }
 
 /// The left, top, right and bottom of an outline.
-fn extent(outline: &[[f64; 2]]) -> Option<[f64; 4]> {
+pub(super) fn extent(outline: &[[f64; 2]]) -> Option<[f64; 4]> {
     let (&[x, y], rest) = outline.split_first()?;
     Some(rest.iter().fold([x, y, x, y], |[l, t, r, b], &[x, y]| {
         [l.min(x), t.min(y), r.max(x), b.max(y)]
@@ -88,7 +91,7 @@ fn extent(outline: &[[f64; 2]]) -> Option<[f64; 4]> {
 }
 
 /// Whether a place falls inside a closed outline, by the even-odd rule.
-fn inside(outline: &[[f64; 2]], at: [f64; 2]) -> bool {
+pub(super) fn inside(outline: &[[f64; 2]], at: [f64; 2]) -> bool {
     let mut odd = false;
     for (index, &[ax, ay]) in outline.iter().enumerate() {
         let [bx, by] = outline[(index + 1) % outline.len()];

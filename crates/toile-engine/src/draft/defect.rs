@@ -27,4 +27,13 @@ pub enum Defect {
     /// tracts are its nodes.
     #[error(transparent)]
     Contour(validate::ContourFault),
+    /// An axis that leaves the piece nothing to be mirrored across: one whose
+    /// two ends fall on the same place, or one that covers the whole contour.
+    #[error("the axis the piece is drawn against is not a line it can be mirrored across")]
+    FoldAxis,
+    /// A drawn half and its mirror that together are not a simple closed
+    /// polygon, which is what an axis across the middle of a piece produces.
+    /// Its indices are positions in the unfolded outline.
+    #[error("unfolded, the piece lies over itself: {0}")]
+    Cloth(validate::ContourFault),
 }

@@ -1,10 +1,19 @@
 use eframe::egui::{Align2, FontId, Painter, Rect, Stroke, StrokeKind, pos2, vec2};
-use toile_engine::draft::Binding;
+use toile_engine::draft::{Axis, Binding};
 
 use super::gesture::{self, Drag};
 use super::view::View;
 use crate::theme::Theme;
 use crate::widgets::CORNER;
+
+/// The precision box: which coordinate it writes, and the text so far.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Typed {
+    /// The coordinate the number lands on.
+    pub axis: Axis,
+    /// What has been typed into it.
+    pub buffer: String,
+}
 
 /// The size of the box, in screen points, before its text asks for more.
 const BOX: [f32; 2] = [124.0, 26.0];

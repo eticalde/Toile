@@ -3,7 +3,7 @@ use toile_engine::draft::{Binding, Doc, Draft, PieceKey, PointKey, block};
 
 use super::*;
 use crate::tabs::patronaje::curve::{self, Bend};
-use crate::tabs::patronaje::inner::Drawn;
+use crate::tabs::patronaje::inner::{Drawn, Tick};
 use crate::tabs::patronaje::snap::{SnapConfig, SnapKind};
 use crate::tabs::patronaje::tract::{self, Tract};
 use crate::tabs::patronaje::view::View;
@@ -13,9 +13,10 @@ pub(in crate::tabs::patronaje) struct Table {
     pub(in crate::tabs::patronaje) draft: Draft,
     pub(in crate::tabs::patronaje) piece: PieceKey,
     pub(in crate::tabs::patronaje) nodes: Vec<(PointKey, [f64; 2])>,
-    tracts: Vec<Tract>,
+    pub(in crate::tabs::patronaje) tracts: Vec<Tract>,
     bends: Vec<Bend>,
     lines: Vec<Drawn>,
+    ticks: Vec<Tick>,
 }
 
 pub(in crate::tabs::patronaje) fn table() -> Table {
@@ -32,6 +33,7 @@ pub(in crate::tabs::patronaje) fn table_of(doc: Doc) -> Table {
         nodes: draft.points_cm(piece).to_vec(),
         bends: curve::bends(&draft, piece),
         lines: inner::of(&draft, piece, &tracts, [0.0, 0.0]),
+        ticks: inner::ticks(&draft, piece, &tracts),
         tracts,
         draft,
         piece,
@@ -58,6 +60,7 @@ impl Table {
             tracts: &self.tracts,
             bends: &self.bends,
             lines: &self.lines,
+            ticks: &self.ticks,
             selection: chosen,
             tool: Tool::Select,
             view: View::default(),
@@ -65,18 +68,24 @@ impl Table {
         }
     }
 
-    /// The same context with `tool` in hand and the snap put out, which is what
-    /// a tool's own reducer is asked against.
+    /// The same context with `tool` in hand and the snap live, which is what a
+    /// tool's own reducer is asked against: the ladder is how the Line tool
+    /// tells a place on the contour from one on the bare cloth.
     pub(in crate::tabs::patronaje) fn wielding(&self, tool: Tool) -> EditContext<'_> {
         EditContext {
             tool,
-            ..self.context(free())
+            ..self.context(SnapConfig::default())
         }
     }
 
     /// The lines the mat drew for the piece in front.
     pub(in crate::tabs::patronaje) fn drawn(&self) -> &[Drawn] {
         &self.lines
+    }
+
+    /// The notches the mat drew on it.
+    pub(in crate::tabs::patronaje) fn ticks(&self) -> &[Tick] {
+        &self.ticks
     }
 
     /// Where a node sits on the glass.

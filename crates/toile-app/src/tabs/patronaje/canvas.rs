@@ -9,8 +9,8 @@ use super::tract::Tract;
 use super::view::{self, View};
 use super::wire::{self, Verb};
 use super::{
-    caption, chalk, curve, dimension, empty, marks, overview, paper, pick, precision, ruler, snap,
-    tract,
+    caption, chalk, curve, dimension, empty, fold, marks, overview, paper, pick, precision, ruler,
+    snap, tract,
 };
 use crate::theme::Theme;
 use crate::widgets::{fill, grid};
@@ -72,7 +72,9 @@ fn detail(
     let drawing = draft.zip(piece);
     let (tracts, bends) = drawn(drawing);
     let (lines, ticks) = marked(drawing, &tracts);
-    frame_once(state, view::bounds(nodes), rect);
+    // Framed on the cloth and not on the nodes, so a piece drawn against an
+    // axis opens with the half nobody drew on the mat as well.
+    frame_once(state, framing(drawing, nodes), rect);
     if state.ask.is_none() {
         wire::view_keys(ui, resp, state);
         if let Some(draft) = draft {
@@ -89,6 +91,7 @@ fn detail(
                 tracts: &tracts,
                 bends: &bends,
                 lines: &lines,
+                ticks: &ticks,
             };
             wire::reduce(ui, resp, &table, state, verbs);
         }
@@ -108,6 +111,15 @@ fn detail(
             theme.alert
         };
         let line = Stroke::new(1.5, ink);
+        // The half nobody drew goes down first, under everything: it is what
+        // the piece is, drawn faintly enough that what is on top is the
+        // drawing.
+        let mat = (state.view, [0.0, 0.0]);
+        fold::ghost(painter, theme, (draft, piece), mat);
+        let ghosts = fold::mirrored(draft, piece, &lines, [0.0, 0.0]);
+        chalk::lines(painter, theme, &ghosts, (state.view, None));
+        let mirror = fold::reflected(draft, piece, &ticks, [0.0, 0.0]);
+        chalk::notches(painter, theme, &mirror, state.view);
         // Under the paper and the cut line, so the tape reads as something the
         // tract wears rather than as the tract itself.
         let at = (piece, tracts.as_slice(), [0.0, 0.0]);
@@ -119,6 +131,7 @@ fn detail(
             &[theme.paper],
             line,
         );
+        fold::crease(painter, theme, (draft, piece), mat);
         // Over the paper and the cut line: a fold, a topstitch or a pocket
         // mouth is a mark on the piece and not something under it.
         chalk::lines(painter, theme, &lines, (state.view, state.selection.line()));
@@ -149,7 +162,23 @@ fn detail(
         Gesture::Tracing(held) => {
             chalk::tracing(painter, theme, state.view, &held.pending, held.rubber);
         }
-        Gesture::Idle | Gesture::Pan { .. } | Gesture::Arrange(_) | Gesture::Sewing(_) => {}
+        // A notch sliding is drawn by the document it is writing on every frame,
+        // so the mark under the pointer is the mark the file holds.
+        Gesture::Idle
+        | Gesture::Pan { .. }
+        | Gesture::Arrange(_)
+        | Gesture::Sewing(_)
+        | Gesture::Sliding(_) => {}
+    }
+}
+
+/// The box the mat frames on its first frame: the whole cloth when the piece
+/// is drawn against an axis, and its nodes otherwise.
+fn framing(drawing: Option<(&Draft, PieceKey)>, nodes: &[(PointKey, [f64; 2])]) -> Option<Rect> {
+    let cloth = drawing.and_then(|(draft, piece)| draft.cloth(piece));
+    match cloth {
+        Some(cloth) => view::bounds_of(&cloth.cm),
+        None => view::bounds(nodes),
     }
 }
 
