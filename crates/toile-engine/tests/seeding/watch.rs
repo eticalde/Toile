@@ -33,20 +33,21 @@ pub const LONG: u64 = 20_000;
 /// Twenty simulated seconds, or wherever the drape went quiet first — see
 /// [`at_substep`]. Measured on the seeded skirt, the band's length and the
 /// cloth's span read the same here as at [`LONG`] to four decimal places, so a
-/// scene that only has to say where the garment ended is read here and costs a
-/// third less wall clock, which for a thread paced by that clock is a third
-/// less of a test.
+/// scene that only has to say where the garment ended is read here and costs
+/// two fifths less wall clock, which for a thread paced by that clock is two
+/// fifths less of a test.
 pub const SETTLED: u64 = 12_000;
 
 /// Substeps a drape is given to come to rest in.
 ///
 /// Sized for a heap that creeps. Against a body that lets cloth slide, the
 /// trouser front lay on the ground creeping for 53,290 substeps before it
-/// slept, and this leaves half as much again; against a body that grips, the
-/// seeded scenes here sleep inside 7,000. The slow figure is the one kept, so
-/// that a scene which starts slipping again reports its number and not a
-/// timeout. Counted in substeps and not in seconds, so the budget means the
-/// same thing on a fast machine and a slow one.
+/// slept, and this leaves half as much again; against a body that grips, a
+/// panel let go over the shoulders sleeps inside 7,000 and the skirt, which
+/// travels the whole length of the body first, inside 14,000. The slow figure
+/// is the one kept, so that a scene which starts slipping again reports its
+/// number and not a timeout. Counted in substeps and not in seconds, so the
+/// budget means the same thing on a fast machine and a slow one.
 pub const REST: u64 = 80_000;
 
 /// How far the garment must have fallen to count as landed, in metres.
@@ -132,12 +133,12 @@ pub fn span(points: &[[f32; 3]]) -> (f32, f32) {
 
 /// Where the cloth's weight lies horizontally, as x and z in metres.
 ///
-/// Reading a drape at rest needs this, because "on the body" stopped meaning
-/// "touching the skin" the moment the floor landed: nothing holds a garment up
-/// yet, so it comes to rest in a heap around the feet and grazes the skin
-/// almost by accident — the startup bodice with seven of its twelve thousand
-/// particles. Where that heap sits still tells a garment that came down this
-/// body from one that came down beside it.
+/// Reading a drape at rest needs this, because "on the body" does not tell a
+/// garment worn from a garment heaped: a panel that came down beside the person
+/// and landed on the floor touches no skin at all, and neither does one that
+/// slid off and pooled round the feet. Where the weight lies says which of the
+/// three happened, and it says it for a scene that ends on the ground as well
+/// as for one that ends on the shoulders.
 pub fn footing(points: &[[f32; 3]]) -> (f32, f32) {
     let n = points.len() as f32;
     let (mut x, mut z) = (0.0f32, 0.0f32);

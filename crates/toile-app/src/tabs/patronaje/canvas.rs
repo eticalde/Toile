@@ -10,13 +10,14 @@ use super::view::{self, View};
 use super::wire::{self, Verb};
 use super::{
     caption, chalk, curve, dimension, empty, fold, marks, overview, paper, pick, precision, ruler,
-    snap, tract,
+    tract,
 };
 use crate::theme::Theme;
-use crate::widgets::{fill, grid};
+use crate::widgets::fill;
 
-/// The closest the mat draws its lines; under that they read as noise.
-const GRID_MIN: f32 = 9.0;
+mod mat;
+
+pub(super) use mat::ruled as ruled_mat;
 
 /// The cutting mat: the whole product or one piece of it, at whatever scale
 /// the view holds, with its rulers and the line over it that says which.
@@ -102,8 +103,8 @@ fn detail(
         pick::under(cm, nodes, &shown, &tracts, state.view.scale())
     });
     fill(painter, theme, rect);
-    mat_grid(painter, theme, rect, state.view);
-    origin(painter, theme, rect, state.view);
+    mat::ruled(painter, theme, rect, state.view);
+    mat::origin(painter, theme, rect, state.view);
     if let Some((draft, piece)) = drawing {
         let ink = if draft.defects(piece).is_empty() {
             theme.outline
@@ -213,54 +214,6 @@ pub(super) fn frame_once(state: &mut State, bbox: Option<Rect>, rect: Rect) {
     {
         state.view.fit(bbox, inner);
         state.frame = false;
-    }
-}
-
-/// The ruled lines, travelling with the view so a centimetre stays a
-/// centimetre wherever the drawing has been dragged to.
-///
-/// The centimetre itself is drawn whenever there is room for it, so that the
-/// grid on the mat is the grid the pointer catches; under that it falls back
-/// to the decade the rulers are counting in.
-pub(super) fn mat_grid(p: &Painter, theme: &Theme, rect: Rect, view: View) {
-    let fine = (snap::GRID_CM * view.scale()) as f32;
-    let step = if fine >= GRID_MIN {
-        fine
-    } else {
-        (ruler::step_cm(view.scale()) * view.scale() / 2.0) as f32
-    };
-    if step < GRID_MIN {
-        return;
-    }
-    grid(
-        p,
-        theme,
-        rect,
-        step,
-        view.to_screen([0.0, 0.0]) - rect.left_top(),
-    );
-}
-
-/// The origin cross: the pattern's (0, 0), drawn over the grid so the centre a
-/// draft is measured from is never in doubt. Each axis shows only while it
-/// falls on the mat; the label only while their crossing does.
-fn origin(p: &Painter, theme: &Theme, rect: Rect, view: View) {
-    let o = view.to_screen([0.0, 0.0]);
-    let stroke = Stroke::new(1.0, theme.accent.gamma_multiply(0.55));
-    if o.x >= rect.left() && o.x <= rect.right() {
-        p.vline(o.x, rect.y_range(), stroke);
-    }
-    if o.y >= rect.top() && o.y <= rect.bottom() {
-        p.hline(rect.x_range(), o.y, stroke);
-    }
-    if rect.contains(o) {
-        p.text(
-            o + vec2(4.0, 3.0),
-            egui::Align2::LEFT_TOP,
-            "0,0",
-            egui::FontId::monospace(10.0),
-            theme.muted,
-        );
     }
 }
 

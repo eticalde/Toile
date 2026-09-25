@@ -44,7 +44,7 @@ pub(super) fn reach(dt: f32) -> f32 {
 /// share of the correction ends the substep displaced from a vertex that
 /// never moved, and that is speed out of nothing in every substep: measured,
 /// a heap whose previous positions follow half the correction never comes
-/// within three orders of the energy it sleeps at, and crosses itself half
+/// within three orders of the energy a quiet one reads, and crosses itself half
 /// as much again, because the speed a contact takes out of an approach is
 /// the share it does not follow.
 pub(super) fn part(state: &mut State, v: usize, t: [usize; 3], thickness: f32, reach: f32) -> bool {

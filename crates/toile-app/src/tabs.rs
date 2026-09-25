@@ -89,7 +89,7 @@ impl Tab {
 
 /// What the fitting table can report about a drape.
 ///
-/// The empty snapshot a table with no sim thread answers with has `converged`
+/// The empty snapshot a table with no sim thread answers with has `asleep`
 /// false, exactly as a simulation still working does, so the sim cells are
 /// gated on there being a thread at all rather than on what the snapshot says.
 fn fitting(session: &Session) -> Vec<String> {
@@ -97,7 +97,7 @@ fn fitting(session: &Session) -> Vec<String> {
         return vec!["sin simulación".to_owned()];
     }
     let snap = session.snapshot();
-    let sim = if snap.converged {
+    let sim = if snap.asleep {
         "sim dormida (0% CPU)"
     } else {
         "sim corriendo"

@@ -5,3 +5,4 @@ mod worker;
 
 pub use handle::{Scene, SimHandle, spawn};
 pub use report::{Snapshot, StaleMessage};
+pub use sleep::Sleep;

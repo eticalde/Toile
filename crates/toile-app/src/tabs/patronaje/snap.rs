@@ -6,9 +6,6 @@ use super::tract::{self, Tract};
 /// How near a grid line has to fall to catch a position, in screen points.
 const GRID_PT: f64 = 6.0;
 
-/// The resolution a free position is written to, in centimetres.
-const FREE_STEP: f64 = 0.1;
-
 /// The spacing of the grid a position is caught by, in centimetres.
 ///
 /// A centimetre, which is the unit of the trade, and not a function of the
@@ -78,7 +75,11 @@ impl SnapConfig {
     /// not still rounds, because a coordinate carrying the rounding noise of a
     /// drag out to the fifteenth decimal is not something anyone can read.
     pub fn step_cm(self) -> f64 {
-        if self.on { self.grid_cm } else { FREE_STEP }
+        if self.on {
+            self.grid_cm
+        } else {
+            crate::bind::FREE_STEP_CM
+        }
     }
 }
 

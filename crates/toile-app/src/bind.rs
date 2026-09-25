@@ -3,6 +3,16 @@ use toile_engine::draft::Binding;
 /// Hundredths of a centimetre: the finest a coordinate is ever written to.
 const HUNDREDTHS: f64 = 100.0;
 
+/// The resolution a coordinate is written to when nothing snaps it, in
+/// centimetres.
+///
+/// A millimetre: finer than a pattern means and coarse enough that the file
+/// diffs on a move rather than on a pointer's arithmetic. It lives beside
+/// [`placed`] because both drawing surfaces write through that function, and a
+/// surface keeping its own copy of the fallback is a surface that quietly
+/// writes at a different resolution from the other one.
+pub const FREE_STEP_CM: f64 = 0.1;
+
 /// What a gesture makes of a coordinate it took `delta` centimetres, to `at`,
 /// working at a resolution of `step` centimetres.
 ///

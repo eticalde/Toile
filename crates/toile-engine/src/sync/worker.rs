@@ -49,7 +49,7 @@ impl Sim {
         }
     }
 
-    pub(super) fn converged(&self) -> bool {
+    pub(super) fn asleep(&self) -> bool {
         self.sleep.asleep()
     }
 
@@ -255,7 +255,7 @@ impl Sim {
         Arc::new(Snapshot {
             generation: self.generation,
             substeps: self.substeps,
-            converged: self.sleep.asleep(),
+            asleep: self.sleep.asleep(),
             positions,
             normals,
             refused: self.refused,

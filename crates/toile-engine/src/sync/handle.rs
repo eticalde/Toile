@@ -135,8 +135,8 @@ impl Drop for SimHandle {
 ///
 /// The thread owns the state outright; everything crosses the boundary as a
 /// message. Rest updates arrive latest-wins, snapshots leave through arc-swap
-/// without locks, and once the cloth converges the thread parks in `recv` at
-/// zero CPU until the next edit.
+/// without locks, and once the drape goes to sleep the thread parks in `recv`
+/// at zero CPU until the next edit.
 pub fn spawn(
     state: State,
     cons: DistanceConstraints,
@@ -160,7 +160,7 @@ pub fn spawn(
         let mut next_tick = Instant::now();
 
         loop {
-            let first = if sim.converged() {
+            let first = if sim.asleep() {
                 match rx.recv() {
                     Ok(m) => {
                         next_tick = Instant::now();
@@ -188,7 +188,7 @@ pub fn spawn(
                 Drained::Continue => {}
                 Drained::Stop => return,
             }
-            if sim.converged() {
+            if sim.asleep() {
                 continue;
             }
 

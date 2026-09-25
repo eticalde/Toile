@@ -8,7 +8,7 @@ use toile_engine::session::Session;
 use toile_mesh::transfer;
 use toile_sim::xpbd::{self, Seams, Stage};
 
-use super::scene::{DT, same_bits, seconds, settle};
+use super::scene::{DT, Settled, same_bits, settle};
 
 /// Substeps of drape before the topology change.
 const DRAPE_SUBSTEPS: usize = 600;
@@ -20,7 +20,8 @@ struct Swap {
     rebuild_ms: f64,
     energy_before: f64,
     energy_after: f64,
-    reconverge_s: f64,
+    verts: (usize, usize),
+    reconverge: Settled,
     hash: u64,
 }
 
@@ -46,8 +47,7 @@ fn swap() -> Swap {
             DT,
         );
     }
-    let n = state.len();
-    let energy_before = f64::from(xpbd::kinetic_energy(&state) / n as f32);
+    let energy_before = f64::from(xpbd::kinetic_energy(&state));
 
     let mut contour_b = contour_a.clone();
     let mid = [
@@ -63,7 +63,7 @@ fn swap() -> Swap {
     let cons_b = pipe_b.constraints(1.0e-8);
     let mut state_b = transfer_state(&pipe_a, &state, &pipe_b);
     let rebuild_ms = t0.elapsed().as_secs_f64() * 1000.0;
-    let nb = state_b.len();
+    let verts = (state.len(), state_b.len());
 
     xpbd::substep(
         &mut state_b,
@@ -73,14 +73,15 @@ fn swap() -> Swap {
         None,
         DT,
     );
-    let energy_after = f64::from(xpbd::kinetic_energy(&state_b) / nb as f32);
+    let energy_after = f64::from(xpbd::kinetic_energy(&state_b));
 
-    let steps = settle(&mut state_b, &cons_b, &no_seams, &sdf, 6000);
+    let reconverge = settle(&mut state_b, &cons_b, &no_seams, &sdf, 6000);
     Swap {
         rebuild_ms,
         energy_before,
         energy_after,
-        reconverge_s: seconds(steps),
+        verts,
+        reconverge,
         hash: xpbd::position_hash(&state_b),
     }
 }
@@ -223,12 +224,12 @@ pub fn run() {
         a.rebuild_ms
     );
     println!(
-        "energía/vért            {:9.2e} antes del swap · {:9.2e} tras el primer substep",
-        a.energy_before, a.energy_after
+        "energía cinética        {:9.2e} antes del swap ({} vért) · {:9.2e} tras el primer substep ({} vért)",
+        a.energy_before, a.verts.0, a.energy_after, a.verts.1
     );
     println!(
-        "re-convergencia         {:7.2} s de sim tras el swap",
-        a.reconverge_s
+        "re-convergencia         hasta dormir tras el swap: {}",
+        a.reconverge
     );
     println!("determinismo            {}", same_bits(a.hash, b.hash));
 

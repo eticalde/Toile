@@ -107,7 +107,13 @@ impl Viewport {
             );
         }
 
-        steer(ui, theme, size, self.renderer.texture_id, &mut self.camera);
+        steer(
+            ui,
+            theme,
+            size,
+            self.renderer.texture_id(),
+            &mut self.camera,
+        );
     }
 
     /// Whether this frame can be painted, resizing the buffers when it is the

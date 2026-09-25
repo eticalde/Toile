@@ -1,3 +1,4 @@
+mod bare;
 mod color;
 mod contact;
 mod crossings;
@@ -14,6 +15,7 @@ mod stage;
 mod state;
 mod vector;
 
+pub use bare::Dropped;
 pub use color::{ColoredConstraints, color_constraints};
 pub use contact::{Floor, Grip, lift_out_of};
 pub use crossings::self_crossings;

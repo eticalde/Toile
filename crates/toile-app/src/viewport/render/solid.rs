@@ -1,9 +1,9 @@
 use eframe::egui_wgpu::RenderState;
 use eframe::wgpu;
 
-use super::pipeline::build_pipeline;
 use super::tape::TapeLayer;
-use super::{COLOR_FORMAT, DEPTH_FORMAT, UNIFORM_BYTES};
+use super::targets::Targets;
+use super::{UNIFORM_BYTES, pipeline};
 
 /// Renders one arbitrary triangle mesh in the 9-float vertex format to an
 /// offscreen texture egui shows as an image.
@@ -19,10 +19,7 @@ pub struct SolidRenderer {
     ibuf: wgpu::Buffer,
     ubuf: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    color: Option<(wgpu::Texture, wgpu::TextureView)>,
-    depth: Option<wgpu::TextureView>,
-    texture_id: Option<eframe::egui::TextureId>,
-    size: (u32, u32),
+    targets: Targets,
     clear: wgpu::Color,
     n_index: usize,
     /// Bytes the vertex and index buffers hold, so a mesh that fits is written
@@ -35,7 +32,7 @@ pub struct SolidRenderer {
 impl SolidRenderer {
     pub fn new(rs: &RenderState, clear: wgpu::Color) -> Self {
         let device = &rs.device;
-        let (pipeline, bgl) = build_pipeline(device);
+        let (pipeline, bgl) = pipeline::build_pipeline(device);
 
         let empty = |usage| {
             device.create_buffer(&wgpu::BufferDescriptor {
@@ -69,10 +66,7 @@ impl SolidRenderer {
             ibuf,
             ubuf,
             bind_group,
-            color: None,
-            depth: None,
-            texture_id: None,
-            size: (0, 0),
+            targets: Targets::default(),
             clear,
             n_index: 0,
             vcap: 0,
@@ -116,45 +110,6 @@ impl SolidRenderer {
         self.tape.upload(rs, verts);
     }
 
-    fn ensure_targets(&mut self, rs: &RenderState, w: u32, h: u32) {
-        if self.size == (w, h) && self.color.is_some() {
-            return;
-        }
-        let device = &rs.device;
-        let make = |format, usage| {
-            device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: wgpu::Extent3d {
-                    width: w,
-                    height: h,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage,
-                view_formats: &[],
-            })
-        };
-        let color = make(
-            COLOR_FORMAT,
-            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-        );
-        let color_view = color.create_view(&wgpu::TextureViewDescriptor::default());
-        let depth = make(DEPTH_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT);
-        self.depth = Some(depth.create_view(&wgpu::TextureViewDescriptor::default()));
-
-        let mut renderer = rs.renderer.write();
-        if let Some(old) = self.texture_id.take() {
-            renderer.free_texture(&old);
-        }
-        self.texture_id =
-            Some(renderer.register_native_texture(device, &color_view, wgpu::FilterMode::Linear));
-        self.color = Some((color, color_view));
-        self.size = (w, h);
-    }
-
     /// Draws the current mesh, and the tape over it, to the offscreen texture
     /// at the given size.
     pub fn paint(
@@ -165,7 +120,7 @@ impl SolidRenderer {
         uniforms: &[f32; 20],
         tape: &[f32; 24],
     ) {
-        self.ensure_targets(rs, w.max(8), h.max(8));
+        self.targets.ensure(rs, w.max(8), h.max(8));
         rs.queue
             .write_buffer(&self.ubuf, 0, bytemuck::cast_slice(uniforms));
         self.tape.set_uniforms(rs, tape);
@@ -173,37 +128,15 @@ impl SolidRenderer {
             return;
         }
 
-        let (_, color_view) = self.color.as_ref().expect("targets created above");
-        let depth_view = self.depth.as_ref().expect("targets created above");
         let mut encoder = rs
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("toile-solid"),
             });
         {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("toile-solid-pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: color_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut pass = self
+                .targets
+                .pass(&mut encoder, "toile-solid-pass", self.clear);
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_vertex_buffer(0, self.vbuf.slice(..));
@@ -216,6 +149,6 @@ impl SolidRenderer {
 
     /// The egui handle for the offscreen texture, once a paint has made one.
     pub fn texture_id(&self) -> Option<eframe::egui::TextureId> {
-        self.texture_id
+        self.targets.texture_id()
     }
 }

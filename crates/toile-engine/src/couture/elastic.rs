@@ -20,8 +20,9 @@ pub const HOLDS_ITS_RATIO: f64 = 10.0;
 /// the span the solver resolves. Measured on the laced ring
 /// `a_held_rings_stiffness_is_felt_once_it_is_swept_again` settles, the four
 /// compliances the rail writes come to four different lengths; measured on the
-/// whole skirt three simulated seconds in, the waistband stands at 120 % of
-/// the length it is held to at the default and at 143 % at a tenth of it.
+/// whole skirt three simulated seconds in, the waistband stands at 120 % of the
+/// length it is held to at the default of ten and at 143 % at a strength of a
+/// tenth, which is the slack end of the rail.
 const ELASTIC: f64 = 1.0e-5;
 
 /// Extra solver sweeps the edges an elastic holds get.

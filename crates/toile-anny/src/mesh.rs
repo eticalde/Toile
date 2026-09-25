@@ -10,7 +10,7 @@ mod tests;
 /// The bytes `assets/body.bin` carries, embedded so the crate has no runtime
 /// file to find and no path to get wrong. Regenerate it with
 /// `cargo run -p toile-cli -- anny-bake RUTA/a/mpfb2`.
-pub(crate) const ASSET: &[u8] = include_bytes!("../../assets/body.bin");
+pub(crate) const ASSET: &[u8] = include_bytes!("../assets/body.bin");
 
 /// The asset decoded once per process rather than once per mesh: the row
 /// table and 2,124,560 deltas are the bulk of its ~17 MB, and every field
@@ -98,9 +98,7 @@ pub(crate) fn accumulate_except(
         if weight == 0.0 {
             continue;
         }
-        let start = row.offset as usize;
-        let end = start + row.length as usize;
-        for delta in &baked.deltas[start..end] {
+        for delta in baked.row_deltas(row) {
             let base = delta.vertex as usize * 3;
             positions[base] += weight * (f64::from(delta.dx) / DELTA_PER_METRE);
             positions[base + 1] += weight * (f64::from(delta.dy) / DELTA_PER_METRE);

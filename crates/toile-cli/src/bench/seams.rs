@@ -2,9 +2,9 @@ use std::time::Instant;
 
 use toile_engine::couture::{ShapePipeline, pair_seam};
 use toile_engine::demo;
-use toile_sim::xpbd::{DistanceConstraints, SdfGrid, Seams, State, position_hash};
+use toile_sim::xpbd::{DistanceConstraints, SdfGrid, Seams, State, position_hash, seam_gap};
 
-use super::scene::{same_bits, seconds, settle, settle_with};
+use super::scene::{Settled, same_bits, settle, settle_with};
 
 const W: f64 = 0.46;
 const H_FRONT: f64 = 0.55;
@@ -174,9 +174,9 @@ fn assemble(dx: f32, dz: f32) -> Garment {
 
 /// Drapes with progressive sewing: seam compliance ramps exponentially from
 /// soft to firm, so the first frames cannot generate extreme forces.
-fn drape(g: &mut Garment) -> (f64, f64) {
+fn drape(g: &mut Garment) -> (Settled, f64) {
     let wall = Instant::now();
-    let steps = settle_with(
+    let settled = settle_with(
         &mut g.state,
         &g.cons,
         &mut g.seams,
@@ -192,12 +192,12 @@ fn drape(g: &mut Garment) -> (f64, f64) {
             }
         },
     );
-    (seconds(steps), wall.elapsed().as_secs_f64())
+    (settled, wall.elapsed().as_secs_f64())
 }
 
 /// Widens the front panel's hem by 6 cm and re-drapes, editing a sewn edge
 /// while the garment is on the avatar.
-fn hot_edit(g: &mut Garment) -> f64 {
+fn hot_edit(g: &mut Garment) -> Settled {
     let mut edited = g.front_contour.clone();
     for p in &mut edited {
         if p[1] < 1.0e-9 {
@@ -209,22 +209,26 @@ fn hot_edit(g: &mut Garment) -> f64 {
         .derive(&edited)
         .expect("the bench widens the hem, never the node count");
     g.cons.rest[..g.n_front_edges].copy_from_slice(&rests[..g.n_front_edges]);
-    seconds(settle(&mut g.state, &g.cons, &g.seams, &g.sdf, 9_000))
+    settle(&mut g.state, &g.cons, &g.seams, &g.sdf, 9_000)
 }
 
 /// Largest and mean separation between sewn pairs.
+///
+/// The largest is the solver's own reading and not a second definition of it:
+/// what counts as the worst gap is decided in one place, and a bench that
+/// re-derived it could drift from what the closing phase waits on.
 fn seam_gaps(g: &Garment) -> (f32, f32) {
-    let (mut worst, mut sum) = (0.0f32, 0.0f32);
+    let mut sum = 0.0f32;
     for k in 0..g.seams.len() {
         let (ia, ib) = (g.seams.a[k] as usize, g.seams.b[k] as usize);
-        let gap = ((g.state.px[ib] - g.state.px[ia]).powi(2)
-            + (g.state.py[ib] - g.state.py[ia]).powi(2)
-            + (g.state.pz[ib] - g.state.pz[ia]).powi(2))
-        .sqrt();
-        worst = worst.max(gap);
-        sum += gap;
+        let (dx, dy, dz) = (
+            g.state.px[ib] - g.state.px[ia],
+            g.state.py[ib] - g.state.py[ia],
+            g.state.pz[ib] - g.state.pz[ia],
+        );
+        sum += (dx * dx + dy * dy + dz * dz).sqrt();
     }
-    (worst, sum / g.seams.len() as f32)
+    (seam_gap(&g.state, &g.seams), sum / g.seams.len() as f32)
 }
 
 fn centre_of_mass(g: &Garment) -> [f32; 3] {
@@ -244,21 +248,21 @@ fn centre_of_mass(g: &Garment) -> [f32; 3] {
 pub fn run() {
     println!("\n── dos piezas cosidas · 10% embebido en costados ──");
     let mut g = assemble(0.0, 0.0);
-    let (sim_s, wall_s) = drape(&mut g);
+    let (settled, wall_s) = drape(&mut g);
     let (gap_max, gap_avg) = seam_gaps(&g);
     let com = centre_of_mass(&g);
-    let edit_s = hot_edit(&mut g);
+    let after_edit = hot_edit(&mut g);
     let hash = position_hash(&g.state);
 
     println!(
-        "drapeado inicial {sim_s:7.2} s de sim · {wall_s:.2} s de pared (batch sin pacing)  (presupuesto: <10 s de pared)"
+        "drapeado inicial {wall_s:7.2} s de pared (batch sin pacing) · hasta dormir: {settled}"
     );
     println!(
-        "costuras         gap máx {:.2} mm · prom {:.2} mm  (cosida ⇒ ~espaciado de malla)",
+        "costuras         gap máx {:.2} mm · prom {:.2} mm  (una pareja cosida cierra a cero)",
         gap_max * 1000.0,
         gap_avg * 1000.0
     );
-    println!("edición cosida   {edit_s:7.2} s de sim para re-converger tras +6 cm de base");
+    println!("edición cosida   re-convergencia tras +6 cm de base: {after_edit}");
 
     // Sensitive Couture's stability test: perturb the starting position and
     // check the garment reaches the same equilibrium.

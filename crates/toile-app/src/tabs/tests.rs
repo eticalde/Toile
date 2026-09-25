@@ -24,7 +24,7 @@ fn body() -> Body<'static> {
 /// A table with nothing draping has no sim thread, and the bar may not report
 /// one — nor name a person, a product or a fabric it is not holding.
 ///
-/// The snapshot such a table answers with is the empty one, whose `converged`
+/// The snapshot such a table answers with is the empty one, whose `asleep`
 /// is false: the same value a simulation still working reports.
 #[test]
 fn a_table_with_no_sim_does_not_say_the_sim_is_running() {

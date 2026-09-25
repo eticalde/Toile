@@ -4,6 +4,7 @@ mod layout;
 mod pipeline;
 mod solid;
 mod tape;
+mod targets;
 
 pub use avatar::Avatar;
 use eframe::egui_wgpu::RenderState;
@@ -12,6 +13,7 @@ use layout::BufferPlan;
 use pipeline::build_pipeline;
 pub use solid::SolidRenderer;
 pub use tape::ribbon;
+use targets::Targets;
 
 use crate::theme::Theme;
 
@@ -33,10 +35,7 @@ pub struct Renderer {
     ibuf: wgpu::Buffer,
     ubuf: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    color: Option<(wgpu::Texture, wgpu::TextureView)>,
-    depth: Option<wgpu::TextureView>,
-    pub texture_id: Option<eframe::egui::TextureId>,
-    size: (u32, u32),
+    targets: Targets,
     clear: wgpu::Color,
     n_cloth_verts: usize,
     /// The index list as uploaded, kept so [`Renderer::fits`] can answer by
@@ -85,10 +84,7 @@ impl Renderer {
             ibuf,
             ubuf,
             bind_group,
-            color: None,
-            depth: None,
-            texture_id: None,
-            size: (0, 0),
+            targets: Targets::default(),
             clear: theme.clear_color(),
             n_cloth_verts,
             indices: plan.indices,
@@ -142,45 +138,6 @@ impl Renderer {
         self.indices = plan.indices;
     }
 
-    fn ensure_targets(&mut self, rs: &RenderState, w: u32, h: u32) {
-        if self.size == (w, h) && self.color.is_some() {
-            return;
-        }
-        let device = &rs.device;
-        let make = |format, usage| {
-            device.create_texture(&wgpu::TextureDescriptor {
-                label: None,
-                size: wgpu::Extent3d {
-                    width: w,
-                    height: h,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage,
-                view_formats: &[],
-            })
-        };
-        let color = make(
-            COLOR_FORMAT,
-            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-        );
-        let color_view = color.create_view(&wgpu::TextureViewDescriptor::default());
-        let depth = make(DEPTH_FORMAT, wgpu::TextureUsages::RENDER_ATTACHMENT);
-        self.depth = Some(depth.create_view(&wgpu::TextureViewDescriptor::default()));
-
-        let mut renderer = rs.renderer.write();
-        if let Some(old) = self.texture_id.take() {
-            renderer.free_texture(&old);
-        }
-        self.texture_id =
-            Some(renderer.register_native_texture(device, &color_view, wgpu::FilterMode::Linear));
-        self.color = Some((color, color_view));
-        self.size = (w, h);
-    }
-
     /// Uploads this frame's cloth and draws the scene to the offscreen texture.
     ///
     /// # Panics
@@ -194,44 +151,20 @@ impl Renderer {
         cloth_vertices: &[f32],
         uniforms: &[f32; 20],
     ) {
-        self.ensure_targets(rs, w.max(8), h.max(8));
+        self.targets.ensure(rs, w.max(8), h.max(8));
         debug_assert_eq!(cloth_vertices.len(), self.n_cloth_verts * 9);
         rs.queue
             .write_buffer(&self.vbuf, 0, bytemuck::cast_slice(cloth_vertices));
         rs.queue
             .write_buffer(&self.ubuf, 0, bytemuck::cast_slice(uniforms));
 
-        let (_, color_view) = self.color.as_ref().expect("targets created above");
-        let depth_view = self.depth.as_ref().expect("targets created above");
         let mut encoder = rs
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("toile"),
             });
         {
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("toile-pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: color_view,
-                    resolve_target: None,
-                    depth_slice: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                    view: depth_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: wgpu::StoreOp::Store,
-                    }),
-                    stencil_ops: None,
-                }),
-                timestamp_writes: None,
-                occlusion_query_set: None,
-                multiview_mask: None,
-            });
+            let mut pass = self.targets.pass(&mut encoder, "toile-pass", self.clear);
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &self.bind_group, &[]);
             pass.set_vertex_buffer(0, self.vbuf.slice(..));
@@ -239,6 +172,11 @@ impl Renderer {
             pass.draw_indexed(0..self.indices.len() as u32, 0, 0..1);
         }
         rs.queue.submit([encoder.finish()]);
+    }
+
+    /// The egui handle for the offscreen texture, once a paint has made one.
+    pub fn texture_id(&self) -> Option<eframe::egui::TextureId> {
+        self.targets.texture_id()
     }
 }
 

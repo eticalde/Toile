@@ -1,14 +1,15 @@
 /// The lines a piece is drawn with and not cut on.
 mod inner;
 mod mark;
+/// How a document number and a document name reach the sheet. Three modules
+/// write into the same drawing, so the millimetre, the two decimals and the
+/// escaping have to be the same in all three or the file is not one drawing.
+mod units;
 
 use std::fmt::Write;
 
+use self::units::{escape, mm};
 use crate::draft::{Draft, PieceKey, PointKey};
-
-/// Millimetres in a centimetre. The document counts in the first and a sheet
-/// of paper in the second, and this is the only place the two meet.
-const MM_PER_CM: f64 = 10.0;
 
 /// Blank paper left around the pattern, in millimetres.
 const MARGIN: f64 = 10.0;
@@ -127,7 +128,8 @@ fn millimetres(draft: &Draft, piece: PieceKey) -> Vec<[f64; 2]> {
     draft
         .cloth_cm(piece)
         .iter()
-        .map(|&[x, y]| [x * MM_PER_CM, y * MM_PER_CM])
+        .copied()
+        .map(units::millimetres)
         .collect()
 }
 
@@ -145,27 +147,8 @@ fn nodes(draft: &Draft, piece: PieceKey) -> Vec<(PointKey, [f64; 2])> {
     draft
         .points_cm(piece)
         .iter()
-        .map(|&(key, [x, y])| (key, [x * MM_PER_CM, y * MM_PER_CM]))
+        .map(|&(key, at)| (key, units::millimetres(at)))
         .collect()
-}
-
-/// A millimetre as the drawing writes it: two decimals, and never a negative
-/// zero, so the same pattern always writes the same bytes.
-fn mm(value: f64) -> String {
-    let text = format!("{value:.2}");
-    if let Some(digits) = text.strip_prefix('-')
-        && digits.bytes().all(|byte| byte == b'0' || byte == b'.')
-    {
-        return digits.to_owned();
-    }
-    text
-}
-
-/// Text as XML takes it.
-fn escape(text: &str) -> String {
-    text.replace('&', "&amp;")
-        .replace('<', "&lt;")
-        .replace('>', "&gt;")
 }
 
 #[cfg(test)]
@@ -216,7 +199,8 @@ mod tests {
             .expect("the block draws one piece");
         let written = to_svg(&draft).expect("the block draws");
         for &(_, [x, y]) in draft.points_cm(piece).iter().take(3) {
-            let vertex = format!("{} {}", mm(x * MM_PER_CM), mm(y * MM_PER_CM));
+            let [x, y] = units::millimetres([x, y]);
+            let vertex = format!("{} {}", mm(x), mm(y));
             assert!(written.contains(&vertex), "{vertex} missing from {written}");
         }
     }
@@ -284,17 +268,5 @@ mod tests {
         let doc = Doc::new(MeasureSet::new("Etienne", [("cintura", 84.0)]));
         let draft = Draft::from_doc(doc).expect("an empty document resolves");
         assert_eq!(to_svg(&draft), Err(ExportError::Empty));
-    }
-
-    #[test]
-    fn a_negative_zero_is_written_as_zero() {
-        assert_eq!(mm(-0.0), "0.00");
-        assert_eq!(mm(-0.001), "0.00");
-        assert_eq!(mm(-0.02), "-0.02");
-    }
-
-    #[test]
-    fn a_name_that_carries_markup_is_escaped() {
-        assert_eq!(escape("A & <B>"), "A &amp; &lt;B&gt;");
     }
 }

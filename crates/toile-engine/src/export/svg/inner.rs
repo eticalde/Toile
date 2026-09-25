@@ -2,7 +2,8 @@ use std::fmt::Write;
 
 use toile_geom::curve;
 
-use super::{CUT, escape, mm};
+use super::CUT;
+use super::units::{centimetres, escape, millimetres, mm};
 use crate::draft::{Draft, InternalLine, LineKind, LineSpan, LineVertex, PieceKey};
 
 /// The weight of a line the cutter does not cut on, in millimetres.
@@ -146,13 +147,4 @@ fn along(tract: &[[f64; 2]], next: [f64; 2], t: f64) -> Option<[f64; 2]> {
         walked += span;
     }
     walk.first().copied()
-}
-
-fn millimetres([x, y]: [f64; 2]) -> [f64; 2] {
-    [x * super::MM_PER_CM, y * super::MM_PER_CM]
-}
-
-/// The way back, for the one question the cloth answers in its own units.
-fn centimetres([x, y]: [f64; 2]) -> [f64; 2] {
-    [x / super::MM_PER_CM, y / super::MM_PER_CM]
 }

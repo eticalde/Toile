@@ -139,15 +139,7 @@ mod tests {
     use toile_engine::draft::block;
 
     use super::*;
-
-    /// A square, in contour order, with a node key per corner.
-    fn square() -> Vec<(PointKey, [f64; 2])> {
-        [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
-            .into_iter()
-            .enumerate()
-            .map(|(i, at)| (PointKey::new(i as u32, 0), at))
-            .collect()
-    }
+    use crate::tabs::patronaje::tests::square;
 
     /// The block on the table, and the tracts its contour draws.
     fn front() -> (Draft, PieceKey) {

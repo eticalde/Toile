@@ -29,7 +29,8 @@ pub const CELL: f64 = 0.005;
 /// The solver only ever asks about a particle it is holding against the
 /// body, so exactness two and a half centimetres out is exactness where it
 /// is read. Past that the field saturates, and that is what keeps this a
-/// narrow band rather than a full distance transform over 3.6 M voxels.
+/// narrow band rather than a full distance transform over the eleven and a
+/// half million voxels a reference adult's box holds.
 pub const BAND: f64 = 0.025;
 
 /// The version of the bake: bumped whenever the field a given mesh produces

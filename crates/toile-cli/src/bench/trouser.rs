@@ -5,7 +5,7 @@ use toile_engine::demo;
 use toile_engine::draft::{Axis, Binding, Command, Draft, PieceKey, PointKey, block};
 use toile_sim::xpbd::{self, Seams, Stage};
 
-use super::scene::{DT, avg, max, same_bits, seconds, settle};
+use super::scene::{DT, Settled, avg, max, same_bits, settle};
 
 /// Frames of the drag storm, at 60 Hz.
 const FRAMES: u32 = 120;
@@ -50,7 +50,7 @@ struct Storm {
     n_edges: usize,
     resolve_ms: Vec<f64>,
     derive_ms: Vec<f64>,
-    converge_s: f64,
+    converge: Settled,
     hash: u64,
 }
 
@@ -100,7 +100,7 @@ fn storm() -> Storm {
         }
     }
 
-    let steps = settle(&mut state, &cons, &no_seams, &sdf, 6000);
+    let converge = settle(&mut state, &cons, &no_seams, &sdf, 6000);
     Storm {
         build_ms,
         n_boundary: pipe.n_boundary(),
@@ -108,7 +108,7 @@ fn storm() -> Storm {
         n_edges: pipe.edges.len(),
         resolve_ms,
         derive_ms,
-        converge_s: seconds(steps),
+        converge,
         hash: xpbd::position_hash(&state),
     }
 }
@@ -147,10 +147,7 @@ pub fn run() {
         max(&edit_ms),
         verdict(max(&edit_ms))
     );
-    println!(
-        "re-convergencia  {:7.2} s de sim tras soltar  (presupuesto: 2–3 s)",
-        a.converge_s
-    );
+    println!("re-convergencia  hasta dormir tras soltar: {}", a.converge);
     println!(
         "determinismo     storm completo: {}",
         same_bits(a.hash, b.hash)

@@ -31,7 +31,7 @@ pub fn coordinates(
     let mut asked = None;
     for (axis, label) in [(Axis::X, "X"), (Axis::Y, "Y")] {
         let source = held.binding(axis).source().into_owned();
-        let (note, fault) = super::coordinate(draft, (piece, point), axis);
+        let (note, fault) = super::reads::coordinate(draft, (piece, point), axis);
         let shown = Editable {
             label,
             source: &source,

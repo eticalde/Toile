@@ -7,18 +7,16 @@ use super::state::{DistanceConstraints, Seams, State};
 #[cfg(test)]
 mod tests;
 
-// The scalar path is the reference formulation: the goldens are defined by
-// it, and every other path must reproduce its bits.
 /// What pulls on a particle, in metres per second squared.
 pub const GRAVITY: f32 = -9.81;
 pub(super) const DAMPING: f32 = 0.999;
 
-/// One full XPBD substep.
+/// One full XPBD substep, and the formulation the goldens are hashed from.
 ///
 /// Small steps: N substeps of one constraint iteration beat one step of N
 /// iterations, so lambda starts from zero each substep and never accumulates.
 ///
-/// A stage whose `floor` is [`Floor::none`] and whose `layers` is `None` runs
+/// A scene whose `floor` is [`Floor::none`] and whose `layers` is `None` runs
 /// exactly the passes it has always run, in the order it has always run them.
 pub fn substep(
     state: &mut State,

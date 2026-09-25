@@ -30,11 +30,11 @@ fn a_broken_x_does_not_make_the_y_row_a_fault() {
         Binding::parse("medida_que_no_existe").expect("the source parses");
     let draft = Draft::from_doc(doc).expect("a bad coordinate is a defect, not a refusal");
 
-    let (note_x, fault_x) = coordinate(&draft, (piece, point), Axis::X);
+    let (note_x, fault_x) = super::reads::coordinate(&draft, (piece, point), Axis::X);
     assert!(fault_x, "the broken axis is the one that faults");
     assert_eq!(note_x, "nombre desconocido: medida_que_no_existe");
 
-    let (note_y, fault_y) = coordinate(&draft, (piece, point), Axis::Y);
+    let (note_y, fault_y) = super::reads::coordinate(&draft, (piece, point), Axis::Y);
     assert!(!fault_y, "the Y formula evaluates: {note_y}");
     assert_eq!(note_y, format!("= {y_cm:.1} cm"));
 }
@@ -48,11 +48,11 @@ fn a_point_that_resolves_reports_both_of_its_coordinates() {
     let x_cm = draft.resolved(point).expect("the hip resolves")[0];
 
     assert_eq!(
-        coordinate(&draft, (piece, point), Axis::X),
+        super::reads::coordinate(&draft, (piece, point), Axis::X),
         (format!("= {x_cm:.1} cm"), false)
     );
     assert_eq!(
-        coordinate(&draft, (piece, point), Axis::Y),
+        super::reads::coordinate(&draft, (piece, point), Axis::Y),
         (format!("= {y_cm:.1} cm"), false)
     );
 }

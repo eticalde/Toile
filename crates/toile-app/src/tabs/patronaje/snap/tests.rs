@@ -4,18 +4,10 @@
 )]
 
 use super::*;
+use crate::tabs::patronaje::tests::square;
 
-/// A square, in contour order, at a scale where a screen point is a tenth
-/// of a centimetre.
+/// The scale at which a screen point is a tenth of a centimetre.
 const SCALE: f64 = 10.0;
-
-fn square() -> Vec<(PointKey, [f64; 2])> {
-    [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
-        .into_iter()
-        .enumerate()
-        .map(|(i, at)| (PointKey::new(i as u32, 0), at))
-        .collect()
-}
 
 fn context<'a>(
     nodes: &'a [(PointKey, [f64; 2])],

@@ -1,9 +1,25 @@
 use eframe::egui::{Pos2, Rect, pos2, vec2};
 use toile_engine::body::Collider;
-use toile_engine::draft::{Axis, Binding, Command, Doc, MeasureSet, Piece, Point, Winding, block};
+use toile_engine::draft::{
+    Axis, Binding, Command, Doc, MeasureSet, Piece, Point, PointKey, Winding, block,
+};
 
 use super::*;
 use crate::theme::Theme;
+
+/// A square piece's nodes, in contour order, ten centimetres a side.
+///
+/// Shared because three modules that meet the pointer — the nearest place, the
+/// tracts and the snapping — were each carrying their own copy of it, and a
+/// scene that has to be changed in three files is a scene that gets changed in
+/// two.
+pub(super) fn square() -> Vec<(PointKey, [f64; 2])> {
+    [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
+        .into_iter()
+        .enumerate()
+        .map(|(i, at)| (PointKey::new(i as u32, 0), at))
+        .collect()
+}
 
 /// One press or release of the primary button, where the pointer is.
 fn button(at: Pos2, pressed: bool) -> egui::Event {

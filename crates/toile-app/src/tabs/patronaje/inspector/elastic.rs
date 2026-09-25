@@ -32,10 +32,10 @@ const RATIO_SPAN: (f64, f64) = (20.0, 200.0);
 ///
 /// Measured on the seeded skirt three simulated seconds in, the waistband
 /// stands at 120 % of the length it is held to at the default of ten and 143 %
-/// at a tenth of it, and it sits 10.7 cm higher on the body for it. The rail
-/// does its work at the slack end: the knee is near three, where the band
-/// already stands at 122 %, so everything from there to fifty is one firm band
-/// told apart by a couple of points. `tests/seeding/grip.rs` reads all three.
+/// at the slack end, and the firm band sits 10.7 cm higher for it. The rail
+/// does its work down there: the knee is near three, where the band already
+/// stands at 122 %, so everything from there to fifty is one firm band told
+/// apart by a couple of points. `tests/seeding/grip.rs` reads all three.
 const STRENGTH_SPAN: (f64, f64) = (0.1, 50.0);
 
 // A rail that reached under the document's floor would offer a drag the edit

@@ -11,10 +11,6 @@ const GRAB_RADIUS: f32 = 14.0;
 /// Margin between the pattern's bounding box and the panel edge, in points.
 const MARGIN: f64 = 40.0;
 
-/// The resolution this panel writes at, in centimetres: it carries no snap of
-/// its own, and a tenth is what the drafting table falls back to without one.
-const STEP_CM: f64 = 0.1;
-
 /// The name a drag leaves in the undo stack.
 const MOVE: &str = "mover punto";
 
@@ -43,7 +39,7 @@ impl Drag {
                 &self.origin[k],
                 at_cm[k],
                 at_cm[k] - self.from_cm[k],
-                STEP_CM,
+                bind::FREE_STEP_CM,
             )
         });
         Command::MovePoint {

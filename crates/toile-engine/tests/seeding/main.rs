@@ -36,7 +36,7 @@ const ON_THE_BODY: f32 = 1.00;
 ///
 /// Where the garment's weight came to rest is what keeps the other three from
 /// being satisfied by one that never met the body at all. Both scenes now rest
-/// on the body rather than round its feet: 3,235 of the startup bodice's
+/// on the body rather than round its feet: 3,244 of the startup bodice's
 /// 12,540 particles sit within a cell of the skin, where under the fixed share
 /// of the motion it was 16.
 fn rests_clear_of_the_body(scene: &str, session: &Session, sdf: &SdfGrid) {

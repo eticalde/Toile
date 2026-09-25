@@ -70,6 +70,18 @@ pub struct Baked {
     pub path_points: Vec<RingPoint>,
 }
 
+impl Baked {
+    /// The delta entries one row owns.
+    ///
+    /// Every reader of `deltas` wants exactly this slice, and each one that
+    /// cut it for itself was a place the `offset`-plus-`length` convention
+    /// could be read one way while the writer meant another.
+    pub(crate) fn row_deltas(&self, row: &Row) -> &[Delta] {
+        let start = row.offset as usize;
+        &self.deltas[start..start + row.length as usize]
+    }
+}
+
 /// Why a byte slice would not decode as an asset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecodeError {

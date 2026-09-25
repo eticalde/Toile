@@ -87,7 +87,7 @@ done
 #    or half the English language. Each file is read up to its own test
 #    module: a test may measure with whatever it likes.
 BANNED='\.(powf|powi|sin|cos|tan|asin|acos|atan|atan2|exp|exp2|ln|log2|log10|sinh|cosh|tanh|hypot)[[:space:]]*\('
-GEOMETRY='crates/toile-sim/src crates/toile-engine/src crates/toile-anny/src crates/toile-mesh/src crates/toile-seamly/src'
+GEOMETRY='crates/toile-sim/src crates/toile-engine/src crates/toile-anny/src crates/toile-mesh/src crates/toile-seamly/src crates/toile-geom/src'
 for f in $(find $GEOMETRY -name '*.rs' | grep -v -e '/tests/' -e 'tests\.rs$' -e '/export/'); do
   hits=$(awk '/#\[cfg\(test\)\]/ { exit } { print FNR": "$0 }' "$f" | grep -E "$BANNED" | head -3)
   [ -n "$hits" ] && say "$f: trascendente de std en la geometría (§determinismo)
@@ -101,6 +101,13 @@ for f in $(grep -rlE --include='*.rs' 'libm::' crates | grep -v -e '/tests/' -e 
   echo "$f" | grep -qE "$LIBM_EARNED" ||
     say "$f: libm:: fuera de donde está justificado (§determinismo)"
 done
+
+# 7. One layout for a module with submodules: `foo.rs` beside `foo/`. Two
+#    layouts means two places to look for the same thing, and the one that
+#    names the module in its own filename is the one the tree uses.
+if find crates -name 'mod.rs' | grep .; then
+  say "mod.rs: el submódulo va en foo.rs junto a foo/ (§4.3)"
+fi
 
 [ $fail -eq 0 ] && echo "✓ estilo"
 exit $fail

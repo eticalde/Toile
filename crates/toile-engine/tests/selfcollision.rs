@@ -30,8 +30,14 @@ const QUIET_FROM: usize = 24_000;
 /// Substeps one line of the energy report covers.
 const LINE: usize = 6_000;
 
-/// Mean kinetic energy per vertex the sim thread goes to sleep under.
-const SLEEP_ENERGY_PER_VERT: f32 = 2.0e-6;
+/// Mean kinetic energy per vertex a landed heap has to stay under.
+///
+/// A bar on the energy itself, and not the sim thread's own rule — that one
+/// reads how far a vertex travelled across a tick, so a heap held apart could
+/// meet it while still trading energy with the pass every substep. The
+/// loudest substep past [`QUIET_FROM`] reads 5.4e-7 a vertex, a little over a
+/// quarter of this, and the test prints the line it falls on.
+const QUIET_ENERGY_PER_VERT: f32 = 2.0e-6;
 
 /// Triangle area cap the crossings are counted at.
 ///
@@ -210,10 +216,10 @@ fn a_garment_settled_on_the_ground_stops_going_through_itself() {
 /// Holding a heap apart must not be what keeps it awake.
 ///
 /// The same heap, run the way the sim thread runs it: the kinetic damper after
-/// every substep, and the energy it hands back read against the threshold the
-/// thread sleeps under. Every substep is read and the loudest one is what is
-/// judged, because a mean lets a heap that twitches once a second pass, and a
-/// reading taken once a tick can land on one of the damper's zeroes.
+/// every substep, and the energy it hands back read against
+/// [`QUIET_ENERGY_PER_VERT`]. Every substep is read and the loudest one is what
+/// is judged, because a mean lets a heap that twitches once a second pass, and
+/// a reading taken once a tick can land on one of the damper's zeroes.
 #[test]
 #[ignore = "release-only: a real body baked and a hundred seconds of heap"]
 fn a_heap_held_apart_goes_quiet_and_stays_quiet() {
@@ -249,8 +255,8 @@ fn a_heap_held_apart_goes_quiet_and_stays_quiet() {
         }
     }
     assert!(
-        late < SLEEP_ENERGY_PER_VERT,
-        "the heap never stayed under the energy it sleeps at: {late:e} after {QUIET_FROM}"
+        late < QUIET_ENERGY_PER_VERT,
+        "the heap never went quiet and stayed quiet: {late:e} after {QUIET_FROM}"
     );
 }
 

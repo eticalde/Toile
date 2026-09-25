@@ -165,8 +165,8 @@ impl Session {
     /// Whether there is a sim thread at all.
     ///
     /// Nothing drapes until a piece meshes, so a blank table has no thread and
-    /// [`Session::snapshot`] answers with the empty snapshot — whose
-    /// `converged` is false, the same value a simulation still working reports.
+    /// [`Session::snapshot`] answers with the empty snapshot — whose `asleep`
+    /// is false, the same value a simulation still working reports.
     /// Anything that speaks about the sim asks this first, or it speaks about a
     /// thread that does not exist.
     pub fn simulating(&self) -> bool {
@@ -176,14 +176,14 @@ impl Session {
     /// True when the sim has slept on the latest edit: nothing left to
     /// animate.
     ///
-    /// The published frame's own verdict is not enough: it may have been
+    /// The published frame's own `asleep` is not enough: it may have been
     /// captured before the last edit reached the sim thread.
     pub fn settled(&self) -> bool {
         let Some(handle) = self.handle.as_ref() else {
             return true;
         };
         let snap = handle.snapshot();
-        snap.converged && snap.generation == self.generation
+        snap.asleep && snap.generation == self.generation
     }
 
     /// Where a piece sits among the ones on the stand.

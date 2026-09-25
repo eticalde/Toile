@@ -75,8 +75,9 @@ pub struct Snapshot {
     pub generation: u64,
     /// Substeps run since the thread started.
     pub substeps: u64,
-    /// The sim is asleep, waiting for an edit.
-    pub converged: bool,
+    /// The sim is asleep, waiting for an edit. A pause and not a verdict: the
+    /// drape is quiet, which is not the same as finished.
+    pub asleep: bool,
     /// Interleaved xyz positions.
     pub positions: Vec<f32>,
     /// Interleaved xyz vertex normals.

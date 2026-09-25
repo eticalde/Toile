@@ -66,6 +66,36 @@ fn secant(mut eval: impl FnMut(f64) -> f64, target_cm: f64, lo: f64, hi: f64) ->
     }
 }
 
+/// Puts the vertices a trial moved back to the baseline it started from.
+///
+/// Only the vertices the solved rows touch: the rest of the body is the same
+/// in every trial, and copying it again per iteration is what makes a secant
+/// step cost the whole mesh instead of a handful of rings.
+fn restore(working: &mut [f32], baseline: &[f64], touched: &[usize]) {
+    for &v in touched {
+        working[v * 3] = baseline[v * 3] as f32;
+        working[v * 3 + 1] = baseline[v * 3 + 1] as f32;
+        working[v * 3 + 2] = baseline[v * 3 + 2] as f32;
+    }
+}
+
+/// Adds one row's deltas onto a trial body at `weight`.
+///
+/// Weight first, then the divisor — the trial path's own association,
+/// parenthesized so it reads as chosen rather than inherited. `crate::mesh`
+/// divides first, which lands about a tenth of the components one f64 ulp
+/// away; none of that survives the `as f32` on the way into `working`, so no
+/// golden pins which association this takes. The two read apart because they
+/// are two paths, not because the bits depend on it.
+fn add_row(working: &mut [f32], deltas: &[crate::asset::Delta], weight: f64) {
+    for delta in deltas {
+        let base = delta.vertex as usize * 3;
+        working[base] += ((weight * f64::from(delta.dx)) / DELTA_PER_METRE) as f32;
+        working[base + 1] += ((weight * f64::from(delta.dy)) / DELTA_PER_METRE) as f32;
+        working[base + 2] += ((weight * f64::from(delta.dz)) / DELTA_PER_METRE) as f32;
+    }
+}
+
 /// Solves one lever, or one tied pair of levers driven by the same value,
 /// so that `extract` (read off a fresh [`Measures`] every trial) reports
 /// `target_cm`.
@@ -102,20 +132,12 @@ pub fn solve_girth(
         .rows
         .iter()
         .filter(|row| matches!(row.kind, RowKind::Lever { lever, .. } if is_target_row(lever)))
-        .flat_map(|row| {
-            let start = row.offset as usize;
-            let end = start + row.length as usize;
-            baked.deltas[start..end].iter().map(|d| d.vertex as usize)
-        })
+        .flat_map(|row| baked.row_deltas(row).iter().map(|d| d.vertex as usize))
         .collect();
 
     let mut working: Vec<f32> = baseline.iter().map(|&d| d as f32).collect();
     let eval = |t: f64| -> f64 {
-        for &v in &touched {
-            working[v * 3] = baseline[v * 3] as f32;
-            working[v * 3 + 1] = baseline[v * 3 + 1] as f32;
-            working[v * 3 + 2] = baseline[v * 3 + 2] as f32;
-        }
+        restore(&mut working, &baseline, &touched);
         for row in &baked.rows {
             let RowKind::Lever { lever, incr } = row.kind else {
                 continue;
@@ -127,21 +149,7 @@ pub fn solve_girth(
             if weight == 0.0 {
                 continue;
             }
-            let start = row.offset as usize;
-            let end = start + row.length as usize;
-            // Weight first, then the divisor — the trial path's own
-            // association, parenthesized so it reads as chosen rather than
-            // inherited. `crate::mesh` divides first, which lands about a
-            // tenth of the components one f64 ulp away; none of that survives
-            // the `as f32` on the way into `working`, so no golden pins which
-            // association this loop uses. The two read apart because they are
-            // two loops, not because the bits depend on it.
-            for delta in &baked.deltas[start..end] {
-                let base = delta.vertex as usize * 3;
-                working[base] += ((weight * f64::from(delta.dx)) / DELTA_PER_METRE) as f32;
-                working[base + 1] += ((weight * f64::from(delta.dy)) / DELTA_PER_METRE) as f32;
-                working[base + 2] += ((weight * f64::from(delta.dz)) / DELTA_PER_METRE) as f32;
-            }
+            add_row(&mut working, baked.row_deltas(row), weight);
         }
         f64::from(extract(&measure::measure(&working)))
     };
@@ -174,20 +182,12 @@ pub fn solve_height(phenotype: &Phenotype, levers: &[f64; 20], target_cm: f64) -
         .rows
         .iter()
         .filter(|row| matches!(row.kind, RowKind::Weighted { mask } if is_height_row(mask)))
-        .flat_map(|row| {
-            let start = row.offset as usize;
-            let end = start + row.length as usize;
-            baked.deltas[start..end].iter().map(|d| d.vertex as usize)
-        })
+        .flat_map(|row| baked.row_deltas(row).iter().map(|d| d.vertex as usize))
         .collect();
 
     let mut working: Vec<f32> = baseline.iter().map(|&d| d as f32).collect();
     let eval = |trial_height: f64| -> f64 {
-        for &v in &touched {
-            working[v * 3] = baseline[v * 3] as f32;
-            working[v * 3 + 1] = baseline[v * 3 + 1] as f32;
-            working[v * 3 + 2] = baseline[v * 3 + 2] as f32;
-        }
+        restore(&mut working, &baseline, &touched);
         let mut trial = *phenotype;
         trial.height = trial_height;
         let phens = phenotype::phens26(&trial);
@@ -202,16 +202,7 @@ pub fn solve_height(phenotype: &Phenotype, levers: &[f64; 20], target_cm: f64) -
             if weight == 0.0 {
                 continue;
             }
-            let start = row.offset as usize;
-            let end = start + row.length as usize;
-            // The same association [`solve_girth`] uses, and for the same
-            // reason: it is the trial path's, not the mesh's.
-            for delta in &baked.deltas[start..end] {
-                let base = delta.vertex as usize * 3;
-                working[base] += ((weight * f64::from(delta.dx)) / DELTA_PER_METRE) as f32;
-                working[base + 1] += ((weight * f64::from(delta.dy)) / DELTA_PER_METRE) as f32;
-                working[base + 2] += ((weight * f64::from(delta.dz)) / DELTA_PER_METRE) as f32;
-            }
+            add_row(&mut working, baked.row_deltas(row), weight);
         }
         f64::from(measure::measure(&working).height)
     };

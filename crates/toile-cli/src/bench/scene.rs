@@ -1,16 +1,13 @@
+use std::fmt;
+
+use toile_engine::sync::Sleep;
 use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, SdfGrid, Seams, Stage, State};
 
 /// Simulated seconds per substep: 60 Hz visual at ten substeps a frame.
 pub const DT: f32 = 1.0 / 600.0;
 
-/// Substeps between sleep checks, matching the engine's tick.
+/// Substeps between two sleep judgements, matching the engine's tick.
 const TICK: usize = 10;
-
-/// Mean kinetic energy per vertex below which a tick counts as quiet.
-const QUIET_ENERGY: f32 = 2.0e-6;
-
-/// Consecutive quiet ticks before the cloth is considered settled.
-const QUIET_TICKS: u32 = 3;
 
 /// A tiny deterministic PRNG (Knuth MMIX), so the benchmark needs no
 /// dependency to be reproducible.
@@ -36,24 +33,63 @@ pub fn shuffle<T>(v: &mut [T], rng: &mut Lcg) {
     }
 }
 
-/// Runs substeps until the cloth stays quiet for [`QUIET_TICKS`] ticks, or the
-/// cap is reached. Returns the substeps taken.
+/// What a drape run came to.
 ///
-/// Same criterion as the engine's sim thread, so a benchmark number means the
-/// same thing a user would experience.
+/// It carries whether the drape actually slept, because a run that used up its
+/// cap measured nothing: printing that cap as a number is how a bench comes to
+/// report its own timeout as a result.
+pub struct Settled {
+    steps: usize,
+    asleep: bool,
+}
+
+impl Settled {
+    /// Whether the drape reached sleep before the cap ran out.
+    pub fn asleep(&self) -> bool {
+        self.asleep
+    }
+
+    /// Simulated seconds the run covered.
+    pub fn seconds(&self) -> f64 {
+        seconds(self.steps)
+    }
+}
+
+impl fmt::Display for Settled {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:7.2} s de sim", self.seconds())?;
+        if !self.asleep {
+            write!(f, " ¡TOPE! la tela seguía moviéndose")?;
+        }
+        Ok(())
+    }
+}
+
+/// Runs substeps until the drape goes to sleep, or the cap runs out.
+///
+/// The sim thread's rule, imported rather than restated: a number a bench
+/// prints then means what a person waiting in front of the application means
+/// by it, including the several seconds of quiet the rule wants before it will
+/// call a drape finished.
 pub fn settle(
     state: &mut State,
     cons: &DistanceConstraints,
     seams: &Seams,
     sdf: &SdfGrid,
     max_steps: usize,
-) -> usize {
+) -> Settled {
     let mut seams = seams.clone();
     settle_with(state, cons, &mut seams, sdf, max_steps, |_, _| {})
 }
 
 /// [`settle`] with a hook run before each substep, for schedules that change
 /// the scene as it converges — progressive sewing, for instance.
+///
+/// The stage carries no ground, as every drape golden's does. A panel with
+/// nothing holding it therefore slides off the sphere and falls for as long as
+/// anything integrates it, gaining speed each substep, and what ends such a run
+/// is the cap rather than the drape — which is why [`Settled`] says which of
+/// the two it was.
 pub fn settle_with(
     state: &mut State,
     cons: &DistanceConstraints,
@@ -61,25 +97,26 @@ pub fn settle_with(
     sdf: &SdfGrid,
     max_steps: usize,
     mut before: impl FnMut(usize, &mut Seams),
-) -> usize {
-    let inv_n = 1.0 / state.len() as f32;
+) -> Settled {
     let mut damper = KineticDamper::new();
-    let mut quiet = 0u32;
+    let mut sleep = Sleep::default();
     let mut steps = 0usize;
-    while quiet < QUIET_TICKS && steps < max_steps {
-        before(steps, seams);
-        xpbd::substep(state, cons, seams, &Stage::around(sdf), None, DT);
-        steps += 1;
-        let e = damper.observe(state);
-        if steps.is_multiple_of(TICK) {
-            if e * inv_n < QUIET_ENERGY {
-                quiet += 1;
-            } else {
-                quiet = 0;
-            }
+    // In whole ticks, because the rule reads how far a vertex travelled across
+    // one and there is nothing to judge in the middle of it.
+    while !sleep.asleep() && steps + TICK <= max_steps {
+        sleep.mark(state);
+        for _ in 0..TICK {
+            before(steps, seams);
+            xpbd::substep(state, cons, seams, &Stage::around(sdf), None, DT);
+            steps += 1;
+            damper.observe(state);
         }
+        sleep.judge(state);
     }
-    steps
+    Settled {
+        steps,
+        asleep: sleep.asleep(),
+    }
 }
 
 /// Simulated seconds represented by a substep count.

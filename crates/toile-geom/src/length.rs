@@ -13,7 +13,8 @@ pub fn cumulative(contour: &[[f64; 2]]) -> Vec<f64> {
     cum.push(0.0);
     for i in 0..n {
         let (a, b) = (contour[i], contour[(i + 1) % n]);
-        total += ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt();
+        let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+        total += (dx * dx + dy * dy).sqrt();
         cum.push(total);
     }
     cum

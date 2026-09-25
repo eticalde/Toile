@@ -74,7 +74,7 @@ pub fn show(
     }
     let over = over(state);
     fill(painter, theme, rect);
-    canvas::mat_grid(painter, theme, rect, state.view);
+    canvas::ruled_mat(painter, theme, rect, state.view);
     if laid.is_empty() {
         empty(painter, theme, rect);
     }

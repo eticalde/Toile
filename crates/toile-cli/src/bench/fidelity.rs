@@ -141,7 +141,7 @@ pub fn run() {
 
     for f in &fabrics() {
         let (mut state, cons) = banner(f);
-        settle(&mut state, &cons, &no_seams, &sdf, 12_000);
+        let settled = settle(&mut state, &cons, &no_seams, &sdf, 12_000);
         let (avg_settle, max_settle) = stretch(&state);
 
         for _ in 0..REFINE_SUBSTEPS {
@@ -163,6 +163,12 @@ pub fn run() {
             f.name,
             max_ref / 100.0 * f64::from(PATTERN_LEN) * 1000.0
         );
+        if !settled.asleep() {
+            println!(
+                "{:30}el estirado se leyó sobre tela en movimiento: {settled}",
+                ""
+            );
+        }
     }
     println!(
         "tolerancia sartorial: ±{TOL_PCT:.0}% · refinado = 10 s de sim extra sin kinetic damping"

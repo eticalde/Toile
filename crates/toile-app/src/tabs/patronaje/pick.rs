@@ -117,15 +117,7 @@ mod tests {
     )]
 
     use super::*;
-
-    /// A square, in contour order, with a node key per corner.
-    fn square() -> Vec<(PointKey, [f64; 2])> {
-        [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]]
-            .into_iter()
-            .enumerate()
-            .map(|(i, at)| (PointKey::new(i as u32, 0), at))
-            .collect()
-    }
+    use crate::tabs::patronaje::tests::square;
 
     #[test]
     fn nearest_on_a_segment_clamps_to_its_ends() {

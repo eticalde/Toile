@@ -240,7 +240,7 @@ fn a_swap_between_ticks_keeps_the_cloth_where_it_was() {
     let swap = Box::new(MeshSwap::new(&old.pos2d, &old.tris, &new, COMPLIANCE));
     assert_eq!(sim.apply_swap(1, swap), Ok(()));
     assert!((mean_height(&sim.state) - before).abs() < 1.0e-3);
-    assert!(!sim.converged(), "a swap wakes the cloth");
+    assert!(!sim.asleep(), "a swap wakes the cloth");
 }
 
 /// The plane a body of this height would stand on.
@@ -268,7 +268,7 @@ fn a_body_arriving_brings_its_own_ground() {
     };
     assert_eq!(sim.apply_collider(1, standing), Ok(()));
     assert_eq!(sim.scene.floor.level(), Some(PLANE));
-    assert!(!sim.converged(), "a body wakes the cloth");
+    assert!(!sim.asleep(), "a body wakes the cloth");
 }
 
 fn mean_height(state: &State) -> f32 {

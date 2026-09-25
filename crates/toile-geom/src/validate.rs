@@ -113,7 +113,8 @@ fn adjacent(i: usize, j: usize, n: usize) -> bool {
 }
 
 fn distance2(a: [f64; 2], b: [f64; 2]) -> f64 {
-    (b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    dx * dx + dy * dy
 }
 
 /// Where `b` falls relative to the ray from `o` through `a`: positive to one

@@ -38,7 +38,7 @@ const QUIET_TICKS_TO_SLEEP: u32 = 360;
 /// Sleep is a pause and never a verdict. Whatever message arrives next wakes
 /// the drape at once, and nothing may read a sleeping drape as a finished one.
 #[derive(Debug, Default)]
-pub(super) struct Sleep {
+pub struct Sleep {
     px: Vec<f32>,
     py: Vec<f32>,
     pz: Vec<f32>,
@@ -47,11 +47,13 @@ pub(super) struct Sleep {
 }
 
 impl Sleep {
-    pub(super) fn asleep(&self) -> bool {
+    /// Whether the drape has been quiet long enough to stop being simulated.
+    pub fn asleep(&self) -> bool {
         self.asleep
     }
 
-    pub(super) fn wake(&mut self) {
+    /// Puts the drape back in motion and forgets how quiet it had been.
+    pub fn wake(&mut self) {
         self.quiet_ticks = 0;
         self.asleep = false;
     }
@@ -60,7 +62,7 @@ impl Sleep {
     ///
     /// Into buffers kept from the tick before, so this allocates only when a
     /// swap has made the state longer than it has ever been.
-    pub(super) fn mark(&mut self, state: &State) {
+    pub fn mark(&mut self, state: &State) {
         for (kept, now) in [
             (&mut self.px, &state.px),
             (&mut self.py, &state.py),
@@ -72,7 +74,7 @@ impl Sleep {
     }
 
     /// Judges the tick that began at the last [`Sleep::mark`].
-    pub(super) fn judge(&mut self, state: &State) {
+    pub fn judge(&mut self, state: &State) {
         if quiet(self.moving(state), state.len()) {
             self.quiet_ticks += 1;
         } else {

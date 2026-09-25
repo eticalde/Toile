@@ -6,7 +6,7 @@ use toile_engine::couture::COMPLIANCE;
 use toile_engine::{demo, sync};
 use toile_sim::xpbd::{self, Floor, Grip, Seams, Stage};
 
-use super::scene::{DT, avg, max, same_bits, seconds, settle};
+use super::scene::{DT, Settled, avg, max, same_bits, settle};
 
 /// Frames of the drag storm, at 60 Hz.
 const FRAMES: u32 = 120;
@@ -16,6 +16,13 @@ const AMPLITUDE: f64 = 0.03;
 
 /// Substeps of initial drape before the storm starts.
 const DRAPE_SUBSTEPS: usize = 600;
+
+/// How long the bench waits for the drape to sleep before it gives up.
+///
+/// The sleep rule wants six seconds of quiet before it will call a drape
+/// finished, so a cap anywhere near that would only ever time out; this leaves
+/// room for the drape itself on top of it.
+const SLEEP_CAP: Duration = Duration::from_secs(30);
 
 /// Centimetres per metre: the document is in centimetres and the solver is
 /// in metres, and this bench crosses that line the same way the editor does.
@@ -74,7 +81,7 @@ struct Storm {
     n_interior: usize,
     n_edges: usize,
     derive_ms: Vec<f64>,
-    converge_s: f64,
+    converge: Settled,
     hash: u64,
 }
 
@@ -112,14 +119,14 @@ fn storm() -> Storm {
         }
     }
 
-    let steps = settle(&mut state, &cons, &no_seams, &sdf, 6000);
+    let converge = settle(&mut state, &cons, &no_seams, &sdf, 6000);
     Storm {
         build_ms,
         n_boundary: pipe.n_boundary(),
         n_interior: pipe.n_interior(),
         n_edges: pipe.edges.len(),
         derive_ms,
-        converge_s: seconds(steps),
+        converge,
         hash: xpbd::position_hash(&state),
     }
 }
@@ -141,10 +148,7 @@ pub fn run_sync() {
         avg(&a.derive_ms),
         max(&a.derive_ms)
     );
-    println!(
-        "re-convergencia  {:7.2} s de sim tras soltar  (presupuesto: 2–3 s)",
-        a.converge_s
-    );
+    println!("re-convergencia  hasta dormir tras soltar: {}", a.converge);
     println!(
         "determinismo     storm completo: {}",
         same_bits(a.hash, b.hash)
@@ -174,9 +178,7 @@ pub fn run_async() {
         10,
     );
 
-    let t0 = Instant::now();
-    wait_for_sleep(&handle);
-    let initial = t0.elapsed().as_secs_f64();
+    let initial = wait_for_sleep(&handle);
 
     let base = contour[demo::SHOULDER_POINT];
     let frame_dur = Duration::from_micros(16_667);
@@ -203,19 +205,17 @@ pub fn run_async() {
         std::thread::sleep(frame_dur.saturating_sub(frame_start.elapsed()));
     }
 
-    let t0 = Instant::now();
-    wait_for_sleep(&handle);
-    let reconv = t0.elapsed().as_secs_f64();
+    let reconv = wait_for_sleep(&handle);
     let snap = handle.snapshot();
     let nan_free = snap.positions.iter().all(|x| x.is_finite());
-    let asleep = snap.converged;
+    let asleep = snap.asleep;
     handle.stop();
 
     println!("\n── pipeline asíncrono · storm a 60 Hz reales ──");
     println!(
         "malla            {n} vértices · {n_edges} aristas · sim en hilo propio (10 substeps/tick)"
     );
-    println!("drapeado inicial {initial:7.2} s de reloj hasta dormir  (presupuesto: <10 s)");
+    println!("drapeado inicial hasta dormir: {initial}");
     println!(
         "derive (hilo UI) {:7.3} ms promedio · {:.3} ms máximo",
         avg(&derive_ms),
@@ -226,7 +226,7 @@ pub fn run_async() {
         avg(&latency_ms),
         max(&latency_ms)
     );
-    println!("re-convergencia  {reconv:7.2} s de reloj tras soltar  (presupuesto: 2–3 s)");
+    println!("re-convergencia  hasta dormir tras soltar: {reconv}");
     println!(
         "estado final     {} · sim dormida: {}",
         if nan_free { "sin NaN" } else { "NaN!" },
@@ -234,10 +234,32 @@ pub fn run_async() {
     );
 }
 
-fn wait_for_sleep(handle: &sync::SimHandle) {
+/// Wall seconds until the drape slept, as something that cannot print the cap
+/// as if it were a measurement.
+fn wait_for_sleep(handle: &sync::SimHandle) -> Wall {
     let t0 = Instant::now();
-    while !handle.snapshot().converged && t0.elapsed() < Duration::from_secs(15) {
+    while !handle.snapshot().asleep && t0.elapsed() < SLEEP_CAP {
         std::thread::sleep(Duration::from_millis(1));
+    }
+    Wall {
+        seconds: t0.elapsed().as_secs_f64(),
+        asleep: handle.snapshot().asleep,
+    }
+}
+
+/// A wall-clock wait, and whether what ended it was the drape or the cap.
+struct Wall {
+    seconds: f64,
+    asleep: bool,
+}
+
+impl std::fmt::Display for Wall {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:7.2} s de reloj", self.seconds)?;
+        if !self.asleep {
+            write!(f, " ¡TOPE! la tela seguía moviéndose")?;
+        }
+        Ok(())
     }
 }
 

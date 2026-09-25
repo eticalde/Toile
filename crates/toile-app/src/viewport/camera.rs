@@ -26,9 +26,10 @@ impl Camera {
     ///
     /// Distance 2.6 sits inside the zoom clamp, and at FOV 55° it leaves the
     /// Anny body a margin in the narrowest viewport the panels leave: at an
-    /// aspect of 0.8 its 1.666 m of stature comes to ~61 % of the half-height
-    /// and the fingertips of its ~40°-out arms (±0.496 m) to ~46 % of the
-    /// half-width.
+    /// aspect of 0.8 the 1.78 m body a fresh mannequin opens on comes to ~66 %
+    /// of the half-height and its fingertips (±0.58 m) to ~53 % of the
+    /// half-width. The tallest and the widest corner of the phenotype box,
+    /// 2.45 m and a ±0.81 m reach, still stay inside at ~91 % and ~75 %.
     pub fn for_body() -> Self {
         Self {
             yaw: 0.6,

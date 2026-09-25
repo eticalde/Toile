@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use super::{escape, mm};
+use super::units::{escape, mm};
 use crate::draft::{Draft, PieceKey, PointKey};
 
 /// The weight of everything drawn inside a cut line, in millimetres.
@@ -136,8 +136,9 @@ fn arrow(path: &mut String, tip: [f64; 2], back: [f64; 2]) {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{MM_PER_CM, to_svg};
-    use super::{CAPTION, FONT, mm};
+    use super::super::to_svg;
+    use super::super::units::{MM_PER_CM, mm};
+    use super::{CAPTION, FONT};
     use crate::draft::{Draft, block};
 
     /// Every node name is written at the node that carries it, and not at some

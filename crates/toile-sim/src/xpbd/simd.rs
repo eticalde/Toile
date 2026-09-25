@@ -1,32 +1,47 @@
 use rayon::prelude::*;
 use wide::{CmpGt, f32x8};
 
+use super::bare::{Bare, Dropped};
 use super::color::ColoredConstraints;
+use super::layers::Layers;
 use super::parallel::{self, MIN_CHUNK};
 use super::ptr::{Buffers, Ptr};
-use super::sdf::SdfGrid;
 use super::solver::GRAVITY;
-use super::state::State;
+use super::stage::Stage;
+use super::state::{Seams, State};
 
 /// [`super::substep_colored`] with the constraint arithmetic in batches of
 /// eight.
 ///
 /// Gathers and scatters stay scalar — neither NEON nor AVX2 has hardware
 /// gather for this pattern — while the maths is vectorised. Each lane executes
-/// the same IEEE operations as the scalar path, so the result is bit-identical
-/// to it.
+/// the same IEEE operations in the same order as [`super::substep_colored`],
+/// so the two are bit-identical, and a test gates that on a sheet whose
+/// colours are wide enough to fill the batches.
 ///
-/// Like [`super::substep_colored`], this path carries neither seams nor strain
-/// limiting.
-pub fn substep_colored_simd(state: &mut State, cc: &ColoredConstraints, sdf: &SdfGrid, dt: f32) {
+/// It runs the same passes as that path and no more, and turns away the same
+/// scenes on the same line, for the same reason.
+///
+/// # Errors
+/// [`Dropped`] names the first pass this path would skip, and nothing moves.
+pub fn substep_colored_simd(
+    state: &mut State,
+    cons: &ColoredConstraints,
+    seams: &Seams,
+    stage: &Stage<'_>,
+    layers: Option<&Layers>,
+    dt: f32,
+) -> Result<(), Dropped> {
+    let scene = Bare::of(cons, seams, stage, layers)?;
     let n = state.len();
     let b = Buffers::of(state);
     let inv_mass = &state.inv_mass;
 
     integrate(b, inv_mass, n, dt);
-    solve_colors(b, inv_mass, cc, dt);
-    parallel::collide(b, sdf, n);
+    solve_colors(b, inv_mass, scene.cons, 1.0 / (dt * dt));
+    parallel::collide(b, scene.sdf, n);
     parallel::derive_velocities(b, n, dt);
+    Ok(())
 }
 
 /// Positions are contiguous, so integration vectorises directly over blocks of
@@ -69,22 +84,12 @@ fn integrate(b: Buffers, inv_mass: &[f32], n: usize, dt: f32) {
     for (i, &im) in inv_mass.iter().enumerate().skip(blocks * 8) {
         // SAFETY: the tail is disjoint from every block and runs
         // single-threaded.
-        unsafe {
-            *b.qx.at(i) = *b.px.at(i);
-            *b.qy.at(i) = *b.py.at(i);
-            *b.qz.at(i) = *b.pz.at(i);
-            if im > 0.0 {
-                *b.vy.at(i) += GRAVITY * dt;
-                *b.px.at(i) += *b.vx.at(i) * dt;
-                *b.py.at(i) += *b.vy.at(i) * dt;
-                *b.pz.at(i) += *b.vz.at(i) * dt;
-            }
-        }
+        unsafe { parallel::step_one(b, im, i, dt) };
     }
 }
 
-fn solve_colors(b: Buffers, inv_mass: &[f32], cc: &ColoredConstraints, dt: f32) {
-    let inv_dt2 = f32x8::splat(1.0 / (dt * dt));
+fn solve_colors(b: Buffers, inv_mass: &[f32], cc: &ColoredConstraints, scalar_inv_dt2: f32) {
+    let inv_dt2 = f32x8::splat(scalar_inv_dt2);
     let cons = &cc.cons;
     for r in &cc.ranges {
         let batches = (r.end - r.start) / 8;
@@ -129,44 +134,12 @@ fn solve_colors(b: Buffers, inv_mass: &[f32], cc: &ColoredConstraints, dt: f32) 
                     }
                 }
             });
-        solve_color_tail(b, inv_mass, cons, r.start + batches * 8..r.end, dt);
-    }
-}
-
-/// The constraints of a colour that do not fill a batch of eight, in the same
-/// formulation as the scalar path.
-fn solve_color_tail(
-    b: Buffers,
-    inv_mass: &[f32],
-    cons: &super::state::DistanceConstraints,
-    range: std::ops::Range<usize>,
-    dt: f32,
-) {
-    for c in range {
-        let (ia, ib) = (cons.a[c] as usize, cons.b[c] as usize);
-        let (wa, wb) = (inv_mass[ia], inv_mass[ib]);
-        let w = wa + wb;
-        if w == 0.0 {
-            continue;
-        }
-        // SAFETY: the tail runs single-threaded after its colour's batches.
-        unsafe {
-            let dx = *b.px.at(ib) - *b.px.at(ia);
-            let dy = *b.py.at(ib) - *b.py.at(ia);
-            let dz = *b.pz.at(ib) - *b.pz.at(ia);
-            let len = (dx * dx + dy * dy + dz * dz).sqrt();
-            if len <= 1.0e-9 {
-                continue;
-            }
-            let alpha = cons.compliance[c] * (1.0 / (dt * dt));
-            let corr = (len - cons.rest[c]) / ((w + alpha) * len);
-            let (sx, sy, sz) = (corr * dx, corr * dy, corr * dz);
-            *b.px.at(ia) += wa * sx;
-            *b.py.at(ia) += wa * sy;
-            *b.pz.at(ia) += wa * sz;
-            *b.px.at(ib) -= wb * sx;
-            *b.py.at(ib) -= wb * sy;
-            *b.pz.at(ib) -= wb * sz;
+        // The constraints of the colour that do not fill a batch of eight, in
+        // the formulation the wide path is a batching of, because it is the
+        // same function the scalar coloured path calls.
+        for c in r.start + batches * 8..r.end {
+            // SAFETY: the tail runs single-threaded after its colour's batches.
+            unsafe { parallel::project(b, inv_mass, cons, c, scalar_inv_dt2) };
         }
     }
 }
