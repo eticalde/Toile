@@ -85,7 +85,7 @@ fn wear(scene: &str, body: &Collider, sdf: &SdfGrid, band: Option<(f64, f64)>) -
 /// What the band buys: it places the garment at the body's own waist rather
 /// than at its chest, it holds the cloth it covers to within a quarter of the
 /// length it is held to instead of being dragged half again as long, and under
-/// a contact that reads the push it leaves the garment standing 0.377 m higher.
+/// a contact that reads the push it leaves the garment standing 0.375 m higher.
 ///
 /// What it does not buy is a garment worn where it was put. The band grips the
 /// waist inside 150 substeps, then travels down the legs keeping its own girth
@@ -180,7 +180,7 @@ fn a_waistband_grips_the_waist_and_still_travels_down_the_body() {
 /// Three drapes of the same skirt: the slack end of what the interface
 /// offers, its default, and the knee between them. Measured at the mark, the
 /// default band stands at 120 % of the length it is held to and its cloth is
-/// 10.7 cm higher up the body than the slack one's, which stands at 143 %; at
+/// 10.6 cm higher up the body than the slack one's, which stands at 143 %; at
 /// three it already stands at 122 %, so the rail does its work under the knee.
 /// Those are the readings the Spanish beside the rail is written from: 20 %
 /// over rest at the default against 43 % at a tenth, near enough the twice as

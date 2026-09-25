@@ -26,10 +26,16 @@ fn main() {
             eprintln!("drape sobre Anny en {:.2} s", t.elapsed().as_secs_f64());
             println!("{hash:#018x}");
         }
+        Some("drape-sewn") => {
+            let t = std::time::Instant::now();
+            let hash = toile_engine::golden::drape_sewn_hash();
+            eprintln!("drape cosido en {:.2} s", t.elapsed().as_secs_f64());
+            println!("{hash:#018x}");
+        }
         _ => {
             println!("toile {}", env!("CARGO_PKG_VERSION"));
             println!(
-                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · doc [RUTA] [--resolve-with NOMBRE] · seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada AAAA-MM-DD --biblioteca DIR [--vincular]]"
+                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · drape-sewn · doc [RUTA] [--resolve-with NOMBRE] · seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada AAAA-MM-DD --biblioteca DIR [--vincular]]"
             );
         }
     }

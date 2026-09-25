@@ -1,5 +1,9 @@
+/// The one scene a seam and a body are pinned in together.
+mod sewn;
+
 use toile_sim::xpbd::{self, SdfGrid, Seams, Stage};
 
+pub use self::sewn::drape_sewn_hash;
 use crate::demo;
 use crate::draft::{Draft, block};
 

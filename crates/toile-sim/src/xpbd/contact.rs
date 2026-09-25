@@ -66,6 +66,73 @@ impl Grip {
     }
 }
 
+/// Halvings [`retreat`] spends narrowing where the field's band ends.
+///
+/// A halving and not a march, because each one doubles the precision instead
+/// of adding a fixed stride: eight of them place the contact within a 256th of
+/// the step that overshot, whatever its length. A stride has to be chosen
+/// against the longest step it will ever be asked about, and on the shortest
+/// one it is then the whole of it.
+const RETREATS: u32 = 8;
+
+/// The field's gradient at a point, by finite differences over `eps`.
+///
+/// Undivided, so its magnitude is the field's slope times `eps` rather than
+/// the slope itself. Every caller here wants only its direction and whether
+/// there is one at all, and the division would buy neither.
+#[inline]
+fn slope(sdf: &SdfGrid, eps: f32, p: [f32; 3], d: f32) -> [f32; 3] {
+    [
+        sdf.sample(p[0] + eps, p[1], p[2]) - d,
+        sdf.sample(p[0], p[1] + eps, p[2]) - d,
+        sdf.sample(p[0], p[1], p[2] + eps) - d,
+    ]
+}
+
+/// The deepest place found on the step from `q` to `p` that the field still
+/// has a gradient at: where it is, what it reads there, and its slope.
+///
+/// A constraint can carry a particle further in one substep than the band the
+/// field was baked to reaches, and out there the field is saturated flat. The
+/// step itself is the way back: a particle that ended past the band and began
+/// the substep where the field could still be read crossed the skin on the
+/// way, so the segment it travelled holds a last place with a gradient, and
+/// halving toward `q` narrows onto it.
+///
+/// `None` when `q` is as flat as `p`. A particle already past the band before
+/// the step, or one thrown in from further out than the band reaches on the
+/// outside, has nothing on this step to be carried back along, and that is the
+/// one the stretch constraints have to answer for.
+fn retreat(sdf: &SdfGrid, eps: f32, p: [f32; 3], q: [f32; 3]) -> Option<([f32; 3], f32, [f32; 3])> {
+    let read = |t: f32| {
+        let at = [0, 1, 2].map(|k| p[k] + (q[k] - p[k]) * t);
+        let d = sdf.sample(at[0], at[1], at[2]);
+        (at, d, slope(sdf, eps, at, d))
+    };
+    let flat = |g: [f32; 3]| g[0] * g[0] + g[1] * g[1] + g[2] * g[2] <= 0.0;
+    let mut found = read(1.0);
+    if flat(found.2) {
+        return None;
+    }
+    let (mut deep, mut back) = (0.0f32, 1.0f32);
+    for _ in 0..RETREATS {
+        // The bracket's middle, written as a step along it rather than as a
+        // mean: only `+ - * /` reaches the geometry, and `f32::midpoint` is
+        // std's arithmetic rather than that.
+        let half = deep + (back - deep) * 0.5;
+        let at = read(half);
+        if flat(at.2) {
+            deep = half;
+        } else {
+            back = half;
+            found = at;
+        }
+    }
+    // Only ever a point under the skin: one the step had not reached the body
+    // at is a particle for the passes after this to place, not a contact.
+    (found.1 < 0.0).then_some(found)
+}
+
 /// Projects one particle out of the field and applies contact friction and
 /// damping. A particle in free flight is returned untouched.
 ///
@@ -79,26 +146,32 @@ pub(super) fn resolve(
     p: [f32; 3],
     q: [f32; 3],
 ) -> ([f32; 3], [f32; 3]) {
-    let d = sdf.sample(p[0], p[1], p[2]);
+    let mut d = sdf.sample(p[0], p[1], p[2]);
     if d >= 0.0 {
         return (p, q);
     }
-    let gx = sdf.sample(p[0] + eps, p[1], p[2]) - d;
-    let gy = sdf.sample(p[0], p[1] + eps, p[2]) - d;
-    let gz = sdf.sample(p[0], p[1], p[2] + eps) - d;
+    let mut at = p;
+    let mut g = slope(sdf, eps, at, d);
     // Deeper in than the band reaches, the field is saturated flat and there
-    // is no normal to be had. The push along it moves the particle nowhere,
-    // while the friction below would take away every bit of tangential motion
-    // against that same nothing and the damping would stop the particle dead
-    // where it stands. [`lift_out_of`] leaves such a particle for the stretch
-    // constraints to draw out through its neighbours, and so does this.
-    let square = gx * gx + gy * gy + gz * gz;
+    // is no normal to be had where the particle stands. The push along it
+    // would move the particle nowhere, the friction below would take away
+    // every bit of tangential motion against that same nothing, and the
+    // damping would stop it dead out there — so the contact is taken where
+    // this step last crossed a field that had a normal. Where there is no
+    // such place, the particle is left for the stretch constraints to draw out
+    // through its neighbours, as [`lift_out_of`] leaves it.
+    let mut square = g[0] * g[0] + g[1] * g[1] + g[2] * g[2];
     if square <= 0.0 {
-        return (p, q);
+        let Some((there, depth, crossed)) = retreat(sdf, eps, at, q) else {
+            return (p, q);
+        };
+        (at, d, g) = (there, depth, crossed);
+        square = g[0] * g[0] + g[1] * g[1] + g[2] * g[2];
     }
+    let (gx, gy, gz) = (g[0], g[1], g[2]);
     let glen = square.sqrt().max(1.0e-9);
     let push = -d / glen;
-    let mut p = [p[0] + gx * push, p[1] + gy * push, p[2] + gz * push];
+    let mut p = [at[0] + gx * push, at[1] + gy * push, at[2] + gz * push];
 
     let (nx, ny, nz) = (gx / glen, gy / glen, gz / glen);
     let (mx, my, mz) = (p[0] - q[0], p[1] - q[1], p[2] - q[2]);
@@ -198,9 +271,7 @@ pub fn lift_out_of(sdf: &SdfGrid, state: &mut State) {
         if d >= 0.0 {
             continue;
         }
-        let gx = sdf.sample(x + eps, y, z) - d;
-        let gy = sdf.sample(x, y + eps, z) - d;
-        let gz = sdf.sample(x, y, z + eps) - d;
+        let [gx, gy, gz] = slope(sdf, eps, [x, y, z], d);
         let square = gx * gx + gy * gy + gz * gz;
         if square <= 0.0 {
             continue;

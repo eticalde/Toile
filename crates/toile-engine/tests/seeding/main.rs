@@ -1,5 +1,7 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
+/// The same habits over a body at the edge of what the sliders can draw.
+mod extremes;
 /// What a waistband is worth on the body, and what it is still not worth.
 mod grip;
 /// The same habits over a product of two sewn pieces.

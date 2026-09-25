@@ -3,29 +3,56 @@ use toile_engine::draft::{
     SeamOrientation, Winding,
 };
 
-/// Each half's waist, in centimetres.
-///
-/// Two halves make 88 cm of cloth, which is the reference body's own waist to
-/// within a fifth of a millimetre: the band is the size of the person, and
-/// what holds it on is the ratio it is pulled to, never a garment drawn small.
-const WAIST: f64 = 44.0;
-
-/// Each half's hip: the reference body's 103 cm and five centimetres of ease.
-///
-/// The ease is what makes the skirt wearable at the waist at all. A garment is
-/// only hung where everything it would pass on the way down is narrower than
-/// it is, and the hip is the one thing between a waistband and the floor.
-const HIP: f64 = 54.0;
-
-/// How far below the waist the hip sits.
-const HIP_DROP: f64 = 20.0;
-
-/// Waist to hem: a skirt that ends above the knee, so its own weight hangs
-/// clear of the ground and nothing but the band can be holding it.
-const LENGTH: f64 = 55.0;
-
 /// Where the back is drawn beside the front on the table.
 const BESIDE: f64 = 70.0;
+
+/// One half of the tube's measurements, in centimetres of pattern.
+///
+/// A cut and not four constants, because the same draft rule applied to a
+/// second person is a second cut of the same fixture: what changes between
+/// two of these is the body they were taken off, and nothing about the
+/// garment.
+#[derive(Debug, Clone, Copy)]
+pub struct Cut {
+    /// Half the waistline of cloth.
+    pub waist: f64,
+    /// Half the hip girth.
+    pub hip: f64,
+    /// How far below the waist the hip sits.
+    pub hip_drop: f64,
+    /// Waist to hem.
+    pub length: f64,
+}
+
+impl Cut {
+    /// The skirt drafted to the reference adult.
+    ///
+    /// Two halves make 88 cm of waist cloth, which is that body's own waist to
+    /// within a fifth of a millimetre: the band is the size of the person, and
+    /// what holds it on is the ratio it is pulled to, never a garment drawn
+    /// small. The hip is its 103 cm and five centimetres of ease, which is
+    /// what makes the skirt wearable at the waist at all — a garment is only
+    /// hung where everything it would pass on the way down is narrower than it
+    /// is, and the hip is the one thing between a waistband and the floor. The
+    /// hem ends above the knee, so the skirt's own weight hangs clear of the
+    /// ground and nothing but the band can be holding it.
+    pub const REFERENCE: Cut = Cut {
+        waist: 44.0,
+        hip: 54.0,
+        hip_drop: 20.0,
+        length: 55.0,
+    };
+
+    /// The same draft rule taken off a body with a 50 cm waist-to-hip drop:
+    /// its own 61 cm waist, its 112 cm hip and the same five centimetres of
+    /// ease, the hip where that body carries it, and an ankle-length hem.
+    pub const WIDE_HIPPED: Cut = Cut {
+        waist: 30.7,
+        hip: 58.5,
+        hip_drop: 22.0,
+        length: 85.0,
+    };
+}
 
 /// The name the front carries in the product tree.
 pub const FRONT: &str = "Delantero";
@@ -45,9 +72,14 @@ pub const BACK: &str = "Trasero";
 /// `band` is the ratio the waist is held to and how hard, or `None` for the
 /// same skirt with nothing holding it — the control.
 pub fn skirt(band: Option<(f64, f64)>) -> Doc {
+    cut_to(Cut::REFERENCE, band)
+}
+
+/// The same tube at the cut it is given.
+pub fn cut_to(cut: Cut, band: Option<(f64, f64)>) -> Doc {
     let mut doc = Doc::new(MeasureSet::new("Maniquí", []));
-    let front = half(&mut doc, FRONT, 0.0, "");
-    let back = half(&mut doc, BACK, BESIDE, "_tras");
+    let front = half(&mut doc, FRONT, 0.0, "", cut);
+    let back = half(&mut doc, BACK, BESIDE, "_tras", cut);
     sew(&mut doc, front, back);
     if let Some((ratio, strength)) = band {
         for (piece, tag) in [(front, ""), (back, "_tras")] {
@@ -61,13 +93,13 @@ pub fn skirt(band: Option<(f64, f64)>) -> Doc {
 ///
 /// Straight from the hip to the hem, so the piece is at its full width over
 /// the whole of that run and the garment's widest girth is unambiguous.
-fn half(doc: &mut Doc, name: &str, from: f64, tag: &str) -> PieceKey {
+fn half(doc: &mut Doc, name: &str, from: f64, tag: &str, cut: Cut) -> PieceKey {
     let nodes = [
         (format!("cintura_cf{tag}"), from, 0.0),
-        (format!("cintura_lat{tag}"), from + WAIST, 0.0),
-        (format!("cadera_lat{tag}"), from + HIP, HIP_DROP),
-        (format!("bajo_lat{tag}"), from + HIP, LENGTH),
-        (format!("bajo_cf{tag}"), from, LENGTH),
+        (format!("cintura_lat{tag}"), from + cut.waist, 0.0),
+        (format!("cadera_lat{tag}"), from + cut.hip, cut.hip_drop),
+        (format!("bajo_lat{tag}"), from + cut.hip, cut.length),
+        (format!("bajo_cf{tag}"), from, cut.length),
     ];
     let points: Vec<PointKey> = nodes
         .iter()

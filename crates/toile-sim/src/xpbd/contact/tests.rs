@@ -31,28 +31,67 @@ fn saturated() -> SdfGrid {
     }
 }
 
-/// Deep in the saturated interior there is no normal, and a particle there is
-/// left exactly where it is — with the motion it arrived carrying.
+/// A particle whose whole step lay deep in the saturated interior is left
+/// exactly where it is — with the motion it arrived carrying.
 ///
-/// The push along a zero gradient moves nothing, so the friction and the
-/// damping that follow would be spent against a normal that does not exist:
-/// they would take away every bit of tangential motion and stop the particle
-/// dead. The stretch constraints are what draw such a particle out, through
-/// the neighbours that do have a gradient, and they cannot do it if the
-/// contact solve has already frozen it.
+/// There is no normal anywhere on such a step. The push along a zero gradient
+/// moves nothing, so the friction and the damping that follow would be spent
+/// against a normal that does not exist: they would take away every bit of
+/// tangential motion and stop the particle dead. The stretch constraints are
+/// what draw it out, through the neighbours that do have a gradient, and they
+/// cannot do it if the contact solve has already frozen it.
 #[test]
 fn a_particle_in_the_saturated_interior_is_left_to_the_constraints() {
     let sdf = saturated();
     let p = [0.015, 0.015, 0.015];
     assert_eq!(sdf.sample(p[0], p[1], p[2]), -BAND, "it is under the skin");
     let q = [0.010, 0.015, 0.015];
+    assert_eq!(
+        sdf.sample(q[0], q[1], q[2]),
+        -BAND,
+        "and so is where it began"
+    );
     let (moved, before) = resolve(&sdf, EPS, Grip::slipping(), p, q);
     assert_eq!(moved, p, "nothing pushed it, so nothing may move it");
     assert_eq!(before, q, "and the motion it had is still there to be read");
 }
 
+/// A particle carried past the band inside one substep is brought back along
+/// the step it took, and ends outside the body.
+///
+/// The one above is what this must not be confused with. Both end where the
+/// field is saturated flat, but this one crossed the skin on the way in, and
+/// the segment it travelled is a reading the contact solve has and the bare
+/// position does not. Without it the particle stays: every later substep finds
+/// it in the same flat nothing, so the drape settles with cloth inside a
+/// person.
+///
+/// Begun on the ramp, because this field saturates outside its band as well as
+/// inside: a step whose own start reads no gradient either says nothing about
+/// where the skin was crossed, and is the case above by another route.
+#[test]
+fn a_particle_a_step_carried_past_the_band_is_brought_back_along_that_step() {
+    let sdf = saturated();
+    let p = [0.015, 0.015, 0.015];
+    let q = [0.007, 0.015, 0.015];
+    assert_eq!(
+        sdf.sample(p[0], p[1], p[2]),
+        -BAND,
+        "it ended under the skin"
+    );
+    assert!(
+        sdf.sample(q[0], q[1], q[2]) > 0.0,
+        "and began clear of it, where the field can still be read"
+    );
+    let (moved, _) = resolve(&sdf, EPS, Grip::slipping(), p, q);
+    assert!(
+        sdf.sample(moved[0], moved[1], moved[2]) >= 0.0,
+        "it is out of the body: {moved:?}"
+    );
+}
+
 /// A particle the band does reach is still carried out of the body, which is
-/// the case the one above must not have broken.
+/// the case neither of the two above may have broken.
 #[test]
 fn a_particle_the_band_reaches_is_still_pushed_out() {
     let sdf = saturated();
