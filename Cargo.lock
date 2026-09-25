@@ -3194,6 +3194,7 @@ name = "toile-cli"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "libc",
  "rayon",
  "serde_json",
  "toile-anny",

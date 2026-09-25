@@ -89,11 +89,12 @@ fn rests_clear_of_the_body(scene: &str, session: &Session, sdf: &SdfGrid) {
 /// and none of it ends up buried under that body's skin.
 ///
 /// The failure this pins is not a near miss. A session seeded at some other
-/// body's height starts a whole panel inside a person: let go at the sphere's
-/// height over an adult body, 1,299 of the trouser front's 10,513 particles
-/// begin out past the band, where the field is saturated flat and its
-/// gradient is exactly zero. The contact solve has no normal to push along,
-/// so they never come out.
+/// body's height starts a whole panel inside a person, out past the band where
+/// the field is saturated flat and its gradient is exactly zero: the contact
+/// solve has no normal to push along, so those particles never come out. Let
+/// go at this body's own height the panel comes down onto it instead, and at
+/// rest 3,755 of the trouser front's 10,513 particles lie within a cell of the
+/// skin with none of them past the band.
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
 fn opening_a_document_does_not_bury_the_garment_in_the_body() {
@@ -135,9 +136,6 @@ fn the_startup_scene_does_not_bury_the_garment_in_the_body() {
 #[test]
 #[ignore = "release-only: a real body baked and a whole drape run"]
 fn a_drape_over_a_body_parks_on_the_body_and_not_on_the_ground() {
-    // It slides sideways at a few millimetres a second and gathering, and
-    // leaves the ball at about 23,000 substeps to fall for ever. A mean of the
-    // energy called that slide parked at 2,280.
     assert!(
         !parks_by(&Session::demo_bodice(), LONG),
         "the demo bodice went to sleep on the sphere inside {LONG} substeps. If \

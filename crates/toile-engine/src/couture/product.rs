@@ -43,15 +43,36 @@ pub fn drop_all(pipelines: &[&ShapePipeline], height: f32, around: Option<&Layou
 
 /// Concatenates every piece's stretch constraints into the one set the solver
 /// holds, each piece's endpoints rebased past the pieces before it.
+///
+/// This is the only set any product ever reaches the solver with, so a pass
+/// that lives on the set and is not carried across here is a pass no garment
+/// gets. Each piece is taken apart field by field rather than copied, so a
+/// fifth thing on a constraint set has to be given a rule for joining N
+/// pieces on this line, instead of arriving as a default nobody chose.
 pub fn combine_constraints(pipelines: &[&ShapePipeline], compliance: f32) -> DistanceConstraints {
     let mut all = DistanceConstraints::default();
     let mut base = 0u32;
     for pipe in pipelines {
-        let one = pipe.constraints(compliance);
-        all.a.extend(one.a.iter().map(|&v| v + base));
-        all.b.extend(one.b.iter().map(|&v| v + base));
-        all.rest.extend_from_slice(&one.rest);
-        all.compliance.extend_from_slice(&one.compliance);
+        let DistanceConstraints {
+            a,
+            b,
+            rest,
+            compliance: give,
+            // A cap and the sweeps that enforce it belong to a scene and not
+            // to a piece, and no piece asks for one: `ShapePipeline` writes
+            // both as zero.
+            strain_limit: _,
+            strain_sweeps: _,
+            // Which edges an elastic holds is not known here — the indices
+            // name the combined set, so `couture::hold` writes them after
+            // every piece is in it.
+            held: _,
+            held_passes: _,
+        } = pipe.constraints(compliance);
+        all.a.extend(a.iter().map(|&v| v + base));
+        all.b.extend(b.iter().map(|&v| v + base));
+        all.rest.extend_from_slice(&rest);
+        all.compliance.extend_from_slice(&give);
         base += pipe.pos2d.len() as u32;
     }
     all

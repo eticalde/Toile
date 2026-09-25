@@ -12,12 +12,13 @@ pub const HOLDS_ITS_RATIO: f64 = 10.0;
 /// An elastic's own scale, and not a multiple of the cloth's. Woven cloth
 /// gives a couple of per cent under load and a length of elastic tape gives a
 /// hundred, so a band is the slacker of the two by orders of magnitude — and a
-/// rail written in multiples of the cloth's stiffness spent the whole of its
+/// rail written in multiples of the cloth's stiffness spends the whole of its
 /// length where one pass at dt = 1/600 s cannot tell one end from the other:
-/// measured across the shipped 0.1×–50×, the settled hem moved 0.20 mm.
+/// over the 0.1 to 50 the interface offers, that scale keeps the solver's
+/// `alpha` between 0.00007 and 0.04. A thousand times the cloth's compliance
+/// runs the same rail from 36 down to 0.07, the span the solver resolves.
 ///
-/// A thousand times the cloth's own compliance puts the shipped rail across
-/// the span the solver resolves. Measured on the laced ring
+/// Measured on the laced ring
 /// `a_held_rings_stiffness_is_felt_once_it_is_swept_again` settles, the four
 /// compliances the rail writes come to four different lengths; measured on the
 /// whole skirt three simulated seconds in, the waistband stands at 120 % of the

@@ -182,9 +182,9 @@ fn a_waistband_grips_the_waist_and_still_travels_down_the_body() {
 /// default band stands at 120 % of the length it is held to and its cloth is
 /// 10.7 cm higher up the body than the slack one's, which stands at 143 %; at
 /// three it already stands at 122 %, so the rail does its work under the knee.
-/// That is the reading the old rail could not give — across the whole of it
-/// the settled hem moved 0.20 mm — and it is what the Spanish beside the rail
-/// now says.
+/// Those are the readings the Spanish beside the rail is written from: 20 %
+/// over rest at the default against 43 % at a tenth, near enough the twice as
+/// much give it promises.
 ///
 /// What is read here is the compliance a strength is written at. The sweeps
 /// held edges get are pinned by the quarter in

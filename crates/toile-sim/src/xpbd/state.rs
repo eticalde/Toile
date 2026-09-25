@@ -64,8 +64,12 @@ pub struct DistanceConstraints {
     /// Post-solve elongation cap as a ratio of rest length, e.g. `1.05`;
     /// `0.0` disables it.
     ///
-    /// Without a cap, a closed garment's hem elongates under its own weight
-    /// until the cloth passes through the avatar.
+    /// It runs before the seams, the layers, the body and the ground, and all
+    /// four move particles after it, so in a scene carrying any of them the cap
+    /// does not bound the strain the substep ends at. What it bounds is the
+    /// stretch the distance solve alone leaves behind, which makes it a
+    /// measuring instrument for a scene with nothing sewn and nothing to
+    /// collide with, and not something a garment can be held together by.
     pub strain_limit: f32,
     /// Clamp sweeps per substep. Values below four are raised to four.
     ///
