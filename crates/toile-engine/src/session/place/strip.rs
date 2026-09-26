@@ -1,5 +1,10 @@
+use std::cmp::Ordering;
+
 use super::super::sew::Sewn;
 use crate::couture::ShapePipeline;
+
+#[cfg(test)]
+mod tests;
 
 /// One piece as the walk crosses it: which way round it runs, and the stretch
 /// of cloth it carries across.
@@ -40,7 +45,7 @@ pub(super) fn walk(
             Some(j) => at(sewn, j, piece)?,
             None => far_from(pipes[piece], out),
         };
-        steps.push(step(piece, pipes[piece], came, out));
+        steps.push(step(piece, pipes[piece], came, out)?);
         let next = across_seam(sewn, exit, piece)?;
         if next == start {
             return Some((steps, true));
@@ -54,7 +59,7 @@ pub(super) fn walk(
             // Nothing else is sewn to this piece, so the strip ends here and
             // the cloth past its one seam reaches to its own edge.
             let end = at(sewn, exit, piece)?;
-            steps.push(step(piece, pipes[piece], end, far_from(pipes[piece], end)));
+            steps.push(step(piece, pipes[piece], end, far_from(pipes[piece], end))?);
             return Some((steps, false));
         };
         exit = onward;
@@ -74,14 +79,26 @@ pub(super) fn across(pipe: &ShapePipeline) -> (f64, f64) {
 
 /// One piece of the walk: the cloth it carries, and which way the seams run
 /// it round the body.
-fn step(piece: usize, pipe: &ShapePipeline, entry: f64, exit: f64) -> Step {
+///
+/// `None` when the two seams run at one abscissa, which no sense answers: the
+/// sense names which of the piece's two ends the walk came in by, and two seams
+/// at one place name neither, so either answer leaves both of them standing
+/// open. A level seam runs at one mean abscissa down the whole of its length,
+/// so a yoke or a midriff band reaches this from the page — it is not a knife
+/// edge in the arithmetic.
+fn step(piece: usize, pipe: &ShapePipeline, entry: f64, exit: f64) -> Option<Step> {
     let (lo, hi) = across(pipe);
-    Step {
+    let sense = match exit.partial_cmp(&entry)? {
+        Ordering::Greater => 1.0,
+        Ordering::Less => -1.0,
+        Ordering::Equal => return None,
+    };
+    Some(Step {
         piece,
-        sense: if exit > entry { 1.0 } else { -1.0 },
+        sense,
         lo,
         hi,
-    }
+    })
 }
 
 /// Where the walk starts, and the seam it leaves by.
