@@ -109,5 +109,31 @@ if find crates -name 'mod.rs' | grep .; then
   say "mod.rs: el submódulo va en foo.rs junto a foo/ (§4.3)"
 fi
 
+# 8. An edit the document can apply is an edit a press can ask for. A command
+#    reachable from no gesture is a feature nobody can use, and it passes every
+#    other rule in this file: it compiles, formats and hashes exactly like the
+#    working kind. Three separate reviews found one of these by accident and
+#    none on purpose, twice in the commit that introduced it.
+#    A command deliberately ahead of its tool goes on the list below with the
+#    reason, because arguing for it is the part that was skipped.
+#    Each name below is an edit with no door yet, and the reason it is allowed
+#    to have none. A name leaves this list by growing a gesture, never by being
+#    forgotten: SetGrain and the three label edits are owed to a person by a
+#    decision already taken, so their lines say so and their absence is a debt.
+AHEAD='SetPin|ClearPin'      # the datum enters before the gesture: PLAN-001 8.1
+AHEAD="$AHEAD|SetGrain"      # the grain is read on every piece and turned on none
+AHEAD="$AHEAD|LabelPoint"    # a node shows its own number and takes no name
+AHEAD="$AHEAD|ShowLabel"     # so the label layer can only answer the pointer
+AHEAD="$AHEAD|LabelLine"     # and an internal line's note is «—» for its life
+AHEAD="$AHEAD|RemoveMannequin" # a product takes a body and never gives one back
+KIND=crates/toile-doc/src/command/kind.rs
+for v in $(awk '/^pub enum Command \{/ { on = 1; next } on && /^\}/ { exit } on' "$KIND" |
+           grep -oE '^    [A-Z][A-Za-z]+ ?[{,(]' | tr -d ' {,('); do
+  echo "$v" | grep -qE "^($AHEAD)$" && continue
+  grep -rlE --include='*.rs' "Command::$v\b" crates/toile-app/src crates/toile-engine/src |
+    grep -vE '(/tests?/|tests\.rs$)' | grep -q . ||
+    say "Command::$v: ninguna pulsación lo pide (§3)"
+done
+
 [ $fail -eq 0 ] && echo "✓ estilo"
 exit $fail
