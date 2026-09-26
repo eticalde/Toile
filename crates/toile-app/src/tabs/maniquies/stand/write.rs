@@ -70,8 +70,18 @@ impl Stand {
 
     /// Undoes or redoes the product's last entry from this tab, closing any
     /// gesture still open first so the entry it steps over is a whole one.
+    ///
+    /// With no product open it is the loose body's own step back instead, so
+    /// the key is not dead on the one gesture that can still destroy a whole
+    /// body.
     pub fn step(&mut self, session: &mut Session, redo: bool) {
         self.release(session);
+        if session.draft().is_none() {
+            if !redo {
+                self.loose.back();
+            }
+            return;
+        }
         let can = if redo {
             session.can_redo()
         } else {
@@ -94,7 +104,7 @@ impl Stand {
             return;
         }
         let Some(draft) = session.draft() else {
-            self.loose.values.insert(name.to_owned(), cm);
+            self.loose.write().values.insert(name.to_owned(), cm);
             return;
         };
         let command = Command::SetMeasure {
@@ -116,7 +126,7 @@ impl Stand {
             return;
         }
         let Some(draft) = session.draft() else {
-            self.loose.phenotype = Some(shape);
+            self.loose.write().phenotype = Some(shape);
             return;
         };
         let command = Command::SetPhenotype {
@@ -135,7 +145,7 @@ impl Stand {
         }
         self.release(session);
         let Some(draft) = session.draft() else {
-            to.clone_into(&mut self.loose.name);
+            to.clone_into(&mut self.loose.write().name);
             return;
         };
         if Self::name_taken(session, to) {
@@ -170,7 +180,7 @@ impl Stand {
     pub(super) fn add_as(&mut self, session: &mut Session, set: MeasureSet, label: &'static str) {
         self.release(session);
         if session.draft().is_none() {
-            self.loose = set;
+            self.loose.replace(set);
             return;
         }
         let name = set.name.clone();
@@ -206,5 +216,11 @@ impl Stand {
         self.refusal = answer
             .err()
             .map(|why| (why.to_string(), session.revision()));
+    }
+
+    /// What the panel says of the press that last replaced the loose body, and
+    /// of the step back still open from it.
+    pub fn replaced(&self) -> Option<String> {
+        self.loose.said()
     }
 }

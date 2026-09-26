@@ -37,6 +37,9 @@ pub fn panel(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, stand: &mu
     if Stand::kept(session) == Kept::Nowhere {
         note(ui, theme.alert, LOOSE);
     }
+    if let Some(said) = stand.replaced() {
+        note(ui, theme.alert, &said);
+    }
     if let Some(why) = stand.refused(session) {
         note(ui, theme.alert, &format!("rechazado: {why}"));
     }

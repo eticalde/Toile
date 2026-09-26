@@ -14,7 +14,7 @@ use crate::library::today::today;
 use crate::library::{LibraryError, Listed};
 use crate::tabs::Kept;
 use crate::theme::Theme;
-use crate::widgets::{PAD, button_secondary, section_with};
+use crate::widgets::{PAD, button_named, section_with};
 
 /// What the section says of a library nobody has been saved to.
 const EMPTY: &str = "Aún no hay nadie en la biblioteca. «Guardar en biblioteca» guarda aquí el \
@@ -97,7 +97,7 @@ pub fn panel(
     own::line(ui, theme, shelf, own);
     let mut plea = actions(ui, theme, all, people, kept, own);
     ui.add_space(4.0);
-    if button(ui, theme, "Guardar en biblioteca") {
+    if button(ui, theme, save_id(), "Guardar en biblioteca") {
         plea = Some(Plea::Save);
     }
     if let Some((text, bad)) = people.said() {
@@ -126,7 +126,7 @@ fn actions(
     let mut plea = None;
     let usable = match found.map(|listed| &listed.persona) {
         Some(Ok(_)) => {
-            if button(ui, theme, use_label(kept)) {
+            if button(ui, theme, use_id(), use_label(kept)) {
                 plea = Some(Plea::Use(stem.to_owned()));
             }
             true
@@ -182,20 +182,41 @@ pub fn act(
     }
 }
 
+/// The identity the button that puts the picked person on the stand is drawn
+/// under, so a press aimed from outside the panel finds it by what it does
+/// rather than by where the rows above it happened to end.
+///
+/// Named rather than taken from the label: what it says depends on whether a
+/// product is open, and it is the one control either way.
+pub fn use_id() -> egui::Id {
+    egui::Id::new("persona-usar")
+}
+
+/// The identity the button that files the body on the stand is drawn under,
+/// found the same way.
+pub fn save_id() -> egui::Id {
+    egui::Id::new("persona-guardar")
+}
+
 /// A panel-wide action button, answering whether it was pressed.
-fn button(ui: &mut egui::Ui, theme: &Theme, label: &str) -> bool {
+fn button(ui: &mut egui::Ui, theme: &Theme, id: egui::Id, label: &str) -> bool {
     ui.horizontal(|ui| {
         ui.add_space(PAD);
-        button_secondary(ui, theme, label).clicked()
+        button_named(ui, theme, id, label).clicked()
     })
     .inner
 }
 
 /// What using a person does, said on the button that does it.
+///
+/// The two are not the same act, so they do not share a verb: with a product
+/// open the person joins it and the body already there stays, and with none she
+/// takes that body's place. The softer word belongs to the branch that keeps
+/// both bodies.
 fn use_label(kept: Kept) -> &'static str {
     match kept {
         Kept::InProduct => "Usar en el producto",
-        Kept::Nowhere => "Usar en la mesa",
+        Kept::Nowhere => "Sustituir el de la mesa",
     }
 }
 

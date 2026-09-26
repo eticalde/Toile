@@ -1,3 +1,4 @@
+mod loose;
 mod person;
 mod write;
 
@@ -9,6 +10,7 @@ use toile_engine::draft::{BodyMesh, BodyShape, MeasureSet};
 use toile_engine::session::Session;
 pub use write::Control;
 
+use self::loose::Loose;
 use super::identity::NewManiqui;
 use crate::tabs::Kept;
 
@@ -29,8 +31,12 @@ struct Basis {
 /// every frame and written back through the session. The one body this holds
 /// is the loose one, shaped while no product is open.
 pub struct Stand {
-    /// The body the tab shapes while no product is open. Nothing saves it.
-    loose: MeasureSet,
+    /// The body the tab shapes while no product is open.
+    ///
+    /// Nothing saves it, which is why it is the one body in the app that
+    /// carries its own way back: the press that puts another one in its place
+    /// enters no history, so it keeps its step back in here.
+    loose: Loose,
     /// The control whose gesture is open.
     held: Option<Control>,
     /// Whether a pointer was still down on that control this frame.
@@ -67,7 +73,7 @@ impl Default for Stand {
         let mut loose = body::default_measures();
         NEW_NAME.clone_into(&mut loose.name);
         Self {
-            loose,
+            loose: Loose::new(loose),
             held: None,
             holding: false,
             refusal: None,
@@ -85,10 +91,13 @@ impl Default for Stand {
 
 impl Stand {
     /// Drops everything that belonged to the product that was open: an open
-    /// gesture, a half-typed name, the last refusal and the solve.
+    /// gesture, a half-typed name, the last refusal, the solve and the step
+    /// back offered from the loose body.
     ///
     /// None of it may outlive that product. A slider still in hand would keep
-    /// writing into the next one, and a pending name would rename its body.
+    /// writing into the next one, a pending name would rename its body, and
+    /// the step back would be offered by a sentence the key no longer obeys:
+    /// with a product on the table the key steps the product's own history.
     pub fn forget(&mut self) {
         self.held = None;
         self.holding = false;
@@ -96,6 +105,7 @@ impl Stand {
         self.built = None;
         self.naming = None;
         self.new_dialog = None;
+        self.loose.forget();
     }
 
     /// The body the tab shows and edits: the one the product's pattern
@@ -110,14 +120,14 @@ impl Stand {
                 .doc()
                 .measures()
                 .expect("a draft resolves against a body its document holds"),
-            None => &self.loose,
+            None => self.loose.body(),
         }
     }
 
     /// The body shaped while no product is open, which is written here and
     /// nowhere else.
     pub fn loose(&self) -> &MeasureSet {
-        &self.loose
+        self.loose.body()
     }
 
     /// The shape the body is generated from. A body that never stored one

@@ -127,7 +127,7 @@ impl Stand {
         }
         let (values, phenotype) = (body.values.clone(), body.phenotype);
         let Some(draft) = session.draft() else {
-            self.loose.origin = copy.origin;
+            self.loose.write().origin = copy.origin;
             return;
         };
         let command = Command::RefreshMannequin {

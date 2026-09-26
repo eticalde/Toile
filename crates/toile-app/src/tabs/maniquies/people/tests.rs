@@ -6,6 +6,7 @@
 mod band;
 mod listing;
 mod own;
+mod replacing;
 
 use toile_engine::body::Collider;
 use toile_engine::draft::{Doc, Persona, Snapshot};
