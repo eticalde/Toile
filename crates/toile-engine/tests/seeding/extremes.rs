@@ -1,6 +1,6 @@
 use toile_anny::phenotype::LEVERS;
 use toile_engine::body::{BodyMesh, Collider, Phenotype, bake, body_mesh, measured_anny};
-use toile_engine::couture::HOLDS_ITS_RATIO;
+use toile_engine::couture::{HOLDS_ITS_RATIO, SEAM_SHUT};
 use toile_engine::session::Session;
 
 use crate::rests_clear_of_the_body;
@@ -8,7 +8,7 @@ use crate::skirt::{Cut, cut_to};
 use crate::watch::through_the_drape;
 
 /// The ratio a waistband is gathered to.
-const GATHERED: f64 = 0.85;
+pub const GATHERED: f64 = 0.85;
 
 /// Where a lever sits in the vector [`body_mesh`] takes, by its own label.
 ///
@@ -34,7 +34,7 @@ fn lever(label: &str) -> usize {
 /// What it is extreme in is the one thing a skirt has to cross: the drop from
 /// the waist to the hip, which on this body is the better part of half a metre
 /// and on the reference adult is under a third of that.
-fn wide_hipped() -> BodyMesh {
+pub fn wide_hipped() -> BodyMesh {
     let phenotype = Phenotype {
         gender: 1.0,
         age: 0.8,
@@ -50,8 +50,8 @@ fn wide_hipped() -> BodyMesh {
     body_mesh(&phenotype, &levers)
 }
 
-/// A skirt cut for a body with a 50 cm waist-to-hip drop comes to rest on that
-/// body and not inside it.
+/// A skirt cut for a body with a 50 cm waist-to-hip drop comes to rest on
+/// that body and not inside it, and on this body does not close.
 ///
 /// The suite's other seeded scenes all run the one reference adult, and burial
 /// is a thing a body's own shape decides: what puts cloth where the field can
@@ -69,7 +69,7 @@ fn wide_hipped() -> BodyMesh {
 /// saturated flat and nothing in the contact solve is looking for it.
 #[test]
 #[ignore = "release-only: an extreme body baked and a whole drape run"]
-fn a_skirt_cut_for_a_wide_hipped_body_rests_clear_of_it() {
+fn a_skirt_cut_for_a_wide_hipped_body_rests_clear_of_it_and_does_not_close() {
     let mesh = wide_hipped();
     let tape = measured_anny(&mesh);
     let of = |name: &str| {
@@ -113,42 +113,32 @@ fn a_skirt_cut_for_a_wide_hipped_body_rests_clear_of_it() {
         "{} particles were driven past the band at substep {}",
         watched.worst.0, watched.worst.1
     );
-    rests_clear_of_the_body("wide-hipped body", &session, &sdf);
-    report_seams(&session);
+    let seams = rests_clear_of_the_body("wide-hipped body", &session, &sdf);
+    let (worst, _) = seams.expect("the skirt is sewn into a tube");
+    still_open(worst);
 }
 
-/// Prints how far the sewn pairs still stand apart once the garment is at rest.
+/// The fit this body's skirt does not have, recorded rather than described.
 ///
-/// Read and not asserted, because what it reports is the fit and not a defect
-/// of the solver: this cut has to carry 117 cm of hem past a 112 cm hip on a
-/// waist of 61 cm, and it does not go. Before the contact solve learned to
-/// retreat along an overshooting step the same seam closed to under a
-/// millimetre — by pulling the two sides through the body — so a reading near
-/// zero here would mean the burial is back and the test above missed it. A
-/// number this test prints rather than judges is the only honest form of that:
-/// nobody has decided what an open seam at rest is worth.
-fn report_seams(session: &Session) {
-    let pairs = session.sewn_pairs();
-    let snap = session.snapshot();
-    let at = |v: u32| {
-        let i = v as usize * 3;
-        [
-            snap.positions[i],
-            snap.positions[i + 1],
-            snap.positions[i + 2],
-        ]
-    };
-    let gap = |(a, b): (u32, u32)| {
-        let (p, q) = (at(a), at(b));
-        let d = [0, 1, 2].map(|k| p[k] - q[k]);
-        (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt()
-    };
-    let worst = pairs.iter().copied().map(gap).fold(0.0f32, f32::max);
-    let mean = pairs.iter().copied().map(gap).sum::<f32>() / pairs.len() as f32;
-    println!(
-        "wide-hipped seams: {} pairs at rest, worst {:.1} mm apart, mean {:.1} mm",
-        pairs.len(),
-        worst * 1000.0,
-        mean * 1000.0
+/// What is asserted is that the seam did *not* shut, which needs no threshold
+/// of this suite's own: [`SEAM_SHUT`] is the distance the solver's own closing
+/// phase stops waiting at, so the negative of it is exactly as measured as the
+/// positive. Nobody has decided what an open seam at rest is worth, and this
+/// does not decide it either — it pins the state of the tree.
+///
+/// Two ways to fail, and both are news. A placement that hands the sewing a
+/// gap it can close is the fix this waits on, from the family of decision 12:
+/// the ring is sized from the widest cloth the product carries while the
+/// product is stood at the ring its band belongs to. And a reading near zero
+/// without such a change means the burial is back — before the contact solve
+/// learned to retreat along an overshooting step, this same seam shut to
+/// 0.2 mm by pulling its two sides through the abdomen.
+fn still_open(worst: f32) {
+    assert!(
+        worst > SEAM_SHUT,
+        "the wide-hipped skirt's side seam shut to {:.1} mm. If a placement \
+         rule now closes it, this is the assertion to invert; if nothing was \
+         placed differently, the cloth went through the body again",
+        worst * 1000.0
     );
 }

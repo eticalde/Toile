@@ -34,7 +34,11 @@ const RAMP: u64 = 450;
 /// A tenth of the spacing the mesher lays boundary vertices at: inside that,
 /// the two sides are one line as far as the cloth is concerned, and what is
 /// left is the residue a firm seam holds rather than a gap.
-const SHUT: f32 = 0.0009;
+///
+/// Public because it is the one measured answer to "did the seam shut", and a
+/// test that asked the question with a number of its own would be asking a
+/// different question from the one the closing phase waits on.
+pub const SEAM_SHUT: f32 = 0.0009;
 
 /// Whether the product is still being pulled together `substeps` into a
 /// drape, with its widest sewn pair `gap` metres apart.
@@ -54,7 +58,7 @@ const SHUT: f32 = 0.0009;
 /// The ramp is the cap rather than a second criterion: past it the sewing is
 /// firm, so a pair still open has had the pulling it is going to get.
 pub fn closing(substeps: u64, gap: f32) -> bool {
-    substeps < RAMP && gap > SHUT
+    substeps < RAMP && gap > SEAM_SHUT
 }
 
 /// How stiff the seams are, and how far they may pull, `substeps` into a
@@ -140,14 +144,14 @@ mod tests {
     /// meet early falls early rather than waiting out the ramp.
     #[test]
     fn the_phase_ends_on_whichever_comes_first_of_the_gap_and_the_ramp() {
-        let wide = SHUT * 10.0;
+        let wide = SEAM_SHUT * 10.0;
         assert!(closing(0, wide), "let go with its seams open");
         assert!(closing(RAMP - 1, wide), "and still open a substep short");
         assert!(!closing(RAMP, wide), "the ramp is the cap");
         assert!(!closing(RAMP * 10, wide));
 
-        assert!(closing(RAMP / 2, SHUT * 1.01), "a hair open is open");
-        assert!(!closing(RAMP / 2, SHUT), "and shut is shut, early");
+        assert!(closing(RAMP / 2, SEAM_SHUT * 1.01), "a hair open is open");
+        assert!(!closing(RAMP / 2, SEAM_SHUT), "and shut is shut, early");
         assert!(!closing(0, 0.0), "so a product with nothing sewn falls");
     }
 

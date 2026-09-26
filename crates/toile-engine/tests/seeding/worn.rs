@@ -4,6 +4,7 @@ use toile_engine::draft::Elastic;
 use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
 
+use crate::fit::shut;
 use crate::skirt::skirt;
 use crate::watch::{
     LONG, MARK, REST, at_mark, at_substep, buried, reference, rest_by, span, through_the_drape,
@@ -59,9 +60,21 @@ fn wear(scene: &str, body: &Collider, sdf: &SdfGrid, band: Option<(f64, f64)>) -
     );
     assert_eq!(watched.worst.0, 0, "{scene}: driven past the band");
     assert_eq!(deep, 0, "{scene}: {deep} of {all} buried at the mark");
+    // The reference adult's own cut, which is the control the wide-hipped
+    // scene is the counterexample to: here the body and the ring agree well
+    // enough that the tube is sewn shut long before the garment has finished
+    // falling, and a suite that only printed that could not tell the day it
+    // stopped being true.
+    shut(scene, &format!("at {MARK}"), &session.sewn_pairs(), &worn);
 
     let late = span(&at_substep(&session, LONG));
-    let rested = rest_by(&session, REST).map(|(points, at)| (at, span(&points).1));
+    let rested = rest_by(&session, REST).map(|(points, at)| {
+        // And still shut where the garment ended. Both of these come to rest
+        // with their widest sewn pair under a tenth of a millimetre apart;
+        // the same reading on the wide-hipped body is 115.3 mm.
+        shut(scene, "at rest", &session.sewn_pairs(), &points);
+        (at, span(&points).1)
+    });
     println!(
         "{scene}: at {LONG} cloth {:.3}..{:.3} · {}",
         late.0,

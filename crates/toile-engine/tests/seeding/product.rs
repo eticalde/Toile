@@ -1,11 +1,12 @@
 use std::f32::consts::PI;
 
 use toile_engine::body::{Collider, bake};
-use toile_engine::couture::Layout;
+use toile_engine::couture::{Layout, SEAM_SHUT};
 use toile_engine::draft::{PieceKey, block};
 use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
 
+use crate::fit::{apart as gap, placed as points, report};
 use crate::watch::{LANDED, MARK, at_mark, buried, reference, span, through_the_drape, touching};
 
 /// How far from a seam, in metres of cloth, a vertex has to be before the two
@@ -46,25 +47,6 @@ fn trousers() -> (Session, SdfGrid, [PieceKey; 2]) {
         .piece_named(block::BACK)
         .expect("the block draws a back");
     (session, sdf, [front, back])
-}
-
-fn points(flat: &[f32]) -> Vec<[f32; 3]> {
-    flat.as_chunks::<3>().0.to_vec()
-}
-
-fn gap(a: [f32; 3], b: [f32; 3]) -> f32 {
-    ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt()
-}
-
-/// Largest and mean separation of the sewn pairs.
-fn seam_gaps(pairs: &[(u32, u32)], at: &[[f32; 3]]) -> (f32, f32) {
-    let (mut worst, mut sum) = (0.0f32, 0.0f32);
-    for &(a, b) in pairs {
-        let d = gap(at[a as usize], at[b as usize]);
-        worst = worst.max(d);
-        sum += d;
-    }
-    (worst, sum / pairs.len() as f32)
 }
 
 /// The vertices of one run that are at least [`AWAY`] of cloth from any seam.
@@ -169,8 +151,8 @@ fn let_go(session: &Session, sdf: &SdfGrid, back: PieceKey) -> Released {
         "and puts them across the axis from each other: {turn} rad apart"
     );
 
-    let (worst, mean) = seam_gaps(&pairs, &start);
-    println!("release: sewn pairs {mean:.3} m apart on average, worst {worst:.3} m");
+    let (_, mean) =
+        report("sewn product", "at release", &pairs, &start).expect("the block's two seams pair");
     // The ring is the cloth's own size, so what is left open at release is the
     // shape of the pieces and not the size of the body: the two seams are a
     // hand's breadth apart, never a turn of the whole body away.
@@ -225,17 +207,20 @@ fn at_the_mark(session: &Session, sdf: &SdfGrid, released: &Released) {
     let landed = at_mark(session);
     let (deep, count) = buried(sdf, &landed);
     let (low, high) = span(&landed);
-    let (worst, mean) = seam_gaps(&released.pairs, &landed);
+    let (worst, mean) = report(
+        "sewn product",
+        &format!("at {MARK}"),
+        &released.pairs,
+        &landed,
+    )
+    .expect("the block's two seams pair");
     let (fx, fz, _) = about_the_axis(0..split, &landed, released.ring.axis);
     let (bx, bz, _) = about_the_axis(split..all, &landed, released.ring.axis);
     let on_skin = touching(sdf, &landed);
     println!(
         "at {MARK}: cloth {low:.3}..{high:.3} · {on_skin} of {count} on the skin · {deep} buried"
     );
-    println!(
-        "at {MARK}: sewn pairs {mean:.3} m apart on average, worst {worst:.3} m · \
-         front at x {fx:+.3} z {fz:+.3} · back at x {bx:+.3} z {bz:+.3}"
-    );
+    println!("at {MARK}: front at x {fx:+.3} z {fz:+.3} · back at x {bx:+.3} z {bz:+.3}");
     println!(
         "at {MARK}: the two pieces come no closer than {:.3} m away from their seams",
         nearest(&released.clear[0], &released.clear[1], &landed)
@@ -265,9 +250,18 @@ fn at_the_mark(session: &Session, sdf: &SdfGrid, released: &Released) {
          is under {}",
         lo[1]
     );
+    // The shipped block's own fit, at the tightest reading the tree has a
+    // number for. What this asked before was a mean under 5 mm and a worst
+    // under 50 mm, and a mean is the wrong half: the wide-hipped skirt stands
+    // 115.3 mm open on one seam and its mean is 3.4 mm. Measured, this
+    // block's widest sewn pair here is under a tenth of a millimetre apart.
     assert!(
-        mean < 0.005 && worst < 0.05,
-        "the seams reached the solver and closed: {mean} mean, {worst} worst"
+        worst <= SEAM_SHUT,
+        "the seams reached the solver and closed: worst pair {:.1} mm apart, \
+         mean {:.1} mm, against the {:.1} mm the closing phase counts as shut",
+        worst * 1000.0,
+        mean * 1000.0,
+        SEAM_SHUT * 1000.0
     );
     let (worst, worst_at) = watched.worst;
     let (worn, worn_at) = watched.worn;

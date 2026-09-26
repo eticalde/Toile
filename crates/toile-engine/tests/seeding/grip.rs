@@ -3,6 +3,7 @@ use toile_engine::couture::HOLDS_ITS_RATIO;
 use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
 
+use crate::fit::shut;
 use crate::skirt::skirt;
 use crate::watch::{MARK, SETTLED, at_substep, band_of, reference, span, touching};
 
@@ -53,6 +54,15 @@ fn wear(scene: &str, body: &Collider, sdf: &SdfGrid, band: Option<(f64, f64)>) -
     let read = |substeps: u64| {
         let points = at_substep(&session, substeps);
         let (band, at) = band_of(&held, &points);
+        // Held tight, held loose and not held at all, at both reads: the band
+        // decides where the garment ends up and never whether its seams met.
+        // The widest sewn pair over these six drapes stands 0.2 mm apart.
+        shut(
+            scene,
+            &format!("at {substeps}"),
+            &session.sewn_pairs(),
+            &points,
+        );
         Read {
             ring,
             band,

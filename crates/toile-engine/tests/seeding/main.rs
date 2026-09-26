@@ -2,6 +2,8 @@
 
 /// The same habits over a body at the edge of what the sliders can draw.
 mod extremes;
+/// Whether a garment's seams met: the one reading that says it fits.
+mod fit;
 /// What a waistband is worth on the body, and what it is still not worth.
 mod grip;
 /// The same habits over a product of two sewn pieces.
@@ -41,7 +43,7 @@ const ON_THE_BODY: f32 = 1.00;
 /// on the body rather than round its feet: 3,244 of the startup bodice's
 /// 12,540 particles sit within a cell of the skin, where under the fixed share
 /// of the motion it was 16.
-fn rests_clear_of_the_body(scene: &str, session: &Session, sdf: &SdfGrid) {
+fn rests_clear_of_the_body(scene: &str, session: &Session, sdf: &SdfGrid) -> Option<(f32, f32)> {
     let (lo, hi) = session.collider().extent();
     let release = session.collider().release_height();
     let floor = session
@@ -85,6 +87,11 @@ fn rests_clear_of_the_body(scene: &str, session: &Session, sdf: &SdfGrid) {
         lo[2],
         hi[2]
     );
+    // And how far the seams still stand apart, read here so that every scene
+    // that rests says it, and handed back rather than judged: two of these
+    // have no seams at all, and which of the rest may insist that theirs shut
+    // is the caller's to say.
+    fit::report(scene, "at rest", &session.sewn_pairs(), &points)
 }
 
 /// Opening a document lets its garment go over the body the document names,
