@@ -49,7 +49,14 @@ impl Command {
             | Command::AddElastic { .. }
             | Command::RemoveElastic { .. }
             | Command::SetElasticRatio { .. }
-            | Command::SetElasticStrength { .. } => ChangeClass::Shape,
+            | Command::SetElasticStrength { .. }
+            // And a hang for the same reason as an elastic, though it writes
+            // no rest length: the run of cloth it holds is read off the
+            // resolved contour, so it is re-read where the piece stands and
+            // the drape carries on.
+            | Command::AddHang { .. }
+            | Command::RemoveHang { .. }
+            | Command::SetHangStation { .. } => ChangeClass::Shape,
             Command::InsertNode { .. }
             | Command::RemoveNode { .. }
             | Command::SetSegment { .. }

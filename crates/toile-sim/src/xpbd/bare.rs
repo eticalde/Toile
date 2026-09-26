@@ -32,6 +32,8 @@ pub enum Dropped {
     Grip,
     /// A pull other than the constant the coloured integrator applies.
     Gravity,
+    /// Runs of cloth held at the body's own ring heights.
+    Hung,
 }
 
 /// A scene the coloured paths solve whole.
@@ -66,7 +68,7 @@ impl<'a> Bare<'a> {
         stage: &Stage<'a>,
         layers: Option<&Layers>,
     ) -> Result<Bare<'a>, Dropped> {
-        // Taken apart field by field, so that a fifth thing put on the stage
+        // Taken apart field by field, so that a sixth thing put on the stage
         // has to be answered for on this line. Read through `stage.` instead,
         // and the coloured paths would drop it without a word.
         let &Stage {
@@ -74,9 +76,13 @@ impl<'a> Bare<'a> {
             floor,
             gravity,
             grip,
+            hung,
         } = stage;
         if !seams.is_empty() {
             return Err(Dropped::Seams);
+        }
+        if !hung.is_empty() {
+            return Err(Dropped::Hung);
         }
         if layers.is_some() {
             return Err(Dropped::Layers);

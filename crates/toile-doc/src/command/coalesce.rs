@@ -1,5 +1,6 @@
 use crate::{
-    Axis, Command, ElasticKey, LineKey, MannequinKey, NotchKey, PieceKey, PointKey, VariableKey,
+    Axis, Command, ElasticKey, HangKey, LineKey, MannequinKey, NotchKey, PieceKey, PointKey,
+    VariableKey,
 };
 
 /// Whether one edit stands for an earlier edit of the same gesture.
@@ -28,6 +29,7 @@ enum Field<'a> {
     Samples(PieceKey, PointKey),
     ElasticRatio(ElasticKey),
     ElasticStrength(ElasticKey),
+    HangStation(HangKey),
     NotchPlace(NotchKey),
     LinePurpose(LineKey),
     LineName(LineKey),
@@ -79,6 +81,7 @@ impl Command {
             Command::SetElasticStrength { elastic, .. } => {
                 Some(Field::ElasticStrength(*elastic))
             }
+            Command::SetHangStation { hang, .. } => Some(Field::HangStation(*hang)),
             Command::MoveNotch { notch, .. } => Some(Field::NotchPlace(*notch)),
             Command::SetLineKind { line, .. } => Some(Field::LinePurpose(*line)),
             Command::LabelLine { line, .. } => Some(Field::LineName(*line)),
@@ -105,6 +108,8 @@ impl Command {
             | Command::RemoveSeam { .. }
             | Command::AddElastic { .. }
             | Command::RemoveElastic { .. }
+            | Command::AddHang { .. }
+            | Command::RemoveHang { .. }
             // Drawing a line creates the handles of every span that bends, so
             // it belongs with the edits that never fold: a second drawing
             // folded onto it would strand the keys the first one issued.

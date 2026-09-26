@@ -34,6 +34,17 @@ pub(super) fn elastics(doc: &Doc) -> Result<(), FormatError> {
     Ok(())
 }
 
+/// Checks that every hang is one a garment could be hung by.
+///
+/// The elastic's rule for its reason: a hand-typed station reaches the
+/// placement as a height, and one no ring answers to names none.
+pub(super) fn hangs(doc: &Doc) -> Result<(), FormatError> {
+    for (_, hang) in doc.hangs.iter() {
+        hang.check().map_err(FormatError::Hang)?;
+    }
+    Ok(())
+}
+
 /// Checks that every internal line is one a piece could be drawn with.
 ///
 /// The same rule the edit answers to, asked again of the file, because the file
@@ -105,6 +116,9 @@ pub(super) fn references(doc: &Doc) -> Result<(), FormatError> {
     }
     for (_, elastic) in doc.elastics.iter() {
         range(doc, elastic.at)?;
+    }
+    for (_, hang) in doc.hangs.iter() {
+        range(doc, hang.at)?;
     }
     for (_, notch) in doc.notches.iter() {
         anchor(doc, notch.at)?;

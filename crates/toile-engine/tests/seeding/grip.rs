@@ -99,13 +99,13 @@ fn wear(scene: &str, body: &Collider, sdf: &SdfGrid, band: Option<(f64, f64)>) -
 ///
 /// What it does not buy is a garment worn where it was put. The band grips the
 /// waist inside 150 substeps, then travels down the legs keeping its own girth
-/// until the body is that size again. Sweeping harder is a price and not yet
-/// an answer: 256 sweeps end down the legs as 64 do, and only 1024 — three
-/// sweeps of the whole garment a substep — was still above the hip at
-/// [`SETTLED`]. Nor can Coulomb: the push a band this stiff makes in a substep
-/// is under a millimetre, skin takes half of it, and the cloth below each band
-/// vertex asks for three. What is left is the anchor Decision 12 holds in
-/// reserve: a line of the garment tied to a ring of the body.
+/// until the body is that size again. Sweeping harder is a price and not an
+/// answer: 256 sweeps end down the legs as 64 do, and only 1024 — three sweeps
+/// of the whole garment a substep — was still above the hip at [`SETTLED`]. Nor
+/// can Coulomb: the push a band this stiff makes in a substep is under a
+/// millimetre, skin takes half of it, and the cloth below asks for three. What
+/// does hold it is the anchor, and this scene is its control: `hang.rs` hangs
+/// the same skirt from the waist ring and it stays there.
 #[test]
 #[ignore = "release-only: a real body baked and three whole drapes run"]
 fn a_waistband_grips_the_waist_and_still_travels_down_the_body() {

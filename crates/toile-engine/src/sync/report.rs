@@ -66,6 +66,18 @@ pub enum StaleMessage {
         /// How many the solver holds in all.
         len: usize,
     },
+    /// A hang holding a vertex the solver does not hold.
+    ///
+    /// Checked for the reason a sewn vertex is: the solver indexes these
+    /// directly, so one past the end is a panic on the sim thread rather than a
+    /// wrong drape.
+    #[error("a hang names vertex {vertex}, in a state of {len}")]
+    HungRange {
+        /// The first vertex past the end of the state.
+        vertex: u32,
+        /// How many the solver holds in all.
+        len: usize,
+    },
 }
 
 /// What the sim thread publishes after every tick.

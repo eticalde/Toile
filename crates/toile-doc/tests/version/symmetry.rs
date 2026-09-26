@@ -119,35 +119,6 @@ fn a_fold_made_and_undone_takes_the_file_to_version_7_and_back() {
     assert_eq!(doc.to_canonical_json(), file);
 }
 
-/// A build cannot know what a later field means, so it refuses the file for its
-/// version rather than open it and drop that field on the next save.
-#[test]
-fn a_version_8_document_is_refused_loudly() {
-    for later in [
-        restamped(SHIPPED, 8),
-        restamped(&shaped(2), 8),
-        placed(SHIPPED, 8),
-        elasticated(8),
-        lined(8),
-        folded(8),
-    ] {
-        let error = Doc::from_json(&later).expect_err("this build reads up to version 7");
-        assert_eq!(
-            error,
-            FormatError::UnknownVersion {
-                found: 8,
-                newest: 7
-            }
-        );
-        assert!(
-            error
-                .to_string()
-                .contains("version 8; this build reads versions 1 to 7"),
-            "{error}"
-        );
-    }
-}
-
 /// `folded(7)` with `from` replaced by `to` inside the axis store only.
 ///
 /// The anchors of a seam are written with the same words at the same depth, and

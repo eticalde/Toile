@@ -1,5 +1,5 @@
 use toile_mesh::transfer::Locator;
-use toile_sim::xpbd::{DistanceConstraints, Seams, State};
+use toile_sim::xpbd::{DistanceConstraints, Hung, Seams, State};
 
 use super::pipeline::{COMPLIANCE, ShapePipeline};
 
@@ -32,6 +32,9 @@ pub struct MeshSwap {
     /// moves the base of every piece standing after it, so there is no seam
     /// whose indices can be assumed to have survived.
     pub seams: Seams,
+    /// What the body's rings hold up, likewise, and for the same reason: a
+    /// rebuilt piece's vertices are all new numbers.
+    pub hung: Vec<Hung>,
     /// Where the re-meshed piece begins in the state this replaces.
     pub at: u32,
     /// How many vertices stood there before.
@@ -57,6 +60,7 @@ impl MeshSwap {
             tris: new.tris.clone(),
             cons: new.constraints(compliance),
             seams: Seams::default(),
+            hung: Vec::new(),
             at: 0,
             replacing: old_pos2d.len() as u32,
         }

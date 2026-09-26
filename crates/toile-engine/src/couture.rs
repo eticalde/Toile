@@ -1,5 +1,6 @@
 mod density;
 mod elastic;
+mod hang;
 mod pipeline;
 mod place;
 mod product;
@@ -9,6 +10,7 @@ mod transfer;
 
 pub use density::for_contour;
 pub use elastic::{HOLDS_ITS_RATIO, Held, compliance_of, hold};
+pub use hang::{HANG_STEP, hung_at};
 pub use pipeline::{COMPLIANCE, RestStateError, ShapePipeline};
 pub use place::{Layout, Wrap};
 pub use product::{combine_constraints, combine_triangles, drop_all, offsets};

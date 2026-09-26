@@ -1,4 +1,4 @@
-use toile_sim::xpbd::{DistanceConstraints, Floor, Seams};
+use toile_sim::xpbd::{DistanceConstraints, Floor, Hung, Seams};
 
 use super::{DT, PieceSlot, SUBSTEPS_PER_TICK, SessionError};
 use crate::body::Collider;
@@ -6,17 +6,18 @@ use crate::couture::{self, Layout, ShapePipeline};
 use crate::draft::{Draft, PieceKey};
 use crate::sync::{self, Scene, SimHandle};
 
-/// What a body offers the solver: its field, the plane it stands on, and how
-/// the two hold cloth.
+/// What a body offers the solver: its field, the plane it stands on, how the
+/// two hold cloth, and the runs of cloth its own rings hold up.
 ///
-/// The one place the three are put together, so a body handed to a running sim
+/// The one place the four are put together, so a body handed to a running sim
 /// and a body a fresh thread starts on cannot come to disagree about where
 /// the ground is or what holds a garment up.
-pub(super) fn scene_of(collider: &Collider) -> Scene {
+pub(super) fn scene_of(collider: &Collider, hung: Vec<Hung>) -> Scene {
     Scene {
         sdf: collider.shared(),
         floor: collider.ground().map_or(Floor::none(), Floor::at),
         grip: collider.grip(),
+        hung,
     }
 }
 
@@ -61,14 +62,14 @@ pub(super) fn drape_piece(
 /// no partner to be placed against — is let go exactly as a lone piece is let
 /// go today, flat at the height the body decides.
 ///
-/// The constraints arrive rather than being compiled here: what an edge rests
-/// at is the session's answer and not the mesh's, because an elastic is
-/// written over a stretch only the table holding the document can place.
+/// The constraints, the seams and the hung runs arrive rather than being
+/// compiled here: each is written over a stretch of contour only the table
+/// holding the document can place.
 pub(super) fn spawn_sim(
     pipelines: &[&ShapePipeline],
     tris: Vec<u32>,
     cons: DistanceConstraints,
-    seams: Seams,
+    (seams, hung): (Seams, Vec<Hung>),
     around: Option<&Layout>,
     collider: &Collider,
 ) -> SimHandle {
@@ -77,7 +78,7 @@ pub(super) fn spawn_sim(
         state,
         cons,
         seams,
-        scene_of(collider),
+        scene_of(collider, hung),
         tris,
         DT,
         SUBSTEPS_PER_TICK,

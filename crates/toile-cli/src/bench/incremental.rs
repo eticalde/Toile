@@ -172,6 +172,7 @@ pub fn run_async() {
             sdf: std::sync::Arc::new(demo::avatar_sdf()),
             floor: Floor::none(),
             grip: Grip::slipping(),
+            hung: Vec::new(),
         },
         pipe.tris.clone(),
         DT,
@@ -199,7 +200,14 @@ pub fn run_async() {
         let generation = u64::from(f) + 1;
         let sent = Instant::now();
         let firm = vec![COMPLIANCE; rests.len()];
-        handle.send_rests(generation, rests, firm, (Vec::new(), 0), Seams::default());
+        handle.send_rests(
+            generation,
+            rests,
+            firm,
+            (Vec::new(), 0),
+            Seams::default(),
+            Vec::new(),
+        );
         latency_ms.push(wait_for_generation(&handle, generation, sent));
 
         std::thread::sleep(frame_dur.saturating_sub(frame_start.elapsed()));

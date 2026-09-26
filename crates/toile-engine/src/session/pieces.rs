@@ -191,6 +191,7 @@ impl Session {
             tris: self.tris.clone(),
             cons: self.constraints(),
             seams,
+            hung: self.hung(),
             at: base,
             replacing,
         });
@@ -207,8 +208,8 @@ impl Session {
         Ok(true)
     }
 
-    /// Hands the whole product's rest state, and what is sewn to what, to the
-    /// sim thread.
+    /// Hands the whole product's rest state, what is sewn to what and what the
+    /// body's rings hold up to the sim thread.
     ///
     /// Every piece goes, not only the one that moved. The solver checks the
     /// count against the constraint set it holds, and that check is the whole
@@ -220,15 +221,17 @@ impl Session {
     /// The compliances travel with the lengths because an elastic writes both,
     /// and because the number an edge is held at has to be re-applied here or
     /// the first drag after a waistband was set would quietly let it out. The
-    /// seams travel with them for the matching reason: an anchor is a node and
-    /// a fraction of the tract leaving it, so a piece that changed shape reads
-    /// its seams onto different boundary vertices than it did before.
+    /// seams and the hung runs travel with them for the matching reason: an
+    /// anchor is a node and a fraction of the tract leaving it, so a piece that
+    /// changed shape reads both onto different boundary vertices than it did
+    /// before.
     fn send_rests(&mut self) {
         if self.handle.is_none() {
             return;
         }
         let cons = self.constraints();
         let seams = self.resew();
+        let hung = self.hung();
         self.generation += 1;
         if let Some(handle) = self.handle.as_ref() {
             handle.send_rests(
@@ -237,6 +240,7 @@ impl Session {
                 cons.compliance,
                 (cons.held, cons.held_passes),
                 seams,
+                hung,
             );
         }
     }

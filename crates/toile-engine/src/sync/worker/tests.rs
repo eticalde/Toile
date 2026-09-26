@@ -12,6 +12,8 @@ use crate::couture::{COMPLIANCE, ShapePipeline};
 
 /// What the weightless phase is and is not, measured against its absence.
 mod gravity;
+/// What the sim refuses because it names a vertex it does not hold.
+mod range;
 /// What wakes a drape that has gone to sleep.
 mod wake;
 
@@ -67,6 +69,7 @@ fn ball(radius: f32) -> Scene {
         )),
         floor: Floor::none(),
         grip: Grip::slipping(),
+        hung: Vec::new(),
     }
 }
 
@@ -91,7 +94,13 @@ fn a_stale_generation_is_an_error_not_a_warm_start() {
     let (stale, firm) = (held.rest, held.compliance);
     let mut sim = sim(&old);
     assert_eq!(
-        sim.apply_rests(1, &stale, &firm, (Vec::new(), 0), Seams::default()),
+        sim.apply_rests(
+            1,
+            &stale,
+            &firm,
+            (Vec::new(), 0),
+            (Seams::default(), Vec::new())
+        ),
         Ok(())
     );
 
@@ -103,7 +112,13 @@ fn a_stale_generation_is_an_error_not_a_warm_start() {
 
     // The rest update that was in flight when the swap landed.
     assert_eq!(
-        sim.apply_rests(1, &stale, &firm, (Vec::new(), 0), Seams::default()),
+        sim.apply_rests(
+            1,
+            &stale,
+            &firm,
+            (Vec::new(), 0),
+            (Seams::default(), Vec::new())
+        ),
         Err(StaleMessage::Generation { applied: 2, got: 1 })
     );
     assert_eq!(sim.cons.rest.len(), edges, "the new mesh kept its rests");
@@ -122,7 +137,7 @@ fn rest_lengths_for_another_mesh_are_refused_by_count() {
         &held.rest,
         &held.compliance,
         (Vec::new(), 0),
-        Seams::default(),
+        (Seams::default(), Vec::new()),
     );
     assert_eq!(
         refused,
@@ -146,7 +161,13 @@ fn compliances_for_another_mesh_are_named_as_compliances() {
     let short = old.constraints(COMPLIANCE).compliance;
     assert_ne!(fits.len(), short.len(), "the two meshes differ in edges");
     assert_eq!(
-        sim.apply_rests(1, &fits, &short, (Vec::new(), 0), Seams::default()),
+        sim.apply_rests(
+            1,
+            &fits,
+            &short,
+            (Vec::new(), 0),
+            (Seams::default(), Vec::new())
+        ),
         Err(StaleMessage::ComplianceCount {
             expected,
             got: short.len()
@@ -180,31 +201,6 @@ fn a_swap_past_the_end_of_the_state_is_refused() {
         held,
         "the mesh it had is still on the stand"
     );
-}
-
-/// A seam is a pair of raw indices into the state, so one past the end is a
-/// panic on the sim thread rather than a wrong drape. It is refused on the
-/// way in, and the cloth goes on unsewn rather than stopping.
-#[test]
-fn a_seam_past_the_end_of_the_state_is_refused() {
-    let (old, _) = meshes();
-    let mut sim = sim(&old);
-    let held = old.pos2d.len();
-    let firm = old.constraints(COMPLIANCE);
-    assert_eq!(
-        sim.apply_rests(
-            1,
-            &firm.rest,
-            &firm.compliance,
-            (Vec::new(), 0),
-            sewn(0, held as u32)
-        ),
-        Err(StaleMessage::SeamRange {
-            vertex: held as u32,
-            len: held,
-        })
-    );
-    assert!(sim.seams.is_empty(), "nothing was sewn");
 }
 
 /// A swap is judged against the state it leaves behind, not the one it
@@ -265,6 +261,7 @@ fn a_body_arriving_brings_its_own_ground() {
         sdf: ball(0.10).sdf,
         floor: Floor::at(PLANE),
         grip: Grip::slipping(),
+        hung: Vec::new(),
     };
     assert_eq!(sim.apply_collider(1, standing), Ok(()));
     assert_eq!(sim.scene.floor.level(), Some(PLANE));

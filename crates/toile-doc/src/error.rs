@@ -77,6 +77,13 @@ pub enum DocError {
     /// An elastic whose two ends sit on different pieces.
     #[error("an elastic has to start and end on one piece")]
     SplitElastic,
+    /// A hang whose two ends sit on different pieces.
+    #[error("a hang has to start and end on one piece")]
+    SplitHang,
+    /// A station the body carries no ring for, so nothing names a height to
+    /// hold the cloth at.
+    #[error("a garment hangs from one of the body's girths, and `{0}` is not one")]
+    HangStation(String),
     /// An internal line anchored to the contour of a piece it is not drawn on.
     #[error("an internal line is drawn on one piece, and anchors only to it")]
     SplitInternalLine,

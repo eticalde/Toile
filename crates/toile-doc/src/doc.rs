@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Arena, Dart, EdgeRange, Elastic, InternalLine, MannequinKey, MeasureSet, Notch, Piece,
+    Arena, Dart, EdgeRange, Elastic, Hang, InternalLine, MannequinKey, MeasureSet, Notch, Piece,
     PieceKey, Pin, Point, PointKey, Seam, Symmetry, SymmetryKey, SymmetryKind, Variable,
     VariableKey,
 };
@@ -28,6 +28,13 @@ pub struct Doc {
     /// elastic back.
     #[serde(default, skip_serializing_if = "Arena::is_empty")]
     pub elastics: Arena<Elastic>,
+    /// The stretches of contour hung from stations of the body.
+    ///
+    /// Under the elastic's rule: with none of them nothing is written at all,
+    /// and nothing of the document names a hang back, so the slot count goes
+    /// unwritten with them and strands nothing.
+    #[serde(default, skip_serializing_if = "Arena::is_empty")]
+    pub hangs: Arena<Hang>,
     /// The notches on the contours.
     pub notches: Arena<Notch>,
     /// The lines the pieces are drawn with and not cut on.
@@ -74,6 +81,7 @@ impl Doc {
             points: Arena::new(),
             seams: Arena::new(),
             elastics: Arena::new(),
+            hangs: Arena::new(),
             notches: Arena::new(),
             lines: Arena::new(),
             darts: Arena::new(),

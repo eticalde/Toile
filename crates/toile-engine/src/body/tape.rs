@@ -106,6 +106,21 @@ fn lay(name: &str) -> Option<Lay> {
     })
 }
 
+/// The body's own ring for catalogue measurement `name`; `None` for a name that
+/// is not a girth.
+///
+/// A second question of the one mapping, rather than a second mapping. A
+/// garment hung from a station needs the ring behind the name, and which ring a
+/// name means is written once, in [`lay`], where the tape already needed it.
+pub(crate) fn ring_of(name: &str) -> Option<RingId> {
+    match lay(name)? {
+        Lay::Girth(id) => Some(id),
+        // A length runs down the body and a stature stands beside it: neither
+        // is a loop, so neither names a height a garment can be held at.
+        Lay::Skin(_) | Lay::Stature => None,
+    }
+}
+
 /// The tape for catalogue measurement `name` on `mesh`, or `None` for a name
 /// outside the catalogue.
 ///

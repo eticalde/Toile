@@ -1,4 +1,5 @@
 use super::contact::{self, Grip};
+use super::hang;
 use super::layers::Layers;
 use super::sdf::SdfGrid;
 use super::stage::Stage;
@@ -16,8 +17,9 @@ pub(super) const DAMPING: f32 = 0.999;
 /// Small steps: N substeps of one constraint iteration beat one step of N
 /// iterations, so lambda starts from zero each substep and never accumulates.
 ///
-/// A scene whose `floor` is [`Floor::none`] and whose `layers` is `None` runs
-/// exactly the passes it has always run, in the order it has always run them.
+/// A scene whose `floor` is [`Floor::none`], whose `hung` is empty and whose
+/// `layers` is `None` runs exactly the passes it has always run, in the order
+/// it has always run them.
 pub fn substep(
     state: &mut State,
     cons: &DistanceConstraints,
@@ -38,6 +40,11 @@ pub fn substep(
     if !seams.is_empty() {
         solve_seams(state, seams, inv_dt2);
     }
+    // Ahead of the body for the reason the block below gives, and measured:
+    // put after it instead, the drape stops going to sleep at all. Last of the
+    // constraints, because a run the stretch and the seams overruled
+    // afterwards would be holding nothing.
+    hang::solve(state, stage.hung);
     // Ahead of the body and ahead of the ground, because those two get the
     // last word. Out past the band a baked field has no gradient left to carry
     // cloth back with, so a push that parts two layers must never be what puts

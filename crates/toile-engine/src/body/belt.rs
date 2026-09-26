@@ -45,6 +45,16 @@ pub(super) fn of(mesh: &BodyMesh) -> Vec<Belt> {
         .collect()
 }
 
+/// The ring `station` names on this body; `None` for a body that carries no
+/// rings, or a station that is not one of its girths.
+///
+/// By the id's own number, because [`of`] maps `RingId::ALL` and that array is
+/// the asset's storage order — a fact its own test pins, and the reason a ring
+/// can be looked up without searching for it.
+pub(crate) fn at_station<'a>(belts: &'a [Belt], station: &str) -> Option<&'a Belt> {
+    belts.get(super::tape::ring_of(station)? as usize)
+}
+
 /// Which ring a garment hanging by `hangs_by` metres of cloth, `widest`
 /// metres round at its fullest and `rise` metres deep is worn at; `None` for
 /// a body that carries no rings.
@@ -95,6 +105,7 @@ mod tests {
     )]
 
     use super::*;
+    use crate::draft::MeasureSet;
 
     /// Heights and girths in the order a body has them, top down.
     fn body() -> Vec<Belt> {
@@ -142,6 +153,48 @@ mod tests {
     #[test]
     fn a_body_without_rings_is_worn_nowhere() {
         assert_eq!(worn_at(&[], 0.7, 0.7, 1.0), None);
+        assert_eq!(at_station(&[], "cintura"), None);
+    }
+
+    /// A station is read straight off the ring's own number, so the name a
+    /// person hangs a garment from finds the ring the tape measures.
+    #[test]
+    fn a_station_names_the_ring_the_tape_measures() {
+        let body: Vec<Belt> = RingId::ALL
+            .iter()
+            .map(|&id| Belt {
+                girth: f64::from(id as u8),
+                height: 0.0,
+                centre: [0.0, 0.0],
+            })
+            .collect();
+        let girth = |name| at_station(&body, name).map(|belt| belt.girth);
+        assert_eq!(girth("cintura"), Some(f64::from(RingId::Waist as u8)));
+        assert_eq!(girth("cadera"), Some(f64::from(RingId::Hip as u8)));
+        assert_eq!(girth("cabeza"), Some(f64::from(RingId::Head as u8)));
+        assert_eq!(girth("estatura"), None, "a plumb line is not a ring");
+        assert_eq!(girth("tiro"), None, "and neither is a length");
+        assert_eq!(girth("waist"), None, "nor a name off the catalogue");
+    }
+
+    /// And every girth the catalogue names finds one, which is what the
+    /// document leans on when it lets a garment be hung from any of them: a
+    /// girth added to the catalogue and to no ring would be offered to a person
+    /// and then hold nothing, in silence.
+    #[test]
+    fn every_catalogue_girth_names_a_ring_of_the_body() {
+        let body: Vec<Belt> = RingId::ALL
+            .iter()
+            .map(|_| Belt {
+                girth: 1.0,
+                height: 0.0,
+                centre: [0.0, 0.0],
+            })
+            .collect();
+        for girth in MeasureSet::GIRTHS {
+            assert!(at_station(&body, girth).is_some(), "{girth}");
+        }
+        assert_eq!(MeasureSet::GIRTHS.len(), RingId::COUNT);
     }
 
     /// A waistband is what a skirt hangs by, so the ring is matched to the

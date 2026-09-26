@@ -25,8 +25,12 @@ impl Session {
     /// anyway for whenever a piece is drawn on it.
     pub fn set_collider(&mut self, collider: Collider) {
         self.generation += 1;
+        // Against the body arriving and not the one leaving: a ring's height
+        // is the new person's, and holding the garment at the old one's would
+        // be the very fault this message exists to avoid.
+        let hung = self.hung_on(&collider);
         if let Some(handle) = self.handle.as_ref() {
-            handle.send_collider(self.generation, scene_of(&collider));
+            handle.send_collider(self.generation, scene_of(&collider, hung));
         }
         self.collider = collider;
     }

@@ -23,6 +23,8 @@ mod elastic;
 mod error;
 /// The formula language a coordinate can be written in.
 pub mod formula;
+/// A stretch of contour hung from a station of the measurement catalogue.
+mod hang;
 /// The document as canonical JSON.
 mod json;
 /// The stable identity of a document entity.
@@ -60,14 +62,16 @@ pub use dart::{Dart, DartWedge, FoldDirection, WedgeNode};
 pub use doc::Doc;
 pub use elastic::Elastic;
 pub use error::DocError;
+pub use hang::Hang;
 pub use json::{
     FormatError, PERSONA_EXTENSION, PERSONA_VERSION, VERSION as FORMAT_VERSION,
     VERSION_ELASTIC as FORMAT_VERSION_ELASTIC, VERSION_EXTENDED as FORMAT_VERSION_EXTENDED,
-    VERSION_FOLDED as FORMAT_VERSION_FOLDED, VERSION_INTERNAL as FORMAT_VERSION_INTERNAL,
-    VERSION_LINKED as FORMAT_VERSION_LINKED, VERSION_PLACED as FORMAT_VERSION_PLACED,
+    VERSION_FOLDED as FORMAT_VERSION_FOLDED, VERSION_HUNG as FORMAT_VERSION_HUNG,
+    VERSION_INTERNAL as FORMAT_VERSION_INTERNAL, VERSION_LINKED as FORMAT_VERSION_LINKED,
+    VERSION_PLACED as FORMAT_VERSION_PLACED,
 };
 pub use key::{
-    DartKey, ElasticKey, Identity, Key, LineKey, MannequinKey, NotchKey, PieceKey, PinKey,
+    DartKey, ElasticKey, HangKey, Identity, Key, LineKey, MannequinKey, NotchKey, PieceKey, PinKey,
     PointKey, SeamKey, SymmetryKey, VariableKey,
 };
 pub use line::{InternalLine, LineEdit, LineKind, LineSpan, LineVertex, SpanEdit, VertexEdit};

@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 
 use crate::{
     Axis, Binding, BodyShape, Dart, DartKey, DartWedge, EdgeAnchor, Elastic, ElasticKey, Grain,
-    Identity, InternalLine, LineEdit, LineKey, LineKind, MannequinKey, MeasureSet, Notch, NotchKey,
-    Origin, Piece, PieceKey, Pin, PinKey, Placement, Point, PointKey, Seam, SeamKey, SegmentEdit,
-    Symmetry, SymmetryKey, VariableKey,
+    Hang, HangKey, Identity, InternalLine, LineEdit, LineKey, LineKind, MannequinKey, MeasureSet,
+    Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey, Placement, Point, PointKey, Seam,
+    SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
 };
 
 /// A reversible edit to the document.
@@ -115,6 +115,15 @@ pub enum Command {
     SetElasticRatio { elastic: ElasticKey, to: f64 },
     /// Writes how hard it holds it.
     SetElasticStrength { elastic: ElasticKey, to: f64 },
+    /// Hangs a stretch of contour from a station of the body.
+    AddHang {
+        identity: Identity<Hang>,
+        hang: Hang,
+    },
+    /// Lets that stretch off the ring.
+    RemoveHang { hang: HangKey },
+    /// Writes which of the body's rings a stretch hangs from.
+    SetHangStation { hang: HangKey, to: String },
     /// Draws a line on a piece that the pattern does not cut.
     ///
     /// The line travels as an edit rather than as an `InternalLine`, for the

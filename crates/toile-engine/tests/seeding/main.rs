@@ -6,6 +6,9 @@ mod extremes;
 mod fit;
 /// What a waistband is worth on the body, and what it is still not worth.
 mod grip;
+/// What hanging a garment from a ring of the body is worth, and what it is
+/// not.
+mod hang;
 /// The same habits over a product of two sewn pieces.
 mod product;
 /// The tube skirt an elastic is proved on.

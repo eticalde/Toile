@@ -101,6 +101,7 @@ impl Session {
         self.generation = 0;
         self.mesh_generation = 0;
         let seams = self.resew();
+        let hung = self.hung();
         let around = self.layout();
         let cons = self.constraints();
         self.handle = (!self.draping.is_empty()).then(|| {
@@ -108,7 +109,7 @@ impl Session {
                 &self.pipelines(),
                 self.tris.clone(),
                 cons,
-                seams,
+                (seams, hung),
                 around.as_ref(),
                 &self.collider,
             )

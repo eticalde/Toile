@@ -1,5 +1,6 @@
 mod curve;
 mod elastic;
+mod hang;
 mod join;
 mod line;
 mod mannequin;
@@ -11,6 +12,7 @@ mod topology;
 
 use curve::{set_samples, set_segment};
 use elastic::{add_elastic, remove_elastic, set_ratio, set_strength};
+use hang::{add_hang, remove_hang, set_station};
 use join::{add_seam, remove_seam};
 use line::{add_line, label_line, remove_line, set_kind};
 use mannequin::{
@@ -32,20 +34,20 @@ impl Command {
     /// Applies the edit and hands back the command that undoes it.
     ///
     /// # Errors
-    /// `DocError::StaleKey` for a key that names nothing, `DuplicateLabel`,
-    /// `DuplicatePieceName` or `DuplicateMannequinName` for a name already
-    /// taken, `UnknownMeasure` for a measurement the body does not carry,
-    /// `BodyInUse` for taking away the body the pattern resolves against,
-    /// `NonFinite` for a number the file could not spell, `NotAStem`, `NotADay`
-    /// or `NotAFingerprint` for a link Toile could not have written,
+    /// `StaleKey` for a dead key, `DuplicateLabel`, `DuplicatePieceName` or
+    /// `DuplicateMannequinName` for a name taken, `UnknownMeasure` for a
+    /// measurement the body lacks, `BodyInUse` for the body in use, `NonFinite`
+    /// for a number JSON cannot spell, `NotAStem`, `NotADay` or
+    /// `NotAFingerprint` for a link Toile could not have written,
     /// `ElasticRatio` or `ElasticStrength` for a pull no elastic carries,
-    /// `NoSuchNode` for a node no contour runs through, `Occupied` for a key
-    /// another entry holds, `Sampling` for a flattening no tract can be asked
-    /// for, `Shared` for a point another piece draws itself with, `ShortLine`
+    /// `HangStation` for a station no body has a ring for, `NoSuchNode` for an
+    /// absent node, `Occupied` for a taken key, `Sampling` for a flattening no
+    /// tract takes, `Shared` for a point another piece draws with, `ShortLine`
     /// for a line through one place, `SplitSeamSide`, `SplitElastic`,
-    /// `SplitInternalLine` or `SplitSymmetry` for a run whose ends disagree on
-    /// their piece, `FoldAxis` and `AlreadySymmetric` for an axis whose ends
-    /// are one place and a second axis on a piece, and `NotYetImplemented`.
+    /// `SplitInternalLine`, `SplitHang` or `SplitSymmetry` for a run whose ends
+    /// disagree on their piece, `FoldAxis` and `AlreadySymmetric` for an axis
+    /// whose ends are one place and a second axis on a piece, and
+    /// `NotYetImplemented`.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
         self.apply_as(doc, Naming::Checked)
     }
@@ -104,6 +106,9 @@ impl Command {
             Command::RemoveElastic { elastic } => remove_elastic(doc, elastic),
             Command::SetElasticRatio { elastic, to } => set_ratio(doc, elastic, to),
             Command::SetElasticStrength { elastic, to } => set_strength(doc, elastic, to),
+            Command::AddHang { identity, hang } => add_hang(doc, identity, hang),
+            Command::RemoveHang { hang } => remove_hang(doc, hang),
+            Command::SetHangStation { hang, to } => set_station(doc, hang, to),
             Command::AddLine { identity, line } => add_line(doc, identity, *line),
             Command::RemoveLine { line } => remove_line(doc, line),
             Command::SetLineKind { line, to } => set_kind(doc, line, to),

@@ -3,21 +3,23 @@ use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use crossbeam_channel::{RecvTimeoutError, Sender, TryRecvError, unbounded};
-use toile_sim::xpbd::{DistanceConstraints, Floor, Grip, SdfGrid, Seams, State};
+use toile_sim::xpbd::{DistanceConstraints, Floor, Grip, Hung, SdfGrid, Seams, State};
 
 use super::report::Snapshot;
 use super::worker::Sim;
 use crate::couture::MeshSwap;
 
-/// What the cloth collides with: the body's field, the ground it stands on,
-/// and how the two hold what touches them.
+/// The body, as the solver meets it: its field, the ground it stands on, how
+/// the two hold what touches them, and what of the cloth is hung from its own
+/// rings.
 ///
-/// The three travel together because they move together. A body put on the
-/// stand brings its own floor with it — a shorter person stands lower — and a
-/// message carrying the field alone would leave the drape resting on the
-/// plane the body before it stood on. The grip goes with them for the same
-/// reason: a person's skin holds a garment and the demo sphere does not, so
-/// swapping one body for the other has to swap what its surface does.
+/// They travel together because they move together, and because this is the
+/// engine's side of one `Stage`. A body put on the stand brings its own floor
+/// with it — a shorter person stands lower — and a message carrying the field
+/// alone would leave the drape resting on the plane the body before it stood
+/// on. The grip goes with them because a person's skin holds a garment and the
+/// demo sphere does not. The hung runs go with them because a ring's height is
+/// this body's and not the last one's.
 #[derive(Clone)]
 pub struct Scene {
     /// The body's field, shared rather than copied.
@@ -26,12 +28,16 @@ pub struct Scene {
     pub floor: Floor,
     /// How that body and that plane hold cloth pressed against them.
     pub grip: Grip,
+    /// The runs of cloth held at this body's ring heights; empty for a product
+    /// hung from nothing.
+    pub hung: Vec<Hung>,
 }
 
 enum Msg {
     /// The product recompiled: what every edge rests at, how hard it is held
-    /// there, which edges an elastic holds, and what is sewn to what. They
-    /// travel together because a shape edit moves all four.
+    /// there, which edges an elastic holds, what is sewn to what, and what is
+    /// hung from the body. They travel together because a shape edit moves all
+    /// five.
     RestUpdate {
         generation: u64,
         rests: Vec<f32>,
@@ -39,6 +45,8 @@ enum Msg {
         /// The edges an elastic holds, and the sweeps they get.
         held: (Vec<u32>, u32),
         seams: Seams,
+        /// The runs of cloth the body's rings hold up.
+        hung: Vec<Hung>,
     },
     /// A piece re-meshed elsewhere, with the drape to carry onto it.
     ///
@@ -79,6 +87,7 @@ impl SimHandle {
         compliance: Vec<f32>,
         held: (Vec<u32>, u32),
         seams: Seams,
+        hung: Vec<Hung>,
     ) {
         let _ = self.tx.send(Msg::RestUpdate {
             generation,
@@ -86,6 +95,7 @@ impl SimHandle {
             compliance,
             held,
             seams,
+            hung,
         });
     }
 
@@ -241,7 +251,8 @@ fn drain(rx: &crossbeam_channel::Receiver<Msg>, first: Option<Msg>, sim: &mut Si
                 compliance,
                 held,
                 seams,
-            } => sim.apply_rests(generation, &rests, &compliance, held, seams),
+                hung,
+            } => sim.apply_rests(generation, &rests, &compliance, held, (seams, hung)),
             Msg::MeshSwap { generation, swap } => sim.apply_swap(generation, swap),
             Msg::Collider { generation, scene } => sim.apply_collider(generation, scene),
         };

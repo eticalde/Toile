@@ -52,6 +52,9 @@ pub enum FormatError {
     /// An axis no piece can be repeated across.
     #[error("the pattern draws a piece against an axis it cannot be repeated across: {0}")]
     Symmetry(#[source] DocError),
+    /// A stretch hung from a station the body carries no ring for.
+    #[error("the pattern hangs a garment from something no body carries: {0}")]
+    Hang(#[source] DocError),
 }
 
 impl FormatError {

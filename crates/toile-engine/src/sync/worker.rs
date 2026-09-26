@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use toile_sim::xpbd::{self, DistanceConstraints, KineticDamper, Seams, Stage, State};
+use toile_sim::xpbd::{self, DistanceConstraints, Hung, KineticDamper, Seams, Stage, State};
 
 use super::handle::Scene;
 use super::report::{Snapshot, StaleMessage};
@@ -53,13 +53,15 @@ impl Sim {
         self.sleep.asleep()
     }
 
-    /// Hot-swaps the rest state and what is sewn to what, and wakes the sim.
+    /// Hot-swaps the rest state, what is sewn to what and what the body holds
+    /// up, and wakes the sim.
     ///
-    /// The four arrive together because a shape edit moves all of them: the
-    /// rest lengths because the cloth changed shape, the compliances and the
-    /// held edges because an elastic writes both and putting one on a tract
-    /// that had none changes neither count, and the seams because an anchor is
-    /// one of its nodes.
+    /// They arrive together because a shape edit moves all of them: the rest
+    /// lengths because the cloth changed shape, the compliances and the held
+    /// edges because an elastic writes both and putting one on a tract that had
+    /// none changes neither count, and the seams and the hung runs because an
+    /// anchor is a node and a fraction of the tract leaving it, so a piece that
+    /// changed shape reads both onto different boundary vertices.
     ///
     /// # Errors
     /// `StaleMessage` when the message was compiled against a mesh the solver
@@ -71,7 +73,7 @@ impl Sim {
         rests: &[f32],
         compliance: &[f32],
         (held, passes): (Vec<u32>, u32),
-        seams: Seams,
+        (seams, hung): (Seams, Vec<Hung>),
     ) -> Result<(), StaleMessage> {
         self.fresh(generation)?;
         if rests.len() != self.cons.rest.len() {
@@ -90,12 +92,13 @@ impl Sim {
         if let Some(&edge) = held.iter().find(|&&e| e as usize >= edges) {
             return Err(StaleMessage::HeldRange { edge, len: edges });
         }
-        holds(&seams, self.state.len())?;
+        holds(&seams, &hung, self.state.len())?;
         self.cons.rest.copy_from_slice(rests);
         self.cons.compliance.copy_from_slice(compliance);
         self.cons.held = held;
         self.cons.held_passes = passes;
         self.seams = seams;
+        self.scene.hung = hung;
         self.wake(generation);
         Ok(())
     }
@@ -131,17 +134,20 @@ impl Sim {
         // a rebuilt piece changes how many vertices stand before every piece
         // after it, so the seams travelling with it are written in the new
         // numbering and only that one can judge them.
-        holds(
-            &swap.seams,
-            len - swap.replacing as usize + swap.pos2d.len(),
-        )?;
+        let after = len - swap.replacing as usize + swap.pos2d.len();
+        holds(&swap.seams, &swap.hung, after)?;
         self.state = onto(&swap, &self.state);
         let MeshSwap {
-            tris, cons, seams, ..
+            tris,
+            cons,
+            seams,
+            hung,
+            ..
         } = *swap;
         self.cons = cons;
         self.tris = tris;
         self.seams = seams;
+        self.scene.hung = hung;
         self.wake(generation);
         Ok(())
     }
@@ -168,6 +174,7 @@ impl Sim {
         scene: Scene,
     ) -> Result<(), StaleMessage> {
         self.fresh(generation)?;
+        holds(&self.seams, &scene.hung, self.state.len())?;
         // The ground arrives with the field: a body that got shorter stands on
         // a higher plane, and a drape left resting on the old one would hang
         // in the air beside the new body.
@@ -217,7 +224,8 @@ impl Sim {
         for _ in 0..self.substeps_per_tick {
             let mut stage = Stage::around(&self.scene.sdf)
                 .on(self.scene.floor)
-                .holding(self.scene.grip);
+                .holding(self.scene.grip)
+                .hung_from(&self.scene.hung);
             if !self.seams.is_empty() {
                 (self.seams.compliance, self.seams.max_step) = couture::sewing_at(self.substeps);
                 let gap = xpbd::seam_gap(&self.state, &self.seams);
@@ -263,18 +271,18 @@ impl Sim {
     }
 }
 
-/// Whether every sewn vertex is one a state of `len` particles holds: the
-/// solver indexes these directly, so one past the end is a panic on the sim
-/// thread rather than a wrong drape.
-fn holds(seams: &Seams, len: usize) -> Result<(), StaleMessage> {
-    match seams
-        .a
-        .iter()
-        .chain(&seams.b)
-        .copied()
-        .find(|&v| v as usize >= len)
-    {
-        Some(vertex) => Err(StaleMessage::SeamRange { vertex, len }),
+/// Whether every vertex a seam or a hang names is one a state of `len`
+/// particles holds: the solver indexes these directly, so one past the end is
+/// a panic on the sim thread rather than a wrong drape.
+fn holds(seams: &Seams, hung: &[Hung], len: usize) -> Result<(), StaleMessage> {
+    let past = |&v: &u32| v as usize >= len;
+    let mut sewn = seams.a.iter().chain(&seams.b).copied();
+    if let Some(vertex) = sewn.find(past) {
+        return Err(StaleMessage::SeamRange { vertex, len });
+    }
+    let mut named = hung.iter().flat_map(|run| run.at.iter()).copied();
+    match named.find(past) {
+        Some(vertex) => Err(StaleMessage::HungRange { vertex, len }),
         None => Ok(()),
     }
 }

@@ -1,9 +1,7 @@
-use toile_doc::Elastic;
-
 use super::place::Band;
+use super::run::edge_bases;
 use super::{Session, ShapePipeline};
 use crate::couture::{self, Held};
-use crate::draft::Draft;
 
 /// What the document's elastics come to on the cloth now on the stand.
 pub(super) struct Elastics {
@@ -13,23 +11,13 @@ pub(super) struct Elastics {
     pub(super) band: Option<Band>,
 }
 
-/// One elastic read onto one piece's mesh: the boundary vertices it runs over
-/// and where that piece's edges open in the constraint set.
-struct Run {
-    at: usize,
-    base: usize,
-    verts: Vec<u32>,
-}
-
 impl Session {
     /// Every elastic of the document, read onto the meshes now on the stand.
     ///
-    /// Read afresh rather than remembered, for the reason the sewing is: a
-    /// shape edit moves an anchor's fraction along its own piece and a rebuild
-    /// hands that piece a whole new set of vertices, so a reading is only ever
-    /// true of the meshes it was taken against. That is why the two moments
-    /// rest lengths are compiled — a derive and an install — both come through
-    /// here, and why an elastic cannot quietly vanish on the first drag.
+    /// Read afresh rather than remembered, for the reason [`Session::run_of`]
+    /// gives. That is why the two moments rest lengths are compiled — a derive
+    /// and an install — both come through here, and why an elastic cannot
+    /// quietly vanish on the first drag.
     pub(super) fn elastics(&self) -> Elastics {
         let mut held = Vec::new();
         let mut waists: Vec<(usize, f64, f64)> = Vec::new();
@@ -40,7 +28,7 @@ impl Session {
         let pipes = self.pipelines();
         let bases = edge_bases(&pipes);
         for (_, elastic) in draft.doc().elastics.iter() {
-            let Some(run) = self.run_of(draft, &pipes, &bases, elastic) else {
+            let Some(run) = self.run_of(draft, &pipes, &bases, elastic.at) else {
                 continue;
             };
             let pipe = pipes[run.at];
@@ -87,54 +75,6 @@ impl Session {
             })
             .collect()
     }
-
-    /// One elastic on the cloth: which piece it lands on, where that piece's
-    /// edges begin, and the boundary vertices the stretch runs over.
-    ///
-    /// `None` for an elastic the cloth cannot answer for — a piece too partial
-    /// to mesh, an anchor on a node its piece no longer runs through, or a
-    /// stretch with no length. Left out of the solve rather than guessed at:
-    /// an elastic read onto the wrong vertices would hold the garment in by
-    /// somewhere nobody asked for.
-    fn run_of(
-        &self,
-        draft: &Draft,
-        pipes: &[&ShapePipeline],
-        bases: &[usize],
-        elastic: &Elastic,
-    ) -> Option<Run> {
-        let at = self.index_of(elastic.at.piece()?)?;
-        let head = draft.anchor_fraction(&elastic.at.head)?;
-        let tail = draft.anchor_fraction(&elastic.at.tail)?;
-        // The walk the way the contour runs, as a seam's side is measured, so
-        // a stretch that passes the closure is as long as the walk.
-        let span = (tail - head).rem_euclid(1.0);
-        if span <= f64::EPSILON {
-            return None;
-        }
-        let verts = pipes[at].boundary_run((head, span));
-        (verts.len() >= 2).then(|| Run {
-            at,
-            base: bases[at],
-            verts,
-        })
-    }
-}
-
-/// Where each piece's edges begin in the product's combined constraints.
-///
-/// The constraints are concatenated in the order the pieces stand, so a
-/// piece's edges begin past every edge of every piece before it — the same
-/// arithmetic [`couture::offsets`] does over vertices, counted over edges
-/// because that is what an elastic addresses.
-fn edge_bases(pipes: &[&ShapePipeline]) -> Vec<usize> {
-    let mut at = 0;
-    let mut bases = Vec::with_capacity(pipes.len());
-    for pipe in pipes {
-        bases.push(at);
-        at += pipe.edges.len();
-    }
-    bases
 }
 
 /// Widens one piece's entry to take in the cloth a stretch covers.

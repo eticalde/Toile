@@ -69,6 +69,15 @@ pub const VERSION_INTERNAL: u32 = 6;
 /// to say a fold was ever there.
 pub const VERSION_FOLDED: u32 = 7;
 
+/// The format version of a document in which a stretch of contour is hung from
+/// a station of the body.
+///
+/// Under the axis's rule it takes the next number. A build that reads version 7
+/// predates the hang, so it would open the product, drop the one thing that
+/// says where on the body the garment belongs, and drape the same file into a
+/// garment that slides off — the elastic's own case, one step further on.
+pub const VERSION_HUNG: u32 = 8;
+
 /// A file: the version, and the pattern under it.
 #[derive(Serialize)]
 struct Written<'a> {
@@ -91,7 +100,8 @@ impl Doc {
     ///
     /// A pure function of what the document carries, never of the file it was
     /// read from, so one document still has exactly one text: the highest
-    /// number any body, piece, elastic, internal line or axis in it needs.
+    /// number any body, piece, elastic, internal line, axis or hang in it
+    /// needs.
     pub fn format_version(&self) -> u32 {
         let bodies = self.mannequins.iter().map(|(_, set)| set.format_version());
         let pieces = self.pieces.iter().map(|(_, piece)| piece.format_version());
@@ -101,11 +111,13 @@ impl Doc {
         let elastic = (!self.elastics.is_empty()).then_some(VERSION_ELASTIC);
         let lines = (!self.lines.is_empty()).then_some(VERSION_INTERNAL);
         let folded = (!self.symmetries.is_empty()).then_some(VERSION_FOLDED);
+        let hung = (!self.hangs.is_empty()).then_some(VERSION_HUNG);
         bodies
             .chain(pieces)
             .chain(elastic)
             .chain(lines)
             .chain(folded)
+            .chain(hung)
             .max()
             .unwrap_or(VERSION)
     }
@@ -140,14 +152,15 @@ impl Doc {
     /// is not a pattern's, a key that leads nowhere, a tract asking to be
     /// flattened at a count no tract can carry, a link to the library Toile
     /// could not have written, an elastic holding a stretch to numbers no
-    /// elastic holds, an internal line no piece could be drawn with, or an axis
-    /// no piece can be repeated across.
+    /// elastic holds, an internal line no piece could be drawn with, an axis no
+    /// piece can be repeated across, or a stretch hung from a station the body
+    /// carries no ring for.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = version(text)?;
-        if !(u64::from(VERSION)..=u64::from(VERSION_FOLDED)).contains(&found) {
+        if !(u64::from(VERSION)..=u64::from(VERSION_HUNG)).contains(&found) {
             return Err(FormatError::UnknownVersion {
                 found,
-                newest: VERSION_FOLDED,
+                newest: VERSION_HUNG,
             });
         }
         let loaded: Loaded =
@@ -158,6 +171,7 @@ impl Doc {
         check::elastics(&loaded.doc)?;
         check::lines(&loaded.doc)?;
         check::symmetries(&loaded.doc)?;
+        check::hangs(&loaded.doc)?;
         Ok(loaded.doc)
     }
 }

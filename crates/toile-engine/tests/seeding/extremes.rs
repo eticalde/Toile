@@ -126,13 +126,13 @@ fn a_skirt_cut_for_a_wide_hipped_body_rests_clear_of_it_and_does_not_close() {
 /// positive. Nobody has decided what an open seam at rest is worth, and this
 /// does not decide it either — it pins the state of the tree.
 ///
-/// Two ways to fail, and both are news. A placement that hands the sewing a
-/// gap it can close is the fix this waits on, from the family of decision 12:
-/// the ring is sized from the widest cloth the product carries while the
-/// product is stood at the ring its band belongs to. And a reading near zero
-/// without such a change means the burial is back — before the contact solve
-/// learned to retreat along an overshooting step, this same seam shut to
-/// 0.2 mm by pulling its two sides through the abdomen.
+/// Two ways to fail, and both are news. Something that hands the sewing a gap
+/// it can close is the fix this waits on, and it is not the anchor decision 12
+/// held in reserve: hanging this very garment from the body's waist leaves the
+/// seam as open as it is here, which `hang.rs` measures as its own scene. And a
+/// reading near zero with nothing else changed means the burial is back —
+/// before the contact solve learned to retreat along an overshooting step, this
+/// same seam shut to 0.2 mm by pulling its two sides through the abdomen.
 fn still_open(worst: f32) {
     assert!(
         worst > SEAM_SHUT,

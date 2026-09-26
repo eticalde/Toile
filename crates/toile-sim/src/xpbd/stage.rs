@@ -1,15 +1,17 @@
 use super::contact::{Floor, Grip};
+use super::hang::Hung;
 use super::sdf::SdfGrid;
 use super::solver::GRAVITY;
 
-/// Everything a substep asks of the world outside the cloth: the body it
-/// falls on, the ground it may not fall through, the pull on it, and how those
-/// two surfaces hold what touches them.
+/// Everything a substep asks of the world outside the cloth.
 ///
-/// The four travel together because a substep reads them together, and
-/// because the alternative is an eighth parameter. Gravity is here rather
-/// than a constant so that a garment can be sewn shut before it is allowed to
-/// fall: [`Stage::weightless`] is that moment, and nothing else changes.
+/// The body it falls on, the ground it may not fall through, the pull on it,
+/// how those two surfaces hold what touches them, and what of the cloth is
+/// hung from the body's own rings. They travel together because a substep
+/// reads them together, and because the alternative is a parameter each.
+/// Gravity is here rather than a constant so that a garment can be sewn shut
+/// before it is allowed to fall: [`Stage::weightless`] is that moment, and
+/// nothing else changes.
 #[derive(Debug, Clone, Copy)]
 #[must_use]
 pub struct Stage<'a> {
@@ -21,6 +23,10 @@ pub struct Stage<'a> {
     pub gravity: f32,
     /// How the body and the ground hold what is pressed against them.
     pub grip: Grip,
+    /// The runs of cloth held at the body's own ring heights; empty for a
+    /// product hung from nothing, and then the substep runs exactly the passes
+    /// it has always run.
+    pub hung: &'a [Hung],
 }
 
 impl<'a> Stage<'a> {
@@ -33,6 +39,7 @@ impl<'a> Stage<'a> {
             floor: Floor::none(),
             gravity: GRAVITY,
             grip: Grip::slipping(),
+            hung: &[],
         }
     }
 
@@ -43,6 +50,7 @@ impl<'a> Stage<'a> {
             floor,
             gravity: self.gravity,
             grip: self.grip,
+            hung: self.hung,
         }
     }
 
@@ -53,6 +61,7 @@ impl<'a> Stage<'a> {
             floor: self.floor,
             gravity: 0.0,
             grip: self.grip,
+            hung: self.hung,
         }
     }
 
@@ -64,6 +73,18 @@ impl<'a> Stage<'a> {
             floor: self.floor,
             gravity: self.gravity,
             grip,
+            hung: self.hung,
+        }
+    }
+
+    /// The same, with runs of its cloth held at the body's ring heights.
+    pub const fn hung_from(self, hung: &'a [Hung]) -> Stage<'a> {
+        Stage {
+            sdf: self.sdf,
+            floor: self.floor,
+            gravity: self.gravity,
+            grip: self.grip,
+            hung,
         }
     }
 }

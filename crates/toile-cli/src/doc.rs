@@ -1,4 +1,4 @@
-use toile_engine::draft::{Command, Doc, Draft, PieceKey, PointKey, block};
+use toile_engine::draft::{Command, Doc, Draft, EdgeRange, PieceKey, PointKey, block};
 
 /// Runs `toile doc`: a pattern, resolved and written out.
 ///
@@ -89,10 +89,64 @@ fn print(draft: &Draft) {
         );
     }
 
+    println!("\nsujeción");
+    let holds = holding(draft);
+    if holds.is_empty() {
+        println!("  nada: la prenda no se sujeta al cuerpo");
+    }
+    for line in holds {
+        println!("  {line}");
+    }
+
     for piece in doc.piece_keys() {
         println!();
         piece_report(draft, piece);
     }
+}
+
+/// What holds the garment on the body, one line each, in key order.
+///
+/// The two answers to one question, so they are read together: an elastic says
+/// how hard a stretch is squeezed and a hang says which ring of the body it
+/// belongs at. Neither is drawn on the paper, so without this the headless door
+/// onto a pattern shows a waistband and a garment hung from the waist exactly
+/// as it shows a plain hem.
+fn holding(draft: &Draft) -> Vec<String> {
+    let doc = draft.doc();
+    let mut lines = Vec::new();
+    for (_, elastic) in doc.elastics.iter() {
+        lines.push(format!(
+            "elástico  {} · {:.0} % · fuerza {}",
+            stretch(draft, elastic.at),
+            elastic.ratio * 100.0,
+            elastic.strength
+        ));
+    }
+    for (_, hang) in doc.hangs.iter() {
+        lines.push(format!(
+            "colgado   {} · de «{}»",
+            stretch(draft, hang.at),
+            hang.station
+        ));
+    }
+    lines
+}
+
+/// A stretch of contour as a person reads it: the piece, and the two nodes it
+/// runs between with the fraction of a tract when it does not end on one.
+fn stretch(draft: &Draft, at: EdgeRange) -> String {
+    let doc = draft.doc();
+    let piece = at.head.piece;
+    let name = doc.pieces.get(piece).map_or("—", |held| held.name.as_str());
+    let end = |anchor: &toile_engine::draft::EdgeAnchor| {
+        let node = name_of(draft, anchor.piece, anchor.from);
+        if anchor.t == 0.0 {
+            node
+        } else {
+            format!("{node}+{:.2}", anchor.t)
+        }
+    };
+    format!("«{name}» {} → {}", end(&at.head), end(&at.tail))
 }
 
 /// One piece: its contour, its perimeter, its edge lengths and its defects.
@@ -157,6 +211,8 @@ fn tract(draft: &Draft, piece: PieceKey, rank: usize) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    use toile_engine::draft::{Elastic, Hang, Identity};
+
     use super::*;
 
     #[test]
@@ -184,5 +240,53 @@ mod tests {
     fn a_file_that_is_not_a_pattern_is_no_pattern_at_all() {
         let args = ["Cargo.toml".to_owned()];
         assert_eq!(asked_for(&args), None);
+    }
+
+    /// The headless door reads a garment held on the body and says what holds
+    /// it, which is the whole of what a person outside the app can do with one
+    /// today: no gesture puts a hang on, and this is where they see it is
+    /// there.
+    #[test]
+    fn a_pattern_held_on_the_body_says_what_holds_it() {
+        let mut doc = block::trousers();
+        let front = doc.piece_named(block::FRONT).expect("the block draws one");
+        let ends = ["cintura_cf", "cintura_lat"]
+            .map(|label| doc.shows_label(front, label).expect("the block names it"));
+        let at = EdgeRange::between(front, ends[0], ends[1]);
+        Command::AddElastic {
+            identity: Identity::New,
+            elastic: Elastic::new(at, 0.85, 10.0),
+        }
+        .apply(&mut doc)
+        .expect("both ends are nodes of the front");
+        Command::AddHang {
+            identity: Identity::New,
+            hang: Hang::new(at, Hang::WAIST),
+        }
+        .apply(&mut doc)
+        .expect("both ends are nodes of the front");
+
+        // Through the file and not from the document in hand: what a person
+        // outside the app has is bytes on disk, and the version those bytes
+        // carry is the one this build has to read back.
+        let written = doc.to_canonical_json();
+        assert!(written.starts_with("{\n  \"toile\": 8,"), "{written}");
+        let reread = Doc::from_json(&written).expect("this build reads it");
+        let draft = Draft::from_doc(reread).expect("the block resolves");
+        assert_eq!(
+            holding(&draft),
+            [
+                "elástico  «Delantero» cintura_cf → cintura_lat · 85 % · fuerza 10",
+                "colgado   «Delantero» cintura_cf → cintura_lat · de «cintura»",
+            ]
+        );
+    }
+
+    /// And a pattern nothing holds on says so, rather than showing an empty
+    /// heading a reader has to guess at.
+    #[test]
+    fn a_pattern_nothing_holds_on_says_nothing_holds_it() {
+        let draft = Draft::from_doc(block::trousers()).expect("the block resolves");
+        assert!(holding(&draft).is_empty());
     }
 }

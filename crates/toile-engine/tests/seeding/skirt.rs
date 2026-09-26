@@ -1,6 +1,6 @@
 use toile_engine::draft::{
-    Command, Doc, EdgeRange, Elastic, Identity, MeasureSet, Piece, PieceKey, Point, PointKey, Seam,
-    SeamOrientation, Winding,
+    Command, Doc, EdgeRange, Elastic, Hang, Identity, MeasureSet, Piece, PieceKey, Point, PointKey,
+    Seam, SeamOrientation, Winding,
 };
 
 /// Where the back is drawn beside the front on the table.
@@ -131,6 +131,34 @@ fn sew(doc: &mut Doc, front: PieceKey, back: PieceKey) {
         }
         .apply(doc)
         .expect("both ends of the fixture's seams are nodes it has just named");
+    }
+}
+
+/// Hangs both halves' waistlines from the body's own waist.
+///
+/// A second call rather than a field of the cut, because what a hang is worth
+/// can only be read against the same garment carrying none: every scene that
+/// uses this has a twin that does not.
+///
+/// The same stretch the waistband is written over, so the cloth the elastic
+/// holds in is the cloth the ring holds up — which is what a waistband is.
+pub fn hang_from_the_waist(doc: &mut Doc) {
+    for (name, tag) in [(FRONT, ""), (BACK, "_tras")] {
+        let piece = doc
+            .piece_named(name)
+            .expect("the fixture draws both halves before this is called");
+        let at = range(
+            doc,
+            piece,
+            &format!("cintura_cf{tag}"),
+            &format!("cintura_lat{tag}"),
+        );
+        Command::AddHang {
+            identity: Identity::New,
+            hang: Hang::new(at, Hang::WAIST),
+        }
+        .apply(doc)
+        .expect("the waistline runs between two nodes of the piece it names");
     }
 }
 
