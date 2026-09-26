@@ -85,6 +85,7 @@ pub fn reduce(
             view: state.view,
             snap: state.snap,
         };
+        let pressed = matches!(event, Input::Down(..));
         let held = std::mem::take(&mut state.gesture);
         let (next, commands, feedback) = input::update(held, event, &ctx);
         state.gesture = next;
@@ -100,6 +101,18 @@ pub fn reduce(
         // has not stopped being on the node the ring is drawn around.
         state.caught = feedback.snapped.or(state.caught);
         state.ask = feedback.ask.or(state.ask.take());
+        // A press either is refused or is not, so it is the next press that
+        // takes the last refusal off the bar. It is worded in Spanish by the
+        // gesture that refused it, and never by a document error. Nothing else
+        // asks for the frame the bar says it on: a refusal edits nothing, so
+        // the sim is sent nothing and the viewer stays asleep.
+        if pressed {
+            let now = feedback.refused.map(str::to_owned);
+            if state.refused != now {
+                ui.ctx().request_repaint();
+            }
+            state.refused = now;
+        }
         // The rest of the frame's events were aimed at this piece.
         if feedback.overview {
             state.overview();

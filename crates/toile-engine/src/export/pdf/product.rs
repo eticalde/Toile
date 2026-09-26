@@ -155,6 +155,7 @@ impl Printed {
         self.laid().fold(Inked::default(), |mut all, piece| {
             all.lines += piece.inked.lines;
             all.notches += piece.inked.notches;
+            all.darts += piece.inked.darts;
             all.names += piece.inked.names;
             all
         })

@@ -101,6 +101,7 @@ fn every_mark_the_document_carries_reaches_the_sheet() {
         Inked {
             lines: 6,
             notches: 3,
+            darts: 0,
             names: 4,
         }
     );

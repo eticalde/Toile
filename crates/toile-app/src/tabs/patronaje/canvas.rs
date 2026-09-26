@@ -9,8 +9,8 @@ use super::tract::Tract;
 use super::view::{self, View};
 use super::wire::{self, Verb};
 use super::{
-    caption, chalk, curve, dimension, empty, fold, marks, overview, paper, pick, precision, ruler,
-    tract,
+    caption, chalk, curve, dart, dimension, empty, fold, marks, overview, paper, pick, precision,
+    ruler, tract,
 };
 use crate::theme::Theme;
 use crate::widgets::fill;
@@ -138,6 +138,7 @@ fn detail(
         // mouth is a mark on the piece and not something under it.
         chalk::lines(painter, theme, &lines, (state.view, state.selection.line()));
         chalk::notches(painter, theme, &ticks, state.view);
+        dart::drawn(painter, theme, &dart::on(draft, piece), state.view);
         dimension::show(painter, theme, draft, piece, state, over);
         marks::bends(painter, theme, &bends, state, over);
         marks::nodes(painter, theme, draft, piece, state, over);
@@ -164,6 +165,7 @@ fn detail(
         Gesture::Tracing(held) => {
             chalk::tracing(painter, theme, state.view, &held.pending, held.rubber);
         }
+        Gesture::Darting(held) => dart::cutting(painter, theme, state.view, held),
         // A notch sliding is drawn by the document it is writing on every frame,
         // so the mark under the pointer is the mark the file holds.
         Gesture::Idle

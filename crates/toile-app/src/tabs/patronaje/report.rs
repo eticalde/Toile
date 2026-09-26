@@ -1,9 +1,9 @@
 use toile_engine::draft::{Draft, PieceKey};
 use toile_engine::session::Session;
 
-use super::active_piece;
 use super::gesture::Gesture;
 use super::state::{Scope, State, Tool};
+use super::{active_piece, dart};
 
 /// The two nodes a base block names for the side seam, so the bar can measure
 /// it instead of quoting it. A piece that names neither reports its perimeter.
@@ -38,6 +38,31 @@ pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
             ("cm".to_owned(), false),
         ];
     }
+    // A wedge being cut is a third promise of the same kind, and the bar is
+    // where the press that has not happened yet is named — including which way
+    // the finished dart will be pressed, which is decided by the leg pressed
+    // first and so has to be readable before the apex goes down.
+    if let Gesture::Darting(held) = &state.gesture {
+        let legs = held.legs.len();
+        let next = if legs < dart::LEGS {
+            "pulsa la segunda pata en el mismo tramo"
+        } else {
+            "pulsa el pico dentro de la pieza"
+        };
+        return vec![
+            (
+                format!("cortando pinza · {legs} de {} patas", dart::LEGS),
+                false,
+            ),
+            (next.to_owned(), false),
+            (
+                "se plancha hacia la primera pata · Retroceso quita la última · Esc cancela"
+                    .to_owned(),
+                false,
+            ),
+            ("cm".to_owned(), false),
+        ];
+    }
     let draft = session.draft();
     let mut cells = match (draft, state.scope) {
         (Some(draft), Scope::Product) => product(draft, state),
@@ -49,6 +74,12 @@ pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
         }
         (None, _) => return empty(),
     };
+    // The tile says which tool is in hand; what a press with it is aimed at is
+    // said here, where a piece tool that waits for a target has room to say so.
+    if state.scope == Scope::Piece && state.tool == Tool::Dart {
+        let said = "pinza: pulsa la primera pata en un tramo recto";
+        cells.push((said.to_owned(), false));
+    }
     if let Some(why) = state.refused.as_deref() {
         cells.push((format!("rechazado: {why}"), true));
     }

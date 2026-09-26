@@ -93,6 +93,7 @@ pub fn drawn(inked: &Inked) -> String {
     let parts: Vec<String> = [
         counted(inked.lines, "línea interna", "líneas internas"),
         counted(inked.notches, "piquete", "piquetes"),
+        counted(inked.darts, "pinza", "pinzas"),
         counted(inked.names, "nombre de nodo", "nombres de nodo"),
     ]
     .into_iter()

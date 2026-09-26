@@ -74,6 +74,7 @@ fn a_document_with_one_body_has_no_next_one() {
     assert_ne!(next, doc.resolve_with, "a step lands on the other body");
 }
 
+mod dart;
 mod desk;
 mod elastic;
 mod exports;

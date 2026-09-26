@@ -6,7 +6,7 @@ use toile_engine::draft::{Command, LineKey, PointKey};
 use super::gesture::{self, EditContext, Feedback, Gesture, Input, Mods, Stack};
 use super::pick::{EDGE_PT, NODE_PT};
 use super::state::{Selection, Tool};
-use super::{inner, slide, trace, tract};
+use super::{dart, inner, slide, trace, tract};
 
 mod bend;
 mod drag;
@@ -41,6 +41,8 @@ pub fn update(
         ) => draw::update(pending, rubber, back_to, &event, ctx),
         // And while a line is being traced, so does every event of that.
         (Gesture::Tracing(held), event) => trace::update(held, &event, ctx),
+        // And while a wedge is being cut, so does every event of that.
+        (Gesture::Darting(held), event) => dart::update(held, &event, ctx),
         (_, Input::Down(at, mods)) => press(at, mods, ctx),
         (Gesture::Pan { from }, Input::Move(at, _)) => (
             Gesture::Pan { from: at },
@@ -71,7 +73,8 @@ pub fn update(
     }
 }
 
-/// A press: with the Line tool it opens a tracing, on a notch of the tract
+/// A press: with the Line tool it opens a tracing and with the Dart tool a
+/// wedge, on a notch of the tract
 /// already chosen it takes that mark in hand, on a node it takes the selection,
 /// on a handle it pulls a tangent, on a place of the chosen line or on any
 /// other notch it takes that mark, on an internal line it chooses that line, on
@@ -83,6 +86,9 @@ fn press(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>,
     }
     if ctx.tool == Tool::Trace {
         return trace::begin(at, mods, ctx);
+    }
+    if ctx.tool == Tool::Dart {
+        return dart::begin(at, mods, ctx);
     }
     let cm = ctx.view.to_document(at);
     // Before the nodes, and only for the marks of the tract chosen: a notch cut
@@ -230,6 +236,7 @@ fn idle(key: Key, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, 
         (Key::P, false, _) => tool(Tool::Point),
         (Key::C, false, _) => tool(Tool::Curve),
         (Key::L, false, _) => tool(Tool::Trace),
+        (Key::D, false, _) => tool(Tool::Dart),
         // Sewing joins two pieces, so its key leaves this one for the whole
         // product, where both can be seen.
         (Key::S, false, _) => Feedback {

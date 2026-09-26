@@ -1,4 +1,5 @@
 mod curve;
+mod dart;
 mod elastic;
 mod hang;
 mod join;
@@ -11,6 +12,7 @@ mod symmetry;
 mod topology;
 
 use curve::{set_samples, set_segment};
+use dart::{add_dart, remove_dart};
 use elastic::{add_elastic, remove_elastic, set_ratio, set_strength};
 use hang::{add_hang, remove_hang, set_station};
 use join::{add_seam, remove_seam};
@@ -46,8 +48,8 @@ impl Command {
     /// for a line through one place, `SplitSeamSide`, `SplitElastic`,
     /// `SplitInternalLine`, `SplitHang` or `SplitSymmetry` for a run whose ends
     /// disagree on their piece, `FoldAxis` and `AlreadySymmetric` for an axis
-    /// whose ends are one place and a second axis on a piece, and
-    /// `NotYetImplemented`.
+    /// whose ends are one place and a second axis on a piece, `FlatWedge` for a
+    /// wedge not cut between three places, and `NotYetImplemented`.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
         self.apply_as(doc, Naming::Checked)
     }
@@ -125,10 +127,13 @@ impl Command {
                 symmetry: axis,
             } => add_symmetry(doc, identity, axis),
             Command::RemoveSymmetry { symmetry } => remove_symmetry(doc, symmetry),
-            Command::AddDart { .. }
-            | Command::RemoveDart { .. }
-            | Command::SetPin { .. }
-            | Command::ClearPin { .. } => Err(DocError::NotYetImplemented),
+            Command::AddDart {
+                identity,
+                dart,
+                wedge,
+            } => add_dart(doc, identity, dart, *wedge),
+            Command::RemoveDart { dart } => remove_dart(doc, dart),
+            Command::SetPin { .. } | Command::ClearPin { .. } => Err(DocError::NotYetImplemented),
         }
     }
 }

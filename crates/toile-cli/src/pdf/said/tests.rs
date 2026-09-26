@@ -133,11 +133,13 @@ fn the_summary_names_every_mark_that_reached_the_paper() {
     let full = Inked {
         lines: 3,
         notches: 1,
+        darts: 2,
         names: 9,
     };
     assert_eq!(
         drawn(&full),
-        "dibujado: 3 líneas internas · 1 piquete · 9 nombres de nodo · los contornos y el hilo"
+        "dibujado: 3 líneas internas · 1 piquete · 2 pinzas · 9 nombres de nodo · los contornos y \
+         el hilo"
     );
     assert_eq!(
         drawn(&Inked::default()),

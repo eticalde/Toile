@@ -18,6 +18,13 @@ pub(super) struct Sewn {
     /// The paired vertices, as indices into the combined state.
     pub(super) a: Vec<u32>,
     pub(super) b: Vec<u32>,
+    /// Whether this is the seam that shuts a dart.
+    ///
+    /// The solver runs it like any other: a dart closes because its two legs
+    /// are sewn. The placement must not see it at all — it reads the seams to
+    /// chain the pieces into a strip, and a seam with one piece on both sides
+    /// chains nothing while looking exactly like the case that rule refuses.
+    pub(super) dart: bool,
 }
 
 impl Session {
@@ -49,6 +56,7 @@ impl Session {
             };
             match pair_seam_anchored(draft, seam, pipes[ia], bases[ia], pipes[ib], bases[ib]) {
                 Ok((a, b)) => sewn.push(Sewn {
+                    dart: draft.doc().darts.iter().any(|(_, it)| it.seam == key),
                     sides: [ia, ib],
                     at: [
                         mean_at(pipes[ia], &a, bases[ia]),
@@ -77,8 +85,13 @@ impl Session {
     /// garment was put, and a test measuring it against the body, both need
     /// the centre, the size and the height that were chosen.
     pub fn layout(&self) -> Option<couture::Layout> {
+        // Without a dart's own seam, for the reason `Sewn::dart` gives: it
+        // joins a piece to itself, which is the shape the walk refuses, and a
+        // garment would stop being placed on the body the moment anybody cut
+        // one.
+        let sewn: Vec<Sewn> = self.sewn().0.into_iter().filter(|one| !one.dart).collect();
         place::around(
-            &self.sewn().0,
+            &sewn,
             &self.pipelines(),
             &self.collider,
             self.elastics().band,

@@ -19,7 +19,7 @@ const TOOLS: [(&str, &str, bool); 9] = [
         true,
     ),
     ("Línea", "3 2 13 2 13 14 3 14 3 2; 5 8 8 8; 10 8 12 8", true),
-    ("Pinza", "3 3 8 13 13 3", false),
+    ("Pinza", "3 3 8 13 13 3", true),
     ("Piquete", "2 9 14 9; 8 9 8 5", false),
     ("Espejo", "8 2 8 14; 5 5 2 8 5 11; 11 5 14 8 11 11", false),
     ("Medir", "2 6 14 6 14 10 2 10 2 6; 5 6 5 8; 11 6 11 8", true),
@@ -38,6 +38,7 @@ fn tool_of(name: &str) -> Option<Tool> {
         "Punto" => Some(Tool::Point),
         "Curva" => Some(Tool::Curve),
         "Línea" => Some(Tool::Trace),
+        "Pinza" => Some(Tool::Dart),
         "Coser" => Some(Tool::Sew),
         _ => None,
     }
@@ -104,7 +105,10 @@ fn take(state: &mut State, tool: Tool) {
         state.sew();
         return;
     }
-    if matches!(state.gesture, Gesture::Sewing(_) | Gesture::Tracing(_)) {
+    if matches!(
+        state.gesture,
+        Gesture::Sewing(_) | Gesture::Tracing(_) | Gesture::Darting(_)
+    ) {
         state.gesture = Gesture::Idle;
     }
     state.tool = tool;
@@ -219,7 +223,7 @@ mod tests {
             ..State::default()
         };
         let expected = [
-            Ready, Ready, Held, Ready, Absent, Absent, Absent, Held, Ready,
+            Ready, Ready, Held, Ready, Ready, Absent, Absent, Held, Ready,
         ];
         assert_eq!(weights(&piece), expected);
         let whole = State {
@@ -251,7 +255,7 @@ mod tests {
         assert_eq!(
             weights(&tracing),
             [
-                Ready, Ready, Ready, Held, Absent, Absent, Absent, Held, Ready
+                Ready, Ready, Ready, Held, Ready, Absent, Absent, Held, Ready
             ],
             "with the line tool in hand its tile is the one lit"
         );

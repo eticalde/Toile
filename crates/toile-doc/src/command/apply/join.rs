@@ -34,6 +34,14 @@ pub(crate) fn add_seam(
 /// The inverse carries the seam back under its own key, so undoing the unpick
 /// leaves anything that named the seam naming it still.
 pub(crate) fn remove_seam(doc: &mut Doc, seam: SeamKey) -> Result<Applied, DocError> {
+    // A dart is a wedge and the seam that shuts it, so a seam taken out from
+    // under one leaves a dart pointing at nothing — which `json::check`
+    // refuses to load. The editor has to refuse what the loader refuses, or a
+    // product can be saved in a state it can never be opened in. Taking the
+    // dart out takes its seam with it, which is the way through.
+    if doc.darts.iter().any(|(_, dart)| dart.seam == seam) {
+        return Err(DocError::SeamClosesADart);
+    }
     let held = doc.seams.remove(seam)?;
     let touched = touched(&held);
     Ok(Applied {

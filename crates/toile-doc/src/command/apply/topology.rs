@@ -148,7 +148,7 @@ pub(crate) fn remove_piece(doc: &mut Doc, piece: PieceKey) -> Result<Applied, Do
 }
 
 /// Where in the contour a node inserted after `after` lands.
-fn seat(doc: &Doc, piece: PieceKey, after: Option<PointKey>) -> Result<usize, DocError> {
+pub(super) fn seat(doc: &Doc, piece: PieceKey, after: Option<PointKey>) -> Result<usize, DocError> {
     let held = doc
         .pieces
         .get(piece)

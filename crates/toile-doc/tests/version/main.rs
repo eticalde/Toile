@@ -2,6 +2,7 @@
 
 use toile_doc::{Doc, MeasureSet, block};
 
+mod dart;
 mod elastic;
 mod hang;
 mod line;

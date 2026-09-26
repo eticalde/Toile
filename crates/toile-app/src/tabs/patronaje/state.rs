@@ -31,6 +31,8 @@ pub enum Tool {
     Curve,
     /// Draw a line inside the piece that the pattern does not cut on.
     Trace,
+    /// Cut a wedge out of the contour and sew it shut: a dart.
+    Dart,
     /// Sew one tract to another, on the whole product where both can be seen.
     Sew,
 }
@@ -163,10 +165,12 @@ impl State {
     pub fn open(&mut self, piece: PieceKey) {
         match &mut self.gesture {
             Gesture::Drawing { back_to, .. } => *back_to = Scope::Piece,
-            // A tract picked for a seam and a line half traced are matters of
-            // view and hold nothing open, so they are simply let go of. A
-            // tracing belongs to the piece it was begun on, and this leaves it.
-            Gesture::Sewing(_) | Gesture::Tracing(_) => self.gesture = Gesture::Idle,
+            // A tract picked for a seam, a line half traced and a wedge half
+            // cut are matters of view and hold nothing open, so they are simply
+            // let go of: both belong to the piece begun on, and this leaves it.
+            Gesture::Sewing(_) | Gesture::Tracing(_) | Gesture::Darting(_) => {
+                self.gesture = Gesture::Idle;
+            }
             _ => {}
         }
         if self.tool == Tool::Sew {
@@ -187,7 +191,7 @@ impl State {
         let free = self.ask.is_none()
             && matches!(
                 self.gesture,
-                Gesture::Idle | Gesture::Drawing { .. } | Gesture::Tracing(_)
+                Gesture::Idle | Gesture::Drawing { .. } | Gesture::Tracing(_) | Gesture::Darting(_)
             );
         if self.scope == Scope::Piece {
             if !free {
@@ -203,7 +207,10 @@ impl State {
     /// A drawing in progress is walked away from, the way Escape leaves it:
     /// nothing of it has reached the document, so there is nothing to unwind.
     pub fn overview(&mut self) {
-        if matches!(self.gesture, Gesture::Drawing { .. } | Gesture::Tracing(_)) {
+        if matches!(
+            self.gesture,
+            Gesture::Drawing { .. } | Gesture::Tracing(_) | Gesture::Darting(_)
+        ) {
             self.gesture = Gesture::Idle;
             self.caught = None;
         }

@@ -35,13 +35,21 @@ pub fn show(
     (state, verbs): (&mut State, &mut Vec<Verb>),
 ) {
     let doc = draft.doc();
-    section_with(ui, theme, "Costuras", &doc.seams.len().to_string());
-    if doc.seams.is_empty() {
+    // A dart's own seam is not one of these. It is not a seam a person sewed
+    // and it is not one they may unpick — the wedge and the thread that shuts
+    // it are one thing, the Pinzas panel owns both, and taking the thread out
+    // from under the wedge writes a product that never opens again. Left off
+    // the list rather than listed and refused, because a row whose two presses
+    // both say no is a row that should not be there.
+    let ours = |key: SeamKey| !doc.darts.iter().any(|(_, dart)| dart.seam == key);
+    let sewn: Vec<(SeamKey, &Seam)> = doc.seams.iter().filter(|(key, _)| ours(*key)).collect();
+    section_with(ui, theme, "Costuras", &sewn.len().to_string());
+    if sewn.is_empty() {
         plain_note(ui, theme, NONE);
         return;
     }
     let fault = |key: SeamKey| faults.iter().find(|(at, _)| *at == key).map(|(_, why)| why);
-    for (index, (key, held)) in doc.seams.iter().enumerate() {
+    for (index, &(key, held)) in sewn.iter().enumerate() {
         let label = format!("{} · {}", index + 1, pieces(draft, held));
         let note = verdict(theme, draft, held, fault(key).is_some());
         let lit = state.selection.seam() == Some(key);
@@ -55,10 +63,14 @@ pub fn show(
             });
         }
     }
-    let chosen = state.selection.seam().and_then(|key| {
-        let at = doc.seams.keys().position(|it| it == key)?;
-        Some((at + 1, key, *doc.seams.get(key)?))
-    });
+    let chosen = state
+        .selection
+        .seam()
+        .filter(|key| ours(*key))
+        .and_then(|key| {
+            let at = sewn.iter().position(|(it, _)| *it == key)?;
+            Some((at + 1, key, *doc.seams.get(key)?))
+        });
     if let Some((ordinal, key, held)) = chosen {
         detail(ui, theme, draft, (ordinal, key, &held), fault(key), verbs);
     }

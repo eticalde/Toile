@@ -91,6 +91,7 @@ fn the_drawing_and_the_sheet_carry_the_same_marks() {
         Inked {
             lines: 2,
             notches: 1,
+            darts: 0,
             names: 4,
         }
     );

@@ -57,7 +57,7 @@ impl Desk {
     /// One frame of the panel fed `events`.
     pub(super) fn frame(&mut self, events: Vec<Event>) {
         let input = RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1320.0, 2400.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1320.0, 2800.0))),
             events,
             ..RawInput::default()
         };

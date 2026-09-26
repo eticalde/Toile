@@ -1,4 +1,5 @@
 mod cite;
+pub(super) mod dart;
 pub(super) mod elastic;
 /// The ways a pattern leaves the app, and the paper the printed ones take.
 mod exports;
@@ -73,10 +74,12 @@ pub fn show(
                 if state.scope == Scope::Product && piece.is_some() {
                     seams::show(ui, theme, draft, faults, (&mut *state, &mut verbs));
                 }
-                // The lines drawn inside a piece are listed where a piece is
-                // open on its own, which is the one scope that edits them.
+                // The lines drawn inside a piece and the darts cut into it are
+                // listed where a piece is open on its own, which is the one
+                // scope whose tools make either of them.
                 if let Some(piece) = piece.filter(|_| state.scope == Scope::Piece) {
                     inner::show(ui, theme, draft, piece, (&mut *state, &mut verbs));
+                    dart::show(ui, theme, draft, piece, &mut verbs);
                 }
                 asked = tape::measures(ui, theme, draft, state, &cite).or(asked);
                 asked = variables::variables(ui, theme, draft, state, &cite).or(asked);

@@ -3,6 +3,7 @@ mod canvas;
 mod caption;
 mod chalk;
 mod curve;
+mod dart;
 mod dimension;
 mod empty;
 mod fold;

@@ -1,12 +1,9 @@
 use toile_doc::{
-    Command, Doc, DocError, EdgeRange, FORMAT_VERSION_HUNG, FormatError, Hang, History, Identity,
-    block,
+    Command, Doc, DocError, EdgeRange, FORMAT_VERSION_HUNG, Hang, History, Identity, block,
 };
 
 use super::elastic::elasticated;
-use super::line::lined;
 use super::placement::placed;
-use super::symmetry::folded;
 use super::{EMPTY, SHIPPED, header, linked, restamped, rewritten, shaped};
 
 /// The edit that hangs the shipped block's waistline from the body's waist.
@@ -21,7 +18,7 @@ fn hang(doc: &Doc) -> Command {
 }
 
 /// The shipped block hung from the waist, stamped `version`.
-fn hung(version: u32) -> String {
+pub(super) fn hung(version: u32) -> String {
     let mut doc = block::trousers();
     hang(&doc)
         .apply(&mut doc)
@@ -142,34 +139,4 @@ fn a_station_no_body_carries_a_ring_for_is_refused_at_the_edit() {
     .apply(&mut doc);
     assert_eq!(refused, Err(DocError::HangStation("estatura".to_owned())));
     assert!(doc.hangs.is_empty(), "and nothing was written");
-}
-
-/// A build cannot know what a later field means, so it refuses the file for its
-/// version rather than open it and drop that field on the next save.
-#[test]
-fn a_version_9_document_is_refused_loudly() {
-    for later in [
-        restamped(SHIPPED, 9),
-        restamped(&shaped(2), 9),
-        placed(SHIPPED, 9),
-        elasticated(9),
-        lined(9),
-        folded(9),
-        hung(9),
-    ] {
-        let error = Doc::from_json(&later).expect_err("this build reads up to version 8");
-        assert_eq!(
-            error,
-            FormatError::UnknownVersion {
-                found: 9,
-                newest: 8
-            }
-        );
-        assert!(
-            error
-                .to_string()
-                .contains("version 9; this build reads versions 1 to 8"),
-            "{error}"
-        );
-    }
 }

@@ -97,6 +97,15 @@ pub enum DocError {
     /// A second axis asked for on a piece that already carries one.
     #[error("the piece is already drawn against an axis of symmetry")]
     AlreadySymmetric,
+    /// A wedge whose three nodes are not three places. Nothing is taken out of
+    /// the contour, and the seam that closes the dart has no length to sew.
+    #[error("a dart's wedge is cut between three places, and two of its nodes are one")]
+    FlatWedge,
+    /// A seam a dart is closed by, asked to be unpicked on its own. The loader
+    /// refuses a dart whose seam is gone, so a document that allowed it could
+    /// be saved and never opened again.
+    #[error("that seam is what closes a dart, so the dart is what takes it out")]
+    SeamClosesADart,
     /// An internal line that runs through fewer than two places.
     #[error("an internal line runs from one place to another, so it needs two")]
     ShortLine,

@@ -1,5 +1,7 @@
 /// Where a place anchored to a contour falls, and which way it runs there.
 mod anchor;
+/// The marks that say a wedge in a contour is a dart, sewn shut.
+mod dart;
 /// The direction the warp runs, arrowed at both ends.
 mod grain;
 /// The lines a piece is drawn with and not cut on.
@@ -51,6 +53,8 @@ pub struct Inked {
     pub lines: usize,
     /// How many notches mark its contour.
     pub notches: usize,
+    /// How many darts are cut into it.
+    pub darts: usize,
     /// How many of its nodes carry a name.
     pub names: usize,
 }
@@ -72,6 +76,12 @@ pub(super) fn of(draft: &Draft, piece: PieceKey) -> Drawn {
     for notch in notch::runs(draft, piece) {
         inked.notches += 1;
         for mark in notch {
+            both(&mut runs, mark, cloth);
+        }
+    }
+    for dart in dart::runs(draft, piece) {
+        inked.darts += 1;
+        for mark in dart {
             both(&mut runs, mark, cloth);
         }
     }

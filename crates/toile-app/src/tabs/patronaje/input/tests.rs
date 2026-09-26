@@ -88,6 +88,11 @@ impl Table {
         &self.ticks
     }
 
+    /// One tract of the piece that bends, when it draws any.
+    pub(in crate::tabs::patronaje) fn bent(&self) -> Option<&Bend> {
+        self.bends.first()
+    }
+
     /// Where a node sits on the glass.
     pub(in crate::tabs::patronaje) fn on_glass(&self, node: usize) -> Pos2 {
         View::default().to_screen(self.nodes[node].1)

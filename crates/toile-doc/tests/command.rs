@@ -246,8 +246,8 @@ fn an_edit_whose_tool_has_not_arrived_is_an_error_not_a_panic() {
         },
     };
     for command in [
-        Command::RemoveDart {
-            dart: DartKey::new(0, 0),
+        Command::ClearPin {
+            pin: PinKey::new(0, 0),
         },
         mirrored,
     ] {
