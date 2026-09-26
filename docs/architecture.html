@@ -143,6 +143,12 @@ h2 .num{font-family:var(--mono);font-weight:400;font-size:.8rem;color:var(--mute
 .axis svg{display:block;color:var(--muted);margin-top:.35rem}
 
 /* ---------- bloques decisión / descartado ---------- */
+.rule{border-left:3px solid var(--ink);padding:.1rem 0 .1rem 1.1rem;margin:1.5rem 0}
+.rule > b:first-child{
+  font-family:var(--mono);font-weight:500;font-size:.68rem;letter-spacing:.18em;
+  text-transform:uppercase;color:var(--muted);display:block;margin-bottom:.35rem;
+}
+.rule p:first-of-type{font-weight:600;margin-top:0}
 .decision,.discarded{margin:1rem 0;padding:.15rem 0 .15rem 1.1rem}
 .decision{border-left:3px solid var(--chalk)}
 .discarded{border-left:3px dashed var(--thread)}
@@ -477,6 +483,15 @@ footer .fin{max-width:1080px;margin:0 auto;font-family:var(--mono)}
     <li><strong>Spike de topología</strong> (mata el riesgo #4): remallado-en-sombra con swap atómico + transferencia baricéntrica + blend; suite de piezas cóncavas para el interpolador (§3.4); undo de un cambio de topología restaurando el mapa de muestreo desde la revisión.</li>
     <li><strong>Condicional:</strong> spike de change-detection de bevy_ecs (§3.2), solo si la propagación por eventos manuales exhibe bugs reales durante los pasos 2–5.</li>
   </ol>
+
+  <div class="rule">
+    <b>Enmienda · 2026-09-25 · El requisito innegociable, medido</b>
+    <p>Re-convergencia: <strong>2,80 s y 3,58 s</strong>. Feedback de edición: <strong>2,99 ms y 2,98 ms</strong> contra un presupuesto de 200.</p>
+    <p>Medido sobre la escena que una persona usa —un <code>Session</code> vivo, el cuerpo Anny de referencia horneado, el delantero de pantalón de 10.513 vértices, suelto a 1,259 m, suelo a −0,837 m, agarre de piel— moviendo la cintura 3 cm y devolviéndola. La banda de 2–3 s se cumple por abajo y se pasa 0,58 s por arriba: cumplido con un 20 % de margen en contra en el peor de dos ediciones de una escena. Nada en el repositorio lo decía antes de esta fecha.</p>
+    <p>Lo que <em>no</em> se cumple es el requisito tal como una persona lo lee en la aplicación, porque lo que la app llama reposo es el <strong>sueño</strong>, y el sueño en bruto tarda <strong>8,80–9,58 s</strong>. Está todo contabilizado y nada de ello es el solver: <strong>6,00 s son la permanencia</strong> que la regla de sueño exige antes de llamar terminada una caída (360 tics quietos, la <em>permanencia</em> de la <a href="./maniqui.html#vestir">decisión 14</a>, calibrada conservadora a propósito), 2,80–3,58 s son el drapeado, y ni un substep es la máquina — diez substeps a 1/600 s son exactamente tiempo real y el hilo lo siguió. La otra palanca es la escena, y es grande: el corpiño de arranque pide 5,18 s sin la permanencia, y una falda tubo que recorre el cuerpo entero 15,20–16,10 s. «2–3 s» es un número para un panel editado donde ya cuelga, no para una prenda buscando su sitio por un cuerpo.</p>
+    <p><em>Vocabulario:</em> este documento dice «convergencia» y «converger» donde el código dice <em>sleep</em> desde la <a href="./maniqui.html#vestir">decisión 14</a>. Se deja como está a propósito: es el registro de lo que se decidió el 2026-09-11, y el sueño es una pausa reversible y no el veredicto que la palabra sugiere. Lo que sí se corrigió es el código, donde <code>Snapshot.converged</code> pasó a <code>asleep</code> en los cuatro crates que lo nombraban.</p>
+    <p><em>Y una advertencia para quien lea las cifras de los bancos:</em> ninguna escena de <code>toile bench</code> llega a dormirse, porque todas colisionan contra <code>Collider::demo()</code>, que no lleva suelo por decisión explícita — un paño sin nada que lo sostenga cae mientras algo lo integre. Se probó ponerle un plano y se revirtió: no reconstruye la escena de una persona, inventa una tercera. Las cifras de arriba salen de las pruebas de siembra, que sí corren el cuerpo horneado.</p>
+  </div>
 </section>
 
 <section id="refs">

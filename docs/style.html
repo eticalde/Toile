@@ -608,6 +608,7 @@ pub use state::{DistanceConstraints, Seams, State};</code></pre>
   <b>Un m&oacute;dulo es un concepto</b>
   <p>No una fase del proyecto ni un experimento. Nada se llama <code>spike</code>, <code>v2</code>, <code>new_</code>, <code>tmp</code>, <code>utils</code> ni <code>helpers</code>: esos cuatro nombres son un contenedor sin criterio, y todo lo que cae adentro deja de tener due&ntilde;o.</p>
   <p>Layout: <code>foo.rs</code> junto a <code>foo/</code> para los submódulos. No se usan <code>mod.rs</code>.</p>
+  <p><em>Enmienda · 2026-09-25:</em> esa última frase vivió aquí y sólo aquí durante tres semanas, y ocho ficheros del árbol no la cumplían — cinco en <code>toile-anny</code>, dos en <code>toile-engine</code>, uno en <code>toile-cli</code>. En un árbol con <code>body.rs</code> al lado de <code>body/solve/mod.rs</code>, qué fichero abre un lector depende de en qué crate esté. Ahora la comprueba la regla 7 de <code>tools/check-style.sh</code>, que es el Principio 3 de esta guía aplicado a la guía misma: una regla que la puerta no comprueba es una regla que se deshace.</p>
 </div>
 
 <div class="axis" id="p4d">
@@ -751,7 +752,10 @@ pub use state::{DistanceConstraints, Seams, State};</code></pre>
   <tr><td>Bloque de comentario ≤ 17 líneas</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
   <tr><td>Sin procedencia en la fuente</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
   <tr><td>Archivos ≤ 300 líneas</td><td><code>tools/check-style.sh</code></td><td><span class="tag-ok">en CI</span></td></tr>
-  <tr><td>El drapeado no cambia de bits</td><td><code>tests/golden.rs</code> · <code>tools/verify.sh</code></td><td><span class="tag-ok">en CI</span> · ARM + x86</td></tr>
+  <tr><td>Sin trascendentes de std en la geometría</td><td><code>tools/check-style.sh</code> regla 6</td><td><span class="tag-ok">en CI</span> · 6 crates</td></tr>
+  <tr><td><code>libm::</code> solo donde se lo ha ganado</td><td><code>tools/check-style.sh</code> regla 6b</td><td><span class="tag-ok">en CI</span> · 4 archivos</td></tr>
+  <tr><td>Sin <code>mod.rs</code></td><td><code>tools/check-style.sh</code> regla 7</td><td><span class="tag-ok">en CI</span></td></tr>
+  <tr><td>Los nueve goldens no cambian de bits</td><td><code>tests/golden.rs</code> · <code>tools/verify.sh</code></td><td><span class="tag-ok">en CI</span> · ARM + x86</td></tr>
   <tr><td>Licencias del árbol (cero GPL)</td><td><code>cargo-deny</code></td><td><span class="tag-ok">verify.sh y CI</span></td></tr>
   <tr><td>Dependencias sin usar</td><td><code>cargo-machete</code></td><td><span class="tag-ok">verify.sh y CI</span></td></tr>
   <tr><td>Typos en código y docs</td><td><code>typos-cli</code></td><td><span class="tag-ok">verify.sh y CI</span></td></tr>
