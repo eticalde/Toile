@@ -14,10 +14,14 @@ pub(super) struct Elastics {
 impl Session {
     /// Every elastic of the document, read onto the meshes now on the stand.
     ///
-    /// Read afresh rather than remembered, for the reason [`Session::run_of`]
+    /// Read afresh rather than remembered, for the reason [`Session::runs_of`]
     /// gives. That is why the two moments rest lengths are compiled — a derive
     /// and an install — both come through here, and why an elastic cannot
     /// quietly vanish on the first drag.
+    ///
+    /// One elastic can come to more than one stretch of cloth: on a piece
+    /// drawn against a fold it holds the drawn half and its mirror, which are
+    /// one hem on the cut piece and two runs of boundary on the mesh.
     pub(super) fn elastics(&self) -> Elastics {
         let mut held = Vec::new();
         let mut waists: Vec<(usize, f64, f64)> = Vec::new();
@@ -28,25 +32,24 @@ impl Session {
         let pipes = self.pipelines();
         let bases = edge_bases(&pipes);
         for (_, elastic) in draft.doc().elastics.iter() {
-            let Some(run) = self.run_of(draft, &pipes, &bases, elastic.at) else {
-                continue;
-            };
-            let pipe = pipes[run.at];
-            let edges: Vec<usize> = run
-                .verts
-                .windows(2)
-                .filter_map(|pair| pipe.edge_index(pair[0], pair[1]))
-                .map(|edge| run.base + edge)
-                .collect();
-            held.push(Held {
-                edges,
-                ratio: elastic.ratio as f32,
-                compliance: couture::compliance_of(elastic.strength),
-            });
-            widen(&mut waists, run.at, pipe, &run.verts);
-            for &v in &run.verts {
-                ordinate += pipe.pos2d[v as usize][1];
-                counted += 1;
+            for run in self.runs_of(draft, &pipes, &bases, elastic.at) {
+                let pipe = pipes[run.at];
+                let edges: Vec<usize> = run
+                    .verts
+                    .windows(2)
+                    .filter_map(|pair| pipe.edge_index(pair[0], pair[1]))
+                    .map(|edge| run.base + edge)
+                    .collect();
+                held.push(Held {
+                    edges,
+                    ratio: elastic.ratio as f32,
+                    compliance: couture::compliance_of(elastic.strength),
+                });
+                widen(&mut waists, run.at, pipe, &run.verts);
+                for &v in &run.verts {
+                    ordinate += pipe.pos2d[v as usize][1];
+                    counted += 1;
+                }
             }
         }
         let band = (counted > 0).then(|| Band {
@@ -82,6 +85,11 @@ impl Session {
 /// Per piece and not per elastic: the cloth two elastics share is one length
 /// of cloth, counted once here and held once by [`couture::hold`], which is
 /// where what two elastics over one stretch mean is written.
+///
+/// It is what makes a folded piece come out whole as well. The drawn half and
+/// its mirror are two stretches that meet on the crease, so one span taken
+/// across both of them is the cloth the band goes round, while adding their
+/// two widths would count the crease twice over.
 fn widen(waists: &mut Vec<(usize, f64, f64)>, at: usize, pipe: &ShapePipeline, verts: &[u32]) {
     let (lo, hi) = verts.iter().fold((f64::MAX, f64::MIN), |(lo, hi), &v| {
         let x = pipe.pos2d[v as usize][0];
@@ -103,7 +111,9 @@ mod tests {
         reason = "an edge nothing held carries the very bits it was given"
     )]
 
-    use toile_doc::{Command, Doc, EdgeRange, Identity, MeasureSet, Piece, Point, Winding};
+    use toile_doc::{
+        Command, Doc, EdgeRange, Identity, MeasureSet, Piece, Point, Symmetry, Winding,
+    };
 
     use super::*;
     use crate::body::Collider;
@@ -160,6 +170,49 @@ mod tests {
         let band = read.band.expect("the elastic holds the panel by its hem");
         assert!((band.girth - 0.20).abs() < 0.01, "{} of cloth", band.girth);
         assert!(band.at.abs() < 1.0e-9, "along the hem");
+    }
+
+    /// The same hem on a panel drawn to a fold is two stretches, and the band
+    /// they make is the whole cloth's.
+    ///
+    /// The number is what a placement passes to the body as the ring to match:
+    /// a band reading half its girth sends a waistband off to look for a ring
+    /// half the size, and on a measured body there is one.
+    #[test]
+    fn an_elastic_on_a_panel_at_the_fold_makes_a_band_of_the_whole_cloth() {
+        let (mut doc, piece) = panel();
+        let named = |doc: &Doc, l| doc.shows_label(piece, l).expect("the panel names it");
+        let at = EdgeRange::between(piece, named(&doc, "a"), named(&doc, "b"));
+        let axis = EdgeRange::between(piece, named(&doc, "b"), named(&doc, "c"));
+        Command::AddSymmetry {
+            identity: Identity::New,
+            symmetry: Symmetry::fold(axis),
+        }
+        .apply(&mut doc)
+        .expect("both ends are nodes of the panel");
+        Command::AddElastic {
+            identity: Identity::New,
+            elastic: toile_doc::Elastic::new(at, 0.85, 10.0),
+        }
+        .apply(&mut doc)
+        .expect("both ends are nodes of the panel");
+
+        let session = Session::from_doc(doc, Collider::demo()).expect("the panel drapes");
+        let read = session.elastics();
+        assert_eq!(
+            read.held.len(),
+            2,
+            "the hem and its mirror: {:?}",
+            read.held
+        );
+        let band = read.band.expect("the elastic holds the panel by its hem");
+        // One span across both stretches and not the two widths added: they
+        // meet on the crease, which the sum would count twice.
+        assert!((band.girth - 0.40).abs() < 0.01, "{} of cloth", band.girth);
+        assert!(
+            band.at.abs() < 1.0e-9,
+            "the mirror keeps the hem's own line"
+        );
     }
 
     /// And a product with no elastic reads as one: nothing held, and nowhere

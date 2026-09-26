@@ -44,6 +44,23 @@ impl Cloth {
         let [tail, head] = self.axis;
         Crease::through(tail, head).map_or(at, |crease| crease.mirror(at))
     }
+
+    /// The stretch of boundary that mirrors one stretch of the drawn walk, as
+    /// the fraction of the perimeter it opens at and how far it runs — the pair
+    /// a place's own fraction is read in.
+    ///
+    /// A place a given length along the walk reflects onto the place the same
+    /// length back from the walk's far end, so the mirror is as long as the
+    /// stretch and opens where the stretch's own far end lands.
+    ///
+    /// `None` for a stretch reaching past the walk, which is one measured the
+    /// other way round the cloth: it covers the mirrored half already, and
+    /// mirroring it would name the drawn half a second time.
+    pub fn mirror_run(&self, (head, span): (f64, f64)) -> Option<(f64, f64)> {
+        let reaches = (head + span) * self.perimeter;
+        (self.perimeter > 0.0 && reaches <= self.walk + EPS)
+            .then(|| (2.0 * self.walk / self.perimeter - head - span, span))
+    }
 }
 
 /// The cloth a drawn half and its axis make, mirrored across the crease.

@@ -12,42 +12,72 @@ pub(super) struct Run {
 }
 
 impl Session {
-    /// One stretch on the cloth: which piece it lands on, where that piece's
-    /// edges begin, and the boundary vertices it runs over.
+    /// Every stretch on the cloth one range of contour names: the piece each
+    /// lands on, where its edges begin, and the vertices the stretch runs over.
     ///
-    /// `None` for a stretch the cloth cannot answer for — a piece too partial
-    /// to mesh, an anchor on a node its piece no longer runs through, or a
-    /// stretch with no length. Left out of the solve rather than guessed
-    /// at: a stretch read onto the wrong vertices would hold the garment by
-    /// somewhere nobody asked for.
+    /// One stretch for a piece drawn whole. Two for a piece drawn against a
+    /// fold: the cloth is the drawing and its reflection, so a range written
+    /// once is on the cut piece twice, and reading the drawn half alone would
+    /// hold half of the cloth and say nothing of the other half.
+    ///
+    /// Empty for a range the cloth cannot answer for, and for one only one half
+    /// of a folded piece has the cloth to carry. Left out of the solve rather
+    /// than guessed at: a range read onto the wrong vertices would hold the
+    /// garment by somewhere nobody asked for.
     ///
     /// Read afresh rather than remembered, for the reason the sewing is: a
-    /// shape edit moves an anchor's fraction along its own piece and a
-    /// rebuild hands that piece a whole new set of vertices, so a reading
-    /// is only ever true of the meshes it was taken against.
-    pub(super) fn run_of(
+    /// shape edit moves an anchor's fraction along its own piece and a rebuild
+    /// hands that piece a whole new set of vertices, so a reading is only ever
+    /// true of the meshes it was taken against.
+    pub(super) fn runs_of(
         &self,
         draft: &Draft,
         pipes: &[&ShapePipeline],
         bases: &[usize],
         at: EdgeRange,
-    ) -> Option<Run> {
-        let piece = self.index_of(at.piece()?)?;
-        let head = draft.anchor_fraction(&at.head)?;
-        let tail = draft.anchor_fraction(&at.tail)?;
-        // The walk the way the contour runs, as a seam's side is measured, so
-        // a stretch that passes the closure is as long as the walk.
-        let span = (tail - head).rem_euclid(1.0);
-        if span <= f64::EPSILON {
-            return None;
+    ) -> Vec<Run> {
+        let Some(key) = at.piece() else {
+            return Vec::new();
+        };
+        let (Some(piece), Some(drawn)) = (self.index_of(key), fractions(draft, &at)) else {
+            return Vec::new();
+        };
+        let mirror = draft.cloth(key).and_then(|cloth| cloth.mirror_run(drawn));
+        let mut runs = Vec::new();
+        for stretch in [Some(drawn), mirror].into_iter().flatten() {
+            let verts = pipes[piece].boundary_run(stretch);
+            // Both halves of a folded piece or neither of them. The mesh lays
+            // its own vertices, so a stretch this short can come to two of
+            // them on one half and one on the other, and keeping the half that
+            // came out holds the cloth on one side of the crease alone: half
+            // the cloth when that half is the drawn one, and a place nobody
+            // drew when it is the mirror.
+            if verts.len() < 2 {
+                return Vec::new();
+            }
+            runs.push(Run {
+                at: piece,
+                base: bases[piece],
+                verts,
+            });
         }
-        let verts = pipes[piece].boundary_run((head, span));
-        (verts.len() >= 2).then(|| Run {
-            at: piece,
-            base: bases[piece],
-            verts,
-        })
+        runs
     }
+}
+
+/// Where a range of contour opens on its piece's cloth and how far it runs,
+/// both as fractions of that cloth's perimeter.
+///
+/// `None` when either end is a place the cloth has no boundary at — a node the
+/// piece no longer runs through, or one inside the crease of a fold — and for
+/// a range with no length.
+fn fractions(draft: &Draft, at: &EdgeRange) -> Option<(f64, f64)> {
+    let head = draft.anchor_fraction(&at.head)?;
+    let tail = draft.anchor_fraction(&at.tail)?;
+    // The walk the way the contour runs, as a seam's side is measured, so
+    // a stretch that passes the closure is as long as the walk.
+    let span = (tail - head).rem_euclid(1.0);
+    (span > f64::EPSILON).then_some((head, span))
 }
 
 /// Where each piece's edges begin in the product's combined constraints.

@@ -13,6 +13,11 @@ impl Session {
     /// reading is only ever true of the meshes and the body it was taken
     /// against. That is why every message that can move either — a derive, a
     /// rebuild, a body re-solved — carries a fresh one.
+    ///
+    /// One hang can hold more than one stretch, for the reason one elastic
+    /// can: a range written on a piece drawn against a fold is on the cut
+    /// piece twice, once on each side of the crease. A vertex more than one of
+    /// them names is held by the first, because it can only be pulled once.
     pub(super) fn hung(&self) -> Vec<Hung> {
         self.hung_on(&self.collider)
     }
@@ -35,6 +40,9 @@ impl Session {
         let bases = edge_bases(&pipes);
         let vertex_bases = offsets(&pipes);
         let mut hung = Vec::new();
+        // Across every hang and not within one, the way `couture::hold` counts
+        // an edge two elastics cover: this is where all of them can be seen.
+        let mut already: Vec<u32> = Vec::new();
         for (_, hang) in draft.doc().hangs.iter() {
             // A body with no rings — the demo ball, the cube a test bakes —
             // measures no height, and cloth held at a height nobody measured is
@@ -42,12 +50,24 @@ impl Session {
             let Some(belt) = at_station(collider.belts(), &hang.station) else {
                 continue;
             };
-            let Some(run) = self.run_of(draft, &pipes, &bases, hang.at) else {
-                continue;
-            };
-            let base = vertex_bases[run.at];
-            let at = run.verts.iter().map(|&v| v + base).collect();
-            hung.push(hung_at(at, belt.height));
+            let mut at: Vec<u32> = Vec::new();
+            for run in self.runs_of(draft, &pipes, &bases, hang.at) {
+                let base = vertex_bases[run.at];
+                // One pull a substep per vertex, whatever names it: the solver
+                // clamps each pull on its own, so a vertex two runs name moves
+                // twice the step the body's own field allows in one. The two
+                // stretches of a folded piece meet on the crease, and two hangs
+                // meet wherever the tracts they are written on do.
+                for v in run.verts.iter().map(|&v| v + base) {
+                    if !already.contains(&v) {
+                        already.push(v);
+                        at.push(v);
+                    }
+                }
+            }
+            if !at.is_empty() {
+                hung.push(hung_at(at, belt.height));
+            }
         }
         hung
     }
@@ -72,6 +92,7 @@ mod tests {
     use toile_doc::{Command, Doc, EdgeRange, Hang, Identity, MeasureSet, Piece, Point, Winding};
 
     use super::*;
+    use crate::body::{Phenotype, body_mesh};
     use crate::draft::PieceKey;
 
     /// A panel with its hem named, so a run can be written over it.
@@ -119,5 +140,40 @@ mod tests {
         let session = Session::from_doc(doc, ball).expect("the panel drapes");
         assert!(!session.draft().expect("a document").doc().hangs.is_empty());
         assert!(session.hung().is_empty(), "and nothing is held");
+    }
+
+    /// Two hangs that meet on a node hold the vertex there once.
+    ///
+    /// The solver clamps each pull on its own, so a vertex two runs name is
+    /// carried twice the step in one substep — and the two tracts leaving one
+    /// node are two presses apart in the studio, not a document nobody would
+    /// write. The rule is the elastics' own: what covers one place twice holds
+    /// it once, and the place to say so is where every hang can be seen.
+    #[test]
+    #[ignore = "release-only: a real body baked, for the rings a station names"]
+    fn two_hangs_that_meet_on_a_node_hold_the_vertex_there_once() {
+        let (mut doc, piece) = panel();
+        let at = |l| doc.shows_label(piece, l).expect("the panel names it");
+        let (hem, side) = (
+            EdgeRange::between(piece, at("a"), at("b")),
+            EdgeRange::between(piece, at("c"), at("a")),
+        );
+        for run in [hem, side] {
+            Command::AddHang {
+                identity: Identity::New,
+                hang: Hang::new(run, Hang::WAIST),
+            }
+            .apply(&mut doc)
+            .expect("both ends are nodes of the panel");
+        }
+        let mesh = body_mesh(&Phenotype::default(), &[0.0; 20]);
+        let body = Collider::bake(&mesh).expect("the Anny body is closed and orientable");
+        let session = Session::from_doc(doc, body).expect("the panel drapes");
+        let mut once: Vec<u32> = session.hung_cloth().iter().map(|&(v, _)| v).collect();
+        let named = once.len();
+        once.sort_unstable();
+        once.dedup();
+        assert!(named > 2, "both tracts hang: {named} vertices");
+        assert_eq!(once.len(), named, "node `a` is held by one pull, not two");
     }
 }
