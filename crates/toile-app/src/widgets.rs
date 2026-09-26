@@ -8,8 +8,8 @@ mod slider;
 pub use canvas::{canvas_label, fill, grid, mat_canvas};
 pub use cite::{Mention, Named, measure_row, named_formula_row};
 pub use control::{
-    button_ghost, button_ghost_icon, button_icon, button_named, button_primary, button_secondary,
-    check_named, cycle, cycle_named, readout,
+    button_ghost_icon, button_icon, button_named, button_primary, button_secondary, check_named,
+    cycle, cycle_named, readout,
 };
 use eframe::egui::CornerRadius;
 pub use field::{Editable, Edited, field_row, formula_row};

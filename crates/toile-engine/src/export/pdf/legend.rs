@@ -45,19 +45,20 @@ pub(super) fn square(out: &mut String) {
 }
 
 /// What the sheet says, in the language its reader cuts in.
-pub(super) fn says(out: &mut String, frame: &Frame, ink: &Ink, size: [f64; 2], place: &Place) {
+pub(super) fn says(out: &mut String, frame: &Frame, inks: &[Ink], size: [f64; 2], place: &Place) {
     let paper = frame.paper();
-    let (name, body) = (ink.name(), ink.body());
+    let body = inks.first().and_then(Ink::body);
+    let several = inks.len() > 1;
     let mut said = if place.total == 1 {
-        alone(paper, size)
+        alone(paper, size, several)
     } else {
-        tiled(paper, size, place)
+        tiled(paper, size, place, several)
     };
     // Which body the pattern was resolved against, on the paper: forty loose
     // sheets of one garment say nothing about whom it was cut for, and the same
     // piece resolved against another body is another pattern at the same size
-    // of paper. The drawing has nowhere to put it — one file carries every
-    // piece of a document, and one sheet of paper carries one piece.
+    // of paper. It goes beside the square and not beside a piece because it is
+    // true of the whole document, and a sheet may carry more than one piece.
     if let Some(body) = body {
         said.insert(0, format!("Trazada para «{body}»."));
     }
@@ -67,11 +68,10 @@ pub(super) fn says(out: &mut String, frame: &Frame, ink: &Ink, size: [f64; 2], p
     debug_assert!((said.len() + 2) as f64 * LEADING <= CALIBRATION);
     let across = MARGIN + CALIBRATION + GAP;
     let top = paper.height_mm - MARGIN - CALIBRATION + TITLE;
-    let titled = if place.total == 1 {
-        format!("Pieza «{name}»")
-    } else {
-        format!("Pieza «{name}» · hoja {} de {}", place.number, place.total)
-    };
+    let mut titled = headed(inks);
+    if place.total > 1 {
+        let _ = write!(titled, " · hoja {} de {}", place.number, place.total);
+    }
     show(out, frame.page(across, top), TITLE, &titled);
     for (rank, said) in said.iter().enumerate() {
         let down = top + LEADING * (rank + 1) as f64;
@@ -79,22 +79,51 @@ pub(super) fn says(out: &mut String, frame: &Frame, ink: &Ink, size: [f64; 2], p
     }
 }
 
-/// What a piece that fits on one sheet says: the scale, and nothing about
+/// What the sheet is titled: the piece on it, or the pile of pieces that share
+/// it, named after the first of them.
+///
+/// A pile is named and not merely counted, because what a person sorting loose
+/// sheets into stacks has to read is which stack a sheet belongs to, and two
+/// piles of three pieces would otherwise print the same words. Which pieces
+/// those are is on the drawing, beside each of them.
+fn headed(inks: &[Ink]) -> String {
+    let first = inks.first().map_or("", |ink| ink.name());
+    match inks.len() {
+        0 | 1 => format!("Pieza «{first}»"),
+        2 => format!("Pliego «{first}» y otra pieza"),
+        many => format!("Pliego «{first}» y otras {} piezas", many - 1),
+    }
+}
+
+/// What the legend calls what a ruler is laid along: the piece, or the whole
+/// sheaf of pieces the sheets make once they are taped.
+///
+/// Written out in both genders rather than built out of a stem, because «la
+/// pieza entera» and «el pliego entero» do not agree with one.
+fn whole(several: bool) -> &'static str {
+    if several {
+        "El pliego entero"
+    } else {
+        "La pieza entera"
+    }
+}
+
+/// What a sheet that stands on its own says: the scale, and nothing about
 /// joining anything to anything.
-fn alone(paper: Paper, size: [f64; 2]) -> Vec<String> {
+fn alone(paper: Paper, size: [f64; 2], several: bool) -> Vec<String> {
     vec![
         "Escala 1:1 — imprime al 100 %.".to_owned(),
         "No uses «ajustar a la página».".to_owned(),
         format!("El cuadrado mide {} cm de lado.", CALIBRATION / MM_PER_CM),
-        measured("La pieza", size),
+        measured(if several { "El pliego" } else { "La pieza" }, size),
         "Mide una de las dos con una regla antes de cortar.".to_owned(),
         named(paper),
     ]
 }
 
-/// What one sheet of a tiled piece says: where it is in the grid, which sheets
+/// What one sheet of a tiled pile says: where it is in the grid, which sheets
 /// it is taped to, what to cut, and the scale.
-fn tiled(paper: Paper, size: [f64; 2], place: &Place) -> Vec<String> {
+fn tiled(paper: Paper, size: [f64; 2], place: &Place, several: bool) -> Vec<String> {
     vec![
         format!(
             "Columna {} de {} · fila {} de {}.",
@@ -119,7 +148,7 @@ fn tiled(paper: Paper, size: [f64; 2], place: &Place) -> Vec<String> {
             "El cuadrado mide {} cm de lado: mídelo antes de recortarlo.",
             CALIBRATION / MM_PER_CM
         ),
-        measured("La pieza entera", size),
+        measured(whole(several), size),
         named(paper),
     ]
 }

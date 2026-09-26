@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use super::super::units::{CUT, MARGIN, number};
+use super::super::units::{CUT, DRAWN, MARGIN, number};
 use super::grid::Grid;
 use super::ink::Ink;
 use super::paper::{Paper, points};
@@ -33,6 +33,12 @@ impl Frame {
         self.paper
     }
 
+    /// Where this sheet's own drawing starts on the tiled plane, in
+    /// millimetres.
+    pub(super) fn at(&self) -> [f64; 2] {
+        self.at
+    }
+
     /// How much of the sheet the pattern may take, in millimetres.
     pub(super) fn cell(&self) -> [f64; 2] {
         self.cell
@@ -59,24 +65,45 @@ impl Frame {
     }
 }
 
-/// One sheet's content stream: the part of the piece this sheet carries, what a
+/// One sheet's content stream: the part of the pile this sheet carries, what a
 /// person joins it by, the square a ruler is laid on, and the Spanish that says
 /// what to do with all three.
 ///
-/// The piece's own ink is written inside the clip and the rest of the sheet
+/// The pieces' own ink is written inside the clip and the rest of the sheet
 /// outside it, so the cut weight the clip opens with is still the current one
 /// when the square is stroked after it closes.
-pub(super) fn content(frame: &Frame, grid: &Grid, ink: &Ink, place: &Place) -> String {
+///
+/// Every cut line first and the marks after, so that the weight a cut line is
+/// stroked at is set once for all of them: the one distinction a sheet has to
+/// make at a glance is the line to cut from everything else, and on a sheet
+/// carrying two pieces it has to make it twice.
+///
+/// A piece is named on the sheet only where the sheet carries more than one.
+/// With one piece the legend's own title says which it is, and a second name on
+/// the paper would say the same thing over the drawing.
+pub(super) fn content(frame: &Frame, grid: &Grid, inks: &[Ink], place: &Place) -> String {
     let mut out = String::new();
     let _ = writeln!(out, "{} w", number(points(CUT)));
     out.push_str("q\n");
     clip(&mut out, frame);
-    cut(&mut out, frame, grid.cut());
-    ink::marks(&mut out, frame, grid, ink);
+    for cloth in grid.cloths() {
+        cut(&mut out, frame, cloth.cut());
+    }
+    for (cloth, ink) in grid.cloths().iter().zip(inks) {
+        ink::marks(&mut out, frame, cloth, ink);
+        if inks.len() > 1 {
+            ink::named(&mut out, frame, cloth, ink);
+        }
+    }
     out.push_str("Q\n");
+    // At the weight of a mark and not of a cut. The square is the one shape on
+    // the sheet the legend tells a person to measure and not to cut, so a
+    // sheet carrying three pieces would otherwise show four heavy closed
+    // outlines and mean three — which is the distinction `DRAWN` exists for.
+    let _ = writeln!(out, "{} w", number(points(DRAWN)));
     legend::square(&mut out);
     join::marks(&mut out, frame, place);
-    legend::says(&mut out, frame, ink, grid.size(), place);
+    legend::says(&mut out, frame, inks, grid.size(), place);
     out
 }
 

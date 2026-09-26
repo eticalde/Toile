@@ -28,11 +28,7 @@ mod tests;
 /// carries it as a linked copy. Nothing is written over an existing file: the
 /// owner's folder and library are theirs.
 pub fn run(args: &[String]) {
-    let result = args::parse(args).and_then(|asked| migrate(&asked));
-    match result {
-        Ok(lines) => lines.iter().for_each(|line| println!("{line}")),
-        Err(why) => eprintln!("{why}"),
-    }
+    crate::report::said(args::parse(args).and_then(|asked| migrate(&asked)));
 }
 
 /// Where the report and the drawing go, beside the product.

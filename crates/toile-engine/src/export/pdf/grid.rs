@@ -1,4 +1,5 @@
-use super::super::units::{MARGIN, box_of, centimetres, millimetres};
+use super::super::units::{MARGIN, box_of, centimetres};
+use super::pack::Placed;
 use super::paper::Paper;
 use super::place::{Joins, Place};
 use super::plane::Plane;
@@ -27,7 +28,7 @@ pub(super) const OVERLAP: f64 = 20.0;
 /// out of a formula lands on the wrong side of a whole step often enough.
 const SLACK: f64 = 1.0e-9;
 
-/// The most sheets one piece may be laid across.
+/// The most sheets one pile may be laid across.
 ///
 /// A ream is five hundred sheets. A piece that asks for more than a ream is a
 /// formula that slipped a decimal, and printing it would say so an hour and a
@@ -52,32 +53,76 @@ fn step(paper: Paper) -> [f64; 2] {
     cell(paper).map(|side| side - OVERLAP)
 }
 
-/// Which sheets a piece needs, and where the cloth sits on them.
+/// One piece of a pile, on the plane the taped sheets make.
+#[derive(Debug)]
+pub(super) struct Cloth {
+    /// Its outline on the plane, in millimetres.
+    cut: Vec<[f64; 2]>,
+    /// Where its every other place reaches that plane.
+    plane: Plane,
+    /// Where the box around it opens on the plane, in millimetres.
+    place: [f64; 2],
+    /// What it measures, in millimetres.
+    size: [f64; 2],
+}
+
+impl Cloth {
+    /// Its outline on the plane, in millimetres.
+    pub(super) fn cut(&self) -> &[[f64; 2]] {
+        &self.cut
+    }
+
+    /// One place of the piece on the plane, in millimetres.
+    pub(super) fn onto(&self, at: [f64; 2]) -> [f64; 2] {
+        self.plane.onto(at)
+    }
+
+    /// Where the box around it opens on the plane, in millimetres.
+    pub(super) fn place(&self) -> [f64; 2] {
+        self.place
+    }
+
+    /// What it measures, in millimetres.
+    pub(super) fn size(&self) -> [f64; 2] {
+        self.size
+    }
+}
+
+/// Which sheets a pile needs, and where each of its pieces sits on them.
 #[derive(Debug)]
 pub(super) struct Grid {
-    /// The cloth's outline on the tiled plane, in millimetres.
-    cut: Vec<[f64; 2]>,
-    /// The plane that outline and every other mark of the piece is laid on.
-    plane: Plane,
-    /// What the cloth measures, in millimetres.
+    /// Every piece of the pile, in the order the file inks them.
+    cloths: Vec<Cloth>,
+    /// What the whole pile measures, in millimetres.
     size: [f64; 2],
     /// How many columns and rows of paper it is laid across.
     counts: [usize; 2],
     /// What each cell of the grid became, in reading order: the number of the
     /// sheet that carries it, or nothing where no cloth reaches the cell.
     sheets: Vec<Option<usize>>,
+    /// How much of one sheet may be drawn on, in millimetres.
+    cell: [f64; 2],
     /// How far one cell starts from the next, in millimetres.
     step: [f64; 2],
 }
 
 impl Grid {
-    /// The grid a piece of cloth is laid across, on this paper.
+    /// The grid a pile of placed pieces is laid across, on this paper.
+    ///
+    /// The paper left over once the columns are counted is shared out across
+    /// them and kept off the rows, because a draft traces downward from the
+    /// waist: a pile hangs from the top margin of its first row, where its own
+    /// first line is.
     ///
     /// # Errors
-    /// `SheetError::TooMany` when the piece asks for more paper than a ream.
-    pub(super) fn new(paper: Paper, cloth_cm: &[[f64; 2]]) -> Result<Grid, SheetError> {
-        let (low, high) = box_of(cloth_cm.iter().copied());
-        let size = millimetres([high[0] - low[0], high[1] - low[1]]);
+    /// `SheetError::TooMany` when the pile asks for more paper than a ream.
+    pub(super) fn new(paper: Paper, laid: &[Placed]) -> Result<Grid, SheetError> {
+        debug_assert!(!laid.is_empty(), "a pile is opened by a piece");
+        let (low, high) = box_of(laid.iter().flat_map(|piece| {
+            let [x, y] = piece.place;
+            [[x, y], [x + piece.size[0], y + piece.size[1]]]
+        }));
+        let size = [high[0] - low[0], high[1] - low[1]];
         let (cell, step) = (cell(paper), step(paper));
         let counts = [0, 1].map(|axis| across(size[axis], cell[axis], step[axis]));
         let asked = counts[0].saturating_mul(counts[1]);
@@ -88,40 +133,53 @@ impl Grid {
                 paper: paper.name,
             });
         }
-        // How much paper is left over once the columns are counted, which is
-        // what the plane shares out.
         let spare = (counts[0] - 1) as f64 * step[0] + cell[0] - size[0];
-        let plane = Plane::new(low, spare);
-        let cut: Vec<[f64; 2]> = cloth_cm.iter().map(|&at| plane.onto(at)).collect();
-        let sheets = walked(&cut, counts, cell, step);
+        let cloths: Vec<Cloth> = laid
+            .iter()
+            .map(|piece| laid_out(piece, low, spare / 2.0))
+            .collect();
+        let sheets = walked(&cloths, counts, cell, step);
         Ok(Grid {
-            cut,
-            plane,
+            cloths,
             size,
             counts,
             sheets,
+            cell,
             step,
         })
     }
 
-    /// The cloth's outline on the tiled plane, in millimetres.
-    pub(super) fn cut(&self) -> &[[f64; 2]] {
-        &self.cut
+    /// Every piece of the pile, in the order the file inks them.
+    pub(super) fn cloths(&self) -> &[Cloth] {
+        &self.cloths
     }
 
-    /// One place of the piece on the tiled plane, in millimetres.
-    pub(super) fn onto(&self, at: [f64; 2]) -> [f64; 2] {
-        self.plane.onto(at)
-    }
-
-    /// What the whole piece measures, in millimetres.
+    /// What the whole pile measures, in millimetres.
     pub(super) fn size(&self) -> [f64; 2] {
         self.size
     }
 
-    /// How many columns and rows the piece is laid across, blank cells and all.
+    /// How many columns and rows the pile is laid across, blank cells and all.
     pub(super) fn counts(&self) -> [usize; 2] {
         self.counts
+    }
+
+    /// How many sheets of paper the pile prints.
+    pub(super) fn sheets(&self) -> usize {
+        self.sheets.iter().flatten().count()
+    }
+
+    /// Whether every sheet of the pile carries a part of every piece on it.
+    ///
+    /// The one thing that makes a pile one thing: a stack whose sheets are all
+    /// the same pieces can be described once, on every sheet of it and in the
+    /// summary, and a person holding any sheet of it is holding all of them.
+    pub(super) fn one_pile(&self) -> bool {
+        self.printed().all(|corner| {
+            self.cloths
+                .iter()
+                .all(|cloth| lands::on(&cloth.cut, corner, self.cell))
+        })
     }
 
     /// Where one cell's drawing starts on the tiled plane, in millimetres.
@@ -129,12 +187,12 @@ impl Grid {
         [col as f64 * self.step[0], row as f64 * self.step[1]]
     }
 
-    /// Every sheet the piece prints, in the order they are printed.
+    /// Every sheet the pile prints, in the order they are printed.
     ///
     /// Reading order, left to right and top to bottom, which is the order the
     /// sheets come out of the printer and the order they are laid on the table.
     pub(super) fn places(&self) -> Vec<Place> {
-        let total = self.sheets.iter().flatten().count();
+        let total = self.sheets();
         let mut out = Vec::with_capacity(total);
         for row in 0..self.counts[1] {
             for col in 0..self.counts[0] {
@@ -158,6 +216,14 @@ impl Grid {
         out
     }
 
+    /// The corner of every cell the pile prints, in reading order.
+    fn printed(&self) -> impl Iterator<Item = [f64; 2]> {
+        (0..self.counts[1]).flat_map(move |row| {
+            (0..self.counts[0])
+                .filter_map(move |col| self.at(col, row).map(|_| self.corner([col, row])))
+        })
+    }
+
     /// The number of the sheet at one cell, or nothing where none was printed.
     fn at(&self, col: usize, row: usize) -> Option<usize> {
         if col >= self.counts[0] || row >= self.counts[1] {
@@ -170,10 +236,23 @@ impl Grid {
     }
 }
 
-/// How many sheets one axis of a piece takes.
+/// One placed piece as the plane carries it, with the spare paper shared in.
+fn laid_out(piece: &Placed, low: [f64; 2], spare: f64) -> Cloth {
+    let place = [piece.place[0] - low[0] + spare, piece.place[1] - low[1]];
+    let plane = Plane::new(piece.low, place);
+    let cut: Vec<[f64; 2]> = piece.outline.iter().map(|&at| plane.onto(at)).collect();
+    Cloth {
+        cut,
+        plane,
+        place,
+        size: piece.size,
+    }
+}
+
+/// How many sheets one axis of a pile takes.
 ///
 /// Each sheet after the first advances by a step rather than by a whole cell,
-/// because the band the two share is drawn twice and moves the piece forward
+/// because the band the two share is drawn twice and moves the pile forward
 /// not at all.
 fn across(size: f64, cell: f64, step: f64) -> usize {
     if size <= cell {
@@ -184,7 +263,7 @@ fn across(size: f64, cell: f64, step: f64) -> usize {
 
 /// Which cell became which sheet, in reading order.
 fn walked(
-    plane: &[[f64; 2]],
+    cloths: &[Cloth],
     counts: [usize; 2],
     cell: [f64; 2],
     step: [f64; 2],
@@ -194,7 +273,10 @@ fn walked(
     for row in 0..counts[1] {
         for col in 0..counts[0] {
             let corner = [col as f64 * step[0], row as f64 * step[1]];
-            sheets.push(lands::on(plane, corner, cell).then(|| {
+            let lands = cloths
+                .iter()
+                .any(|cloth| lands::on(&cloth.cut, corner, cell));
+            sheets.push(lands.then(|| {
                 printed += 1;
                 printed
             }));
@@ -204,96 +286,4 @@ fn walked(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::super::A4;
-    use super::super::tests::ELL;
-    use super::*;
-
-    /// A rectangle of cloth, in centimetres, hung at the document's origin.
-    fn cloth(wide: f64, tall: f64) -> Vec<[f64; 2]> {
-        vec![[0.0, 0.0], [wide, 0.0], [wide, tall], [0.0, tall]]
-    }
-
-    /// The sheet a piece that fits takes, and the one thing that must not have
-    /// changed for it: it is still one sheet, and the cloth still sits on it
-    /// where a sheet with no grid put it.
-    #[test]
-    fn a_piece_that_fits_is_one_sheet_and_the_grid_is_a_no_op() {
-        let grid = Grid::new(A4, &cloth(12.0, 14.0)).expect("it fits");
-        assert_eq!(grid.counts(), [1, 1]);
-        let places = grid.places();
-        assert_eq!(places.len(), 1);
-        assert_eq!(
-            places[0].joins,
-            Joins {
-                above: None,
-                below: None,
-                left: None,
-                right: None
-            }
-        );
-        let spare = (cell(A4)[0] - 120.0) / 2.0;
-        let [x, y] = grid.cut()[0];
-        assert!((x - spare).abs() < 1.0e-9, "{x} against {spare}");
-        assert!(y.abs() < 1.0e-9, "{y}");
-    }
-
-    /// Each sheet after the first advances by a step and not by a cell, so the
-    /// count is the one a person can check by laying the sheets out.
-    #[test]
-    fn a_piece_wider_than_the_paper_takes_a_column_for_every_step() {
-        let cell = cell(A4)[0];
-        let step = cell - OVERLAP;
-        for (extra, want) in [(0.0, 1), (0.1, 2), (step, 2), (step + 0.1, 3)] {
-            let wide = (cell + extra) / 10.0;
-            let grid = Grid::new(A4, &cloth(wide, 1.0)).expect("it fits a ream");
-            assert_eq!(grid.counts()[0], want, "{wide} cm");
-        }
-    }
-
-    /// A size that lands a nanometre past a whole step is that step, and not
-    /// another sheet of paper for a millionth of a millimetre of cloth.
-    #[test]
-    fn a_nanometre_past_a_whole_step_is_not_another_sheet() {
-        let cell = cell(A4)[0];
-        let step = cell - OVERLAP;
-        let wide = (cell + step + 1.0e-10) / 10.0;
-        let grid = Grid::new(A4, &cloth(wide, 1.0)).expect("it fits");
-        assert_eq!(grid.counts()[0], 2);
-    }
-
-    /// The sheets are numbered in the order they are printed, and a cell with
-    /// no cloth on it takes no number at all.
-    #[test]
-    fn the_numbers_run_in_reading_order_and_skip_the_blank_cells() {
-        let grid = Grid::new(A4, &ELL).expect("it fits");
-        assert_eq!(grid.counts(), [2, 2]);
-        let places = grid.places();
-        assert_eq!(places.len(), 3, "the hollow cell prints nothing");
-        assert_eq!(places[0].cell, [0, 0]);
-        assert_eq!(places[0].number, 1);
-        assert_eq!(places[0].joins.right, None, "the sheet beside it is blank");
-        assert_eq!(places[0].joins.below, Some(2));
-        assert_eq!(places[1].cell, [0, 1]);
-        assert_eq!(places[1].joins.above, Some(1));
-        assert_eq!(places[2].cell, [1, 1]);
-        assert_eq!(places[2].joins.left, Some(2));
-        assert_eq!(places[2].joins.above, None);
-    }
-
-    /// A piece that asks for more paper than a ream is a formula that slipped a
-    /// decimal, and it is said in sheets because that is what it would cost.
-    #[test]
-    fn a_piece_that_asks_for_more_than_a_ream_is_refused_in_sheets() {
-        let refused = Grid::new(A4, &cloth(1_000.0, 1_000.0));
-        let Err(SheetError::TooMany {
-            sheets, size_cm, ..
-        }) = refused
-        else {
-            panic!("ten metres of cloth each way is not a pattern: {refused:?}");
-        };
-        assert!(sheets > REAM, "{sheets}");
-        assert!((size_cm[0] - 1_000.0).abs() < 1.0e-9, "{size_cm:?}");
-        assert!((size_cm[1] - 1_000.0).abs() < 1.0e-9, "{size_cm:?}");
-    }
-}
+mod tests;

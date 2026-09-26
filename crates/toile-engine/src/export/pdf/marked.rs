@@ -1,8 +1,8 @@
 use super::super::drawn::Inked;
 use super::paper::points_of_cm;
-use super::tests::{step, stream_of};
+use super::read::{step, stream_of};
 use super::text::literal;
-use super::{A4, to_pdf};
+use super::{A4, piece_to_pdf};
 use crate::draft::{
     Binding, Command, Doc, Draft, EdgeAnchor, Identity, LineEdit, LineKind, MeasureSet, Notch,
     NotchCount, Piece, PieceKey, Point, VertexEdit, Winding,
@@ -95,9 +95,9 @@ fn kinds() -> Vec<LineKind> {
 #[test]
 fn every_mark_the_document_carries_reaches_the_sheet() {
     let (draft, piece) = marked();
-    let printed = to_pdf(&draft, piece, A4).expect("the marked piece prints");
+    let printed = piece_to_pdf(&draft, piece, A4).expect("the marked piece prints");
     assert_eq!(
-        printed.inked,
+        printed.piles[0].pieces[0].inked,
         Inked {
             lines: 6,
             notches: 3,
@@ -117,7 +117,7 @@ fn every_mark_the_document_carries_reaches_the_sheet() {
 #[test]
 fn only_the_kinds_the_pattern_breaks_are_drawn_broken() {
     let (draft, piece) = marked();
-    let printed = to_pdf(&draft, piece, A4).expect("the marked piece prints");
+    let printed = piece_to_pdf(&draft, piece, A4).expect("the marked piece prints");
     let stream = stream_of(&printed.bytes);
     let (whole, dashed) = marks(&stream);
     // Every line is ten centimetres long and each runs down its own column of
@@ -157,7 +157,7 @@ fn only_the_kinds_the_pattern_breaks_are_drawn_broken() {
 #[test]
 fn a_notch_cuts_into_the_cloth_from_the_side_it_is_marked_on() {
     let (draft, piece) = marked();
-    let printed = to_pdf(&draft, piece, A4).expect("the marked piece prints");
+    let printed = piece_to_pdf(&draft, piece, A4).expect("the marked piece prints");
     let stream = stream_of(&printed.bytes);
     let (whole, _) = marks(&stream);
     let deep = points_of_cm(DEEP);
@@ -180,7 +180,7 @@ fn a_notch_cuts_into_the_cloth_from_the_side_it_is_marked_on() {
 #[test]
 fn the_sheet_says_every_name_a_cutter_reads() {
     let (draft, piece) = marked();
-    let printed = to_pdf(&draft, piece, A4).expect("the marked piece prints");
+    let printed = piece_to_pdf(&draft, piece, A4).expect("the marked piece prints");
     let stream = stream_of(&printed.bytes);
     for name in ["A", "B", "C", "D"] {
         let said = format!("{} Tj", literal(name));
@@ -193,13 +193,57 @@ fn the_sheet_says_every_name_a_cutter_reads() {
     assert!(stream.contains(&literal("Pieza «Cuadro»")), "{stream}");
 }
 
+/// And every one of them is set where the sheet still shows it.
+///
+/// The case the test above cannot see, and the one that happened: a name is
+/// written up and to the right of its node, a node on the piece's own top edge
+/// sits on the cell's own boundary, and the clip discards the whole line. The
+/// bytes carry it and the paper does not — so `contains` passes and fifteen of
+/// the owner's sixty-four names reached no sheet of his file. This fixture's
+/// corners A and B are exactly that node, which is why the test above
+/// green-lit them.
+#[test]
+fn every_name_is_set_inside_the_clip_that_shows_it() {
+    let (draft, piece) = marked();
+    let printed = piece_to_pdf(&draft, piece, A4).expect("the marked piece prints");
+    let stream = stream_of(&printed.bytes);
+    let (clip, _) = stream.split_once(" re W n").expect("the sheet clips");
+    let corner: Vec<f64> = clip
+        .rsplit('\n')
+        .next()
+        .expect("the clip is one line")
+        .split_whitespace()
+        .filter_map(|word| word.parse().ok())
+        .collect();
+    let [left, low, wide, tall] = <[f64; 4]>::try_from(corner).expect("four operands");
+    let mut seen = 0;
+    for name in ["A", "B", "C", "D"] {
+        let said = format!("{} Tj", literal(name));
+        let before = stream.split(&said).next().expect("the name is written");
+        let anchor: Vec<f64> = before
+            .rsplit("BT\n")
+            .next()
+            .expect("the name opens a text object")
+            .split_whitespace()
+            .filter_map(|word| word.parse().ok())
+            .collect();
+        let (x, y) = (anchor[anchor.len() - 2], anchor[anchor.len() - 1]);
+        assert!(
+            x >= left && x <= left + wide && y >= low && y <= low + tall,
+            "«{name}» is set at {x},{y}, outside the clip {left},{low} {wide}×{tall}"
+        );
+        seen += 1;
+    }
+    assert_eq!(seen, 4, "every corner was read");
+}
+
 /// A sheet of the marked piece is as deterministic as a blank one: every mark
 /// on it comes out of the document and nothing out of an address or a clock.
 #[test]
 fn the_same_marked_piece_writes_the_same_sheet_twice() {
     let (draft, piece) = marked();
-    let once = to_pdf(&draft, piece, A4).expect("it prints");
-    let again = to_pdf(&draft, piece, A4).expect("it prints");
+    let once = piece_to_pdf(&draft, piece, A4).expect("it prints");
+    let again = piece_to_pdf(&draft, piece, A4).expect("it prints");
     assert_eq!(once, again);
 }
 

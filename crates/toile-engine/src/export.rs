@@ -10,5 +10,8 @@ mod svg;
 mod units;
 
 pub use drawn::Inked;
-pub use pdf::{A4, CARTA, Paper, Printed, SheetError, to_pdf};
+pub use pdf::{
+    A4, CARTA, Laid, NothingPrinted, Paper, Pile, Printed, SheetError, Skipped, piece_to_pdf,
+    to_pdf,
+};
 pub use svg::{ExportError, to_svg};

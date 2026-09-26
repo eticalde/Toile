@@ -26,35 +26,34 @@ const OUT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../toile-anny/assets/bod
 /// downloads or hardcodes a path to it — the caller always says where their
 /// checkout lives.
 pub fn run(args: &[String]) {
-    let Some(root) = args.first() else {
-        eprintln!("uso: toile anny-bake RUTA/a/mpfb2");
-        return;
+    crate::report::said(written(args));
+}
+
+/// The bake and the one write, with every refusal on the way out rather than
+/// printed where it happens: a bake that read nothing must not leave the shell
+/// believing it baked.
+fn written(args: &[String]) -> Result<Vec<String>, String> {
+    let root = args
+        .first()
+        .ok_or_else(|| "uso: toile anny-bake RUTA/a/mpfb2".to_owned())?;
+    let read = |path: &str| {
+        std::fs::read_to_string(path).map_err(|why| format!("no se pudo leer «{path}»: {why}"))
     };
-    let obj_path = format!("{root}/3dobjs/base.obj");
-    let groups_path = format!("{root}/mesh_metadata/basemesh_vertex_groups.json");
-    let obj_text = match std::fs::read_to_string(&obj_path) {
-        Ok(text) => text,
-        Err(why) => return eprintln!("no se pudo leer «{obj_path}»: {why}"),
-    };
-    let groups_text = match std::fs::read_to_string(&groups_path) {
-        Ok(text) => text,
-        Err(why) => return eprintln!("no se pudo leer «{groups_path}»: {why}"),
-    };
+    let obj_text = read(&format!("{root}/3dobjs/base.obj"))?;
+    let groups_text = read(&format!("{root}/mesh_metadata/basemesh_vertex_groups.json"))?;
 
     let parsed_targets = targets::discover_and_read(root);
     let baked = bake(&obj_text, &groups_text, parsed_targets, root);
     let bytes = asset::encode(&baked);
-    match std::fs::write(OUT, &bytes) {
-        Ok(()) => println!(
-            "{OUT}: {} bytes, {} vértices, {} triángulos, {} filas, {} deltas",
-            bytes.len(),
-            baked.positions.len() / 3,
-            baked.indices.len() / 3,
-            baked.rows.len(),
-            baked.deltas.len()
-        ),
-        Err(why) => eprintln!("no se pudo escribir «{OUT}»: {why}"),
-    }
+    std::fs::write(OUT, &bytes).map_err(|why| format!("no se pudo escribir «{OUT}»: {why}"))?;
+    Ok(vec![format!(
+        "{OUT}: {} bytes, {} vértices, {} triángulos, {} filas, {} deltas",
+        bytes.len(),
+        baked.positions.len() / 3,
+        baked.indices.len() / 3,
+        baked.rows.len(),
+        baked.deltas.len()
+    )])
 }
 
 /// The bake itself, kept apart from most file I/O so a test can drive it on

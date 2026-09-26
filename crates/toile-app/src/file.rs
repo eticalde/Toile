@@ -4,7 +4,7 @@ mod dialog;
 use std::path::{Path, PathBuf};
 
 pub use bar::show as bar;
-pub use dialog::{confirm_discard, open, save_as, svg_target, write};
+pub use dialog::{confirm_discard, open, pdf_target, save_as, svg_target, write, write_bytes};
 use toile_engine::draft::Doc;
 
 /// The base block Toile ships, in the very bytes its serialiser writes.
@@ -17,11 +17,14 @@ const EXAMPLE: &str = include_str!("../../../assets/pantalon-base.toile");
 /// What a pattern that has never been written is called.
 const UNTITLED: &str = "Sin título";
 
-/// The extension a pattern is kept under, and the SVG it is drawn into.
+/// The extension a pattern is kept under, the SVG it is drawn into, and the
+/// sheets of paper it is printed onto.
 pub const PATTERN_EXT: &str = "toile";
 pub const DRAWING_EXT: &str = "svg";
+pub const SHEETS_EXT: &str = "pdf";
 
-/// What the interface asks be done with the file a pattern lives in.
+/// What the interface asks be done with the files a pattern lives in and goes
+/// out to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
     /// Clear the table and start something new.
@@ -36,6 +39,10 @@ pub enum Action {
     SaveAs,
     /// Draw it into an SVG at true scale.
     Svg,
+    /// Lay every piece of it onto sheets of paper to print at true scale.
+    Pdf,
+    /// Lay those sheets out on the next size of paper from now on.
+    Paper,
 }
 
 /// Something the file has to say, and the revision it was said at.

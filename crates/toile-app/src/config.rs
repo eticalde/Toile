@@ -1,6 +1,10 @@
+/// The size of paper the studio prints on, and the word it is remembered as.
+mod paper;
+
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+pub use paper::Paper;
 use serde::{Deserialize, Serialize};
 
 /// The schema version of the preferences file, bumped when its shape changes
@@ -49,6 +53,19 @@ pub struct Prefs {
     /// existed reads and writes back byte for byte.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_persona: Option<String>,
+    /// The paper the sheets of a print are laid out on.
+    ///
+    /// A preference of this installation, never of Toile: which ream is in the
+    /// printer says nothing about the garment, and the same pattern printed in
+    /// two studios is one pattern on two sizes of paper. Reached through
+    /// `paper`, so that an unset preference means one thing in one place. Left
+    /// out of the file while unset, so a file written before it existed reads
+    /// and writes back byte for byte.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "paper::known"
+    )]
+    paper: Option<Paper>,
     /// The file these were read from, and the one `save` writes back to.
     /// `None` writes nowhere.
     #[serde(skip)]
@@ -116,6 +133,20 @@ impl Prefs {
         } else {
             Some(stem.to_owned())
         };
+    }
+
+    /// The paper a print is laid out on.
+    pub fn paper(&self) -> Paper {
+        self.paper.unwrap_or_default()
+    }
+
+    /// Lays every print from now on out on the next size of paper.
+    ///
+    /// Stepped and not chosen from a list: there are two sizes, and a control
+    /// that steps says which one is current in the room a list would need for
+    /// its handle alone.
+    pub fn step_paper(&mut self) {
+        self.paper = Some(self.paper().next());
     }
 
     /// Records a pattern as the most recent, and its folder as the last used.

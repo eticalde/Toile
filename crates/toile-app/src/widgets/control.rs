@@ -128,13 +128,8 @@ pub fn button_named(ui: &mut Ui, theme: &Theme, id: Id, label: &str) -> Response
 }
 
 /// An action whose phase has not arrived: the same room, no border, muted ink,
-/// and no click to answer with, because a button that lies is worse than a
-/// gap.
-pub fn button_ghost(ui: &mut Ui, theme: &Theme, label: &str) {
-    ghost(ui, theme, label, 0.0);
-}
-
-/// The same dead weight, carrying the glyph that will stand for the action.
+/// and no click to answer with, because a button that lies is worse than a gap.
+/// Carries the glyph that will stand for the action.
 pub fn button_ghost_icon(
     ui: &mut Ui,
     theme: &Theme,

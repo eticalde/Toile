@@ -1,6 +1,7 @@
 use super::paper::points_of_cm;
+use super::read::{media_box, path_of, square_of, step, stream_of};
 use super::text::literal;
-use super::{A4, CARTA, Paper, SheetError, to_pdf};
+use super::{A4, CARTA, Paper, SheetError, piece_to_pdf};
 use crate::draft::{Doc, Draft, MeasureSet, Piece, PieceKey, Point, Winding};
 
 /// The sides of the test piece, in centimetres, chosen to fit on the smaller of
@@ -52,9 +53,9 @@ pub(super) fn ell() -> (Draft, PieceKey) {
 /// what it said before pieces were tiled at all, and a fixture that quietly
 /// grew a second sheet would take the proof of scale with it.
 fn printed(draft: &Draft, piece: PieceKey, paper: Paper) -> Vec<u8> {
-    let printed = to_pdf(draft, piece, paper).expect("a rectangle prints");
-    assert_eq!(printed.sheets, 1, "the fixture takes one sheet");
-    assert_eq!(printed.grid, [1, 1]);
+    let printed = piece_to_pdf(draft, piece, paper).expect("a rectangle prints");
+    assert_eq!(printed.sheets(), 1, "the fixture takes one sheet");
+    assert_eq!(printed.piles[0].grid, [1, 1]);
     printed.bytes
 }
 
@@ -154,7 +155,7 @@ fn a_piece_that_resolves_to_no_contour_is_no_sheet() {
         .pieces
         .insert(Piece::polygon("Punto", points, Winding::Cw));
     let draft = Draft::from_doc(doc).expect("a one-point piece resolves");
-    assert_eq!(to_pdf(&draft, piece, A4), Err(SheetError::Empty));
+    assert_eq!(piece_to_pdf(&draft, piece, A4), Err(SheetError::Empty));
 }
 
 /// The cross-reference table is what a reader trusts before anything else: it
@@ -214,67 +215,6 @@ fn until_newline(printed: &[u8], at: usize) -> usize {
 /// broken file and not a decoding to fall back from.
 fn ascii(bytes: &[u8]) -> &str {
     std::str::from_utf8(bytes).expect("the file's structure is written in ASCII")
-}
-
-/// The page's content stream, as the one reader of this file cares about it.
-pub(super) fn stream_of(printed: &[u8]) -> String {
-    let text = String::from_utf8_lossy(printed).into_owned();
-    let opened = text
-        .split_once("stream\n")
-        .expect("the page has a content stream")
-        .1;
-    opened
-        .split_once("endstream")
-        .expect("the stream closes")
-        .0
-        .to_owned()
-}
-
-/// The first path of the stream, in the order it is drawn, in points.
-pub(super) fn path_of(stream: &str) -> Vec<[f64; 2]> {
-    stream
-        .lines()
-        .take_while(|line| *line != "h S")
-        .filter_map(|line| {
-            let mut word = line.split_whitespace();
-            let x: f64 = word.next()?.parse().ok()?;
-            let y: f64 = word.next()?.parse().ok()?;
-            matches!(word.next(), Some("m" | "l")).then_some([x, y])
-        })
-        .collect()
-}
-
-/// The rectangle the stream strokes for calibration, in points.
-pub(super) fn square_of(stream: &str) -> [f64; 4] {
-    let line = stream
-        .lines()
-        .find(|line| line.ends_with(" re S"))
-        .expect("the sheet carries a calibration square");
-    let numbers: Vec<f64> = line
-        .split_whitespace()
-        .filter_map(|word| word.parse().ok())
-        .collect();
-    [numbers[0], numbers[1], numbers[2], numbers[3]]
-}
-
-/// The page's own size in points, as the file states it.
-pub(super) fn media_box(printed: &[u8]) -> [f64; 2] {
-    let text = String::from_utf8_lossy(printed).into_owned();
-    let opened = text
-        .split_once("/MediaBox [0 0 ")
-        .expect("the page states a box")
-        .1;
-    let stated = opened.split_once(']').expect("the box closes").0;
-    let numbers: Vec<f64> = stated
-        .split_whitespace()
-        .filter_map(|word| word.parse().ok())
-        .collect();
-    [numbers[0], numbers[1]]
-}
-
-/// The distance between two places, in whatever unit they are both in.
-pub(super) fn step(from: [f64; 2], to: [f64; 2]) -> f64 {
-    (to[0] - from[0]).hypot(to[1] - from[1])
 }
 
 /// The paper a sheet was asked for, so the two sizes are named once here.

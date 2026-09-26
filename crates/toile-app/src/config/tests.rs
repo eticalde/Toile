@@ -94,6 +94,57 @@ fn a_default_person_survives_the_file_and_leaves_it_once_cleared() {
     assert_eq!(std::fs::read_to_string(&file).expect("written"), OLD);
 }
 
+/// A studio that never said which paper it prints on prints on the size every
+/// print used before the choice existed, and its file keeps saying nothing.
+#[test]
+fn a_file_that_names_no_paper_prints_on_the_size_it_always_did() {
+    let scratch = Scratch::new("prefs-paper-none");
+    let file = scratch.beside("prefs.json");
+    std::fs::write(&file, OLD).expect("a scratch file");
+
+    let prefs = Prefs::load_from(&file);
+    assert_eq!(prefs.paper(), Paper::A4);
+    prefs.save();
+    assert_eq!(std::fs::read_to_string(&file).expect("written back"), OLD);
+}
+
+/// The paper is stepped once and stays stepped: the ream in the printer does
+/// not change between two prints of the same afternoon.
+#[test]
+fn the_paper_steps_between_the_two_sizes_and_survives_the_file() {
+    let scratch = Scratch::new("prefs-paper");
+    let file = scratch.beside("prefs.json");
+    std::fs::write(&file, OLD).expect("a scratch file");
+
+    let mut prefs = Prefs::load_from(&file);
+    prefs.step_paper();
+    assert_eq!(prefs.paper(), Paper::Carta);
+    prefs.save();
+    let text = std::fs::read_to_string(&file).expect("written");
+    assert!(text.contains("\"paper\": \"carta\""), "{text}");
+
+    let mut read = Prefs::load_from(&file);
+    assert_eq!(read.paper(), Paper::Carta);
+    assert_eq!(read.recents, prefs.recents, "nothing else moved");
+    read.step_paper();
+    assert_eq!(read.paper(), Paper::A4, "two sizes, so it steps back");
+}
+
+/// A word from a later build is a preference to forget, not a file to throw
+/// away: the window geometry and the recent patterns outlive it.
+#[test]
+fn a_paper_this_build_does_not_know_is_forgotten_on_its_own() {
+    let scratch = Scratch::new("prefs-paper-unknown");
+    let file = scratch.beside("prefs.json");
+    let ahead = OLD.replace("\"maximized\"", "\"paper\": \"a3\",\n  \"maximized\"");
+    std::fs::write(&file, &ahead).expect("a scratch file");
+
+    let prefs = Prefs::load_from(&file);
+    assert_eq!(prefs.paper(), Paper::A4);
+    assert_eq!(prefs.window, Some([10.0, 20.0, 1320.0, 780.0]));
+    assert_eq!(prefs.recents.len(), 1, "the rest of the file survived it");
+}
+
 #[test]
 fn the_default_person_is_one_at_most_and_the_same_choice_twice_clears_it() {
     let mut prefs = Prefs::default();

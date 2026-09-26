@@ -10,6 +10,8 @@ mod lands;
 mod legend;
 #[cfg(test)]
 mod marked;
+/// Which pieces share a plane, and where each of them sits on it.
+mod pack;
 /// The two paper sizes, and the transform from a document centimetre to a
 /// page point.
 mod paper;
@@ -17,6 +19,13 @@ mod paper;
 mod place;
 /// The plane the taped sheets make, and where a place of the piece falls on it.
 mod plane;
+/// What one file holds: every piece of a product, or one piece of it.
+mod product;
+/// A written file read back the way a program that reads it would. Nothing in
+/// it knows how the file was written: a proof of scale that asked the transform
+/// to agree with itself would prove nothing.
+#[cfg(test)]
+mod read;
 /// The drawing on one sheet: where it sits, and everything inked on it.
 mod sheet;
 #[cfg(test)]
@@ -25,12 +34,11 @@ mod tests;
 mod text;
 #[cfg(test)]
 mod tiled;
+#[cfg(test)]
+mod whole;
 
-use self::grid::Grid;
-use self::ink::Ink;
 pub use self::paper::{A4, CARTA, Paper};
-use self::sheet::{Frame, content};
-use super::drawn::Inked;
+pub use self::product::{Laid, NothingPrinted, Pile, Printed, Skipped, piece_to_pdf, to_pdf};
 use super::units::number;
 use crate::draft::{Draft, PieceKey};
 
@@ -77,68 +85,17 @@ pub enum SheetError {
     },
 }
 
-/// One piece as sheets of paper, at true scale.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Printed {
-    /// The file, of one page per sheet.
-    pub bytes: Vec<u8>,
-    /// How many sheets it prints.
-    pub sheets: usize,
-    /// How many columns and rows the piece was laid across, blank cells and
-    /// all.
-    pub grid: [usize; 2],
-    /// How much of the piece besides its cut line reached the paper.
-    pub inked: Inked,
-}
-
-impl Printed {
-    /// How many cells of the grid carry no cloth and are therefore not printed.
-    #[must_use]
-    pub fn blank(&self) -> usize {
-        self.grid[0] * self.grid[1] - self.sheets
-    }
-}
-
-/// One piece as sheets to print at true scale, tiled across the paper it takes.
+/// What the pattern calls a piece.
 ///
-/// Everything the pattern draws on the piece is on them: the line it is cut on,
-/// the lines drawn inside it, its notches, its grain and its names.
-///
-/// The page box is each sheet's own paper size, so printing at 100 % is the
-/// identity and a viewer's fit-to-page is the only thing left that can lie
-/// about the scale, which is why every sheet says in Spanish not to use it. A
-/// piece larger than the paper is tiled and never shrunk: a trouser leg is most
-/// of a metre long and no sheet of paper is.
-///
-/// No clock reaches the file and no object id depends on anything but a sheet's
-/// rank, so the bytes are a function of the document alone.
-///
-/// # Errors
-/// `SheetError::Empty` when the piece resolves to no contour, and
-/// `SheetError::TooMany` when it would take more paper than a ream.
-pub fn to_pdf(draft: &Draft, piece: PieceKey, paper: Paper) -> Result<Printed, SheetError> {
-    let outline = draft.cloth_cm(piece);
-    if outline.len() < 3 {
-        return Err(SheetError::Empty);
-    }
-    let grid = Grid::new(paper, outline)?;
-    let ink = Ink::new(draft, piece);
-    // Every node of the cloth is inside the box the grid is built from, so a
-    // piece that resolves to a contour always lands on at least one sheet.
-    let streams: Vec<String> = grid
-        .places()
-        .iter()
-        .map(|place| {
-            let frame = Frame::new(paper, grid.corner(place.cell));
-            content(&frame, &grid, &ink, place)
-        })
-        .collect();
-    Ok(Printed {
-        sheets: streams.len(),
-        grid: grid.counts(),
-        inked: ink.inked(),
-        bytes: file(&objects(paper, &streams)),
-    })
+/// Asked here and not of the piece's own ink, because a piece that never
+/// reached paper has no ink and still has to be named in the summary that says
+/// why.
+fn named(draft: &Draft, piece: PieceKey) -> String {
+    draft
+        .doc()
+        .pieces
+        .get(piece)
+        .map_or_else(String::new, |held| held.name.clone())
 }
 
 /// The objects the file is made of, in the order they are written.
@@ -146,6 +103,10 @@ pub fn to_pdf(draft: &Draft, piece: PieceKey, paper: Paper) -> Result<Printed, S
 /// A catalogue, a page tree, the one font they all name, and then two objects
 /// per sheet. Helvetica is one of the fourteen every reader carries, so nothing
 /// has to be embedded and the file stays what it draws.
+///
+/// Each page states its own paper as its box, so printing at 100 % is the
+/// identity and a viewer's fit-to-page is the only thing left that can lie
+/// about the scale — which is why every sheet says in Spanish not to use it.
 fn objects(paper: Paper, streams: &[String]) -> Vec<String> {
     let [width, height] = paper.points();
     let kids: Vec<String> = (0..streams.len())
@@ -184,6 +145,9 @@ fn objects(paper: Paper, streams: &[String]) -> Vec<String> {
 /// digits of offset, five of generation, the kind, and a two-byte end of line —
 /// because a reader that finds an object one byte from where the table sent it
 /// refuses the file rather than looking for it.
+///
+/// No clock reaches the bytes and no object id depends on anything but a
+/// sheet's rank, so the file is a function of the document alone.
 fn file(objects: &[String]) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(b"%PDF-1.4\n");

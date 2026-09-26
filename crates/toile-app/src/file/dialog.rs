@@ -3,11 +3,12 @@ use std::path::{Path, PathBuf};
 use rfd::{FileDialog, MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
 use toile_engine::draft::Doc;
 
-use super::{DRAWING_EXT, PATTERN_EXT};
+use super::{DRAWING_EXT, PATTERN_EXT, SHEETS_EXT};
 
-/// What the dialogs call the two kinds of file.
+/// What the dialogs call the three kinds of file.
 const PATTERN: &str = "Patrón de Toile";
 const DRAWING: &str = "Dibujo SVG";
+const SHEETS: &str = "Hojas para imprimir";
 
 /// A pattern the person picked, and what came out of the file.
 ///
@@ -56,12 +57,31 @@ pub fn svg_target(stem: &str) -> Option<PathBuf> {
     Some(with_extension(path, DRAWING_EXT))
 }
 
+/// Where the person wants the sheets written.
+pub fn pdf_target(stem: &str) -> Option<PathBuf> {
+    let path = FileDialog::new()
+        .add_filter(SHEETS, &[SHEETS_EXT])
+        .set_file_name(format!("{stem}.{SHEETS_EXT}"))
+        .set_title("Imprimir en PDF a escala real")
+        .save_file()?;
+    Some(with_extension(path, SHEETS_EXT))
+}
+
 /// Writes a file, saying in the language of the interface what went wrong.
 ///
 /// # Errors
 /// The message shown to the person when the file cannot be written.
 pub fn write(path: &Path, text: &str) -> Result<(), String> {
-    std::fs::write(path, text).map_err(|why| format!("no se pudo escribir «{}»: {why}", name(path)))
+    write_bytes(path, text.as_bytes())
+}
+
+/// Writes a file that is not text, which the sheets of paper are.
+///
+/// # Errors
+/// The message shown to the person when the file cannot be written.
+pub fn write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    std::fs::write(path, bytes)
+        .map_err(|why| format!("no se pudo escribir «{}»: {why}", name(path)))
 }
 
 /// Asks before work nobody has written down is thrown away.

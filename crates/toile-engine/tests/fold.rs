@@ -9,7 +9,7 @@ use toile_engine::draft::{
     Command, Doc, Draft, EdgeRange, Identity, LineEdit, LineKind, MeasureSet, Piece, PieceKey,
     Point, PointKey, Symmetry, VertexEdit, Winding, block,
 };
-use toile_engine::export::{A4, to_pdf, to_svg};
+use toile_engine::export::{A4, piece_to_pdf, to_svg};
 
 /// The waistband of a baggy-jeans draft, as its own formulas write it.
 ///
@@ -216,9 +216,10 @@ fn the_exported_sheet_is_the_cloth_and_carries_both_halves_of_a_mark() {
 #[test]
 fn the_sheets_are_counted_for_the_cloth_and_not_for_the_drawn_half() {
     let (folded, piece) = drafted(true);
-    let whole = to_pdf(&folded, piece, A4).expect("a band ninety-five centimetres wide tiles");
-    assert_eq!(whole.grid, [6, 1]);
-    assert_eq!(whole.sheets, 6);
+    let whole =
+        piece_to_pdf(&folded, piece, A4).expect("a band ninety-five centimetres wide tiles");
+    assert_eq!(whole.piles[0].grid, [6, 1]);
+    assert_eq!(whole.sheets(), 6);
     let said = String::from_utf8_lossy(&whole.bytes).into_owned();
     assert!(
         said.contains("La pieza entera mide 95.0 cm de ancho"),
@@ -226,8 +227,8 @@ fn the_sheets_are_counted_for_the_cloth_and_not_for_the_drawn_half() {
     );
 
     let (drawn, piece) = drafted(false);
-    let half = to_pdf(&drawn, piece, A4).expect("the drawn half tiles too");
-    assert_eq!(half.grid, [3, 1]);
+    let half = piece_to_pdf(&drawn, piece, A4).expect("the drawn half tiles too");
+    assert_eq!(half.piles[0].grid, [3, 1]);
     assert_eq!(drawn.cloth_cm(piece).len(), 6);
 }
 

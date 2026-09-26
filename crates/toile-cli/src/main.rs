@@ -6,6 +6,7 @@ mod bench;
 mod create;
 mod doc;
 mod pdf;
+mod report;
 mod seamly;
 
 fn main() {
@@ -38,7 +39,7 @@ fn main() {
         _ => {
             println!("toile {}", env!("CARGO_PKG_VERSION"));
             println!(
-                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · drape-sewn · doc [RUTA] [--resolve-with NOMBRE] · pdf [RUTA] [SALIDA.pdf] [--pieza NOMBRE] [--papel a4|carta] · seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada AAAA-MM-DD --biblioteca DIR [--vincular]]"
+                "subcomandos: anny-bake RUTA/a/mpfb2 · asset [RUTA] · bench [--verts N | --incr | --incr-async | --seams | --measure | --topo] · drape · drape-anny · drape-sewn · doc [RUTA] [--resolve-with NOMBRE] · pdf [RUTA] [SALIDA.pdf] [--pieza NOMBRE] [--papel a4|carta] (sin --pieza, el producto entero en un archivo) · seamly RUTA.sm2d [SALIDA.toile] [--persona NOMBRE --tomada AAAA-MM-DD --biblioteca DIR [--vincular]]"
             );
         }
     }

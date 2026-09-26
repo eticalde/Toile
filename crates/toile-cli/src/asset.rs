@@ -10,10 +10,10 @@ const ASSET: &str = "assets/pantalon-base.toile";
 pub fn run(args: &[String]) {
     let path = args.first().map_or(ASSET, String::as_str);
     let text = block::trousers().to_canonical_json();
-    match std::fs::write(path, &text) {
-        Ok(()) => println!("{path}: {} bytes", text.len()),
-        Err(why) => eprintln!("no se pudo escribir «{path}»: {why}"),
-    }
+    let said = std::fs::write(path, &text)
+        .map(|()| vec![format!("{path}: {} bytes", text.len())])
+        .map_err(|why| format!("no se pudo escribir «{path}»: {why}"));
+    crate::report::said(said);
 }
 
 #[cfg(test)]

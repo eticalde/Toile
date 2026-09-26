@@ -1,8 +1,9 @@
 use super::grid::{OVERLAP, cell};
 use super::paper::points;
-use super::tests::{ell, path_of, rectangle};
+use super::read::{path_of, streams_of};
+use super::tests::{ell, rectangle};
 use super::text::literal;
-use super::{A4, to_pdf};
+use super::{A4, piece_to_pdf};
 
 /// A piece too big for the paper is laid across more paper. Scaling it down
 /// would print a sheet that looks right and cuts a garment two sizes off, and
@@ -10,14 +11,11 @@ use super::{A4, to_pdf};
 #[test]
 fn a_piece_larger_than_the_paper_is_tiled_and_never_shrunk() {
     let (draft, piece) = rectangle(30.0, 30.0);
-    let printed = to_pdf(&draft, piece, A4).expect("a piece bigger than the paper tiles");
-    assert_eq!(printed.grid, [2, 2]);
-    assert_eq!(printed.sheets, 4);
-    assert_eq!(
-        printed.blank(),
-        0,
-        "a rectangle fills every cell of its box"
-    );
+    let printed = piece_to_pdf(&draft, piece, A4).expect("a piece bigger than the paper tiles");
+    let laid = &printed.piles[0];
+    assert_eq!(laid.grid, [2, 2]);
+    assert_eq!(laid.sheets, 4);
+    assert_eq!(laid.blank(), 0, "a rectangle fills every cell of its box");
     let file = String::from_utf8_lossy(&printed.bytes).into_owned();
     assert_eq!(file.matches("/Type /Page ").count(), 4);
     assert!(file.contains("/Count 4"), "{file}");
@@ -36,8 +34,8 @@ fn a_piece_larger_than_the_paper_is_tiled_and_never_shrunk() {
 #[test]
 fn a_place_two_sheets_share_lands_on_the_same_point_of_the_pattern() {
     let (draft, piece) = rectangle(40.0, 10.0);
-    let printed = to_pdf(&draft, piece, A4).expect("a wide piece tiles");
-    assert_eq!(printed.grid, [3, 1]);
+    let printed = piece_to_pdf(&draft, piece, A4).expect("a wide piece tiles");
+    assert_eq!(printed.piles[0].grid, [3, 1]);
     let pages = streams_of(&printed.bytes);
     let step = points(cell(A4)[0] - OVERLAP);
     let mut worst_um = 0.0_f64;
@@ -60,7 +58,7 @@ fn a_place_two_sheets_share_lands_on_the_same_point_of_the_pattern() {
 #[test]
 fn the_marks_of_a_joint_are_on_both_of_its_sheets_and_one_step_apart() {
     let (draft, piece) = rectangle(40.0, 10.0);
-    let printed = to_pdf(&draft, piece, A4).expect("a wide piece tiles");
+    let printed = piece_to_pdf(&draft, piece, A4).expect("a wide piece tiles");
     let pages = streams_of(&printed.bytes);
     // A joint is named after the two sheets it holds together, so the one
     // between the first two is C1-2, drawn on the right band of one and the
@@ -91,7 +89,7 @@ fn the_marks_of_a_joint_are_on_both_of_its_sheets_and_one_step_apart() {
 #[test]
 fn a_joints_name_is_on_its_two_sheets_and_on_no_others() {
     let (draft, piece) = rectangle(30.0, 30.0);
-    let printed = to_pdf(&draft, piece, A4).expect("a piece bigger than the paper tiles");
+    let printed = piece_to_pdf(&draft, piece, A4).expect("a piece bigger than the paper tiles");
     let pages = streams_of(&printed.bytes);
     // Sheets 1 2 / 3 4: two joints down the columns, two across the rows.
     for (joint, sheets) in [
@@ -114,7 +112,7 @@ fn a_joints_name_is_on_its_two_sheets_and_on_no_others() {
 #[test]
 fn a_sheet_says_to_cut_only_where_another_sheet_meets_it() {
     let (draft, piece) = rectangle(30.0, 30.0);
-    let printed = to_pdf(&draft, piece, A4).expect("a piece bigger than the paper tiles");
+    let printed = piece_to_pdf(&draft, piece, A4).expect("a piece bigger than the paper tiles");
     let pages = streams_of(&printed.bytes);
     // Two columns by two rows: every sheet has exactly two neighbours, the
     // corner sheets of a square grid having one of each.
@@ -133,7 +131,7 @@ fn a_sheet_says_to_cut_only_where_another_sheet_meets_it() {
 #[test]
 fn every_sheet_carries_the_square_and_says_where_it_belongs() {
     let (draft, piece) = rectangle(30.0, 30.0);
-    let printed = to_pdf(&draft, piece, A4).expect("a piece bigger than the paper tiles");
+    let printed = piece_to_pdf(&draft, piece, A4).expect("a piece bigger than the paper tiles");
     let pages = streams_of(&printed.bytes);
     for (rank, page) in pages.iter().enumerate() {
         assert!(page.contains(" re S"), "sheet {rank} has no square");
@@ -160,10 +158,11 @@ fn every_sheet_carries_the_square_and_says_where_it_belongs() {
 #[test]
 fn the_blank_cells_of_a_concave_piece_are_not_printed() {
     let (draft, piece) = ell();
-    let printed = to_pdf(&draft, piece, A4).expect("an L tiles");
-    assert_eq!(printed.grid, [2, 2]);
-    assert_eq!(printed.sheets, 3);
-    assert_eq!(printed.blank(), 1);
+    let printed = piece_to_pdf(&draft, piece, A4).expect("an L tiles");
+    let laid = &printed.piles[0];
+    assert_eq!(laid.grid, [2, 2]);
+    assert_eq!(laid.sheets, 3);
+    assert_eq!(laid.blank(), 1);
     let pages = streams_of(&printed.bytes);
     assert_eq!(pages.len(), 3);
     for (rank, page) in pages.iter().enumerate() {
@@ -178,23 +177,9 @@ fn the_blank_cells_of_a_concave_piece_are_not_printed() {
 #[test]
 fn the_same_tiled_piece_writes_the_same_sheets_twice() {
     let (draft, piece) = rectangle(30.0, 30.0);
-    let once = to_pdf(&draft, piece, A4).expect("it tiles");
-    let again = to_pdf(&draft, piece, A4).expect("it tiles");
+    let once = piece_to_pdf(&draft, piece, A4).expect("it tiles");
+    let again = piece_to_pdf(&draft, piece, A4).expect("it tiles");
     assert_eq!(once, again);
-}
-
-/// Every page's content stream, in the order the file writes them.
-fn streams_of(printed: &[u8]) -> Vec<String> {
-    String::from_utf8_lossy(printed)
-        .split("\nstream\n")
-        .skip(1)
-        .map(|rest| {
-            rest.split_once("endstream")
-                .expect("the stream closes")
-                .0
-                .to_owned()
-        })
-        .collect()
 }
 
 /// Where across the page each mark of one joint is written, in points.

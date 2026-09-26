@@ -6,6 +6,7 @@ use toile_engine::session::Session;
 
 use super::super::{State, table};
 use super::button;
+use crate::config::Paper;
 use crate::theme::Theme;
 
 /// The row of the whole product, in the tree.
@@ -54,9 +55,9 @@ impl Studio {
             ..RawInput::default()
         };
         let (theme, session, state) = (&self.theme, &mut self.session, &mut self.state);
-        let mut pass = self
-            .ctx
-            .run_ui(input, |ui| table(ui, theme, session, state));
+        let mut pass = self.ctx.run_ui(input, |ui| {
+            table(ui, theme, session, state, Paper::default());
+        });
         self.shapes = std::mem::take(&mut pass.shapes);
         pass.drop_without_applying_deltas();
     }

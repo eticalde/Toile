@@ -1,5 +1,7 @@
 mod cite;
 pub(super) mod elastic;
+/// The ways a pattern leaves the app, and the paper the printed ones take.
+mod exports;
 pub(super) mod fold;
 pub(super) mod inner;
 pub(super) mod notch;
@@ -22,9 +24,9 @@ use super::curve::{self, Side};
 use super::layout;
 use super::state::{Scope, State};
 use super::wire::Verb;
-use crate::file::Action;
+use crate::config::Paper;
 use crate::theme::Theme;
-use crate::widgets::{button_ghost, button_secondary, field_row, footer_note, section};
+use crate::widgets::{field_row, footer_note, section};
 
 const NOTE: &str =
     "Las fórmulas se evalúan contra el maniquí elegido: mismo patrón, cualquier talla.";
@@ -51,6 +53,7 @@ pub fn show(
     faults: &[(SeamKey, SeamFault)],
     piece: Option<PieceKey>,
     state: &mut State,
+    paper: Paper,
 ) -> Vec<Verb> {
     let body = (ui.available_height() - FOOT_H).max(0.0);
     let mut verbs = Vec::new();
@@ -79,7 +82,7 @@ pub fn show(
             } else {
                 unchosen(ui, theme);
             }
-            exports(ui, theme, state);
+            exports::show(ui, theme, state, paper);
             asked
         })
         .inner;
@@ -230,21 +233,6 @@ fn summary(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, piece: PieceKey) {
     if draft.cloth(piece).is_some() {
         field_row(ui, theme, "doblez", "sí", "");
     }
-}
-
-/// The ways a pattern leaves the app: the drawing at true scale, and the
-/// sheets of paper it is tiled onto, which wait on the phase that lays them
-/// out and is drawn dead until then.
-fn exports(ui: &mut egui::Ui, theme: &Theme, state: &mut State) {
-    section(ui, theme, "Exportar");
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 8.0;
-        ui.add_space(crate::widgets::PAD);
-        button_ghost(ui, theme, "PDF A4 · 1:1");
-        if button_secondary(ui, theme, "SVG").clicked() {
-            state.asked = Some(Action::Svg);
-        }
-    });
 }
 
 #[cfg(test)]

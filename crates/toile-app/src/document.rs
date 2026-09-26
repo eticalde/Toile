@@ -1,11 +1,14 @@
 mod autosave;
+/// The pattern as a drawing at true scale.
+mod drawing;
 mod fresh;
+/// The pattern as the sheets of paper a printer reproduces at true scale.
+mod sheets;
 
 use std::path::{Path, PathBuf};
 
 use eframe::egui;
 use toile_engine::draft::Doc;
-use toile_engine::export;
 use toile_engine::session::{Session, SessionError};
 
 use crate::file::{self, Action, File};
@@ -73,7 +76,8 @@ impl crate::App {
         self.band = crate::band::Band::opened(&mut self.shelf, &self.session);
     }
 
-    /// Does what the interface asked of the file the pattern lives in.
+    /// Does what the interface asked of the files a pattern lives in and goes
+    /// out to, the paper those take included.
     pub(crate) fn act(&mut self, action: Action) {
         match action {
             // Ask the name first; the table is cleared only once it is given.
@@ -91,7 +95,14 @@ impl crate::App {
                 self.save(unplaced);
             }
             Action::SaveAs => self.save(true),
-            Action::Svg => self.export(),
+            Action::Svg => self.draw(),
+            Action::Pdf => self.print(),
+            // Written down on the spot: which ream is in the printer is a
+            // decision, not a window size to keep until the app is closed.
+            Action::Paper => {
+                self.prefs.step_paper();
+                self.prefs.save();
+            }
         }
     }
 
@@ -249,32 +260,6 @@ impl crate::App {
                 let name = self.file.name().to_owned();
                 self.file.say(format!("guardado · {name}"), revision);
             }
-            Err(why) => self.file.warn(why, revision),
-        }
-    }
-
-    /// Draws the pattern into an SVG at true scale.
-    fn export(&mut self) {
-        let revision = self.session.revision();
-        let drawn = self.session.draft().map(export::to_svg);
-        let text = match drawn {
-            Some(Ok(text)) => text,
-            Some(Err(why)) => {
-                self.file
-                    .warn(format!("no se pudo dibujar: {why}"), revision);
-                return;
-            }
-            None => {
-                self.file
-                    .warn("no hay ningún patrón que exportar", revision);
-                return;
-            }
-        };
-        let Some(path) = file::svg_target(self.file.stem()) else {
-            return;
-        };
-        match file::write(&path, &text) {
-            Ok(()) => self.file.say("SVG exportado a escala real", revision),
             Err(why) => self.file.warn(why, revision),
         }
     }

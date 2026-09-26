@@ -7,6 +7,7 @@ use toile_engine::session::Session;
 
 use super::super::super::state::{Scope, Selection, State};
 use super::super::show;
+use crate::config::Paper;
 use crate::tabs::patronaje::apply;
 use crate::tabs::right_panel;
 use crate::theme::Theme;
@@ -30,6 +31,8 @@ pub(super) struct Desk {
     pub(super) ctx: egui::Context,
     /// The pointer the last frame asked the platform for.
     pub(super) cursor: CursorIcon,
+    /// The paper the installation prints on, which the panel names and steps.
+    pub(super) paper: Paper,
     theme: Theme,
 }
 
@@ -46,6 +49,7 @@ impl Desk {
             state: State::default(),
             ctx,
             cursor: CursorIcon::Default,
+            paper: Paper::default(),
             theme,
         }
     }
@@ -58,11 +62,14 @@ impl Desk {
             ..RawInput::default()
         };
         let (draft, faults) = (self.session.draft(), self.session.seam_faults());
-        let (theme, state) = (&self.theme, &mut self.state);
+        let (theme, paper) = (&self.theme, self.paper);
+        let state = &mut self.state;
         let piece = state.active;
         let mut asked = Vec::new();
         let pass = self.ctx.run_ui(input, |ui| {
-            asked = right_panel(ui, theme, |ui| show(ui, theme, draft, faults, piece, state));
+            asked = right_panel(ui, theme, |ui| {
+                show(ui, theme, draft, faults, piece, state, paper)
+            });
         });
         self.cursor = pass.platform_output.cursor_icon;
         pass.drop_without_applying_deltas();

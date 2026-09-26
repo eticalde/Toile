@@ -42,17 +42,28 @@ use toile_engine::session::Session;
 use self::gesture::Gesture;
 use self::state::{Scope, Tool};
 use self::wire::Verb;
+use crate::config::Paper;
 use crate::file::Action;
 use crate::tabs::{Workspace, left_panel, right_panel};
 use crate::theme::Theme;
 
 pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
-    table(ui, w.theme, w.session, w.patronaje);
+    table(ui, w.theme, w.session, w.patronaje, w.prefs.paper());
 }
 
 /// The whole tab, out of what the workspace hands it: the product tree and
 /// the tools, the inspector, and the mat between them.
-fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mut State) {
+///
+/// The paper comes down as a value and not as the preferences themselves: the
+/// panel says which size the sheets will be and asks for the next one, and the
+/// app is what writes the choice down.
+fn table(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    session: &mut Session,
+    patronaje: &mut State,
+    paper: Paper,
+) {
     // A question waiting on the mat owns the open entry until it is answered.
     // The tiles that would move the stack under it go dead, and so does every
     // edit a panel offers: an entry belongs to the gesture that opened it.
@@ -94,7 +105,7 @@ fn table(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, patronaje: &mu
     }));
     let faults = session.seam_faults();
     let asked = right_panel(ui, theme, |ui| {
-        inspector::show(ui, theme, draft, faults, active, state)
+        inspector::show(ui, theme, draft, faults, active, state, paper)
     });
     // The panel brackets its own entries: a field confirmed is one of its own
     // under its own name, and a rail dragged holds one open across frames. A

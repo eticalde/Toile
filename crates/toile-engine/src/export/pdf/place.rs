@@ -11,14 +11,19 @@ pub(super) struct Joins {
     pub(super) right: Option<usize>,
 }
 
-/// One sheet's place in a piece: which cell of the grid it carries, and what it
+/// One sheet's place in a pile: which cell of the grid it carries, and what it
 /// is taped to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Place {
-    /// Which sheet of the piece this is, counting only the sheets that are
-    /// printed, so that it is also the page a print dialogue asks for.
+    /// Which sheet of the pile this is, counting only the sheets that are
+    /// printed.
+    ///
+    /// Of the pile and not of the file: one file carries every pile of a
+    /// product, so what a print dialogue asks for is this plus the sheets of
+    /// the piles before it, which is the number the summary prints and the
+    /// paper does not.
     pub(super) number: usize,
-    /// How many sheets the piece takes.
+    /// How many sheets the pile takes.
     pub(super) total: usize,
     /// Which column and row of the grid this sheet carries.
     pub(super) cell: [usize; 2],

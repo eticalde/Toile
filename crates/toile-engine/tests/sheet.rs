@@ -4,7 +4,7 @@ use toile_engine::draft::{
     Command, Doc, Draft, EdgeAnchor, EdgeRange, Identity, LineEdit, LineKind, MeasureSet, Notch,
     NotchCount, Piece, PieceKey, Point, Symmetry, VertexEdit, Winding,
 };
-use toile_engine::export::{A4, Inked, to_pdf, to_svg};
+use toile_engine::export::{A4, Inked, piece_to_pdf, to_svg};
 
 /// Half a waistband on the fold, in centimetres: nine drawn and eighteen cut.
 ///
@@ -84,10 +84,10 @@ fn band(folded: bool) -> (Draft, PieceKey) {
 fn the_drawing_and_the_sheet_carry_the_same_marks() {
     let (folded, piece) = band(true);
     let drawing = to_svg(&folded).expect("the band draws");
-    let printed = to_pdf(&folded, piece, A4).expect("the band prints");
-    assert_eq!(printed.sheets, 1, "eighteen centimetres fit on one sheet");
+    let printed = piece_to_pdf(&folded, piece, A4).expect("the band prints");
+    assert_eq!(printed.sheets(), 1, "eighteen centimetres fit on one sheet");
     assert_eq!(
-        printed.inked,
+        printed.piles[0].pieces[0].inked,
         Inked {
             lines: 2,
             notches: 1,
@@ -124,7 +124,7 @@ fn the_drawing_and_the_sheet_carry_the_same_marks() {
 fn a_name_the_pattern_holds_reaches_both_sheets() {
     let (folded, piece) = band(true);
     let drawing = to_svg(&folded).expect("the band draws");
-    let printed = to_pdf(&folded, piece, A4).expect("the band prints");
+    let printed = piece_to_pdf(&folded, piece, A4).expect("the band prints");
     let stream = String::from_utf8_lossy(&printed.bytes).into_owned();
     for name in ["presilla", "doblez"] {
         assert_eq!(
@@ -158,7 +158,7 @@ fn a_name_the_pattern_holds_reaches_both_sheets() {
 fn the_two_sheets_break_the_same_lines() {
     let (drawn, piece) = band(false);
     let drawing = to_svg(&drawn).expect("the band draws");
-    let printed = to_pdf(&drawn, piece, A4).expect("the band prints");
+    let printed = piece_to_pdf(&drawn, piece, A4).expect("the band prints");
     let stream = String::from_utf8_lossy(&printed.bytes).into_owned();
     // The drawing breaks one path, and it is the one named after the fold.
     assert_eq!(drawing.matches("stroke-dasharray").count(), 1, "{drawing}");
@@ -187,7 +187,7 @@ fn the_two_sheets_break_the_same_lines() {
 #[test]
 fn the_sheet_says_which_body_the_pattern_was_drawn_on() {
     let (drawn, piece) = band(false);
-    let printed = to_pdf(&drawn, piece, A4).expect("the band prints");
+    let printed = piece_to_pdf(&drawn, piece, A4).expect("the band prints");
     let stream = String::from_utf8_lossy(&printed.bytes).into_owned();
     assert!(
         stream.contains("(Trazada para \\253Etienne\\273.)"),
