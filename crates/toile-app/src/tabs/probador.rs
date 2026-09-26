@@ -19,6 +19,9 @@ use crate::widgets::{
 /// Gap between the 2D and 3D halves, in points.
 const SPLIT_GAP: f32 = 12.0;
 const SUBBAR_H: f32 = 44.0;
+/// How wide the box that says what the body is holding up is drawn: enough for
+/// the longest reading it can carry without the words being cut.
+const HUNG_W: f32 = 210.0;
 const SEAM_H: f32 = 28.0;
 const MARK: f32 = 12.0;
 
@@ -64,7 +67,13 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     let theme = w.theme;
     let body = note::cost(w.fitting);
     let crossed = w.fitting.crossings.as_ref().and_then(note::crossed);
-    sub_bar(ui, theme, w.session, &body, crossed.as_deref());
+    // Off the published frame, which is where the solver put it: a reading the
+    // tab worked out for itself would be a second answer to a question the
+    // anchor has already answered, and it would cost a walk of the cloth on
+    // every frame of every product, hung or not.
+    let hanging = note::hanging(w.session.snapshot().hanging);
+    let read = (crossed.as_deref(), hanging.as_deref());
+    sub_bar(ui, theme, w.session, &body, read);
     right_panel(ui, theme, |ui| inspector(ui, theme, w.session));
     egui::CentralPanel::no_frame().show(ui, |ui| {
         let full = ui.available_size();
@@ -116,7 +125,18 @@ fn standing(session: &Session, mesh: &BodyMesh, theme: &Theme) -> Avatar {
 /// a swapped mesh and a shutdown, and nothing else: there is no pause to ask
 /// for, no resume, and no starting state to go back to. They keep their room
 /// so that the phase which builds them moves nothing on this bar.
-fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session, body: &str, crossed: Option<&str>) {
+///
+/// `read` is what the register has to say about this drape: where the body
+/// crosses itself, and how near its rings it holds the garment. Either is
+/// `None` when nothing of the kind was measured, and then it takes no room at
+/// all — an empty box reads as a box that failed to fill.
+fn sub_bar(
+    ui: &mut egui::Ui,
+    theme: &Theme,
+    session: &Session,
+    body: &str,
+    read: (Option<&str>, Option<&str>),
+) {
     egui::Panel::top("probador-subbar")
         .exact_size(SUBBAR_H)
         .frame(
@@ -130,11 +150,15 @@ fn sub_bar(ui: &mut egui::Ui, theme: &Theme, session: &Session, body: &str, cros
                     readout(ui, theme, "maniquí", named, 150.0);
                 }
                 readout(ui, theme, "cuerpo", body, 170.0);
-                // In the ink of any other readout: it is something known about
+                let (crossed, hanging) = read;
+                // In the ink of any other readout: both are things known about
                 // the body, and the body was baked and is draped on all the
                 // same.
                 if let Some(crossed) = crossed {
                     readout(ui, theme, "cruces", crossed, 190.0);
+                }
+                if let Some(hanging) = hanging {
+                    readout(ui, theme, "colgado", hanging, HUNG_W);
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.spacing_mut().item_spacing.x = 6.0;

@@ -2,6 +2,7 @@ use toile_engine::body::{Collider, bake};
 use toile_engine::couture::{HANG_STEP, HOLDS_ITS_RATIO, SEAM_SHUT};
 use toile_engine::draft::Doc;
 use toile_engine::session::Session;
+use toile_engine::sync::Hanging;
 use toile_sim::xpbd::SdfGrid;
 
 use crate::extremes::{GATHERED as WIDE_GATHERED, wide_hipped};
@@ -30,6 +31,9 @@ struct Read {
     /// Mean and worst signed distance from the hung run to its ring, in
     /// metres; `None` for a garment hung from nothing.
     off: Option<(f64, f64)>,
+    /// What the published frame says about the same run, which is what the
+    /// fitting room reads off it.
+    told: Option<Hanging>,
 }
 
 /// Drapes `doc` over `body` and reads it at [`SETTLED`].
@@ -58,9 +62,11 @@ fn wear(scene: &str, doc: Doc, body: &Collider, sdf: &SdfGrid) -> Read {
     let read = Read {
         cloth: span(&points),
         off: off_its_ring(&hung, &points),
+        told: session.snapshot().hanging,
     };
     println!(
-        "{scene} at {SETTLED}: {} vertices hung, {} · cloth {:.4}..{:.4} · {deep} of {all} buried",
+        "{scene} at {SETTLED}: {} vertices hung, {} · the frame says {} · cloth {:.4}..{:.4} · \
+         {deep} of {all} buried",
         hung.len(),
         read.off.map_or_else(
             || "nothing held".to_owned(),
@@ -69,6 +75,10 @@ fn wear(scene: &str, doc: Doc, body: &Collider, sdf: &SdfGrid) -> Read {
                 mean * 1000.0,
                 worst * 1000.0
             )
+        ),
+        read.told.map_or_else(
+            || "nothing".to_owned(),
+            |told| format!("{} runs, {:.1} mm off", told.runs, told.gap * 1000.0)
         ),
         read.cloth.0,
         read.cloth.1,
@@ -144,11 +154,24 @@ fn a_skirt_hung_from_the_waist_stays_there_and_the_same_skirt_unhung_does_not() 
     );
 
     assert_eq!(bare.off, None, "the control hangs from nothing at all");
+    assert_eq!(bare.told, None, "and its frame says nothing about hanging");
     let (mean, worst) = hung.off.expect("the hung skirt names a ring");
     assert!(
         worst.abs() < f64::from(AT_ITS_RING),
         "a vertex of the hung waistline came to rest {worst:.4} m from the ring \
          it names, with the run averaging {mean:.4} m"
+    );
+    // What the fitting room reads is this same cloth and the same quantity,
+    // so the two agree to the tenth of a millimetre the bar prints. A cap's
+    // worth of slack here is what let the two mean different things: read
+    // where the anchor pulls, the frame said 1.6 mm of a run settling at 1.1.
+    let told = hung.told.expect("the hung skirt publishes a reading");
+    assert_eq!(told.runs, 2, "both halves of the skirt are hung");
+    assert!(
+        (f64::from(told.gap) - worst.abs()).abs() < 1.0e-4,
+        "the frame reports {:.4} m off the ring where the cloth is {:.4} m off",
+        told.gap,
+        worst.abs()
     );
     // And the garment is on the body rather than round its feet. The control
     // is the measure: with the same band and nothing hung, its cloth ends far

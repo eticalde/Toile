@@ -1,11 +1,11 @@
-use std::sync::Arc;
-
 use toile_sim::xpbd::{self, DistanceConstraints, Hung, KineticDamper, Seams, Stage, State};
 
 use super::handle::Scene;
-use super::report::{Snapshot, StaleMessage};
+use super::report::StaleMessage;
 use super::sleep::Sleep;
 use crate::couture::{self, MeshSwap, onto};
+
+mod publish;
 
 /// The simulation, owned exclusively by its thread.
 pub(super) struct Sim {
@@ -21,6 +21,9 @@ pub(super) struct Sim {
     substeps: u64,
     sleep: Sleep,
     refused: Option<StaleMessage>,
+    /// What the anchor pass left on the last substep it ran, in metres, and
+    /// `None` until one has run against the scene now on the stand.
+    reach: Option<f32>,
 }
 
 impl Sim {
@@ -46,6 +49,7 @@ impl Sim {
             substeps: 0,
             sleep: Sleep::default(),
             refused: None,
+            reach: None,
         }
     }
 
@@ -201,10 +205,16 @@ impl Sim {
     }
 
     /// Takes a message in and puts the cloth back in motion.
+    ///
+    /// The anchor's reading goes with the message that arrived: every one of
+    /// them can change which vertices are held or where their rings are, and a
+    /// number measured against the scene before it is a number about a garment
+    /// nobody is looking at any more.
     fn wake(&mut self, generation: u64) {
         self.generation = generation;
         self.sleep.wake();
         self.damper.reset();
+        self.reach = None;
     }
 
     /// Advances one tick and asks whether the drape may sleep after it.
@@ -236,38 +246,18 @@ impl Sim {
             // No layers: the drape a person watches does not collide with
             // itself yet. The pass exists and is proven, and what it costs per
             // substep is the whole reason it is not switched on here.
-            xpbd::substep(
+            self.reach = Some(xpbd::substep(
                 &mut self.state,
                 &self.cons,
                 &self.seams,
                 &stage,
                 None,
                 self.dt,
-            );
+            ));
             self.substeps += 1;
             self.damper.observe(&mut self.state);
         }
         self.sleep.judge(&self.state);
-    }
-
-    pub(super) fn publish(&self) -> Arc<Snapshot> {
-        let n = self.state.len();
-        let mut positions = Vec::with_capacity(n * 3);
-        for i in 0..n {
-            positions.push(self.state.px[i]);
-            positions.push(self.state.py[i]);
-            positions.push(self.state.pz[i]);
-        }
-        let mut normals = vec![0.0f32; n * 3];
-        xpbd::vertex_normals(&self.state, &self.tris, &mut normals);
-        Arc::new(Snapshot {
-            generation: self.generation,
-            substeps: self.substeps,
-            asleep: self.sleep.asleep(),
-            positions,
-            normals,
-            refused: self.refused,
-        })
     }
 }
 

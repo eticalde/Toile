@@ -1,3 +1,5 @@
+/// What every panel calls the measurements of the catalogue.
+mod catalogue;
 pub mod maniquies;
 pub mod patronaje;
 pub mod probador;

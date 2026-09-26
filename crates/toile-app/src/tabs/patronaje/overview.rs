@@ -216,6 +216,7 @@ fn piece(
     // The spread's tracts already lie where the overview put the piece.
     let at = (it.piece, cut.tracts.as_slice(), [0.0, 0.0]);
     marks::elastics(p, theme, draft.doc(), at, state.view);
+    marks::hangs(p, theme, draft.doc(), at, state.view);
     // The outline is the cloth, so a folded piece takes its real room here;
     // the crease over it is what says the drawing is half of that.
     canvas::paper_and_outline(p, &it.outline, state.view, &grounds, line);

@@ -33,6 +33,8 @@ pub struct Theme {
     pub measure: Color32,
     /// A stretch of contour an elastic holds in: the tape sewn along it.
     pub elastic: Color32,
+    /// A stretch of contour the body holds up: the hooks it hangs by.
+    pub hang: Color32,
     /// Two stretches of contour sewn to each other: the thread between them.
     pub seam: Color32,
     /// Warnings and the point being dragged.
@@ -70,6 +72,11 @@ impl Theme {
             // against the brass of a selection, the teal of a tape and the
             // thread red of a fault, all on the one drawing.
             elastic: Color32::from_rgb(178, 141, 201),
+            // The hue left between the brass of a selection and the teal of a
+            // tape, because the one thing this has to be told from at a glance
+            // is the violet beside it: a waistband is hung and elasticated on
+            // the same stretch of contour, and the two marks cross there.
+            hang: Color32::from_rgb(150, 190, 104),
             // Basting blue. A seam lies along the same outlines a selection
             // lights in brass and an elastic tapes in violet, and has to be
             // told from both at a glance.

@@ -3,6 +3,7 @@ pub(super) mod elastic;
 /// The ways a pattern leaves the app, and the paper the printed ones take.
 mod exports;
 pub(super) mod fold;
+pub(super) mod hang;
 pub(super) mod inner;
 pub(super) mod notch;
 /// What one coordinate of a point reads as, and what it says instead when
@@ -183,7 +184,7 @@ fn group(ui: &mut egui::Ui, theme: &Theme, draft: &Draft, state: &State, many: u
 }
 
 /// The chosen tract: the two nodes it runs between, how long it is, when it
-/// bends how finely it is flattened, and what holds it in.
+/// bends how finely it is flattened, what holds it in, and what holds it up.
 fn tract(
     ui: &mut egui::Ui,
     theme: &Theme,
@@ -205,6 +206,7 @@ fn tract(
     let (state, cite) = writing;
     let asked = write::samples(ui, theme, draft, (piece, from), (&mut *state, cite));
     elastic::show(ui, theme, doc, edge, (&mut *state, &mut *verbs));
+    hang::show(ui, theme, doc, edge, verbs);
     let asked = notch::show(ui, theme, doc, (piece, from), (&mut *state, cite), verbs).or(asked);
     fold::show(ui, theme, draft, edge, verbs);
     asked

@@ -1,6 +1,7 @@
 use eframe::egui::{Rect, pos2, vec2};
 use toile_engine::body::Collider;
 use toile_engine::draft::block;
+use toile_engine::sync::Hanging;
 
 use super::*;
 
@@ -52,8 +53,45 @@ fn the_bar_names_the_body_even_when_the_document_has_not() {
     let session = Session::from_doc(block::trousers(), Collider::demo()).expect("the block opens");
     assert_eq!(fitted(&session), Some("Etienne"));
 
-    paint(|ui, theme| sub_bar(ui, theme, &session, "en caché", None));
-    paint(|ui, theme| sub_bar(ui, theme, &blank, "horneando…", Some("14 · entrepierna")));
+    paint(|ui, theme| sub_bar(ui, theme, &session, "en caché", (None, None)));
+    let read = (
+        Some("14 · entrepierna"),
+        Some("2 tramos · 1.1 mm del anillo"),
+    );
+    paint(|ui, theme| sub_bar(ui, theme, &blank, "horneando…", read));
+}
+
+/// The bar says how near its rings the body is holding the garment, and says
+/// nothing whatever about a garment hung from nothing.
+///
+/// The second half is the one that matters: every product anybody has drawn so
+/// far hangs from nothing, and a box reading `0 tramos` or `0.0 mm` on all of
+/// them would be a reading nobody took.
+#[test]
+fn the_bar_says_how_near_its_ring_the_garment_hangs_and_nothing_for_one_hung_from_nothing() {
+    assert_eq!(note::hanging(None), None);
+    let one = Hanging {
+        runs: 1,
+        gap: 0.000_1,
+    };
+    assert_eq!(
+        note::hanging(Some(one)).as_deref(),
+        Some("1 tramo · 0.1 mm del anillo")
+    );
+    // A centimetre and over reads in centimetres: a waistline a hand's breadth
+    // below its ring would say `118.0 mm`, and nobody reads a garment in
+    // millimetres at that size.
+    let far = Hanging {
+        runs: 2,
+        gap: 0.118,
+    };
+    assert_eq!(
+        note::hanging(Some(far)).as_deref(),
+        Some("2 tramos · 11.8 cm del anillo")
+    );
+    let blank = Session::blank(Collider::demo());
+    assert_eq!(blank.snapshot().hanging, None, "and nothing is hung");
+    paint(|ui, theme| sub_bar(ui, theme, &blank, "en caché", (None, None)));
 }
 
 /// The bar says where a body crosses itself when a garment can reach it, and

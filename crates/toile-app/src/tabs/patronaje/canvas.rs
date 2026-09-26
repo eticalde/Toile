@@ -121,10 +121,11 @@ fn detail(
         chalk::lines(painter, theme, &ghosts, (state.view, None));
         let mirror = fold::reflected(draft, piece, &ticks, [0.0, 0.0]);
         chalk::notches(painter, theme, &mirror, state.view);
-        // Under the paper and the cut line, so the tape reads as something the
-        // tract wears rather than as the tract itself.
+        // Under the paper and the cut line, so what holds a tract up reads as
+        // something the tract wears rather than as the tract itself.
         let at = (piece, tracts.as_slice(), [0.0, 0.0]);
         marks::elastics(painter, theme, draft.doc(), at, state.view);
+        marks::hangs(painter, theme, draft.doc(), at, state.view);
         paper_and_outline(
             painter,
             draft.flat_cm(piece),

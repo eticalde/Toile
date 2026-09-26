@@ -78,6 +78,7 @@ mod desk;
 mod elastic;
 mod exports;
 mod fold;
+mod hang;
 mod inner;
 mod insert;
 mod listing;

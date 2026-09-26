@@ -4,42 +4,9 @@ use eframe::egui::{self, RichText, Slider, SliderClamping};
 use toile_engine::session::Session;
 
 use super::stand::{Control, Stand};
-use crate::tabs::UNNAMED;
+use crate::tabs::{UNNAMED, catalogue};
 use crate::theme::Theme;
 use crate::widgets::{PAD, footer_note, section, section_with};
-
-/// Girth measurements, each catalogue name with the label the panel shows,
-/// ordered top-down the body: the tape starts at the neck and ends at the
-/// ankle, then the arm and the head, which sit off the trunk's line.
-const CONTORNOS: [(&str, &str); 12] = [
-    ("cuello", "Cuello"),
-    ("pecho_alto", "Pecho alto"),
-    ("pecho", "Contorno de pecho"),
-    ("bajo_pecho", "Bajo pecho"),
-    ("cintura", "Cintura"),
-    ("cadera", "Cadera"),
-    ("muslo", "Muslo"),
-    ("rodilla", "Rodilla"),
-    ("tobillo", "Tobillo"),
-    ("brazo_contorno", "Contorno de brazo"),
-    ("muneca", "Muñeca"),
-    ("cabeza", "Contorno de cabeza"),
-];
-
-/// Vertical measurements and the one width (the shoulders), top-down as
-/// well: the trunk lengths, the arm, then the legs.
-const LARGOS: [(&str, &str); 7] = [
-    ("largo_espalda", "Largo de espalda"),
-    ("brazo", "Largo de brazo"),
-    ("hombros", "Ancho de hombros"),
-    ("tiro", "Tiro"),
-    ("largo_lateral", "Largo lateral"),
-    ("entrepierna", "Entrepierna"),
-    ("altura_cadera", "Altura de cadera"),
-];
-
-/// The one whole-body measurement.
-const CUERPO: [(&str, &str); 1] = [("estatura", "Estatura")];
 
 /// The width the slider leaves for its value box and the panel's padding.
 const VALUE_W: f32 = 78.0;
@@ -100,17 +67,11 @@ pub fn panel(ui: &mut egui::Ui, theme: &Theme, session: &mut Session, stand: &mu
         .auto_shrink([false, false])
         .show(ui, |ui| {
             let mut lit = None;
-            section(ui, theme, "Contornos");
-            for entry in CONTORNOS {
-                lit = row(ui, theme, session, stand, entry).or(lit);
-            }
-            section(ui, theme, "Largos y anchos");
-            for entry in LARGOS {
-                lit = row(ui, theme, session, stand, entry).or(lit);
-            }
-            section(ui, theme, "Cuerpo");
-            for entry in CUERPO {
-                lit = row(ui, theme, session, stand, entry).or(lit);
+            for (heading, names) in catalogue::KINDS {
+                section(ui, theme, heading);
+                for &name in names {
+                    lit = row(ui, theme, session, stand, (name, catalogue::label(name))).or(lit);
+                }
             }
             ui.add_space(PAD);
             lit

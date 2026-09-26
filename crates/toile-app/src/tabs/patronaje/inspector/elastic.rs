@@ -109,7 +109,7 @@ fn on(doc: &Doc, at: EdgeRange) -> Option<(ElasticKey, Elastic)> {
 }
 
 /// Whether a stretch runs from node to node over exactly the tract `at`.
-fn covers(held: EdgeRange, at: EdgeRange) -> bool {
+pub(super) fn covers(held: EdgeRange, at: EdgeRange) -> bool {
     let ends =
         held.head.t.to_bits() == 0.0_f64.to_bits() && held.tail.t.to_bits() == 0.0_f64.to_bits();
     ends && held.head.piece == at.head.piece

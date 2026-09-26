@@ -80,6 +80,20 @@ pub enum StaleMessage {
     },
 }
 
+/// What the body is holding up, as the anchor pass last found it.
+///
+/// A garment hung from nothing carries none of this, which is a different
+/// answer from a garment sitting at its rings: a reading of zero taken off a
+/// product nobody hung is a reading nobody took.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Hanging {
+    /// How many runs of cloth the body holds at one of its own rings.
+    pub runs: usize,
+    /// How far the furthest of their vertices was still from its ring when the
+    /// last pull let go of it, in metres.
+    pub gap: f32,
+}
+
 /// What the sim thread publishes after every tick.
 #[derive(Debug, Clone, Default)]
 pub struct Snapshot {
@@ -94,6 +108,8 @@ pub struct Snapshot {
     pub positions: Vec<f32>,
     /// Interleaved xyz vertex normals.
     pub normals: Vec<f32>,
+    /// What the body holds up, and how near its rings it is holding it.
+    pub hanging: Option<Hanging>,
     /// The last message the sim refused, if it ever refused one.
     pub refused: Option<StaleMessage>,
 }

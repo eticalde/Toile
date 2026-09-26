@@ -1,10 +1,19 @@
 use toile_engine::body::Station;
 use toile_engine::body::bake::Crossings;
+use toile_engine::sync::Hanging;
 
 use crate::fitting::Fitting;
 
 /// How many places are named before the rest are left to the count.
 const NAMED: usize = 2;
+
+/// Where the reading changes unit, in metres as the solver holds it:
+/// millimetres under this, centimetres from it up.
+///
+/// A waistline that settles a tenth of a millimetre off its ring is at it, and
+/// a box reading `0.0 cm` says so much less than one reading `0.1 mm` that it
+/// would be read as a box that failed to fill.
+const FINE: f32 = 0.01;
 
 /// What the body on the stand cost, and where it came from.
 ///
@@ -43,6 +52,26 @@ pub fn crossed(found: &Crossings) -> Option<String> {
     let named: Vec<&str> = places.iter().take(NAMED).map(|s| place(*s)).collect();
     let more = if places.len() > NAMED { "…" } else { "" };
     Some(format!("{pairs} · {}{more}", named.join(", ")))
+}
+
+/// What the body is holding up, and how near the rings it names it is holding
+/// it: nothing at all for a garment hung from nothing.
+///
+/// A distance and never a verdict. Whether a tenth of a millimetre matters is
+/// the person's to judge and depends on the garment, so the bar says how far
+/// the cloth is and leaves the reading to whoever asked for the hang. It is
+/// measured at the end of the substep and not where the anchor pulls: the body
+/// and the ground both move the cloth afterwards, and read at the pull this
+/// same skirt said 1.6 mm where its run settles 1.1 mm from its ring.
+pub fn hanging(held: Option<Hanging>) -> Option<String> {
+    let Hanging { runs, gap } = held?;
+    let run = if runs == 1 { "tramo" } else { "tramos" };
+    let off = if gap < FINE {
+        format!("{:.1} mm", gap * 1000.0)
+    } else {
+        format!("{:.1} cm", gap * 100.0)
+    };
+    Some(format!("{runs} {run} · {off} del anillo"))
 }
 
 /// A station as a person names that part of a body.

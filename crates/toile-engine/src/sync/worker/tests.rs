@@ -12,6 +12,8 @@ use crate::couture::{COMPLIANCE, ShapePipeline};
 
 /// What the weightless phase is and is not, measured against its absence.
 mod gravity;
+/// What a published frame says about the runs the body holds up.
+mod hanging;
 /// What the sim refuses because it names a vertex it does not hold.
 mod range;
 /// What wakes a drape that has gone to sleep.

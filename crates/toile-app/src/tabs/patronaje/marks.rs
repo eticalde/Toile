@@ -9,6 +9,10 @@ use super::tract::Tract;
 use super::view::View;
 use crate::theme::Theme;
 
+mod hang;
+
+pub use hang::hangs;
+
 /// How far the guide of an axis reaches past the pointer, in screen points.
 const GUIDE: f32 = 60.0;
 

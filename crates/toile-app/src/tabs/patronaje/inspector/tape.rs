@@ -4,7 +4,7 @@ use toile_engine::draft::{Command, Doc, Draft, MannequinKey, MeasureSet};
 use super::super::state::{Field, State};
 use super::cite::{Cite, measure_id};
 use super::write::{self, Asked};
-use crate::tabs::UNNAMED;
+use crate::tabs::{UNNAMED, catalogue};
 use crate::theme::Theme;
 use crate::widgets::{
     Editable, Named, PAD, cycle, footer_note, measure_row, readout, section, section_with,
@@ -12,14 +12,6 @@ use crate::widgets::{
 
 const MEASURE: &str = "editar medida";
 const BODY: &str = "cambiar de cuerpo";
-
-/// The catalogue as a person reads it, under the headings the mannequin tab
-/// gives the same groups.
-const GROUPS: [(&str, &[&str]); 3] = [
-    ("Contornos", &MeasureSet::GIRTHS),
-    ("Largos y anchos", &MeasureSet::LENGTHS),
-    ("Cuerpo", &MeasureSet::WHOLE),
-];
 
 /// Where a body's own names go, the ones the catalogue does not list.
 const OTHERS: &str = "Otras";
@@ -65,7 +57,7 @@ pub fn measures(
 /// catalogue follows under a heading of its own, so no value it holds is out
 /// of reach.
 pub fn groups(set: &MeasureSet) -> Vec<Group<'_>> {
-    let mut groups: Vec<Group<'_>> = GROUPS
+    let mut groups: Vec<Group<'_>> = catalogue::KINDS
         .iter()
         .map(|&(heading, names)| (heading, names.iter().map(|&n| (n, set.get(n))).collect()))
         .collect();

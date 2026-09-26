@@ -20,6 +20,12 @@ pub(super) const DAMPING: f32 = 0.999;
 /// A scene whose `floor` is [`Floor::none`], whose `hung` is empty and whose
 /// `layers` is `None` runs exactly the passes it has always run, in the order
 /// it has always run them.
+///
+/// Hands back how far the furthest hung vertex stands from its ring at the end
+/// of it, in metres, and zero for a scene hung from nothing. Read there and not
+/// where the anchor pulls, because the body and the ground both move the cloth
+/// after the anchor has let go, and what a person is shown has to be where the
+/// cloth ended rather than what one correction could not close.
 pub fn substep(
     state: &mut State,
     cons: &DistanceConstraints,
@@ -27,7 +33,7 @@ pub fn substep(
     stage: &Stage,
     layers: Option<&mut Layers>,
     dt: f32,
-) {
+) -> f32 {
     let inv_dt2 = 1.0 / (dt * dt);
     integrate(state, stage.gravity, dt);
     solve_distance(state, cons, inv_dt2);
@@ -67,6 +73,7 @@ pub fn substep(
         rest_on_floor(state, y, stage.grip);
     }
     derive_velocities(state, dt);
+    hang::reach(state, stage.hung)
 }
 
 /// Semi-implicit integration, saving the previous position for the velocity
