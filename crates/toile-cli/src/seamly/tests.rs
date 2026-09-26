@@ -14,6 +14,8 @@ use super::migrate;
 mod inner;
 /// Filing the body as a person in the library, and the product's link.
 mod persona;
+/// Why a checked product is not written.
+mod refusing;
 
 // The owner's pattern and body, as the reader's own tests keep them.
 const PATTERN: &str = include_str!("../../../toile-seamly/tests/fixtures/baggy-jeans.sm2d");

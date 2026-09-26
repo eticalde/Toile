@@ -78,11 +78,8 @@ fn migrate(asked: &Asked) -> Result<Vec<String>, String> {
     };
     let check = check::check(&product, &pattern, &body)
         .map_err(|why| format!("no se pudo comprobar el producto: {why}"))?;
-    if !check.defects.is_empty() {
-        return Err(format!(
-            "el producto no resuelve limpio: {}",
-            check.defects.join("; ")
-        ));
+    if let Some(why) = refused(&check) {
+        return Err(why);
     }
     let draft = Draft::from_doc(product.doc.clone())
         .map_err(|why| format!("el producto no resuelve: {why}"))?;
@@ -113,6 +110,47 @@ fn migrate(asked: &Asked) -> Result<Vec<String>, String> {
         .as_ref()
         .map(|(persona, json)| (persona, json.is_some()));
     Ok(summary(&product, &check, person, &written))
+}
+
+/// Why the checked product is not written, if it is not.
+///
+/// Two readings of one rule: what the report says about the product has to be
+/// something a person can act on. A defect is a piece resolving to a shape
+/// nobody can cut; a point that lands nowhere leaves the parity infinite, and
+/// an infinity printed as though it were a number — «peor inf cm» — is the one
+/// refusal a script walking a folder cannot tell from a clean import.
+fn refused(check: &check::Check) -> Option<String> {
+    // Taken apart field by field, so that a reading added to the check has to
+    // be answered for on this line. Read through `check.` instead, and a
+    // reading that should stop the run would be printed and exit zero, which is
+    // the very thing `unplaced` was added to stop.
+    let check::Check {
+        points,
+        worst: _,
+        grown: _,
+        followed: _,
+        drift: _,
+        defects,
+        unplaced,
+        trusting: _,
+    } = check;
+    if !defects.is_empty() {
+        return Some(format!(
+            "el producto no resuelve limpio: {}",
+            defects.join("; ")
+        ));
+    }
+    if !unplaced.is_empty() {
+        // The count is the subject, and it is 1 as often as not: «1 de sus 164
+        // puntos no caen» is the sentence a program writes, not a person.
+        let cae = if unplaced.len() == 1 { "cae" } else { "caen" };
+        return Some(format!(
+            "el producto no resuelve: {} de sus {points} puntos no {cae} en ningún sitio ({})",
+            unplaced.len(),
+            unplaced.join(", ")
+        ));
+    }
+    None
 }
 
 /// The pattern, its body, and the path of the body's file.

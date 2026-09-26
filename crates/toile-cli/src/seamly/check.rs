@@ -32,6 +32,10 @@ pub struct Check {
     pub drift: BTreeMap<Frozen, f64>,
     /// Every defect a piece resolves with, in words.
     pub defects: Vec<String>,
+    /// The points that land nowhere, by the name the product shows them under:
+    /// one side of the comparison has no place for them, so `worst` is
+    /// infinite and no parity can be read off it at all.
+    pub unplaced: Vec<String>,
     /// What an evaluator that trusts the spline lengths the file wrote does
     /// differently; `None` when such an evaluator cannot evaluate the file,
     /// because a spline writes no length or a written one leaves a
@@ -68,10 +72,15 @@ pub fn check(product: &Product, pattern: &Pattern, body: &Measurements) -> Resul
     let reference = evaluate(body)?;
     let written = trusted(body);
     let mut worst: f64 = 0.0;
+    let mut unplaced = Vec::new();
     let mut moved: BTreeMap<PointKey, f64> = BTreeMap::new();
     for (key, source) in &product.sources {
         let toile = draft.resolved(*key);
-        worst = worst.max(gap(toile, source.locate(&reference)));
+        let off = gap(toile, source.locate(&reference));
+        if !off.is_finite() {
+            unplaced.push(shown(product, *key));
+        }
+        worst = worst.max(off);
         if let Some(there) = written.as_ref().map(|w| source.locate(w))
             && there != source.locate(&reference)
         {
@@ -120,8 +129,20 @@ pub fn check(product: &Product, pattern: &Pattern, body: &Measurements) -> Resul
         followed,
         drift,
         defects,
+        unplaced,
         trusting,
     })
+}
+
+/// What the product shows a point under: its label, else its key, because a
+/// handle carries no label and a refusal has to name it anyway.
+fn shown(product: &Product, key: PointKey) -> String {
+    product
+        .doc
+        .points
+        .get(key)
+        .and_then(|point| point.label.clone())
+        .unwrap_or_else(|| format!("P{}", key.index()))
 }
 
 /// Every defect a piece of the draft resolves with, in words.

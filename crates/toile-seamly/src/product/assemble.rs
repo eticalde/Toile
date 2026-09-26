@@ -57,8 +57,7 @@ pub(super) fn assemble(
         };
         variables.push((note, binding));
     }
-    let (body, mapped, carried, left_out) = body(&tr.names, name);
-    let mut doc = Doc::new(body);
+    let mut doc = Doc::new(tape(&tr.names, name));
     for (note, binding) in &variables {
         add_variable(&mut doc, &note.toile, binding.clone())?;
     }
@@ -77,6 +76,7 @@ pub(super) fn assemble(
             stands_for: helper.stands_for.clone(),
         });
     }
+    let (mapped, carried, left_out) = body(&mut doc, &tr.names);
     let frozen = frozen(&tr, &doc, &placed)?;
     let directions = tr
         .directions
@@ -127,9 +127,32 @@ fn binding(source: &str, what: &str) -> Result<Binding, Error> {
     })
 }
 
+/// Every measurement the body could be asked for, under the Toile name it
+/// would go by: the tape the translation writes its formulas against.
+///
+/// Wider than the body the product keeps, and it has to be. Which measurements
+/// the product reads is the answer to which formulas it carries, and the last
+/// of those is written when the last piece is drawn — so the tape stays whole
+/// until then and [`body`] cuts it down afterwards.
+fn tape(names: &Names, name: &str) -> MeasureSet {
+    let values = names
+        .measurements()
+        .values()
+        .filter_map(|m| Some((m.toile.as_deref()?, m.value)));
+    MeasureSet::new(name, values)
+}
+
 /// The product's body: every measurement with a catalogue name, and every
-/// other one a formula reads; the rest left out.
-fn body(names: &Names, name: &str) -> (MeasureSet, Vec<Measure>, Vec<Measure>, Vec<Measure>) {
+/// other one a formula reads; the rest left out of the document and said so in
+/// the report.
+///
+/// Asked after the pieces are placed, because a measurement is read for the
+/// first time by whichever formula cites it and a piece's internal lines are
+/// the last formulas written. Sorted any earlier, a measurement only an
+/// internal line reads counted as read by nothing: the body went out without
+/// it, and the line's own points then cited a name the document did not carry,
+/// so they resolved nowhere and the drawing lost the line.
+fn body(doc: &mut Doc, names: &Names) -> (Vec<Measure>, Vec<Measure>, Vec<Measure>) {
     let (mut mapped, mut carried, mut left_out) = (Vec::new(), Vec::new(), Vec::new());
     for (seamly, measure) in names.measurements() {
         let note = Measure {
@@ -148,11 +171,19 @@ fn body(names: &Names, name: &str) -> (MeasureSet, Vec<Measure>, Vec<Measure>, V
             });
         }
     }
-    let values = mapped
+    let held: BTreeSet<&str> = mapped
         .iter()
         .chain(&carried)
-        .filter_map(|m| Some((m.toile.as_deref()?, m.value)));
-    (MeasureSet::new(name, values), mapped, carried, left_out)
+        .filter_map(|m| m.toile.as_deref())
+        .collect();
+    // Not `if let`: a body this never found would ship the whole tape under a
+    // report that lists half of it as left out, and say nothing.
+    let set = doc
+        .mannequins
+        .get_mut(doc.resolve_with)
+        .expect("Doc::new inserted the body the document resolves against");
+    set.values.retain(|name, _| held.contains(name.as_str()));
+    (mapped, carried, left_out)
 }
 
 /// Every frozen quantity with what it reaches in the product, and every cut
