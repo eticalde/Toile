@@ -104,10 +104,17 @@ fn marks(doc: &mut Doc, front: PieceKey, back: PieceKey, points: &[PointKey]) {
         count: NotchCount::Triple,
     });
     doc.notches.get_mut(here).expect("the key is live").mate = Some(there);
-    let seam = doc.seams.keys().next().expect("the document sews one");
+    // Its own seam, and the one that shuts it: a dart's record says three nodes
+    // standing together are sewn leg to leg through the apex, and a reader
+    // holds it to that. Any other seam of the document would make this a
+    // dart nothing closes, which is a file that does not open.
+    let legs = (points[1], points[3]);
+    let seam = doc
+        .seams
+        .insert(Dart::shutting_seam(front, points[2], legs));
     doc.darts.insert(Dart {
         apex: points[2],
-        legs: (points[1], points[3]),
+        legs,
         seam,
         fold: FoldDirection::TowardStart,
     });

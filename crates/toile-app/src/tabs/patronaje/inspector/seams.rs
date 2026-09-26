@@ -41,7 +41,7 @@ pub fn show(
     // from under the wedge writes a product that never opens again. Left off
     // the list rather than listed and refused, because a row whose two presses
     // both say no is a row that should not be there.
-    let ours = |key: SeamKey| !doc.darts.iter().any(|(_, dart)| dart.seam == key);
+    let ours = |key: SeamKey| doc.dart_closed_by(key).is_none();
     let sewn: Vec<(SeamKey, &Seam)> = doc.seams.iter().filter(|(key, _)| ours(*key)).collect();
     section_with(ui, theme, "Costuras", &sewn.len().to_string());
     if sewn.is_empty() {

@@ -70,6 +70,12 @@ impl Command {
             | Command::RemoveNotch { .. }
             | Command::AddDart { .. }
             | Command::RemoveDart { .. }
+            // A declaration gains no node, so nothing forces a remesh by
+            // itself — but it issues the seam that shuts the wedge, and a seam
+            // is paired where the cloth is built. It is priced with the seam it
+            // brings, which is the row `AddSeam` already sits in.
+            | Command::DeclareDart { .. }
+            | Command::UndeclareDart { .. }
             | Command::AddSymmetry { .. }
             | Command::RemoveSymmetry { .. } => ChangeClass::Topology,
             // A body that is added, renamed or removed is never the one the

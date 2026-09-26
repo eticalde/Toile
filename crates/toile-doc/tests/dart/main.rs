@@ -1,9 +1,13 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
+/// What a wedge refuses, and every edit that would leave a dart the contour
+/// no longer describes.
+mod refused;
+
 use toile_doc::{
     ChangeClass, Command, ContourNode, Dart, DartKey, DartWedge, Doc, DocError, EdgeRange,
     FoldDirection, History, Identity, PieceKey, Point, PointKey, SeamKey, SeamOrientation,
-    WedgeNode, block,
+    SegmentEdit, WedgeNode, block,
 };
 
 /// The name the gesture that cuts a dart carries into the status bar.
@@ -98,41 +102,6 @@ fn a_wedge_is_cut_after_the_node_it_follows_and_sewn_leg_to_leg() {
     );
     assert_eq!(doc.seams.len(), 3, "the block's two, and the dart's");
     assert_eq!(applied.inverse, Command::RemoveDart { dart: key });
-}
-
-/// The three refusals the document makes of a cut, each of them before anything
-/// moves at all.
-#[test]
-fn a_cut_no_contour_could_take_writes_nothing() {
-    let (mut doc, piece, node) = block();
-    let before = doc.clone();
-    let stray = PointKey::new(99, 0);
-    let flat = DartWedge {
-        nodes: [
-            WedgeNode::line(Identity::New, Point::at(51.0, 0.0)),
-            WedgeNode::line(Identity::New, Point::at(52.0, 12.0)),
-            WedgeNode::line(Identity::New, Point::at(51.0, 0.0)),
-        ],
-        ..wedge(piece, Some(node))
-    };
-    let cases = [
-        (
-            wedge(PieceKey::new(9, 0), None),
-            DocError::stale(PieceKey::new(9, 0)),
-        ),
-        (wedge(piece, Some(stray)), DocError::NoSuchNode),
-        (flat, DocError::FlatWedge),
-    ];
-    for (asking, why) in cases {
-        let refused = Command::AddDart {
-            identity: Identity::New,
-            dart: asked(),
-            wedge: Box::new(asking),
-        }
-        .apply(&mut doc);
-        assert_eq!(refused, Err(why));
-        assert_eq!(doc, before, "nothing moved");
-    }
 }
 
 /// A wedge that opens the contour lands at its head, and the inverse says so by
@@ -275,26 +244,4 @@ fn a_piece_takes_a_second_dart_beside_the_first() {
     assert_eq!(doc.darts.len(), 2);
     assert_eq!(doc.seams.len(), 4, "the block's two, and one per dart");
     assert_eq!(contour(&doc, piece).len(), 15);
-}
-
-/// A dart's own seam cannot be unpicked on its own.
-///
-/// The loader refuses a dart whose seam is gone, so an editor that allowed it
-/// would let a person save a product and never open it again — three presses
-/// from the tool that cut the dart. The way out of a dart is the dart.
-#[test]
-fn the_seam_that_shuts_a_dart_is_not_one_to_unpick() {
-    let (mut doc, piece, after) = block();
-    cut(piece, Some(after))
-        .apply(&mut doc)
-        .expect("the wedge fits");
-    let (_, dart) = only_dart(&doc);
-    let before = doc.to_canonical_json();
-
-    let why = Command::RemoveSeam { seam: dart.seam }
-        .apply(&mut doc)
-        .expect_err("the dart's own thread stays where it is");
-
-    assert_eq!(why, DocError::SeamClosesADart);
-    assert_eq!(doc.to_canonical_json(), before, "and nothing was written");
 }

@@ -101,11 +101,30 @@ pub enum DocError {
     /// the contour, and the seam that closes the dart has no length to sew.
     #[error("a dart's wedge is cut between three places, and two of its nodes are one")]
     FlatWedge,
+    /// A wedge whose three nodes do not stand together in the contour, in the
+    /// order a dart names them. Two of them one node lands here as well: one
+    /// node cannot follow itself.
+    #[error("a dart's wedge is three nodes standing together in the contour, leg, apex and leg")]
+    ScatteredWedge,
+    /// A wedge one of whose nodes another dart of the piece already names. Two
+    /// darts over one node are two seams pulling one place and two mouths on
+    /// one printed sheet.
+    #[error("one of those nodes already belongs to a dart")]
+    AlreadyDarted,
+    /// A dart whose seam no longer sews one leg to the other through the apex,
+    /// so the record says dart and the cloth is not held shut.
+    #[error("a dart's seam sews one leg to the other through its apex, and this one does not")]
+    DartNotShut,
     /// A seam a dart is closed by, asked to be unpicked on its own. The loader
     /// refuses a dart whose seam is gone, so a document that allowed it could
     /// be saved and never opened again.
     #[error("that seam is what closes a dart, so the dart is what takes it out")]
     SeamClosesADart,
+    /// An edit that would leave a dart's three nodes no longer standing
+    /// together on their contour. The loader refuses such a document, so the
+    /// editor refuses the edit rather than letting it be saved.
+    #[error("that node is part of a dart's wedge, so the dart is what moves it")]
+    InsideAWedge,
     /// An internal line that runs through fewer than two places.
     #[error("an internal line runs from one place to another, so it needs two")]
     ShortLine,

@@ -6,6 +6,9 @@ use crate::tabs::patronaje::input::tests::{Table, table};
 use crate::tabs::patronaje::state::Tool;
 use crate::tabs::patronaje::view::View;
 
+/// What a wedge the tool cuts is worth on the next body it is drafted on.
+mod redraft;
+
 /// The waistline of the block's front: the tract leaving its first node, which
 /// runs twenty-two centimetres straight along the top of the piece.
 const WAIST: usize = 0;
@@ -88,10 +91,15 @@ fn asked(commands: &[Command]) -> (Dart, DartWedge) {
 }
 
 /// Where the three nodes of a wedge are written, in centimetres.
+///
+/// Plain numbers, because a wedge is stated from the node its tract leaves and
+/// the waistline of the block leaves the centre front, which is bound to plain
+/// numbers. A wedge cut on a tract whose node carries formulas is written in
+/// formulas, and that is what `redraft` measures.
 fn places(wedge: &DartWedge) -> [[f64; 2]; 3] {
     let literal = |binding: &Binding| match binding {
         Binding::Literal(cm) => *cm,
-        Binding::Formula(_) => panic!("the tool writes the place the press landed on"),
+        Binding::Formula(_) => panic!("the centre front is bound to plain numbers"),
     };
     [0, 1, 2].map(|at| {
         let value = &wedge.nodes[at].value;

@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
 use crate::{
-    Axis, Binding, BodyShape, Dart, DartKey, DartWedge, EdgeAnchor, Elastic, ElasticKey, Grain,
-    Hang, HangKey, Identity, InternalLine, LineEdit, LineKey, LineKind, MannequinKey, MeasureSet,
-    Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey, Placement, Point, PointKey, Seam,
-    SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
+    Axis, Binding, BodyShape, Dart, DartKey, DartWedge, DrawnWedge, EdgeAnchor, Elastic,
+    ElasticKey, Grain, Hang, HangKey, Identity, InternalLine, LineEdit, LineKey, LineKind,
+    MannequinKey, MeasureSet, Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey, Placement,
+    Point, PointKey, Seam, SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
 };
 
 /// A reversible edit to the document.
@@ -157,6 +157,21 @@ pub enum Command {
     },
     /// Closes a dart back up.
     RemoveDart { dart: DartKey },
+    /// Declares a dart over a wedge the contour already has.
+    ///
+    /// A cut brings three points, a seam and a record, and its undo gives all
+    /// five back; this brings a seam and a record over nodes that were already
+    /// drawn, and its undo takes only those two away. One command doing both
+    /// would carry that branch through every path either of them walks — the
+    /// keys it checks, the points it places, the contour it writes and the
+    /// inverse it hands back — so they are two.
+    DeclareDart {
+        identity: Identity<Dart>,
+        dart: Dart,
+        wedge: DrawnWedge,
+    },
+    /// Takes a declared dart off, and leaves the wedge drawn.
+    UndeclareDart { dart: DartKey },
     /// Folds or mirrors a piece on an axis.
     AddSymmetry {
         identity: Identity<Symmetry>,

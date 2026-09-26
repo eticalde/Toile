@@ -12,6 +12,10 @@ use super::view::View;
 /// and from the key alike.
 pub const UNPICK: &str = "descoser";
 
+/// What the mat says when the thread under the press is a dart's own.
+pub const SHUT: &str = "ese hilo es el que cierra una pinza: quita la pinza en el panel Pinzas y \
+                        el hilo se va con ella";
+
 /// One seam as the whole product draws it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Thread {
@@ -22,6 +26,9 @@ pub struct Thread {
     /// Its two sides as lines on the mat, each in the direction the pairing
     /// walks it.
     pub sides: [Vec<[f64; 2]>; 2],
+    /// Whether this is the thread that shuts a dart, which is not a thread a
+    /// person sewed and not one they may pull.
+    pub dart: bool,
 }
 
 /// What the reducer reads of the mat besides the event.
@@ -50,6 +57,7 @@ pub fn of(doc: &Doc, spread: &[Spread]) -> Vec<Thread> {
                 seam: key,
                 ordinal: index + 1,
                 sides: sides(spread, seam)?,
+                dart: doc.dart_closed_by(key).is_some(),
             })
         })
         .collect()
@@ -119,6 +127,16 @@ pub fn update(
             })
         }
         (Gesture::Idle, Input::Key(Key::Delete | Key::Backspace, _), Some(seam)) => {
+            // A dart's own thread is not one to pull: the document refuses it,
+            // and it refuses in the language a library speaks. Said here, where
+            // the press is, so a person reads the reason and not the rule.
+            if reach.threads.iter().any(|it| it.seam == seam && it.dart) {
+                let said = Arranged {
+                    refused: Some(SHUT),
+                    ..Arranged::default()
+                };
+                return Some((Gesture::Idle, Vec::new(), said));
+            }
             let said = Arranged {
                 stack: Some(Stack::Once(UNPICK)),
                 ..Arranged::default()

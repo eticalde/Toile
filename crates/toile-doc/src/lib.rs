@@ -58,7 +58,7 @@ pub use anchor::{EdgeAnchor, EdgeRange};
 pub use arena::Arena;
 pub use binding::Binding;
 pub use command::{Applied, ChangeClass, Coalesced, Command, History};
-pub use dart::{Dart, DartWedge, FoldDirection, WedgeNode};
+pub use dart::{Dart, DartWedge, DrawnWedge, FoldDirection, WedgeNode};
 pub use doc::Doc;
 pub use elastic::Elastic;
 pub use error::DocError;

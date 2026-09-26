@@ -39,7 +39,11 @@ pub(crate) fn remove_seam(doc: &mut Doc, seam: SeamKey) -> Result<Applied, DocEr
     // refuses to load. The editor has to refuse what the loader refuses, or a
     // product can be saved in a state it can never be opened in. Taking the
     // dart out takes its seam with it, which is the way through.
-    if doc.darts.iter().any(|(_, dart)| dart.seam == seam) {
+    //
+    // This is also the only door out of a sewn seam, so it is where turning one
+    // round is refused too: the document has no edit that rewrites a seam, and
+    // every hand that changes one takes it out and puts it back under its key.
+    if doc.dart_closed_by(seam).is_some() {
         return Err(DocError::SeamClosesADart);
     }
     let held = doc.seams.remove(seam)?;

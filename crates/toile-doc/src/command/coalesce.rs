@@ -119,6 +119,8 @@ impl Command {
             | Command::RemoveNotch { .. }
             | Command::AddDart { .. }
             | Command::RemoveDart { .. }
+            | Command::DeclareDart { .. }
+            | Command::UndeclareDart { .. }
             | Command::AddSymmetry { .. }
             | Command::RemoveSymmetry { .. }
             | Command::SetPin { .. }

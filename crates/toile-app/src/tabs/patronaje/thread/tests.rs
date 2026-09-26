@@ -28,6 +28,7 @@ fn threads(spread: &[Spread]) -> Vec<Thread> {
             seam: SeamKey::new(index as u32, 0),
             ordinal: index + 1,
             sides: sides(spread, seam).expect("both sides are on the mat"),
+            dart: false,
         })
         .collect()
 }
@@ -160,6 +161,24 @@ fn delete_unpicks_the_chosen_seam_in_one_entry_under_either_tool() {
     };
     let held = reach(&threads, Tool::Select, Some(seam));
     assert_eq!(update(&busy, &key(Key::Delete), &held), None);
+}
+
+/// A dart's own thread is not one the mat lets a person pull.
+///
+/// The document refuses it as well, and in the language a library speaks. Said
+/// here, where the press is, the person reads the way out instead of the rule.
+#[test]
+fn delete_on_the_thread_that_shuts_a_dart_says_so_and_sends_nothing() {
+    let spread = squares();
+    let mut threads = threads(&spread);
+    threads[1].dart = true;
+    let held = reach(&threads, Tool::Select, Some(threads[1].seam));
+    let (gesture, commands, said) =
+        update(&Gesture::Idle, &key(Key::Delete), &held).expect("a seam is chosen");
+    assert_eq!(gesture, Gesture::Idle);
+    assert!(commands.is_empty(), "{commands:?}");
+    assert_eq!(said.refused, Some(SHUT));
+    assert_eq!(said.stack, None, "and no entry is opened");
 }
 
 #[test]

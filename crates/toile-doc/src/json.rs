@@ -68,8 +68,9 @@ impl Doc {
     /// flattened at a count no tract can carry, a link to the library Toile
     /// could not have written, an elastic holding a stretch to numbers no
     /// elastic holds, an internal line no piece could be drawn with, an axis no
-    /// piece can be repeated across, or a stretch hung from a station the body
-    /// carries no ring for.
+    /// piece can be repeated across, a stretch hung from a station the body
+    /// carries no ring for, or a dart whose record does not describe the
+    /// contour it names.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = stamp(text)?;
         if !(u64::from(VERSION)..=u64::from(VERSION_DARTED)).contains(&found) {
@@ -87,6 +88,7 @@ impl Doc {
         check::lines(&loaded.doc)?;
         check::symmetries(&loaded.doc)?;
         check::hangs(&loaded.doc)?;
+        check::darts(&loaded.doc)?;
         Ok(loaded.doc)
     }
 }

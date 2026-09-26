@@ -8,9 +8,7 @@ mod wedge;
 pub use cut::{Cut, on};
 use eframe::egui::{Key, Pos2};
 pub use mark::{cutting, drawn};
-use toile_engine::draft::{
-    Command, Dart, DartWedge, Identity, Point, PointKey, SeamKey, WedgeNode,
-};
+use toile_engine::draft::{Command, Dart, DartWedge, Identity, PointKey, SeamKey};
 pub use wedge::{Darting, Leg};
 
 use super::gesture::{EditContext, Feedback, Gesture, Input, Mods, Stack};
@@ -173,11 +171,13 @@ fn cut(
     let Some((first, second)) = darting.ordered() else {
         return held(darting.clone());
     };
-    let node = |at: [f64; 2]| WedgeNode::line(Identity::New, Point::at(at[0], at[1]));
+    let Some(nodes) = wedge::stated((first, second), apex, ctx) else {
+        return held(darting.clone());
+    };
     let wedge = DartWedge {
         piece: ctx.piece,
         after: Some(first.from),
-        nodes: [node(first.cm), node(apex), node(second.cm)],
+        nodes,
     };
     let issued = ctx.doc.points.issued();
     let key = |offset: u32| PointKey::new(issued + offset, 0);

@@ -20,6 +20,10 @@ pub(crate) fn insert_node(
     samples: u16,
 ) -> Result<Applied, DocError> {
     let seat = seat(doc, piece, after)?;
+    // Never into the middle of a wedge: see `dart::over`.
+    if crate::dart::splits(doc, piece, seat) {
+        return Err(DocError::InsideAWedge);
+    }
     if !samples_fit(segment.bends(), samples) {
         return Err(DocError::sampling(samples));
     }
@@ -63,6 +67,15 @@ pub(crate) fn remove_node(
         .get(piece)
         .ok_or_else(|| DocError::stale(piece))?;
     let seat = held.node_index(node).ok_or(DocError::NoSuchNode)?;
+    // A wedge's own node leaves with its dart and never on its own: see
+    // `dart::over`.
+    if crate::dart::over(doc, node) {
+        return Err(DocError::InsideAWedge);
+    }
+    let held = doc
+        .pieces
+        .get(piece)
+        .ok_or_else(|| DocError::stale(piece))?;
     let found = *held.contour.get(seat).ok_or(DocError::NoSuchNode)?;
     let after = seat
         .checked_sub(1)
@@ -136,6 +149,17 @@ pub(crate) fn add_piece(
 /// even when they are not, leaving them is what makes the inverse a single
 /// command that gives the piece back exactly as it was, every key intact.
 pub(crate) fn remove_piece(doc: &mut Doc, piece: PieceKey) -> Result<Applied, DocError> {
+    // With its darts still on it the record would name a contour that is
+    // gone, which the loader refuses: see `dart::over`. The dart comes off
+    // first, and that is one entry of the history apiece rather than a
+    // removal that quietly takes more than it was asked for.
+    if doc.darts.iter().any(|(_, dart)| {
+        doc.pieces
+            .get(piece)
+            .is_some_and(|held| held.node_index(dart.apex).is_some())
+    }) {
+        return Err(DocError::InsideAWedge);
+    }
     let held = doc.pieces.remove(piece)?;
     Ok(Applied {
         inverse: Command::AddPiece {

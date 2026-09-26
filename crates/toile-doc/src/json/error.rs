@@ -55,6 +55,9 @@ pub enum FormatError {
     /// A stretch hung from a station the body carries no ring for.
     #[error("the pattern hangs a garment from something no body carries: {0}")]
     Hang(#[source] DocError),
+    /// A dart whose record no longer describes the contour it names.
+    #[error("the pattern carries a dart its contour does not: {0}")]
+    Dart(#[source] DocError),
 }
 
 impl FormatError {

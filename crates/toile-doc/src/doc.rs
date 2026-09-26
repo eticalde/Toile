@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Arena, Dart, EdgeRange, Elastic, Hang, InternalLine, MannequinKey, MeasureSet, Notch, Piece,
-    PieceKey, Pin, Point, PointKey, Seam, Symmetry, SymmetryKey, SymmetryKind, Variable,
-    VariableKey,
+    Arena, Dart, DartKey, EdgeRange, Elastic, Hang, InternalLine, MannequinKey, MeasureSet, Notch,
+    Piece, PieceKey, Pin, Point, PointKey, Seam, SeamKey, Symmetry, SymmetryKey, SymmetryKind,
+    Variable, VariableKey,
 };
 
 /// The document: everything a pattern file holds.
@@ -122,6 +122,20 @@ impl Doc {
             .iter()
             .find(|(_, held)| held.piece() == Some(piece))
             .map(|(key, held)| (key, *held))
+    }
+
+    /// The dart `seam` is what closes, if it closes one.
+    ///
+    /// The one place that answers it, because the answer is a refusal in three
+    /// different rooms: the edit that unpicks a seam, the list a person picks a
+    /// seam out of, and the reader that opens a file. Three copies of the walk
+    /// would be three chances for one of them to go on offering a thread the
+    /// other two say is not a person's to pull.
+    pub fn dart_closed_by(&self, seam: SeamKey) -> Option<DartKey> {
+        self.darts
+            .iter()
+            .find(|(_, dart)| dart.seam == seam)
+            .map(|(key, _)| key)
     }
 
     /// The stretch of contour a piece is folded on, if it is drawn on a fold.
