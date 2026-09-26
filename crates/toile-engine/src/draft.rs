@@ -31,6 +31,7 @@ pub use toile_doc::{
     PERSONA_EXTENSION, Persona, PersonaError, Piece, PieceKey, Placement, Point, PointKey, SAMPLES,
     Seam, SeamKey, SeamKind, SeamOrientation, Segment, SegmentEdit, Side, Snapshot, Symmetry,
     SymmetryKey, SymmetryKind, Variable, VariableKey, VertexEdit, WedgeNode, Winding,
+    wedge_is_shared,
 };
 pub use toile_geom::curve;
 pub use toile_geom::validate::ContourFault;

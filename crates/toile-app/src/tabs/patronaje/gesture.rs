@@ -10,6 +10,7 @@ use toile_engine::draft::{Doc, PieceKey, PointKey};
 use super::arrange::Arrange;
 use super::curve::Bend;
 use super::dart::Darting;
+use super::dart::declare::Declaring;
 use super::inner::{Drawn, Tick};
 /// The precision box lives with the box that paints it; a drag carries one.
 pub use super::precision::Typed;
@@ -64,6 +65,8 @@ pub enum Gesture {
     Tracing(Tracing),
     /// Cutting a dart: the legs pressed so far, waiting for the apex.
     Darting(Darting),
+    /// Declaring a dart over a wedge already drawn: the nodes chosen so far.
+    Declaring(Declaring),
     /// Sliding a notch along the tract it was cut into.
     Sliding(Slide),
 }

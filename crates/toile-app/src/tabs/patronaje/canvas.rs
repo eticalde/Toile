@@ -166,6 +166,7 @@ fn detail(
             chalk::tracing(painter, theme, state.view, &held.pending, held.rubber);
         }
         Gesture::Darting(held) => dart::cutting(painter, theme, state.view, held),
+        Gesture::Declaring(held) => dart::declaring(painter, theme, state.view, held),
         // A notch sliding is drawn by the document it is writing on every frame,
         // so the mark under the pointer is the mark the file holds.
         Gesture::Idle

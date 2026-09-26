@@ -107,7 +107,7 @@ fn take(state: &mut State, tool: Tool) {
     }
     if matches!(
         state.gesture,
-        Gesture::Sewing(_) | Gesture::Tracing(_) | Gesture::Darting(_)
+        Gesture::Sewing(_) | Gesture::Tracing(_) | Gesture::Darting(_) | Gesture::Declaring(_)
     ) {
         state.gesture = Gesture::Idle;
     }

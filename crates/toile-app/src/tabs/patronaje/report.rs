@@ -1,6 +1,7 @@
 use toile_engine::draft::{Draft, PieceKey};
 use toile_engine::session::Session;
 
+use super::dart::declare;
 use super::gesture::Gesture;
 use super::state::{Scope, State, Tool};
 use super::{active_piece, dart};
@@ -63,6 +64,29 @@ pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
             ("cm".to_owned(), false),
         ];
     }
+    // And a wedge being declared is the fourth. The count is of nodes and not
+    // of legs, and the word is «declarando», because those two are all the bar
+    // can give a person to tell this gesture from the cut that shares its tool.
+    if let Gesture::Declaring(held) = &state.gesture {
+        let chosen = held.nodes.len();
+        let next = match chosen {
+            1 => "pulsa el pico: el nodo de al lado",
+            _ => "pulsa la segunda pata: el nodo que sigue al pico",
+        };
+        return vec![
+            (
+                format!("declarando pinza · {chosen} de {} nodos", declare::NODES),
+                false,
+            ),
+            (next.to_owned(), false),
+            (
+                "se plancha hacia la primera pata · Retroceso quita el último · Esc cancela"
+                    .to_owned(),
+                false,
+            ),
+            ("cm".to_owned(), false),
+        ];
+    }
     let draft = session.draft();
     let mut cells = match (draft, state.scope) {
         (Some(draft), Scope::Product) => product(draft, state),
@@ -76,8 +100,10 @@ pub fn status(session: &Session, state: &State) -> Vec<(String, bool)> {
     };
     // The tile says which tool is in hand; what a press with it is aimed at is
     // said here, where a piece tool that waits for a target has room to say so.
+    // Both of its targets are named, because where the press lands is the only
+    // thing that decides which of the tool's two gestures opens.
     if state.scope == Scope::Piece && state.tool == Tool::Dart {
-        let said = "pinza: pulsa la primera pata en un tramo recto";
+        let said = "pinza: pulsa un tramo recto para cortarla, o un nodo para declararla";
         cells.push((said.to_owned(), false));
     }
     if let Some(why) = state.refused.as_deref() {

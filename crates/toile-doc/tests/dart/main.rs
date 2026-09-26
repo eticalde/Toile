@@ -1,13 +1,16 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
+/// The two doors out of a dart: the one that keeps its wedge drawn, and what
+/// the one that takes the wedge away will not do.
+mod loose;
 /// What a wedge refuses, and every edit that would leave a dart the contour
 /// no longer describes.
 mod refused;
 
 use toile_doc::{
-    ChangeClass, Command, ContourNode, Dart, DartKey, DartWedge, Doc, DocError, EdgeRange,
-    FoldDirection, History, Identity, PieceKey, Point, PointKey, SeamKey, SeamOrientation,
-    SegmentEdit, WedgeNode, block,
+    ChangeClass, Command, ContourNode, Dart, DartKey, DartWedge, Doc, DocError, EdgeAnchor,
+    EdgeRange, FoldDirection, History, Identity, Notch, PieceKey, Point, PointKey, SeamKey,
+    SeamOrientation, SegmentEdit, WedgeNode, block,
 };
 
 /// The name the gesture that cuts a dart carries into the status bar.

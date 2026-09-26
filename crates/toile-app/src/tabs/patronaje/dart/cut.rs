@@ -1,4 +1,6 @@
-use toile_engine::draft::{Dart, DartKey, Doc, Draft, FoldDirection, PieceKey};
+use toile_engine::draft::{
+    Binding, Dart, DartKey, Doc, Draft, FoldDirection, PieceKey, PointKey, wedge_is_shared,
+};
 
 /// One dart of a piece, as the panel and the mat read it.
 #[derive(Debug, Clone, PartialEq)]
@@ -11,6 +13,16 @@ pub struct Cut {
     pub names: [String; 3],
     /// Which way the sewn wedge is pressed.
     pub fold: FoldDirection,
+    /// How many of the six coordinates of its three nodes are formulas.
+    ///
+    /// The one thing the panel can say about what taking the wedge away would
+    /// cost without asking a question the record cannot answer. The record says
+    /// nothing about whether the wedge was cut by the tool or drawn by hand —
+    /// that is what kept the format at one version — but a formula is on the
+    /// page either way, and it is what a removal cannot give back.
+    pub formulas: usize,
+    /// Whether anything else in the pattern is drawn on those three nodes.
+    pub shared: bool,
     /// Its first leg, its apex and its second leg, in centimetres.
     ///
     /// Nothing at all when one of the three resolves nowhere, which is what
@@ -63,6 +75,8 @@ pub fn on(draft: &Draft, piece: PieceKey) -> Vec<Cut> {
                 ordinal: rank + 1,
                 names: [named(0), named(1), named(2)],
                 fold: held.fold,
+                formulas: formulas(doc, points),
+                shared: wedge_is_shared(doc, key),
                 at: resolved(draft, points),
             }
         })
@@ -78,8 +92,20 @@ pub fn cut_into(doc: &Doc, dart: &Dart) -> Option<PieceKey> {
     doc.seams.get(dart.seam)?.a.piece()
 }
 
+/// How many of the six coordinates of three nodes are written as a formula.
+fn formulas(doc: &Doc, points: [PointKey; 3]) -> usize {
+    points
+        .iter()
+        .filter_map(|&key| doc.points.get(key))
+        .map(|point| {
+            usize::from(matches!(point.x, Binding::Formula(_)))
+                + usize::from(matches!(point.y, Binding::Formula(_)))
+        })
+        .sum()
+}
+
 /// Where the three points of a wedge lie, when all three of them lie anywhere.
-fn resolved(draft: &Draft, points: [toile_engine::draft::PointKey; 3]) -> Option<[[f64; 2]; 3]> {
+fn resolved(draft: &Draft, points: [PointKey; 3]) -> Option<[[f64; 2]; 3]> {
     let at = points.map(|key| draft.resolved(key));
     Some([at[0]?, at[1]?, at[2]?])
 }
@@ -101,6 +127,8 @@ mod tests {
             ordinal: 1,
             names: ["a".to_owned(), "pico".to_owned(), "b".to_owned()],
             fold: FoldDirection::TowardStart,
+            formulas: 0,
+            shared: false,
             at: Some([[15.0, 0.0], [20.0, 12.0], [25.0, 0.0]]),
         }
     }

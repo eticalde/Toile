@@ -43,6 +43,8 @@ pub fn update(
         (Gesture::Tracing(held), event) => trace::update(held, &event, ctx),
         // And while a wedge is being cut, so does every event of that.
         (Gesture::Darting(held), event) => dart::update(held, &event, ctx),
+        // And while one already drawn is being declared a dart.
+        (Gesture::Declaring(held), event) => dart::declare::update(held, &event, ctx),
         (_, Input::Down(at, mods)) => press(at, mods, ctx),
         (Gesture::Pan { from }, Input::Move(at, _)) => (
             Gesture::Pan { from: at },
@@ -73,8 +75,9 @@ pub fn update(
     }
 }
 
-/// A press: with the Line tool it opens a tracing and with the Dart tool a
-/// wedge, on a notch of the tract
+/// A press: with the Line tool it opens a tracing and with the Dart tool
+/// either a wedge to cut or a dart to declare, whichever of the two it landed
+/// on, on a notch of the tract
 /// already chosen it takes that mark in hand, on a node it takes the selection,
 /// on a handle it pulls a tangent, on a place of the chosen line or on any
 /// other notch it takes that mark, on an internal line it chooses that line, on

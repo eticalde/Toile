@@ -94,6 +94,14 @@ pub(crate) fn add_dart(
 /// contour the wedge followed.
 pub(crate) fn remove_dart(doc: &mut Doc, dart: DartKey) -> Result<Applied, DocError> {
     let held = *doc.darts.get(dart).ok_or_else(|| DocError::stale(dart))?;
+    // The three points leave the document, and a file that names a point it
+    // does not carry is one `json::check` refuses: measured, a mark on a
+    // wedge's own leg outlives the wedge and the product never opens again.
+    // The history cannot reach this on the way back — the mark went on
+    // after the cut, so its own entry is the one undo takes first.
+    if crate::dart::wedge_is_shared(doc, dart) {
+        return Err(DocError::WedgeStillDrawn);
+    }
     let sewn = *doc
         .seams
         .get(held.seam)

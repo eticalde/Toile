@@ -166,9 +166,13 @@ impl State {
         match &mut self.gesture {
             Gesture::Drawing { back_to, .. } => *back_to = Scope::Piece,
             // A tract picked for a seam, a line half traced and a wedge half
-            // cut are matters of view and hold nothing open, so they are simply
-            // let go of: both belong to the piece begun on, and this leaves it.
-            Gesture::Sewing(_) | Gesture::Tracing(_) | Gesture::Darting(_) => {
+            // cut or half declared are matters of view and hold nothing open,
+            // so they are let go of: each belongs to the piece it was begun on,
+            // and this leaves it.
+            Gesture::Sewing(_)
+            | Gesture::Tracing(_)
+            | Gesture::Darting(_)
+            | Gesture::Declaring(_) => {
                 self.gesture = Gesture::Idle;
             }
             _ => {}
@@ -191,7 +195,11 @@ impl State {
         let free = self.ask.is_none()
             && matches!(
                 self.gesture,
-                Gesture::Idle | Gesture::Drawing { .. } | Gesture::Tracing(_) | Gesture::Darting(_)
+                Gesture::Idle
+                    | Gesture::Drawing { .. }
+                    | Gesture::Tracing(_)
+                    | Gesture::Darting(_)
+                    | Gesture::Declaring(_)
             );
         if self.scope == Scope::Piece {
             if !free {
@@ -209,7 +217,10 @@ impl State {
     pub fn overview(&mut self) {
         if matches!(
             self.gesture,
-            Gesture::Drawing { .. } | Gesture::Tracing(_) | Gesture::Darting(_)
+            Gesture::Drawing { .. }
+                | Gesture::Tracing(_)
+                | Gesture::Darting(_)
+                | Gesture::Declaring(_)
         ) {
             self.gesture = Gesture::Idle;
             self.caught = None;

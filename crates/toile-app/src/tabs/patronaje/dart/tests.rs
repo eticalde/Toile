@@ -184,16 +184,34 @@ fn the_wedge_is_pressed_toward_the_leg_pressed_first() {
     assert_eq!(places(&asked(&near_first).1), places(&asked(&far_first).1));
 }
 
-/// A press that lands off the contour puts no leg, and says so where the person
-/// reads it rather than leaving the mat silent.
+/// A press that lands on neither of the tool's two targets opens neither
+/// gesture, and names them both rather than leaving the mat silent.
 #[test]
-fn a_press_off_the_contour_puts_no_leg_and_says_why() {
+fn a_press_on_neither_target_opens_nothing_and_names_both() {
     let table = table();
     let ctx = table.wielding(Tool::Dart);
     let (gesture, commands, feedback) = begin(in_the_cloth(&table), Mods::default(), &ctx);
     assert_eq!(gesture, Gesture::Idle);
     assert!(commands.is_empty());
+    assert_eq!(feedback.refused, Some(NOWHERE));
+}
+
+/// Once a wedge is being cut, its second leg goes along the contour and not on
+/// a node.
+///
+/// Which of the tool's two gestures is running is settled by its first press,
+/// so a press on a node inside a cut carries the cut on rather than starting
+/// the other one — and a leg is not a place a node can be.
+#[test]
+fn the_second_leg_of_a_cut_is_refused_on_a_node() {
+    let table = table();
+    let ctx = table.wielding(Tool::Dart);
+    let (gesture, _, _) = begin(along(&table, WAIST, 0.3), Mods::default(), &ctx);
+    let (gesture, commands, feedback) =
+        update(darting(&gesture), &down(table.on_glass(WAIST)), &ctx);
+    assert!(commands.is_empty());
     assert_eq!(feedback.refused, Some(OFF_EDGE));
+    assert_eq!(darting(&gesture).legs.len(), 1, "the first leg is kept");
 }
 
 /// Both legs go on one tract: the three nodes of a wedge stand together in the

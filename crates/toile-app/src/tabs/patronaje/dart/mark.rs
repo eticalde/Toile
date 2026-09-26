@@ -2,6 +2,7 @@ use eframe::egui::{Painter, Pos2, Shape, Stroke, Vec2};
 use toile_engine::draft::FoldDirection;
 
 use super::super::view::View;
+use super::declare::Declaring;
 use super::{Cut, Darting};
 use crate::theme::Theme;
 
@@ -90,6 +91,26 @@ pub fn cutting(p: &Painter, theme: &Theme, view: View, darting: &Darting) {
     }
     for leg in &darting.legs {
         p.circle_filled(view.to_screen(leg.cm), DOT, theme.accent);
+    }
+}
+
+/// The wedge being declared, between the presses that name it.
+///
+/// The three nodes are drawn already, so what this adds is which of them the
+/// hand has taken: a dot on each, and the run from the last of them to the
+/// pointer. The mouth and the arrow wait for the third press, because until
+/// then which node is the far leg is the pointer's to say and not the mat's.
+pub fn declaring(p: &Painter, theme: &Theme, view: View, declaring: &Declaring) {
+    let guide = Stroke::new(1.0, theme.accent.gamma_multiply(0.55));
+    let mut walk: Vec<Pos2> = declaring
+        .nodes
+        .iter()
+        .map(|&(_, cm)| view.to_screen(cm))
+        .collect();
+    walk.push(view.to_screen(declaring.rubber));
+    p.add(Shape::line(walk, guide));
+    for &(_, cm) in &declaring.nodes {
+        p.circle_filled(view.to_screen(cm), DOT, theme.accent);
     }
 }
 

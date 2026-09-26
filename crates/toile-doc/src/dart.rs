@@ -1,4 +1,8 @@
+/// What else of the pattern is drawn on a wedge's own three nodes.
+mod shared;
+
 use serde::{Deserialize, Serialize};
+pub use shared::wedge_is_shared;
 
 use crate::{
     ContourNode, Doc, DocError, EdgeRange, Identity, Piece, PieceKey, Point, PointKey, Seam,

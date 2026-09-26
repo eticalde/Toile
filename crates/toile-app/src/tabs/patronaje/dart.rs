@@ -1,13 +1,15 @@
 /// The darts a piece carries, as the panel and the mat read them.
 mod cut;
-/// What the mat draws of a dart, and of the wedge being cut.
+/// Declaring a dart over three nodes the contour already draws.
+pub mod declare;
+/// What the mat draws of a dart, and of the wedge being made.
 mod mark;
 /// The wedge the presses of the tool build, before it is cut.
 mod wedge;
 
 pub use cut::{Cut, on};
 use eframe::egui::{Key, Pos2};
-pub use mark::{cutting, drawn};
+pub use mark::{cutting, declaring, drawn};
 use toile_engine::draft::{Command, Dart, DartWedge, Identity, PointKey, SeamKey};
 pub use wedge::{Darting, Leg};
 
@@ -19,11 +21,23 @@ use super::{curve, pick, tract};
 /// The name one dart cut leaves in the undo stack.
 pub const PUT_ON: &str = "poner pinza";
 
-/// The name taking one off leaves there.
-pub const TAKE_OFF: &str = "quitar la pinza";
+/// The name taking one off leaves there, wedge and all.
+pub const TAKE_OFF: &str = "quitar la pinza y su cuña";
+
+/// The name letting one go leaves there: the record and the thread come off,
+/// and the three nodes stay drawn.
+///
+/// The same words as the press, because the history is where a person looks to
+/// find out which of the two they pressed, and two wordings for one entry is
+/// the guess this panel exists to remove.
+pub const LET_GO: &str = "dejar de llamarla pinza";
 
 /// How many legs a wedge has, which is what the second press finishes.
 pub const LEGS: usize = 2;
+
+/// What a first press that landed on neither of the tool's two targets says.
+pub(in crate::tabs::patronaje) const NOWHERE: &str = "la pinza se corta pulsando un tramo recto del contorno, o se declara pulsando los tres nodos \
+     de una cuña ya dibujada";
 
 const OFF_EDGE: &str = "la pata de una pinza se pone en un tramo del contorno, no en un nodo ni \
                         sobre la tela";
@@ -32,15 +46,30 @@ const BENT: &str = "ese tramo es una curva, y la boca de una pinza se corta en u
 const ONE_PLACE: &str = "la segunda pata va en otro sitio del tramo, no encima de la primera";
 const OFF_CLOTH: &str = "el pico de la pinza va dentro de la pieza, no en su contorno ni fuera";
 
-/// Opens a wedge where a press landed, and opens none where it landed
-/// elsewhere.
+/// Opens whichever of the two gestures the first press aimed at, and opens
+/// neither where it aimed at nothing.
+///
+/// The snap ladder is the arbiter, and it already puts a node above the tract
+/// the node sits on, each with its own budget in screen points: a press within
+/// a node's budget is aimed at that node, which is the rule a drag and a notch
+/// already obey. So a press on a place *along* a tract cuts a new wedge, and a
+/// press on a node declares a dart over the wedge somebody drew — and which of
+/// the two the hand is doing is read off the dot under the pointer rather than
+/// off a mode nobody can see.
 pub fn begin(at: Pos2, mods: Mods, ctx: &EditContext<'_>) -> (Gesture, Vec<Command>, Feedback) {
-    match leg(at, None, mods, ctx) {
-        Ok(leg) => held(Darting {
-            legs: vec![leg],
-            rubber: leg.cm,
-        }),
-        Err(why) => refused(Gesture::Idle, why),
+    let caught = caught(at, ctx.view.to_document(at), mods, ctx);
+    match caught.kind {
+        Some(SnapKind::Node(node)) => declare::begin((node, caught.at), ctx),
+        Some(SnapKind::Edge { .. }) => match leg(caught, None, ctx) {
+            Ok(leg) => held(Darting {
+                legs: vec![leg],
+                rubber: leg.cm,
+            }),
+            Err(why) => refused(Gesture::Idle, why),
+        },
+        Some(SnapKind::Handle(_) | SnapKind::Axis | SnapKind::Grid) | None => {
+            refused(Gesture::Idle, NOWHERE)
+        }
     }
 }
 
@@ -83,7 +112,9 @@ fn pressed(
     ctx: &EditContext<'_>,
 ) -> (Gesture, Vec<Command>, Feedback) {
     if darting.legs.len() < LEGS {
-        return match leg(at, darting.legs.first(), mods, ctx) {
+        let first = darting.legs.first().copied();
+        let anchor = first.map_or_else(|| ctx.view.to_document(at), |leg| leg.cm);
+        return match leg(caught(at, anchor, mods, ctx), first.as_ref(), ctx) {
             Ok(leg) => {
                 let mut darting = darting;
                 darting.rubber = leg.cm;
@@ -109,14 +140,7 @@ fn pressed(
 /// handles, and a wedge node carries no new ones. That is asked of the first
 /// leg alone, because the second one lands on the tract the first already
 /// cleared.
-fn leg(
-    at: Pos2,
-    first: Option<&Leg>,
-    mods: Mods,
-    ctx: &EditContext<'_>,
-) -> Result<Leg, &'static str> {
-    let anchor = first.map_or_else(|| ctx.view.to_document(at), |leg| leg.cm);
-    let caught = caught(at, anchor, mods, ctx);
+fn leg(caught: Snapped, first: Option<&Leg>, ctx: &EditContext<'_>) -> Result<Leg, &'static str> {
     let Some(SnapKind::Edge { from, t }) = caught.kind else {
         return Err(OFF_EDGE);
     };
