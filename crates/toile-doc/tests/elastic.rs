@@ -263,19 +263,24 @@ fn an_elastic_whose_node_is_deleted_survives_the_undo_cycle() {
     assert!(doc.points.get(hip).is_some());
 }
 
+/// An elastic keeps its piece on the table until the elastic comes off first:
+/// a file naming a piece it does not carry is one the loader refuses.
 #[test]
-fn an_elastic_on_a_piece_taken_off_the_table_comes_back_with_it() {
+fn an_elastic_keeps_its_piece_on_the_table_until_it_comes_off_first() {
     let mut doc = block::trouser_front();
     let piece = front(&doc);
-    banded(&mut doc);
+    let key = banded(&mut doc);
     let before = doc.clone();
     let mut history = History::new();
-
-    history
-        .edit(&mut doc, Command::RemovePiece { piece })
-        .expect("the piece is live");
-    assert_eq!(doc.elastics.len(), 1, "the elastic waits for its piece");
-    history.undo(&mut doc).expect("the slot is free again");
+    let off = || Command::RemovePiece { piece };
+    let why = history.edit(&mut doc, off());
+    assert_eq!(why, Err(DocError::PieceStillDrawn));
+    assert_eq!(doc, before, "and nothing was written");
+    for command in [Command::RemoveElastic { elastic: key }, off()] {
+        history.edit(&mut doc, command).expect("in that order");
+    }
+    history.undo(&mut doc).expect("the piece comes back");
+    history.undo(&mut doc).expect("and the elastic with it");
     assert_eq!(doc, before);
 }
 

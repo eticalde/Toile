@@ -149,16 +149,22 @@ pub(crate) fn add_piece(
 /// even when they are not, leaving them is what makes the inverse a single
 /// command that gives the piece back exactly as it was, every key intact.
 pub(crate) fn remove_piece(doc: &mut Doc, piece: PieceKey) -> Result<Applied, DocError> {
-    // With its darts still on it the record would name a contour that is
-    // gone, which the loader refuses: see `dart::over`. The dart comes off
-    // first, and that is one entry of the history apiece rather than a
-    // removal that quietly takes more than it was asked for.
+    // A dart says so in its own words, because taking one off is a gesture a
+    // person already has.
     if doc.darts.iter().any(|(_, dart)| {
         doc.pieces
             .get(piece)
             .is_some_and(|held| held.node_index(dart.apex).is_some())
     }) {
         return Err(DocError::InsideAWedge);
+    }
+    // And nothing else may be left naming a piece the file no longer carries:
+    // `json::check` refuses such a document, so a removal the editor allowed
+    // would be saved and never opened again — measured, a two-piece pattern
+    // whose one seam outlives its piece. One entry of the history apiece,
+    // rather than a removal that quietly takes more than it was asked for.
+    if doc.drawn_on(piece) {
+        return Err(DocError::PieceStillDrawn);
     }
     let held = doc.pieces.remove(piece)?;
     Ok(Applied {

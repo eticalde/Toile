@@ -100,7 +100,7 @@ fn table(
             if plea == tree::Plea::Draw {
                 ui.ctx().request_repaint();
             }
-            asked.extend(plead(state, plea, draft.is_some()));
+            asked.extend(plead(state, plea, draft));
         }
         asked
     }));
@@ -147,13 +147,20 @@ fn active_piece(
         .or_else(|| doc.piece_keys().first().copied())
 }
 
+/// Why the cross on a tree row will not take a piece off the table.
+///
+/// Named here rather than left to the document, which says it in English.
+const STILL_DRAWN: &str = "esa pieza lleva algo dibujado encima —una costura, una pinza, \
+un piquete, una línea, un doblez— y eso se quita primero";
+
 /// What the product tree's plea does to the tab, and the edits it asks for.
 ///
 /// A new drawing and the whole product wait for the mat to be free of every
 /// gesture but a drawing or a side picked for a seam, which they walk away
 /// from: any other gesture may hold the undo stack open, and a view left
 /// behind would leave that entry open with it.
-fn plead(state: &mut State, plea: tree::Plea, has_document: bool) -> Vec<Verb> {
+fn plead(state: &mut State, plea: tree::Plea, draft: Option<&Draft>) -> Vec<Verb> {
+    let has_document = draft.is_some();
     let free = matches!(
         state.gesture,
         Gesture::Idle | Gesture::Drawing { .. } | Gesture::Sewing(_) | Gesture::Tracing(_)
@@ -168,6 +175,14 @@ fn plead(state: &mut State, plea: tree::Plea, has_document: bool) -> Vec<Verb> {
             return entry("renombrar pieza", Command::RenamePiece { piece, to });
         }
         tree::Plea::Remove(piece) => {
+            // Asked here, in Spanish, because the cross has no other way to
+            // say it: the document refuses this removal in English, and on a
+            // freshly opened pattern six of the owner's ten pieces are sewn,
+            // notched or drawn on, so the press meets the refusal at once.
+            if draft.is_some_and(|draft| draft.doc().drawn_on(piece)) {
+                state.refused = Some(STILL_DRAWN.to_string());
+                return Vec::new();
+            }
             return entry("borrar pieza", Command::RemovePiece { piece });
         }
         tree::Plea::Draw | tree::Plea::Overview => {}

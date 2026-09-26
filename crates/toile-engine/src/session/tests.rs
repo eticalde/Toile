@@ -224,9 +224,26 @@ fn a_rebuild_of_one_piece_leaves_the_others_alone() {
 
 /// A piece the document lets go of leaves the stand, and the rest of the
 /// product goes on draping without it.
+///
+/// The shipped block sews its two pieces to each other, and a piece something
+/// is still drawn on does not come off the table, so the seam is unpicked
+/// first — one entry apiece, which is the same order a person works in.
 #[test]
 fn a_removed_piece_leaves_the_stand_and_the_others_stay() {
     let (mut session, front, back) = trousers();
+    let sewn: Vec<SeamKey> = session
+        .draft()
+        .expect("the block has a document")
+        .doc()
+        .seams
+        .iter()
+        .map(|(key, _)| key)
+        .collect();
+    for seam in sewn {
+        session
+            .edit(Command::RemoveSeam { seam })
+            .expect("the seam is unpicked");
+    }
     session
         .edit(Command::RemovePiece { piece: back })
         .expect("the back comes off the table");

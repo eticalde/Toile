@@ -1,5 +1,6 @@
 use toile_doc::{
-    Coalesced, Command, DocError, History, Identity, LineKey, LineKind, Point, SegmentEdit, block,
+    Coalesced, Command, Doc, DocError, History, Identity, LineKey, LineKind, Point, SegmentEdit,
+    block,
 };
 
 use super::{draw, drawn, front, mouth, node};
@@ -102,22 +103,37 @@ fn a_node_inserted_under_the_run_leaves_both_ends_where_they_were() {
     assert_eq!(drawn(&doc, key), before);
 }
 
-/// The same as a seam and an elastic: the line waits under its own key, the
-/// arena never hands the slot to anything else, and the undo gives the piece
-/// back with everything that was drawn on it.
+/// The same as a seam and an elastic: a line keeps its piece on the table
+/// until the line itself comes off.
+///
+/// A line names the piece it is drawn on, and a file naming a piece it does
+/// not carry is one the loader refuses, so the removal is refused instead of
+/// leaving the line waiting for a piece that is gone. Taken off in order, both
+/// steps undo back to the pattern that was opened.
 #[test]
-fn a_line_on_a_piece_taken_off_the_table_comes_back_with_it() {
+fn a_line_keeps_its_piece_on_the_table_until_it_comes_off_first() {
     let mut doc = block::trouser_front();
     let piece = front(&doc);
     let edit = mouth(&mut doc);
-    draw(&mut doc, edit);
+    let key = draw(&mut doc, edit);
     let before = doc.clone();
     let mut history = History::new();
 
+    let why = history
+        .edit(&mut doc, Command::RemovePiece { piece })
+        .expect_err("the line is still drawn on it");
+    assert_eq!(why, DocError::PieceStillDrawn);
+    assert_eq!(doc, before, "and nothing was written");
+
+    history
+        .edit(&mut doc, Command::RemoveLine { line: key })
+        .expect("the line is rubbed out");
     history
         .edit(&mut doc, Command::RemovePiece { piece })
-        .expect("the piece is live");
-    assert_eq!(doc.lines.len(), 1, "the line waits for its piece");
-    history.undo(&mut doc).expect("the slot is free again");
+        .expect("and then the piece");
+    Doc::from_json(&doc.to_canonical_json()).expect("what it writes opens again");
+
+    history.undo(&mut doc).expect("the piece comes back");
+    history.undo(&mut doc).expect("and the line with it");
     assert_eq!(doc, before);
 }

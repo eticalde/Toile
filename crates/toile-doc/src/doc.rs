@@ -59,6 +59,8 @@ pub struct Doc {
     pub resolve_with: MannequinKey,
 }
 
+mod label;
+
 impl Doc {
     /// An empty document that resolves against `mannequin`.
     ///
@@ -107,6 +109,25 @@ impl Doc {
             .collect()
     }
 
+    /// Whether anything else in the pattern is drawn on `piece`.
+    ///
+    /// Asked in one place because the editor and the loader must not disagree:
+    /// `json::check` refuses a document naming a piece it does not carry, so a
+    /// removal allowed here would be saved and never opened again.
+    pub fn drawn_on(&self, piece: PieceKey) -> bool {
+        let named = |at: Option<PieceKey>| at == Some(piece);
+        let sewn = |seam: &Seam| named(seam.a.piece()) || named(seam.b.piece());
+        self.seams.iter().any(|(_, seam)| sewn(seam))
+            || self.elastics.iter().any(|(_, held)| named(held.at.piece()))
+            || self.hangs.iter().any(|(_, hung)| named(hung.at.piece()))
+            || self.lines.iter().any(|(_, line)| line.piece == piece)
+            || self
+                .notches
+                .iter()
+                .any(|(_, notch)| notch.at.piece == piece)
+            || self.symmetries.iter().any(|(_, axis)| named(axis.piece()))
+    }
+
     /// Every piece, in key order.
     pub fn piece_keys(&self) -> Vec<PieceKey> {
         self.pieces.keys().collect()
@@ -142,42 +163,6 @@ impl Doc {
     pub fn fold_of(&self, piece: PieceKey) -> Option<EdgeRange> {
         let (_, held) = self.symmetry_of(piece)?;
         (held.kind == SymmetryKind::Fold).then_some(held.axis)
-    }
-
-    /// The name a piece shows for one of its points.
-    ///
-    /// The label its author wrote, or `P` and its rank in the order the piece
-    /// gained its points. Indices are never recycled, so that rank holds still
-    /// even after a point is deleted.
-    pub fn label_of(&self, piece: PieceKey, point: PointKey) -> Option<String> {
-        let held = self.pieces.get(piece)?;
-        if !held.anchors().any(|anchor| anchor == point) {
-            return None;
-        }
-        if let Some(label) = self.points.get(point).and_then(|p| p.label.clone()) {
-            return Some(label);
-        }
-        self.automatic_label(piece, point)
-    }
-
-    /// The `P` name a point of `piece` falls back to when it carries no label.
-    pub(crate) fn automatic_label(&self, piece: PieceKey, point: PointKey) -> Option<String> {
-        let held = self.pieces.get(piece)?;
-        if !held.anchors().any(|anchor| anchor == point) {
-            return None;
-        }
-        let rank = held
-            .anchors()
-            .filter(|anchor| anchor.index() < point.index())
-            .count();
-        Some(format!("P{}", rank + 1))
-    }
-
-    /// The point of `piece` that shows `label`, if one does.
-    pub fn shows_label(&self, piece: PieceKey, label: &str) -> Option<PointKey> {
-        let held = self.pieces.get(piece)?;
-        held.anchors()
-            .find(|&point| self.label_of(piece, point).as_deref() == Some(label))
     }
 
     /// The piece that carries `name`, if one does.

@@ -21,7 +21,7 @@ fn a_piece_row_opens_its_piece_and_the_product_row_goes_back() {
         frame: false,
         ..State::default()
     };
-    let asked = plead(&mut state, tree::Plea::Focus(back), true);
+    let asked = plead(&mut state, tree::Plea::Focus(back), Some(&draft));
     assert!(asked.is_empty(), "opening a piece edits nothing");
     assert_eq!(state.scope, Scope::Piece);
     assert_eq!(state.active, Some(back));
@@ -30,7 +30,7 @@ fn a_piece_row_opens_its_piece_and_the_product_row_goes_back() {
     state.frame = false;
     let row = click_the_tree(Some(&draft), &mut renaming, pos2(100.0, 50.0));
     assert_eq!(row, Some(tree::Plea::Overview));
-    assert!(plead(&mut state, tree::Plea::Overview, true).is_empty());
+    assert!(plead(&mut state, tree::Plea::Overview, Some(&draft)).is_empty());
     assert_eq!(state.scope, Scope::Product);
     assert!(state.frame, "every piece is framed on the way back");
     assert_eq!(
@@ -62,7 +62,7 @@ fn escape_on_a_piece_lets_go_of_what_is_chosen_then_of_the_piece() {
 fn a_piece_drawn_from_the_whole_product_lands_on_its_own_detail() {
     let mut bench = Bench::new(block::trousers());
     bench.frame(Vec::new());
-    assert!(plead(&mut bench.state, tree::Plea::Draw, true).is_empty());
+    assert!(plead(&mut bench.state, tree::Plea::Draw, bench.session.draft()).is_empty());
     assert_eq!(
         bench.state.scope,
         Scope::Piece,
@@ -99,7 +99,7 @@ fn escape_from_a_drawing_goes_back_to_the_scope_it_was_begun_from() {
     for doc in [block::trousers(), empty] {
         let mut bench = Bench::new(doc);
         bench.frame(Vec::new());
-        assert!(plead(&mut bench.state, tree::Plea::Draw, true).is_empty());
+        assert!(plead(&mut bench.state, tree::Plea::Draw, bench.session.draft()).is_empty());
         bench.frame(Vec::new());
         assert_eq!(bench.state.scope, Scope::Piece, "drawn on a detail");
         bench.click(pos2(600.0, 400.0));
@@ -113,7 +113,7 @@ fn escape_from_a_drawing_goes_back_to_the_scope_it_was_begun_from() {
     let (front, _) = front_and_back(bench.doc());
     bench.state.open(front);
     bench.frame(Vec::new());
-    assert!(plead(&mut bench.state, tree::Plea::Draw, true).is_empty());
+    assert!(plead(&mut bench.state, tree::Plea::Draw, bench.session.draft()).is_empty());
     bench.click(pos2(600.0, 400.0));
     bench.key(Key::Escape);
     assert_eq!(bench.state.gesture, Gesture::Idle);
@@ -132,7 +132,11 @@ fn taking_off_the_piece_on_the_mat_goes_back_to_the_whole_product() {
     bench.state.open(second);
     bench.frame(Vec::new());
     let before = bench.doc().piece_keys();
-    let verbs = plead(&mut bench.state, tree::Plea::Remove(second), true);
+    let verbs = plead(
+        &mut bench.state,
+        tree::Plea::Remove(second),
+        bench.session.draft(),
+    );
     apply(&mut bench.session, verbs, &mut bench.state.refused);
     assert_eq!(bench.state.refused, None, "the removal is taken");
     follow::pieces(&bench.session, &mut bench.state, &before);
@@ -152,4 +156,35 @@ fn the_first_step_of_the_trail_goes_back_to_the_whole_product() {
     bench.click(pos2(50.0, 34.0));
     assert_eq!(bench.state.scope, Scope::Product);
     assert_eq!(bench.session.revision(), 0);
+}
+
+/// The cross on a row will not take off a piece the pattern is drawn on, and it
+/// says so in Spanish before the document says it in English.
+///
+/// The shipped block's two pieces are sewn to each other, so both are refused
+/// from the moment it opens. Measured without the refusal: the removal is taken
+/// and the file it writes is one the loader will not open again.
+#[test]
+fn the_cross_will_not_take_off_a_piece_something_is_drawn_on() {
+    let mut bench = Bench::new(block::trousers());
+    let (front, _) = front_and_back(bench.doc());
+    bench.frame(Vec::new());
+    let before = bench.doc().piece_keys();
+    // The front sits at 79, and the cross at the right end of its row.
+    let mut renaming = None;
+    let row = click_the_tree(bench.session.draft(), &mut renaming, pos2(204.0, 79.0));
+    assert_eq!(row, Some(tree::Plea::Remove(front)));
+
+    let verbs = plead(
+        &mut bench.state,
+        tree::Plea::Remove(front),
+        bench.session.draft(),
+    );
+    assert!(verbs.is_empty(), "nothing is asked of the document");
+    assert_eq!(
+        bench.state.refused.as_deref(),
+        Some(super::super::STILL_DRAWN),
+        "and the bar carries the reason, in Spanish"
+    );
+    assert_eq!(bench.doc().piece_keys(), before, "the piece is still there");
 }

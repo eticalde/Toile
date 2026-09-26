@@ -120,6 +120,20 @@ pub enum DocError {
     /// be saved and never opened again.
     #[error("that seam is what closes a dart, so the dart is what takes it out")]
     SeamClosesADart,
+    /// A piece asked to come off the table while something else in the pattern
+    /// is still drawn on it. The loader refuses a seam, an elastic, a hang, a
+    /// line, a notch or an axis that names a piece the file does not carry, so
+    /// the editor refuses the removal rather than letting it be saved.
+    #[error("something else in the pattern is drawn on that piece, so that has to come off first")]
+    PieceStillDrawn,
+    /// A dart asked to be closed back up while something else in the pattern is
+    /// drawn on one of the three nodes its wedge would take out of the
+    /// document. The loader refuses a mark, a seam or a line that names a
+    /// point the file does not carry, so the editor refuses the removal
+    /// rather than letting it be saved. Letting the dart go instead leaves
+    /// every node where it is.
+    #[error("something else in the pattern is drawn on that wedge, so that has to come off first")]
+    WedgeStillDrawn,
     /// An edit that would leave a dart's three nodes no longer standing
     /// together on their contour. The loader refuses such a document, so the
     /// editor refuses the edit rather than letting it be saved.
