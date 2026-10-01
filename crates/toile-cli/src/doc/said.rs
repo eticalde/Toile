@@ -1,5 +1,8 @@
 use toile_engine::draft::{Doc, Draft, EdgeAnchor, EdgeRange, PieceKey, PointKey, Segment};
 
+/// Every seam the document declares, measured against its own tolerance.
+mod seams;
+
 /// The whole pattern, one line at a time: the body it resolves against, its
 /// measurements and variables, what holds it on, and every piece.
 pub fn pattern(draft: &Draft) -> Vec<String> {
@@ -12,6 +15,7 @@ pub fn pattern(draft: &Draft) -> Vec<String> {
     lines.extend(measures(draft));
     lines.extend(variables(draft));
     lines.extend(sujecion(draft));
+    lines.extend(seams::costuras(draft));
     for piece in doc.piece_keys() {
         lines.push(String::new());
         lines.extend(piece_lines(draft, piece));

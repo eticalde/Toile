@@ -8,6 +8,7 @@ mod measure;
 mod order;
 mod resolve;
 mod resolved;
+mod seam;
 
 use std::collections::BTreeMap;
 
@@ -17,6 +18,7 @@ pub use env::{Env, EnvError};
 pub use fold::Cloth;
 pub use resolve::{to_document, to_metres};
 pub use resolved::Resolved;
+pub use seam::{Lengths, side_cm, tolerance_cm};
 pub use toile_anny::BodyMesh;
 // The one door between the document and the interface. The desktop app
 // depends on this crate and on nothing else of Toile's, so a type reaches it

@@ -9,6 +9,10 @@ mod grip;
 /// What hanging a garment from a ring of the body is worth, and what it is
 /// not.
 mod hang;
+/// One leg of a trouser as two mirrored pieces, cut to a declared mismatch.
+mod leg;
+/// What two sides of unequal length cost, and what they do not cost.
+mod mismatch;
 /// The same habits over a product of two sewn pieces.
 mod product;
 /// The tube skirt an elastic is proved on.
