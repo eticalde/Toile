@@ -57,11 +57,15 @@ fn a_dart_in_one_piece_leaves_the_product_where_it_was_placed() {
 }
 
 /// The seams and the body place the product: the two pieces are rolled onto
-/// opposite sides of one ring, and that ring is the garment's own size.
+/// opposite sides of one surface, and that surface is the garment's own size.
 ///
 /// Front before the body and back behind it are not declared anywhere. The
 /// document says only which stretch of one meets which stretch of the other,
-/// and walking that ring is what puts them across the axis from each other.
+/// and walking that surface is what puts them across the axis from each other.
+///
+/// Every vertex sits at the radius its own pattern ordinate names, and those
+/// are not one number: a trouser block's cloth widens from the waist to the
+/// seat, so the hoops it lands on widen with it.
 ///
 /// The demo ball carries no measurements, so no ring on it can be matched: the
 /// product is let go about the whole of it, at its own cloth's size, opened
@@ -79,14 +83,34 @@ fn the_seams_put_one_piece_before_the_body_and_one_behind_it() {
     let mean_z = |run: &[[f32; 3]]| run.iter().map(|p| p[2]).sum::<f32>() / run.len() as f32;
     assert!(mean_z(&at[..split]) > 0.0, "the front is before the body");
     assert!(mean_z(&at[split..]) < 0.0, "the back is behind it");
-    for p in at {
-        let r = f64::from(p[0].hypot(p[2]));
-        assert!((r - ring.radius).abs() < 1.0e-5, "a vertex sits at {r}");
+
+    let pipes = session.pipelines();
+    assert_eq!(pipes.len(), 2, "the block is a front and a back");
+    let bases = [0, split];
+    let (mut narrowest, mut widest) = (f64::MAX, 0.0f64);
+    for (piece, pipe) in pipes.iter().enumerate() {
+        for (i, &p) in pipe.pos2d.iter().enumerate() {
+            let q = at[bases[piece] + i];
+            let got = f64::from(q[0].hypot(q[2]));
+            let asked = ring.round.radius(p[1]);
+            assert!(
+                (got - asked).abs() < 1.0e-5,
+                "a vertex of piece {piece} sits {got} out where its own ordinate \
+                 {} asks for {asked}",
+                p[1]
+            );
+            narrowest = narrowest.min(asked);
+            widest = widest.max(asked);
+        }
     }
     assert!(
-        ring.radius < f64::from(0.15f32.hypot(0.15)),
-        "the ring is the cloth's own size and not the ball's: {}",
-        ring.radius
+        widest > narrowest + crate::body::bake::CELL,
+        "the surface follows the cloth rather than being one ring: {narrowest} \
+         to {widest}"
+    );
+    assert!(
+        widest < f64::from(0.15f32.hypot(0.15)),
+        "and it is the cloth's own size and not the ball's: {widest}"
     );
 }
 

@@ -1,13 +1,10 @@
-use std::f64::consts::TAU;
-
 use toile_engine::body::{BodyMesh, Collider, bake};
-use toile_engine::couture::{HOLDS_ITS_RATIO, SEAM_SHUT};
+use toile_engine::couture::{HOLDS_ITS_RATIO, SEAM_SHUT, ShapePipeline, for_contour};
 use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
 
-use crate::extremes::{GATHERED, wide_hipped};
+use crate::extremes::GATHERED;
 use crate::skirt::{Cut, cut_to};
-use crate::watch::{buried, reference};
 
 /// A published frame's flat triple-per-vertex positions, as points.
 pub fn placed(flat: &[f32]) -> Vec<[f32; 3]> {
@@ -88,76 +85,46 @@ pub fn shut(scene: &str, when: &str, pairs: &[(u32, u32)], at: &[[f32; 3]]) {
     );
 }
 
+/// The pieces of a session meshed again, in the order it holds them.
+///
+/// The engine's own pipelines are not a test's to see, so this builds the same
+/// ones the same way: the same contours, through the same density rule. What it
+/// buys is the pattern a vertex came from, which is what any reading of where
+/// the placement put it has to be taken against.
+///
+/// # Panics
+/// If the scene was not opened from a document, or the meshes come out a
+/// different size from the ones the session is standing on.
+pub fn meshed(session: &Session) -> Vec<ShapePipeline> {
+    let draft = session
+        .draft()
+        .expect("the scene was opened from a document");
+    let pipes: Vec<ShapePipeline> = session
+        .pieces()
+        .iter()
+        .map(|&key| {
+            let contour = draft.outline_m(key);
+            let (samples, area) = for_contour(contour);
+            ShapePipeline::build(contour, samples, area).expect("the pieces mesh")
+        })
+        .collect();
+    assert_eq!(
+        pipes.iter().map(|pipe| pipe.pos2d.len()).sum::<usize>(),
+        session.n_vertices(),
+        "the meshes a test builds are the meshes the session is standing on"
+    );
+    pipes
+}
+
 /// Bakes a body and lets the skirt drafted to it go, without draping it.
-fn let_go(mesh: &BodyMesh, cut: Cut) -> (Session, SdfGrid) {
+pub fn let_go(mesh: &BodyMesh, cut: Cut) -> (Session, SdfGrid) {
     let body = Collider::bake(mesh).expect("the Anny body is closed and orientable");
     let sdf = bake::sdf(mesh).expect("the Anny body is closed and orientable");
     let doc = cut_to(cut, Some((GATHERED, HOLDS_ITS_RATIO)));
     (Session::from_doc(doc, body).expect("the skirt drapes"), sdf)
 }
 
-/// The ring two bodies' skirts are let go on, and what each one releases open.
-///
-/// Read and not hashed, deliberately. A `Layout` is four numbers and a wrap
-/// per piece, cheap to pin and the wrong instrument twice over: the radius is
-/// mostly the body's — `clear_of` walks it out until the person stops
-/// swallowing the panels — so a hash would re-pin the bake, which has three
-/// goldens already; and the wraps come out of the branch dividing the whole
-/// turn between the pieces, one half of a contradiction in `around`'s own
-/// doc, so pinning them would price its repair as a golden move.
-///
-/// What is asserted instead is what the rule promises, and a rule replacing
-/// it would still owe: the ring is never smaller round than the cloth,
-/// nothing is released already inside the person, and the ring stands within
-/// the body's own height rather than over its crown. Which of the body's
-/// rings it stands at is sharper and is not asked here — `Collider::belts`
-/// is the crate's own, so a test outside it cannot name one.
-#[test]
-#[ignore = "release-only: two real bodies baked"]
-fn the_ring_releases_every_garment_clear_of_the_body() {
-    for (scene, mesh, cut) in [
-        ("reference adult", reference(), Cut::REFERENCE),
-        ("wide-hipped body", wide_hipped(), Cut::WIDE_HIPPED),
-    ] {
-        let (session, sdf) = let_go(&mesh, cut);
-        let (lo, hi) = session.collider().extent();
-        let ring = session.layout().expect("the seams place the skirt");
-        let round = ring.radius * TAU;
-        // The line the ring is sized from. Both halves of this fixture run at
-        // their full width from the hip to the hem, so the widest cloth the
-        // product carries is twice the cut's own hip, in metres.
-        let girth = 2.0 * cut.hip / 100.0;
-        let start = placed(&session.released());
-        let (deep, all) = buried(&sdf, &start);
-        println!(
-            "{scene}: ring {round:.5} m round at {:.4}, crest {:.4} · {girth:.5} m of cloth, \
-             opened {:.2} cells · body {:.4}..{:.4} · {deep} of {all} released past the band",
-            ring.stand,
-            ring.crest,
-            (round - girth) / (TAU * bake::CELL),
-            lo[1],
-            hi[1]
-        );
-        report(scene, "at release", &session.sewn_pairs(), &start);
-        assert!(
-            round >= girth,
-            "{scene}: rolling preserves length, so a ring smaller round than \
-             the cloth could only be filled by the pieces overlapping: \
-             {round} against {girth}"
-        );
-        assert_eq!(
-            deep, 0,
-            "{scene}: the ring released {deep} of {all} particles past the band, \
-             where the field is saturated flat and no contact solve has a normal \
-             to carry them out along"
-        );
-        assert!(
-            ring.stand > lo[1] && ring.stand < hi[1],
-            "{scene}: the garment is hung somewhere down the body and not over \
-             its crown: {} against {}..{}",
-            ring.stand,
-            lo[1],
-            hi[1]
-        );
-    }
-}
+/// What rolling costs the cloth: every edge against its own flat length.
+mod stretch;
+/// The surface a garment is let go on, and every line of cloth's place on it.
+mod surface;

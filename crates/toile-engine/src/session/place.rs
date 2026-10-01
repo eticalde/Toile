@@ -1,19 +1,25 @@
-use std::f64::consts::TAU;
-
 use strip::{Step, adjacency, walk};
 
 use super::sew::Sewn;
 use crate::body::{Collider, bake, worn_at};
-use crate::couture::{Layout, ShapePipeline, Wrap};
+use crate::couture::{Layout, Round, ShapePipeline};
 
 mod strip;
 
-/// How far the ring is opened at a time when the body needs the room, in
+/// How far the surface is opened at a time where the body needs the room, in
 /// metres.
 ///
 /// The field's own cell. A step finer asks the field a question it cannot
 /// answer differently, and one coarser hands the garment room it never needed.
 const OPENING: f64 = bake::CELL;
+
+/// How tall one band of the clearance profile is, in metres.
+///
+/// The field's own cell again, and for the same reason: two bands closer
+/// together than that would be opened by a reading the field cannot tell apart.
+/// It is also what makes the profile's own slope readable — a band of height
+/// per band of radius is the steepest wall the surface is allowed to lean at.
+const BAND_HEIGHT: f64 = bake::CELL;
 
 /// How far round a product's elastics go, and the line of cloth they run at.
 ///
@@ -30,18 +36,20 @@ pub(super) struct Band {
 /// Where a sewn product is let go on the body.
 ///
 /// Three readings, from three places. The seams chain the pieces into a strip
-/// and say which way round each one runs. The cloth says how big the ring is:
-/// a garment is the size of the cloth it is cut from, never the size of the
-/// person. The body says where on itself a ring that size belongs, and how far
-/// the ring has to be opened to go round it at all.
+/// and say which way round each one runs. The cloth says how big the surface is
+/// at every height. The body says where on itself a garment that size belongs,
+/// and which of those heights have to be opened to go round it at all.
 ///
-/// A piece's arc is its own flat width, so nothing is stretched to fit, and a
-/// closed garment divides the whole turn between its pieces.
+/// One radius cannot do the middle reading. A skirt's waistband carries 61 cm
+/// of cloth and its hip 117, and the one hoop that cleared the person was
+/// 130 cm round: the band — the line that has to close first and holds the
+/// garment up — was let go at 47 % coverage, its two ends most of its own
+/// length apart. A hoop per ordinate lands every line of cloth on a hoop its
+/// own size, so the arc a seam walks is the arc its cloth gives it.
 ///
 /// `None` when the seams do not chain the pieces into one strip — a piece sewn
-/// to itself, one carrying three seams, or two strips at once. The placement
-/// those want is not a turn around one axis, and guessing one would be
-/// inventing the very thing this reads.
+/// to itself, one carrying three seams, or two at once. What those want is not
+/// a turn around one axis, and guessing one would invent what this reads.
 pub(super) fn around(
     sewn: &[Sewn],
     pipes: &[&ShapePipeline],
@@ -72,84 +80,53 @@ pub(super) fn around(
     let (hangs_by, crest) = band.map_or((girth, top), |band| (band.girth, band.at));
     let (axis, stand) = stands(collider, hangs_by, girth, crest - hem);
 
-    // The garment's own size first, opened only as far as the person under it
-    // makes necessary. A ring smaller than the body starts the cloth inside it,
-    // past the band where the field is saturated flat and no contact solve has
-    // a normal to carry it out along.
+    // The garment's own size first, opened only at the heights the person under
+    // it makes necessary. Cloth let go inside the body starts past the band
+    // where the field is saturated flat and no contact solve has a normal to
+    // carry it out along.
     let far = outermost(collider, axis);
-    let mut radius = girth / TAU;
-    loop {
-        let on = Ring {
-            axis,
-            radius,
-            stand,
-            crest,
-        };
-        let layout = rolled(&steps, pipes.len(), girth, closed, &on);
-        if radius >= far || clear_of(&layout, pipes, collider) {
-            return Some(layout);
-        }
-        radius += OPENING;
-    }
+    let order: Vec<(usize, f64)> = steps.iter().map(|s| (s.piece, s.sense)).collect();
+    let round = Round::over(&order, pipes, closed, BAND_HEIGHT)?;
+    let mut layout = Layout::on(round, axis, stand, crest, pipes.len());
+    // Band by band rather than the whole surface at once, which is the point:
+    // a garment that fits the person over most of its height is opened only
+    // where it does not, and everywhere else the hoops stay the size of the
+    // cloth and the seams meet. The walk cannot circle — every round either
+    // stops or opens a band it has not yet walked out to `far`.
+    while layout.open(&swallowed(&layout, pipes, collider), OPENING, far) {}
+    Some(layout)
 }
 
-/// The cylinder a candidate placement stands on.
-struct Ring {
-    axis: [f32; 2],
-    radius: f64,
-    stand: f32,
-    crest: f64,
-}
-
-/// Rolls the strip onto one candidate ring.
+/// Every pattern ordinate at which the body has swallowed some of the rolled
+/// cloth.
 ///
-/// The first piece's middle opens the turn, so a product comes out facing the
-/// same way whatever ring it ends on.
-fn rolled(steps: &[Step], pieces: usize, girth: f64, closed: bool, on: &Ring) -> Layout {
-    let mut along = Vec::with_capacity(steps.len());
-    let mut walked = 0.0;
-    for step in steps {
-        let width = step.hi - step.lo;
-        along.push(walked + width / 2.0);
-        walked += width;
-    }
-    // A closed garment divides the whole turn between its pieces; an open one
-    // has no whole to divide, so its pieces simply abut at the ring's own size.
-    let turn_of = |mid: f64| {
-        if closed {
-            TAU * mid / girth
-        } else {
-            mid / on.radius
+/// The ordinates and not the vertices, because what is opened is a height: a
+/// panel caught at the hip says the hip's hoop is too small, and says nothing
+/// at all about the waistband two hand's breadths above it.
+///
+/// At the band and not a step short of it, which was measured and costs the
+/// whole point of the rule. Stopping the walk one opening early does give the
+/// release a real margin — 5.2 mm and 5.7 mm on the two skirts, against the
+/// 51 µm and 12 µm `fit.rs` reads — and it shuts the shipped block's seams
+/// besides, 1 pair of 381 standing open at the mark instead of 5. It pays for
+/// that at the one place that must not pay: the tightest hoop in a garment is
+/// the line it hangs by, so the waistband is the first band a margin opens,
+/// and the reference skirt's band comes off a hoop 3.5 % longer than its own
+/// cloth with the held run stretched 2.87 % — a garment let go too big at the
+/// band, which is the defect the ordinate-by-ordinate hoop exists to end.
+fn swallowed(layout: &Layout, pipes: &[&ShapePipeline], collider: &Collider) -> Vec<f64> {
+    let mut inside = Vec::new();
+    for (at, pipe) in pipes.iter().enumerate() {
+        for &p in &pipe.pos2d {
+            if layout.point(at, p).is_some_and(|q| collider.swallows(q)) {
+                inside.push(p[1]);
+            }
         }
-    };
-    let origin = turn_of(along[0]);
-    let mut wraps = vec![None; pieces];
-    for (k, step) in steps.iter().enumerate() {
-        let middle = f64::midpoint(step.lo, step.hi);
-        wraps[step.piece] = Some(Wrap {
-            turn: turn_of(along[k]) - origin - step.sense * middle / on.radius,
-            sense: step.sense,
-        });
     }
-    Layout {
-        axis: on.axis,
-        radius: on.radius,
-        stand: on.stand,
-        crest: on.crest,
-        wraps,
-    }
+    inside
 }
 
-/// Whether no part of the rolled cloth is anywhere the body has swallowed it.
-fn clear_of(layout: &Layout, pipes: &[&ShapePipeline], collider: &Collider) -> bool {
-    pipes.iter().enumerate().all(|(at, pipe)| {
-        pipe.pos2d
-            .iter()
-            .all(|&p| layout.point(at, p).is_none_or(|q| !collider.swallows(q)))
-    })
-}
-
-/// Where the ring sits: the body's own ring for a garment this size, or the
+/// Where the surface sits: the body's own ring for a garment this size, or the
 /// middle of the body's box at the height it releases from.
 ///
 /// The fallback is for a body that carries no measurements — the demo ball,

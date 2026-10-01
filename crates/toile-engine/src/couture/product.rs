@@ -111,6 +111,19 @@ mod tests {
         ShapePipeline::build(&rectangle, 16, 0.01).expect("the rectangle is finite")
     }
 
+    /// The pieces of `order` rolled onto their own closed surface, let go with
+    /// the crest at the rectangles' own top edge.
+    fn placed(
+        pipes: &[&ShapePipeline],
+        order: &[(usize, f64)],
+        axis: [f32; 2],
+        stand: f32,
+    ) -> Layout {
+        let round = super::super::place::Round::over(order, pipes, true, 0.005)
+            .expect("the rectangles have widths");
+        Layout::on(round, axis, stand, 0.20, pipes.len())
+    }
+
     /// The reduction the whole many-piece path stands on.
     ///
     /// A product of one piece is that piece's own arithmetic with an offset of
@@ -146,37 +159,29 @@ mod tests {
     fn a_layout_that_places_nothing_seeds_the_flat_release() {
         let pipe = pipeline(0.30, 0.20);
         let one = [&pipe];
-        let empty = Layout {
-            axis: [0.4, -0.3],
-            radius: 0.5,
-            stand: 0.9,
-            crest: 0.2,
-            wraps: vec![None],
-        };
+        // A surface that carries a second piece and not this one, which is the
+        // shape a lone panel of a product comes out as.
+        let empty = placed(&[&pipe, &pipe], &[(1, 1.0)], [0.4, -0.3], 0.9);
         assert_eq!(
             position_hash(&drop_all(&one, DROP_HEIGHT, Some(&empty))),
             position_hash(&drop_state(&pipe, DROP_HEIGHT))
         );
     }
 
-    /// And one that does place it puts every vertex on the cylinder instead.
+    /// And one that does place it puts every vertex on the surface instead,
+    /// each at the radius its own pattern ordinate names.
     #[test]
     fn a_placed_piece_is_rolled_onto_the_stand() {
         let pipe = pipeline(0.30, 0.20);
-        let around = Layout {
-            axis: [0.0, 0.0],
-            radius: 0.5,
-            stand: DROP_HEIGHT,
-            crest: 0.20,
-            wraps: vec![Some(super::super::place::Wrap {
-                turn: 0.0,
-                sense: 1.0,
-            })],
-        };
+        let around = placed(&[&pipe], &[(0, 1.0)], [0.0, 0.0], DROP_HEIGHT);
         let state = drop_all(&[&pipe], DROP_HEIGHT, Some(&around));
         for i in 0..state.len() {
             let r = f64::from(state.px[i].hypot(state.pz[i]));
-            assert!((r - around.radius).abs() < 1.0e-6, "vertex {i} at {r}");
+            let asked = around.round.radius(pipe.pos2d[i][1]);
+            assert!(
+                (r - asked).abs() < 1.0e-6,
+                "vertex {i} at {r} against {asked}"
+            );
         }
     }
 

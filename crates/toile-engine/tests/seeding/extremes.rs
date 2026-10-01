@@ -1,6 +1,6 @@
 use toile_anny::phenotype::LEVERS;
 use toile_engine::body::{BodyMesh, Collider, Phenotype, bake, body_mesh, measured_anny};
-use toile_engine::couture::{HOLDS_ITS_RATIO, SEAM_SHUT};
+use toile_engine::couture::HOLDS_ITS_RATIO;
 use toile_engine::session::Session;
 
 use crate::rests_clear_of_the_body;
@@ -35,6 +35,22 @@ fn lever(label: &str) -> usize {
 /// the waist to the hip, which on this body is the better part of half a metre
 /// and on the reference adult is under a third of that.
 pub fn wide_hipped() -> BodyMesh {
+    hips_at(1.0)
+}
+
+/// The same body with its hips most of the way back towards the reference
+/// adult's.
+///
+/// Not an edge of what the sliders draw but a point inside it, which is why it
+/// is here: a person reaches it by typing a 105 cm hip against a 61 cm waist,
+/// and it is the body the anchor's old cap broke on while both ends of the
+/// range passed.
+pub fn hips_a_little_wide() -> BodyMesh {
+    hips_at(0.6)
+}
+
+/// The three-lever body with its hips wherever `hips` puts them.
+fn hips_at(hips: f64) -> BodyMesh {
     let phenotype = Phenotype {
         gender: 1.0,
         age: 0.8,
@@ -44,14 +60,14 @@ pub fn wide_hipped() -> BodyMesh {
         proportions: 0.5,
     };
     let mut levers = [0.0f64; 20];
-    levers[lever("hips-circ")] = 1.0;
+    levers[lever("hips-circ")] = hips;
     levers[lever("thigh-circ")] = 1.0;
     levers[lever("waist-circ")] = -1.0;
     body_mesh(&phenotype, &levers)
 }
 
-/// A skirt cut for a body with a 50 cm waist-to-hip drop comes to rest on
-/// that body and not inside it, and on this body does not close.
+/// A skirt cut for a body with a 50 cm waist-to-hip drop comes to rest on that
+/// body and not inside it, and on this body it now closes.
 ///
 /// The suite's other seeded scenes all run the one reference adult, and burial
 /// is a thing a body's own shape decides: what puts cloth where the field can
@@ -69,7 +85,7 @@ pub fn wide_hipped() -> BodyMesh {
 /// saturated flat and nothing in the contact solve is looking for it.
 #[test]
 #[ignore = "release-only: an extreme body baked and a whole drape run"]
-fn a_skirt_cut_for_a_wide_hipped_body_rests_clear_of_it_and_does_not_close() {
+fn a_skirt_cut_for_a_wide_hipped_body_rests_clear_of_it_and_closes() {
     let mesh = wide_hipped();
     let tape = measured_anny(&mesh);
     let of = |name: &str| {
@@ -115,30 +131,41 @@ fn a_skirt_cut_for_a_wide_hipped_body_rests_clear_of_it_and_does_not_close() {
     );
     let seams = rests_clear_of_the_body("wide-hipped body", &session, &sdf);
     let (worst, _) = seams.expect("the skirt is sewn into a tube");
-    still_open(worst);
+    meets(worst);
 }
 
-/// The fit this body's skirt does not have, recorded rather than described.
+/// How far apart the two sides of a seam may stand at rest and still be a seam
+/// that met, in metres.
 ///
-/// What is asserted is that the seam did *not* shut, which needs no threshold
-/// of this suite's own: [`SEAM_SHUT`] is the distance the solver's own closing
-/// phase stops waiting at, so the negative of it is exactly as measured as the
-/// positive. Nobody has decided what an open seam at rest is worth, and this
-/// does not decide it either — it pins the state of the tree.
+/// Not the sewing's own `SEAM_SHUT`, which is what its closing phase stops
+/// waiting at — that phase runs with gravity off and nothing else pulling, and
+/// this reading is taken at rest with the garment's whole weight on the seam
+/// and the body pushing back through it. Five millimetres is a seam a machinist
+/// would sew; what is being asserted is that a side seam which stood 115.3 mm
+/// open has met, not that it met to the tolerance of a phase that is long over.
+pub const MET: f32 = 0.005;
+
+/// The fit this body's skirt now has, recorded rather than described.
 ///
-/// Two ways to fail, and both are news. Something that hands the sewing a gap
-/// it can close is the fix this waits on, and it is not the anchor decision 12
-/// held in reserve: hanging this very garment from the body's waist leaves the
-/// seam as open as it is here, which `hang.rs` measures as its own scene. And a
-/// reading near zero with nothing else changed means the burial is back —
-/// before the contact solve learned to retreat along an overshooting step, this
-/// same seam shut to 0.2 mm by pulling its two sides through the abdomen.
-fn still_open(worst: f32) {
+/// It did not have it. Let go on one hoop sized to clear the person, the
+/// waistband landed on a hoop 1.29566 m round carrying 0.61189 m of cloth — 47
+/// % coverage — and the seam rested 115.3 mm open, which this test asserted
+/// that it did. Let go on a hoop per ordinate the band's own cloth lands on a
+/// 0.61189 m hoop, and the seam rests 1.7 mm open with nothing past the band at
+/// any published frame of the drape.
+///
+/// Two ways to fail, and both are news. A reading back up near a tenth of a
+/// metre means the garment stopped being placed on hoops its own size. A
+/// reading of exactly zero with particles past the band means the burial is
+/// back — before the contact solve learned to retreat along an overshooting
+/// step, this same seam shut to 0.2 mm by pulling its two sides through the
+/// abdomen.
+fn meets(worst: f32) {
     assert!(
-        worst > SEAM_SHUT,
-        "the wide-hipped skirt's side seam shut to {:.1} mm. If a placement \
-         rule now closes it, this is the assertion to invert; if nothing was \
-         placed differently, the cloth went through the body again",
-        worst * 1000.0
+        worst < MET,
+        "the wide-hipped skirt's side seam rests {:.1} mm open, against the \
+         {:.1} mm a met seam is held to",
+        worst * 1000.0,
+        MET * 1000.0
     );
 }

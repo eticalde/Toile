@@ -1,36 +1,33 @@
 use std::f32::consts::PI;
 
 use toile_engine::body::{Collider, bake};
-use toile_engine::couture::{Layout, SEAM_SHUT};
+use toile_engine::couture::Layout;
 use toile_engine::draft::{PieceKey, block};
 use toile_engine::session::Session;
 use toile_sim::xpbd::SdfGrid;
 
-use crate::fit::{apart as gap, placed as points, report};
-use crate::watch::{LANDED, MARK, at_mark, buried, reference, span, through_the_drape, touching};
+use crate::fit::{placed as points, report};
+use crate::watch::{buried, reference, span};
 
-/// How far from a seam, in metres of cloth, a vertex has to be before the two
-/// pieces coming close there counts as one passing through the other.
-///
-/// Near a seam the two pieces are *meant* to meet, so the smallest gap in the
-/// product is always a sewn one and says nothing. Cloth distance is taken on
-/// the release state, where each piece is a rigid rolled panel and a straight
-/// line across it is the cloth's own length.
-const AWAY: f32 = 0.05;
+/// Where the two pieces sit round the surface: one arc each.
+mod arcs;
+/// What the garment has become once the sim has run to the mark.
+mod mark;
+/// One piece's meshed boundary, read by this suite rather than by the engine.
+mod outline;
+/// What the surface does above the height the shortest piece stops at.
+mod tab;
 
 /// What the release measured, and what reading the mark needs from it.
-struct Released {
+pub(super) struct Released {
     /// Every sewn pair, as indices into the published positions.
-    pairs: Vec<(u32, u32)>,
-    /// Each piece's vertices that lie more than [`AWAY`] of cloth from any
-    /// seam: the ones whose meeting would be one piece inside the other.
-    clear: [Vec<usize>; 2],
+    pub(super) pairs: Vec<(u32, u32)>,
     /// Where the back's block of the combined state begins, and how long the
     /// whole of it is.
-    split: usize,
-    all: usize,
+    pub(super) split: usize,
+    pub(super) all: usize,
     /// The ring the product was let go on.
-    ring: Layout,
+    pub(super) ring: Layout,
 }
 
 /// The shipped block over the reference body: two pieces, two seams.
@@ -49,25 +46,12 @@ fn trousers() -> (Session, SdfGrid, [PieceKey; 2]) {
     (session, sdf, [front, back])
 }
 
-/// The vertices of one run that are at least [`AWAY`] of cloth from any seam.
-fn off_the_seams(run: std::ops::Range<usize>, sewn: &[usize], at: &[[f32; 3]]) -> Vec<usize> {
-    run.filter(|&i| sewn.iter().all(|&s| gap(at[i], at[s]) > AWAY))
-        .collect()
-}
-
-/// Closest approach between two sets of vertices.
-fn nearest(a: &[usize], b: &[usize], at: &[[f32; 3]]) -> f32 {
-    let mut best = f32::MAX;
-    for &i in a {
-        for &j in b {
-            best = best.min(gap(at[i], at[j]));
-        }
-    }
-    best
-}
-
 /// Where a run of the product sits around the ring's axis, in metres.
-fn about_the_axis(run: std::ops::Range<usize>, at: &[[f32; 3]], axis: [f32; 2]) -> (f32, f32, f32) {
+pub(super) fn about_the_axis(
+    run: std::ops::Range<usize>,
+    at: &[[f32; 3]],
+    axis: [f32; 2],
+) -> (f32, f32, f32) {
     let n = run.len() as f32;
     let (mut x, mut z, mut r) = (0.0f32, 0.0f32, 0.0f32);
     for i in run {
@@ -104,7 +88,7 @@ fn a_sewn_product_is_let_go_around_the_body() {
         session.seam_faults()
     );
     let released = let_go(&session, &sdf, back);
-    at_the_mark(&session, &sdf, &released);
+    mark::at_the_mark(&session, &sdf, &released);
 }
 
 /// Where the seams and the body put the two pieces.
@@ -161,131 +145,15 @@ fn let_go(session: &Session, sdf: &SdfGrid, back: PieceKey) -> Released {
         "the pieces are let go all but touching: {mean} m apart on average"
     );
 
-    // Cloth distance to the nearest seam, read off the release state, so that
-    // the pieces closing on each other at the seam is not mistaken later for
-    // one of them passing through the other.
-    let sewn: Vec<usize> = pairs
-        .iter()
-        .flat_map(|&(a, b)| [a as usize, b as usize])
-        .collect();
-    let clear = [
-        off_the_seams(0..split, &sewn, &start),
-        off_the_seams(split..all, &sewn, &start),
-    ];
-    println!(
-        "{} of {split} front and {} of {} back vertices lie more than {AWAY} m of cloth from a seam",
-        clear[0].len(),
-        clear[1].len(),
-        all - split
-    );
-    let apart = nearest(&clear[0], &clear[1], &start);
-    println!("release: the two pieces come no closer than {apart:.3} m away from their seams");
-    assert!(
-        apart > AWAY,
-        "the pieces are rolled onto disjoint arcs of one ring, so at release \
-         no part of one can be inside the other: {apart} m"
-    );
+    // Where the two pieces sit round the surface, and what the surface does
+    // above the height the front stops at. Both are readings of this very
+    // release, so they are taken here rather than from a scene of their own.
+    arcs::one_arc_each(session, &ring);
+    tab::above_the_strip(session, &ring);
     Released {
         pairs,
-        clear,
         split,
         all,
         ring,
     }
-}
-
-/// What the drape has made of it once the sim has run [`MARK`] substeps.
-fn at_the_mark(session: &Session, sdf: &SdfGrid, released: &Released) {
-    let (lo, _) = session.collider().extent();
-    let stand = released.ring.stand;
-    let (split, all) = (released.split, released.all);
-
-    // Watched before the mark is read, because it has to see the frames on
-    // the way there: this is the one that has to be running while the garment
-    // is still being worn.
-    let watched = through_the_drape(session, sdf);
-    let landed = at_mark(session);
-    let (deep, count) = buried(sdf, &landed);
-    let (low, high) = span(&landed);
-    let (worst, mean) = report(
-        "sewn product",
-        &format!("at {MARK}"),
-        &released.pairs,
-        &landed,
-    )
-    .expect("the block's two seams pair");
-    let (fx, fz, _) = about_the_axis(0..split, &landed, released.ring.axis);
-    let (bx, bz, _) = about_the_axis(split..all, &landed, released.ring.axis);
-    let on_skin = touching(sdf, &landed);
-    println!(
-        "at {MARK}: cloth {low:.3}..{high:.3} · {on_skin} of {count} on the skin · {deep} buried"
-    );
-    println!("at {MARK}: front at x {fx:+.3} z {fz:+.3} · back at x {bx:+.3} z {bz:+.3}");
-    println!(
-        "at {MARK}: the two pieces come no closer than {:.3} m away from their seams",
-        nearest(&released.clear[0], &released.clear[1], &landed)
-    );
-    println!(
-        "at {MARK}: the garment came down {:.3} m of the {LANDED} m that counts as landed",
-        stand - high
-    );
-
-    assert!(
-        high < stand - LANDED,
-        "the garment never came down from the ring at {stand}: {high}"
-    );
-    assert!(
-        on_skin > 0,
-        "the garment is not on the body: not one of {count} particles lies \
-         within a cell of the skin"
-    );
-    // Still on the body, rather than fallen away beneath it. A sewn tube is
-    // let go round a limb and hangs a metre down from there, so its hem is
-    // under the foot from the first substep and the whole-panel reading the
-    // one-piece scenes take cannot be asked of it. What can be asked, and is,
-    // is that the cloth has not left the body by the mark.
-    assert!(
-        high > lo[1],
-        "the garment fell clear of the body instead of onto it: its top {high} \
-         is under {}",
-        lo[1]
-    );
-    // The shipped block's own fit, at the tightest reading the tree has a
-    // number for. What this asked before was a mean under 5 mm and a worst
-    // under 50 mm, and a mean is the wrong half: the wide-hipped skirt stands
-    // 115.3 mm open on one seam and its mean is 3.4 mm. Measured, this
-    // block's widest sewn pair here is under a tenth of a millimetre apart.
-    assert!(
-        worst <= SEAM_SHUT,
-        "the seams reached the solver and closed: worst pair {:.1} mm apart, \
-         mean {:.1} mm, against the {:.1} mm the closing phase counts as shut",
-        worst * 1000.0,
-        mean * 1000.0,
-        SEAM_SHUT * 1000.0
-    );
-    let (worst, worst_at) = watched.worst;
-    let (worn, worn_at) = watched.worn;
-    println!(
-        "through the drape: worst {worst} past the band at substep {worst_at} · \
-         most worn {worn} of {count} on the skin at substep {worn_at}"
-    );
-    assert!(
-        worn > count / 8,
-        "the garment was never really worn: at its best only {worn} of {count} \
-         particles were within a cell of the skin"
-    );
-    // Over every frame and not only this one. The mark catches a tube after it
-    // has slid off the leg, so a count taken there would read zero for the
-    // wrong reason; what this refuses is a particle driven past the band at
-    // any moment, which is where the field is saturated flat and nothing
-    // carries it out again.
-    assert_eq!(
-        worst, 0,
-        "{worst} of {count} particles were driven past the band, worst at \
-         substep {worst_at}"
-    );
-    assert_eq!(
-        deep, 0,
-        "{deep} of {count} are still past the band at the mark"
-    );
 }
