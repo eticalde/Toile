@@ -180,7 +180,7 @@ fn top_at_mark(body: &Collider, band: Option<(f64, f64)>) -> (f32, f32) {
 /// was drawn hangs the skirt exactly where the gathered one does and holds it
 /// nowhere. The difference left is the rest lengths, which is the one thing
 /// nothing else in the tree could tell from their absence. Measured, it is
-/// worth 73 mm of top edge at the mark: 0.273 m against 0.199 m.
+/// worth 101 mm of top edge at the mark: 0.2627 m against 0.1613 m.
 #[test]
 #[ignore = "release-only: a real body baked and two whole drapes run"]
 fn the_band_the_solver_holds_carries_the_skirt_higher_than_the_ring_alone() {
