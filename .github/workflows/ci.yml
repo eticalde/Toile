@@ -35,6 +35,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt
+      # This installs the newest stable, but rust-toolchain.toml overrides it
+      # for every bare `cargo` call below: the pinned channel is what actually
+      # builds, and rustup fetches it with its components on first use. The
+      # step stays because it warms the cache and costs one download.
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy

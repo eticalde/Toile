@@ -31,6 +31,12 @@ similar_names = "allow"
 multiple_unsafe_ops_per_block = "allow"
 # Deliberate on the tiny accessors inside the solver's hot loop.
 inline_always = "allow"
+# A test whose subject is that nothing happened reads `assert!(x.is_empty())`.
+# The rewrite this lint asks for needs an empty-array literal annotated with the
+# element type to compile — `assert_eq!(commands, [] as [Command; 0])` — and
+# that annotation is noise in the ~120 places the tree says it. Where the value
+# on failure is worth printing, the assertion carries a message instead.
+assert_is_empty = "allow"
 
 # The rules this project actually wants enforced.
 too_long_first_doc_paragraph = "warn"

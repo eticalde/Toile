@@ -1,0 +1,19 @@
+# The compiler is part of the determinism contract.
+#
+# The goldens promise the same bits on ARM and on x86, and `kurbo` and `libm`
+# are pinned for that reason already. A floating toolchain can move the same
+# two things from underneath: the bits the solver produces, and the lints the
+# gate enforces. On 2026-10-09 it moved the second — CI's unpinned stable had
+# reached 1.99.0 while the local gate ran 1.98.0, so a 9/9 green push turned
+# main red on a lint that did not exist locally.
+#
+# Raising this is a deliberate, dated act: bump the channel, run
+# ./tools/verify.sh, and commit what it says. The golden surviving the bump is
+# the thing worth checking — 1.98.0 → 1.99.0 did not move it.
+#
+# Nightly is deliberately not pinned here: only `cargo +nightly fmt` uses it,
+# formatting never reaches the binary, and a date-pinned nightly is one more
+# number to carry. That hole stays open knowingly.
+[toolchain]
+channel = "1.99.0"
+components = ["clippy", "rustfmt"]
