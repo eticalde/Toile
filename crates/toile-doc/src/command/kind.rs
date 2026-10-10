@@ -183,6 +183,15 @@ pub enum Command {
     RenamePiece { piece: PieceKey, to: String },
     /// Turns the grain line of a piece.
     SetGrain { piece: PieceKey, to: Grain },
+    /// Writes how far outside its drawn line a piece is cut, or says it is
+    /// cut on the line.
+    SetSeamAllowance { piece: PieceKey, to: Option<f64> },
+    /// Writes how many of a piece the garment takes.
+    SetQuantity { piece: PieceKey, to: u32 },
+    /// Writes the letter a piece's label shows, or takes it away.
+    SetLetter { piece: PieceKey, to: Option<String> },
+    /// Writes the lines of a piece's label, as its author wrote them.
+    SetLabels { piece: PieceKey, to: Vec<String> },
     /// Moves a piece on the product overview, or hands it back to the
     /// overview's own layout.
     PlacePiece {

@@ -83,7 +83,7 @@ fn band(folded: bool) -> (Draft, PieceKey) {
 #[test]
 fn the_drawing_and_the_sheet_carry_the_same_marks() {
     let (folded, piece) = band(true);
-    let drawing = to_svg(&folded).expect("the band draws");
+    let drawing = to_svg(&folded).expect("the band draws").text;
     let printed = piece_to_pdf(&folded, piece, A4).expect("the band prints");
     assert_eq!(printed.sheets(), 1, "eighteen centimetres fit on one sheet");
     assert_eq!(
@@ -124,7 +124,7 @@ fn the_drawing_and_the_sheet_carry_the_same_marks() {
 #[test]
 fn a_name_the_pattern_holds_reaches_both_sheets() {
     let (folded, piece) = band(true);
-    let drawing = to_svg(&folded).expect("the band draws");
+    let drawing = to_svg(&folded).expect("the band draws").text;
     let printed = piece_to_pdf(&folded, piece, A4).expect("the band prints");
     let stream = String::from_utf8_lossy(&printed.bytes).into_owned();
     for name in ["presilla", "doblez"] {
@@ -158,7 +158,7 @@ fn a_name_the_pattern_holds_reaches_both_sheets() {
 #[test]
 fn the_two_sheets_break_the_same_lines() {
     let (drawn, piece) = band(false);
-    let drawing = to_svg(&drawn).expect("the band draws");
+    let drawing = to_svg(&drawn).expect("the band draws").text;
     let printed = piece_to_pdf(&drawn, piece, A4).expect("the band prints");
     let stream = String::from_utf8_lossy(&printed.bytes).into_owned();
     // The drawing breaks one path, and it is the one named after the fold.

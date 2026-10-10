@@ -18,7 +18,7 @@ pub fn pieces(session: &Session, state: &mut State, before: &[PieceKey]) -> bool
     if let Some(&fresh) = after.iter().find(|key| !before.contains(key)) {
         match state.scope {
             Scope::Piece => state.open(fresh),
-            Scope::Product => state.active = Some(fresh),
+            Scope::Product => state.front(fresh),
         }
     } else if state.scope == Scope::Piece && state.active.is_some_and(|key| !after.contains(&key)) {
         state.overview();

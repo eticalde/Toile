@@ -4,8 +4,6 @@ mod grid;
 mod ink;
 /// What a person needs to put one sheet against the next.
 mod join;
-/// Whether any of the cloth falls on one cell of paper.
-mod lands;
 /// The square a ruler is laid on, and the Spanish beside it.
 mod legend;
 #[cfg(test)]
@@ -26,6 +24,8 @@ mod product;
 /// to agree with itself would prove nothing.
 #[cfg(test)]
 mod read;
+#[cfg(test)]
+mod says;
 /// The drawing on one sheet: where it sits, and everything inked on it.
 mod sheet;
 #[cfg(test)]

@@ -40,6 +40,11 @@ impl Desk {
     /// A desk tall enough that the panel never has to scroll: a name that
     /// scrolled out of sight could not be pressed, and would say nothing
     /// about whether it answers a press.
+    ///
+    /// The number only has to clear the longest the panel gets, so it grows
+    /// whenever a section does; what a real window does with a panel longer
+    /// than itself is the scroll bar's business, and it is tested by the
+    /// harness that plays a real window.
     pub(super) fn tall(doc: Doc) -> Desk {
         let ctx = egui::Context::default();
         let theme = Theme::sastreria();
@@ -57,7 +62,7 @@ impl Desk {
     /// One frame of the panel fed `events`.
     pub(super) fn frame(&mut self, events: Vec<Event>) {
         let input = RawInput {
-            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1320.0, 2800.0))),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1320.0, 3600.0))),
             events,
             ..RawInput::default()
         };

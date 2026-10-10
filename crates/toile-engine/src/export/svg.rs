@@ -7,10 +7,11 @@ mod xml;
 
 use std::fmt::Write;
 
-use self::xml::escape;
-use super::drawn;
-use super::units::{self, CUT, INK, MARGIN, TITLE, box_of, number};
-use crate::draft::{Draft, PieceKey};
+use super::block::{self, Room};
+use super::drawn::{self, Drawn};
+use super::metric;
+use super::units::{self, CAPTION, CUT, INK, MARGIN, beside, box_of, number};
+use crate::draft::{Draft, Piece, PieceKey};
 
 /// What stops a pattern from being written as a drawing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -18,6 +19,20 @@ pub enum ExportError {
     /// Nothing in the document resolves to a contour a sheet could carry.
     #[error("the pattern draws no piece that resolves to a contour")]
     Empty,
+}
+
+/// A pattern drawn once, and what the drawing could not say.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Drawing {
+    /// The drawing itself.
+    pub text: String,
+    /// How many pieces found nowhere on it to say their own words.
+    ///
+    /// The piece that lost its label also says so in its own group's title,
+    /// which is what a person hovering it reads. This is for the door they
+    /// came in by: a drawing carries no legend to put a count in, and a title
+    /// nobody opens is a warning nobody gets.
+    pub unsaid: usize,
 }
 
 /// The document as an SVG drawing at true scale.
@@ -28,39 +43,73 @@ pub enum ExportError {
 /// reads SVG. Each piece is one group — the line it is cut on and everything
 /// drawn inside it — so a piece can be moved or hidden on its own.
 ///
+/// The words a piece carries are laid out against the drawing, against the
+/// other pieces on it and against every block already placed, the same way the
+/// printed sheet lays them out against its own cell: a drawing is one page, so
+/// a block on it is never clipped, and a block that landed inside the piece
+/// beside it or on top of its neighbour's words would be as anonymous here as
+/// it is on paper.
+///
 /// # Errors
 /// `ExportError::Empty` when no piece of the document resolves to a contour.
-pub fn to_svg(draft: &Draft) -> Result<String, ExportError> {
-    let drawn: Vec<PieceKey> = draft
+pub fn to_svg(draft: &Draft) -> Result<Drawing, ExportError> {
+    let pieces: Vec<PieceKey> = draft
         .doc()
         .piece_keys()
         .into_iter()
         .filter(|&piece| draft.points_cm(piece).len() >= 3)
         .collect();
-    let sheet = sheet(draft, &drawn).ok_or(ExportError::Empty)?;
+    let cloths: Vec<Vec<[f64; 2]>> = pieces
+        .iter()
+        .map(|&piece| millimetres(draft, piece))
+        .collect();
+    let sheet = sheet(&cloths).ok_or(ExportError::Empty)?;
+    let inked: Vec<Drawn> = pieces
+        .iter()
+        .map(|&piece| drawn::of(draft, piece))
+        .collect();
+    let mut taken = named(&inked);
+    let mut unsaid = 0;
     let mut out = String::new();
     header(&mut out, sheet);
-    for piece in drawn {
-        group(&mut out, draft, piece);
+    for (rank, &piece) in pieces.iter().enumerate() {
+        let Some(held) = draft.doc().pieces.get(piece) else {
+            continue;
+        };
+        let others: Vec<&[[f64; 2]]> = cloths
+            .iter()
+            .enumerate()
+            .filter(|&(other, _)| other != rank)
+            .map(|(_, cloth)| cloth.as_slice())
+            .collect();
+        let room = Room {
+            sheet: [sheet[0], sheet[1], sheet[0] + sheet[2], sheet[1] + sheet[3]],
+            cloth: &cloths[rank],
+            taken: &taken,
+            others: &others,
+        };
+        // Laid out before the group is written, because a piece that could not
+        // say its own words anywhere says that in its own title — and because
+        // the piece after it has to be told where these words went.
+        let said = mark::said(held, &room);
+        unsaid += usize::from(said.is_none());
+        group(&mut out, held, &cloths[rank], &inked[rank], said.as_deref());
+        taken.extend(
+            said.unwrap_or_default()
+                .iter()
+                .map(|line| metric::box_of(line.size, line.at, &line.body)),
+        );
     }
     out.push_str("</svg>\n");
-    Ok(out)
+    Ok(Drawing { text: out, unsaid })
 }
 
 /// The sheet the pieces fit on: its corner and its size, in millimetres.
 ///
 /// `None` when there is nothing on it, which is the one thing a drawing cannot
 /// be made of.
-fn sheet(draft: &Draft, pieces: &[PieceKey]) -> Option<[f64; 4]> {
-    let mut low = [f64::INFINITY; 2];
-    let mut high = [f64::NEG_INFINITY; 2];
-    for &piece in pieces {
-        let (piece_low, piece_high) = box_of(millimetres(draft, piece));
-        for axis in 0..2 {
-            low[axis] = low[axis].min(piece_low[axis]);
-            high[axis] = high[axis].max(piece_high[axis]);
-        }
-    }
+fn sheet(cloths: &[Vec<[f64; 2]>]) -> Option<[f64; 4]> {
+    let (low, high) = box_of(cloths.iter().flatten().copied());
     if low[0] > high[0] {
         return None;
     }
@@ -70,6 +119,18 @@ fn sheet(draft: &Draft, pieces: &[PieceKey]) -> Option<[f64; 4]> {
         high[0] - low[0] + 2.0 * MARGIN,
         high[1] - low[1] + 2.0 * MARGIN,
     ])
+}
+
+/// The box every node name of the drawing takes, of every piece on it.
+///
+/// Gathered before a single block is placed, because a block that dodged only
+/// its own piece's names would land on its neighbour's.
+fn named(inked: &[Drawn]) -> Vec<[f64; 4]> {
+    inked
+        .iter()
+        .flat_map(|drawn| drawn.names.iter())
+        .map(|(label, at)| metric::box_of(CAPTION, beside(units::millimetres(*at)), label))
+        .collect()
 }
 
 /// The opening of the file, where the true scale is declared.
@@ -84,16 +145,22 @@ fn header(out: &mut String, sheet: [f64; 4]) {
 }
 
 /// One piece: its cut line, and everything drawn inside it.
-fn group(out: &mut String, draft: &Draft, piece: PieceKey) {
-    let Some(held) = draft.doc().pieces.get(piece) else {
-        return;
-    };
-    let drawn = drawn::of(draft, piece);
+fn group(
+    out: &mut String,
+    piece: &Piece,
+    cloth: &[[f64; 2]],
+    drawn: &Drawn,
+    said: Option<&[block::Line]>,
+) {
     let _ = writeln!(out, "  <g>");
-    let _ = writeln!(out, "    <title>{}</title>", escape(&held.name));
-    contour(out, &millimetres(draft, piece));
+    let _ = writeln!(
+        out,
+        "    <title>{}</title>",
+        mark::titled(piece, said.is_some())
+    );
+    contour(out, cloth);
     ink::runs(out, &drawn.runs);
-    mark::names(out, corner(draft, piece), &drawn.names, &held.name);
+    mark::names(out, &drawn.names, said);
     let _ = writeln!(out, "  </g>");
 }
 
@@ -126,137 +193,5 @@ fn millimetres(draft: &Draft, piece: PieceKey) -> Vec<[f64; 2]> {
         .collect()
 }
 
-/// Where the name of a piece goes: over the top left of the box around its
-/// nodes, in millimetres.
-///
-/// The nodes and not the flattening, so that a curve bulging past the two nodes
-/// it hangs between cannot push the name off the piece it names.
-fn corner(draft: &Draft, piece: PieceKey) -> [f64; 2] {
-    let (low, _) = box_of(
-        draft
-            .points_cm(piece)
-            .iter()
-            .map(|&(_, at)| units::millimetres(at)),
-    );
-    [low[0], low[1] - TITLE / 2.0]
-}
-
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::draft::{Doc, MeasureSet, Piece, Point, Winding, block};
-
-    /// A ten by twenty centimetre rectangle, whose every millimetre is known
-    /// without resolving anything.
-    fn rectangle() -> Draft {
-        let mut doc = Doc::new(MeasureSet::new("Etienne", [("cintura", 84.0)]));
-        let corners = [[0.0, 0.0], [10.0, 0.0], [10.0, 20.0], [0.0, 20.0]];
-        let points: Vec<_> = corners
-            .into_iter()
-            .map(|[x, y]| doc.points.insert(Point::at(x, y)))
-            .collect();
-        doc.pieces
-            .insert(Piece::polygon("Cuadro", points, Winding::Cw));
-        Draft::from_doc(doc).expect("a rectangle resolves")
-    }
-
-    #[test]
-    fn the_sheet_is_declared_in_millimetres_at_true_scale() {
-        let written = to_svg(&rectangle()).expect("a rectangle draws");
-        assert!(
-            written.contains(
-                "width=\"120.00mm\" height=\"220.00mm\" viewBox=\"-10.00 -10.00 120.00 220.00\""
-            ),
-            "{written}"
-        );
-    }
-
-    #[test]
-    fn a_contour_is_one_closed_path_in_millimetres() {
-        let written = to_svg(&rectangle()).expect("a rectangle draws");
-        assert!(
-            written.contains("d=\"M 0.00 0.00 L 100.00 0.00 L 100.00 200.00 L 0.00 200.00 Z\""),
-            "{written}"
-        );
-    }
-
-    #[test]
-    fn svg_millimetres_match_the_resolved_contour() {
-        let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
-        let piece = draft
-            .doc()
-            .piece_named(block::FRONT)
-            .expect("the block draws one piece");
-        let written = to_svg(&draft).expect("the block draws");
-        for &(_, [x, y]) in draft.points_cm(piece).iter().take(3) {
-            let [x, y] = units::millimetres([x, y]);
-            let vertex = format!("{} {}", number(x), number(y));
-            assert!(written.contains(&vertex), "{vertex} missing from {written}");
-        }
-    }
-
-    /// What a ruler laid on the drawing reads, which is the one number the
-    /// whole of true scale is for.
-    #[test]
-    fn the_side_seam_measures_what_the_pattern_says_it_measures() {
-        let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
-        let piece = draft
-            .doc()
-            .piece_named(block::FRONT)
-            .expect("the block draws one piece");
-        let drawn = points_of(&to_svg(&draft).expect("the block draws"));
-        // The waist opens the hip curve, the only bend before the hem, so the
-        // hem sits past its samples plus the hip and the knee.
-        let hip = draft
-            .doc()
-            .pieces
-            .get(piece)
-            .expect("the key is live")
-            .contour[1]
-            .samples;
-        let hem = 1 + usize::from(hip) + 2;
-        let side: f64 = drawn[1..=hem]
-            .windows(2)
-            .map(|step| {
-                let (from, to) = (step[0], step[1]);
-                (to[0] - from[0]).hypot(to[1] - from[1])
-            })
-            .sum();
-        assert!((side - 1046.0).abs() < 0.5, "{side} mm");
-    }
-
-    /// The vertices of the first path of a drawing, in the order it draws
-    /// them, which is how a program that reads SVG would measure it.
-    fn points_of(drawing: &str) -> Vec<[f64; 2]> {
-        let opened = drawing
-            .split_once("d=\"")
-            .expect("the drawing has a path")
-            .1;
-        let data = opened.split_once('"').expect("the path closes").0;
-        let numbers: Vec<f64> = data
-            .split_whitespace()
-            .filter_map(|word| word.parse().ok())
-            .collect();
-        numbers
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|pair| [pair[0], pair[1]])
-            .collect()
-    }
-
-    #[test]
-    fn a_piece_carries_its_name_and_the_names_of_its_nodes() {
-        let draft = Draft::from_doc(block::trouser_front()).expect("the block resolves");
-        let written = to_svg(&draft).expect("the block draws");
-        assert!(written.contains("<title>Delantero</title>"), "{written}");
-        assert!(written.contains(">cintura_lat</text>"), "{written}");
-    }
-
-    #[test]
-    fn a_document_that_draws_nothing_is_not_a_drawing() {
-        let doc = Doc::new(MeasureSet::new("Etienne", [("cintura", 84.0)]));
-        let draft = Draft::from_doc(doc).expect("an empty document resolves");
-        assert_eq!(to_svg(&draft), Err(ExportError::Empty));
-    }
-}
+mod tests;

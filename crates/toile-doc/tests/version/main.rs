@@ -2,6 +2,7 @@
 
 use toile_doc::{Doc, MeasureSet, block};
 
+mod cut;
 mod dart;
 mod elastic;
 mod hang;
@@ -107,7 +108,7 @@ fn header(version: u32) -> String {
 
 /// `text` with its header claiming `version` instead.
 fn restamped(text: &str, version: u32) -> String {
-    let body = (1..=9)
+    let body = (1..=10)
         .find_map(|stamp| text.strip_prefix(&header(stamp)))
         .expect("the file opens with a header the tests write");
     format!("{}{body}", header(version))

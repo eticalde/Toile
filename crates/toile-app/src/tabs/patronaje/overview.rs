@@ -145,7 +145,7 @@ fn reduce(ui: &egui::Ui, resp: &Response, mat: &Mat<'_>, state: &mut State, verb
         state.gesture = next;
         wire::stacked(said.stack, commands, verbs);
         if let Some(piece) = said.chosen {
-            state.active = Some(piece);
+            state.front(piece);
         }
         if let Some(tool) = said.tool {
             state.tool = tool;

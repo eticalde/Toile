@@ -59,6 +59,19 @@ pub(super) fn lines(doc: &Doc) -> Result<(), FormatError> {
     Ok(())
 }
 
+/// Checks that every piece is cut by numbers a piece is cut by.
+///
+/// The elastic's rule for its reason: a hand-typed allowance of `-1.5` takes
+/// cloth off a piece instead of adding it, and a count of `0` is a piece the
+/// garment never cuts, still drawn on the table and still printed on paper.
+pub(super) fn cuts(doc: &Doc) -> Result<(), FormatError> {
+    for (_, piece) in doc.pieces.iter() {
+        crate::piece::check_allowance(piece.seam_allowance).map_err(FormatError::Cut)?;
+        crate::piece::check_quantity(piece.quantity).map_err(FormatError::Cut)?;
+    }
+    Ok(())
+}
+
 /// Checks that every axis is one a piece can be repeated across.
 ///
 /// The same rule the edit answers to, asked again of the file, and the same

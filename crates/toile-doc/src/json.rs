@@ -12,8 +12,8 @@ pub use error::FormatError;
 pub use persona::{EXTENSION as PERSONA_EXTENSION, VERSION as PERSONA_VERSION};
 use serde::{Deserialize, Serialize};
 pub use version::{
-    VERSION, VERSION_DARTED, VERSION_ELASTIC, VERSION_EXTENDED, VERSION_FOLDED, VERSION_HUNG,
-    VERSION_INTERNAL, VERSION_LINKED, VERSION_PLACED,
+    VERSION, VERSION_CUT, VERSION_DARTED, VERSION_ELASTIC, VERSION_EXTENDED, VERSION_FOLDED,
+    VERSION_HUNG, VERSION_INTERNAL, VERSION_LINKED, VERSION_PLACED,
 };
 use writer::Canonical;
 
@@ -69,14 +69,14 @@ impl Doc {
     /// could not have written, an elastic holding a stretch to numbers no
     /// elastic holds, an internal line no piece could be drawn with, an axis no
     /// piece can be repeated across, a stretch hung from a station the body
-    /// carries no ring for, or a dart whose record does not describe the
-    /// contour it names.
+    /// carries no ring for, a dart whose record does not describe the contour
+    /// it names, or a piece cut by numbers no piece is cut by.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = stamp(text)?;
-        if !(u64::from(VERSION)..=u64::from(VERSION_DARTED)).contains(&found) {
+        if !(u64::from(VERSION)..=u64::from(VERSION_CUT)).contains(&found) {
             return Err(FormatError::UnknownVersion {
                 found,
-                newest: VERSION_DARTED,
+                newest: VERSION_CUT,
             });
         }
         let loaded: Loaded =
@@ -89,6 +89,7 @@ impl Doc {
         check::symmetries(&loaded.doc)?;
         check::hangs(&loaded.doc)?;
         check::darts(&loaded.doc)?;
+        check::cuts(&loaded.doc)?;
         Ok(loaded.doc)
     }
 }

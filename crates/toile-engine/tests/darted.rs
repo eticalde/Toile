@@ -56,7 +56,7 @@ fn darted() -> (Draft, PieceKey) {
 #[test]
 fn a_dart_reaches_both_sheets_as_a_wedge_that_is_sewn_shut() {
     let (draft, piece) = darted();
-    let drawing = to_svg(&draft).expect("the panel draws");
+    let drawing = to_svg(&draft).expect("the panel draws").text;
     let printed = piece_to_pdf(&draft, piece, A4).expect("the panel prints");
     assert_eq!(printed.sheets(), 1, "sixteen centimetres fit on one sheet");
     assert_eq!(
@@ -100,7 +100,7 @@ fn a_dart_reaches_both_sheets_as_a_wedge_that_is_sewn_shut() {
 #[test]
 fn every_mark_of_a_dart_but_its_mouth_is_inside_the_cloth() {
     let (draft, _) = darted();
-    let drawing = to_svg(&draft).expect("the panel draws");
+    let drawing = to_svg(&draft).expect("the panel draws").text;
     for at in drawing.split("M ").skip(1) {
         for place in at.split_once('"').expect("a path is quoted").0.split(" L ") {
             let y: f64 = place

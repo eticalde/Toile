@@ -63,7 +63,32 @@ pub fn pile(pile: &Pile) -> String {
             pile.blank()
         );
     }
+    if pile.unsaid > 0 {
+        let _ = write!(
+            said,
+            " · {} sin sitio en su hoja",
+            plural(pile.unsaid, "rótulo", "rótulos")
+        );
+    }
     said
+}
+
+/// The labels a print could not fit on a sheet, where it could not.
+///
+/// A piece's own words are laid inside that piece and never over a node name
+/// or inside another piece's cut line, so a sheet with no room left for them
+/// carries that piece's outline and not its label. Said out loud and counted:
+/// every piece is still printed, and what a person has to know before he cuts
+/// is which sheets answer the question and which do not.
+pub fn unsaid(printed: &Printed) -> Option<String> {
+    let unsaid = printed.unsaid();
+    (unsaid > 0).then(|| {
+        format!(
+            "aviso: {} sin sitio en su hoja: las palabras no caben sin pisar un nombre de nodo \
+             o entrar en la pieza vecina, así que esa hoja lleva el contorno y no el rótulo",
+            plural(unsaid, "rótulo de pieza", "rótulos de pieza")
+        )
+    })
 }
 
 /// What sharing the paper saved, where anything was shared at all.

@@ -1,4 +1,6 @@
 mod cite;
+/// What a piece says about being cut out, in the boxes that write it.
+pub(super) mod cut;
 pub(super) mod dart;
 pub(super) mod elastic;
 /// The ways a pattern leaves the app, and the paper the printed ones take.
@@ -37,8 +39,9 @@ const EMPTY: &str = "Carga una pieza desde el panel Producto para inspeccionarla
 /// Room the footer keeps for itself under the scrolling body.
 const FOOT_H: f32 = 74.0;
 
-/// The right panel: the bindings of whatever is chosen, the names they can
-/// read, and the ways out of the app.
+/// The right panel: the bindings of whatever is chosen, what the piece in
+/// front is cut to, the names the formulas can read, and the ways out of the
+/// app.
 ///
 /// It writes nothing itself; the edits it asks for are played by the tab, so
 /// the document is borrowed for reading only while the panel draws. One field
@@ -80,6 +83,17 @@ pub fn show(
                 if let Some(piece) = piece.filter(|_| state.scope == Scope::Piece) {
                     inner::show(ui, theme, draft, piece, (&mut *state, &mut verbs));
                     dart::show(ui, theme, draft, piece, &mut verbs);
+                }
+                // What the piece says about being cut out belongs to the piece
+                // and not to what is chosen, so it is drawn wherever a piece is
+                // in front. It is drawn here, under the sections that answer a
+                // press, for two reasons that pull the same way: a section that
+                // answers a press has to still be where the press landed, and
+                // the seam a press chooses answers in a block that already
+                // reaches the foot of the glass.
+                if let Some(piece) = piece {
+                    let said = cut::show(ui, theme, draft.doc(), piece, (&mut *state, &cite));
+                    asked = said.or(asked);
                 }
                 asked = tape::measures(ui, theme, draft, state, &cite).or(asked);
                 asked = variables::variables(ui, theme, draft, state, &cite).or(asked);

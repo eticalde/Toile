@@ -11,7 +11,7 @@ use crate::widgets::Mention;
 
 const IDLE: &str = "Escribe en una fórmula y pulsa un nombre para insertarlo.";
 const LIVE: &str = "Pulsa un nombre: entra en la fórmula donde está el cursor.";
-const NUMBER: &str = "Este campo es un número: los nombres solo entran en fórmulas.";
+const PLAIN: &str = "Los nombres solo entran en fórmulas, y este campo no es una.";
 
 /// Where a name pressed on the panel goes this frame.
 ///
@@ -25,8 +25,9 @@ const NUMBER: &str = "Este campo es un número: los nombres solo entran en fórm
 pub struct Cite {
     /// The formula being written, while one has the focus.
     into: Option<Field>,
-    /// Whether the focus is on a field that takes a number and no name.
-    number: bool,
+    /// Whether the focus is on a field that takes no name: a number, a letter,
+    /// a line of a label.
+    plain: bool,
     /// Whether the pointer pressed or clicked a name this frame.
     claimed: bool,
 }
@@ -42,12 +43,12 @@ impl Cite {
         let into = focused
             .filter(|of| matches!(of, Field::Coordinate(..) | Field::Variable(_)))
             .cloned();
-        let number = focused.is_some() && into.is_none();
+        let plain = focused.is_some() && into.is_none();
         let claimed = into.is_some()
             && ids(doc).any(|id| ctx.read_response(id).is_some_and(|hit| taken(ctx, &hit)));
         Cite {
             into,
-            number,
+            plain,
             claimed,
         }
     }
@@ -83,8 +84,8 @@ impl Cite {
     pub fn hint(&self) -> &'static str {
         if self.into.is_some() {
             LIVE
-        } else if self.number {
-            NUMBER
+        } else if self.plain {
+            PLAIN
         } else {
             IDLE
         }

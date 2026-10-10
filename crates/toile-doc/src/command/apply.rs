@@ -1,4 +1,5 @@
 mod curve;
+mod cut;
 mod dart;
 mod elastic;
 mod hang;
@@ -12,6 +13,7 @@ mod symmetry;
 mod topology;
 
 use curve::{set_samples, set_segment};
+use cut::{set_labels, set_letter, set_quantity, set_seam_allowance};
 use dart::{add_dart, declare_dart, remove_dart, undeclare_dart};
 use elastic::{add_elastic, remove_elastic, set_ratio, set_strength};
 use hang::{add_hang, remove_hang, set_station};
@@ -42,14 +44,14 @@ impl Command {
     /// `BodyInUse` for the body in use, `NonFinite` for a number JSON cannot
     /// spell, `NotAStem`, `NotADay` or `NotAFingerprint` for a link Toile could
     /// not have written, `ElasticRatio` or `ElasticStrength` for a pull no
-    /// elastic carries, `HangStation` for a station no body has a ring for,
-    /// `NoSuchNode` for an absent node, `Sampling` for a flattening no tract
-    /// takes, `Shared` for a point another piece draws with, `ShortLine` for a
-    /// line through one place, any `Split…` for a run whose ends disagree on
-    /// their piece, `FoldAxis` and `AlreadySymmetric` for an axis whose ends
-    /// are one place and a second axis on a piece, `FlatWedge`,
-    /// `ScatteredWedge` and `AlreadyDarted` for a wedge no dart can be put
-    /// on, and `NotYetImplemented`.
+    /// elastic carries, `SeamAllowance` or `CutQuantity` for a cut no piece
+    /// takes, `HangStation` for a station no body rings, `NoSuchNode` for an
+    /// absent node, `Sampling` for a flattening no tract takes, `Shared` for a
+    /// point another piece draws, `ShortLine` for a line through one place, any
+    /// `Split…` for ends on two pieces, `FoldAxis` and `AlreadySymmetric` for
+    /// an axis of no length and a second one on a piece, `FlatWedge`,
+    /// `ScatteredWedge` and `AlreadyDarted` for a wedge no dart takes, and
+    /// `NotYetImplemented`.
     pub fn apply(self, doc: &mut Doc) -> Result<Applied, DocError> {
         self.apply_as(doc, Naming::Checked)
     }
@@ -86,6 +88,10 @@ impl Command {
             }
             Command::RenamePiece { piece, to } => rename_piece(doc, piece, to, naming),
             Command::SetGrain { piece, to } => set_grain(doc, piece, to),
+            Command::SetSeamAllowance { piece, to } => set_seam_allowance(doc, piece, to),
+            Command::SetQuantity { piece, to } => set_quantity(doc, piece, to),
+            Command::SetLetter { piece, to } => set_letter(doc, piece, to),
+            Command::SetLabels { piece, to } => set_labels(doc, piece, to),
             Command::PlacePiece { piece, to } => place_piece(doc, piece, to),
             Command::LabelPoint { point, to } => label_point(doc, point, to, naming),
             Command::ShowLabel { point, to } => show_label(doc, point, to),

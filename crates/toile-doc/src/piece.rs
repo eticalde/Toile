@@ -2,9 +2,10 @@ use std::f64::consts::FRAC_PI_2;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{Placement, PointKey, Segment};
+use crate::{DocError, Placement, PointKey, Segment};
 
-/// A pattern piece: its ordered contour and the grain it is cut on.
+/// A pattern piece: its ordered contour, the grain it is cut on, and what its
+/// author wrote about cutting it out.
 ///
 /// The closure is implicit: the last node's tract runs back to the first.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -18,6 +19,28 @@ pub struct Piece {
     /// The grain line the piece is cut on.
     #[serde(default)]
     pub grain: Grain,
+    /// How far outside the drawn line the cloth is cut, in centimetres.
+    ///
+    /// `None` is a piece cut on its own line, which a real trouser has two of:
+    /// a strip folded in thirds is sewn to nothing along its length, so an
+    /// allowance there would be cloth nobody asked for. The paper says this
+    /// number; nothing offsets the contour by it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seam_allowance: Option<f64>,
+    /// How many of the piece the garment takes.
+    #[serde(default = "once", skip_serializing_if = "is_once")]
+    pub quantity: u32,
+    /// The letter its label shows, so a printed sheet names the piece on it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub letter: Option<String>,
+    /// The lines of its label, as its author wrote them.
+    ///
+    /// Prose, kept whole and never read for a number. A label reading
+    /// `cortar 2 + entretela` on a piece whose count says 2 is one author
+    /// saying two things, and the document carries both of them rather than
+    /// choosing which one it believes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub labels: Vec<String>,
     /// Where the product overview draws the piece, once someone arranged it.
     ///
     /// Absent, the overview lays the piece out itself and nothing is written,
@@ -80,6 +103,12 @@ pub enum Grain {
 }
 
 impl Piece {
+    /// How many of a piece are cut when nobody said otherwise.
+    ///
+    /// One, so that a file written before the count — and every piece whose
+    /// author never wrote one — is a piece cut once rather than cut none.
+    pub const CUT_ONCE: u32 = 1;
+
     /// A piece whose contour is the straight polygon through `points`.
     pub fn polygon(
         name: &str,
@@ -91,14 +120,28 @@ impl Piece {
             contour: points.into_iter().map(ContourNode::line).collect(),
             winding,
             grain: Grain::default(),
+            seam_allowance: None,
+            quantity: Piece::CUT_ONCE,
+            letter: None,
+            labels: Vec::new(),
             placement: None,
         }
     }
 
+    /// Whether the piece says anything at all about how it is cut out.
+    pub fn says_how_it_is_cut(&self) -> bool {
+        self.seam_allowance.is_some()
+            || self.quantity != Piece::CUT_ONCE
+            || self.letter.is_some()
+            || !self.labels.is_empty()
+    }
+
     /// The oldest format version whose reader keeps everything the piece
-    /// carries: a placement needs 4, the rest 1.
+    /// carries: anything about cutting it needs 10, a placement 4, the rest 1.
     pub(crate) fn format_version(&self) -> u32 {
-        if self.placement.is_some() {
+        if self.says_how_it_is_cut() {
+            crate::json::VERSION_CUT
+        } else if self.placement.is_some() {
             crate::json::VERSION_PLACED
         } else {
             crate::json::VERSION
@@ -153,6 +196,49 @@ pub(crate) fn samples_fit(bends: bool, count: u16) -> bool {
     (floor..=SAMPLES.1).contains(&count)
 }
 
+/// The count a piece carries when the file writes none.
+const fn once() -> u32 {
+    Piece::CUT_ONCE
+}
+
+/// Whether a count is the one the file leaves out.
+#[allow(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde hands a reference to the field it is deciding about"
+)]
+fn is_once(quantity: &u32) -> bool {
+    *quantity == Piece::CUT_ONCE
+}
+
+/// Refuses a seam allowance no piece is cut with.
+///
+/// A width of cloth outside the line, so a negative one takes cloth away from
+/// a piece instead of adding it. The numbers JSON cannot spell go out the same
+/// door, but not for the reason a placement's do: a placement's `x` is a bare
+/// `f64`, so the `null` the writer puts there refuses the file on the next
+/// open. This field is an `Option`, and `null` is how `None` is spelled — so
+/// the piece comes back *net*, the stamp falls from the cut's version to the
+/// first, and nothing says a word. A loud refusal is a worse bug than a quiet
+/// one only until the quiet one is the one that costs cloth.
+pub(crate) fn check_allowance(seam_allowance: Option<f64>) -> Result<(), DocError> {
+    match seam_allowance {
+        Some(width) if !width.is_finite() || width < 0.0 => Err(DocError::SeamAllowance),
+        _ => Ok(()),
+    }
+}
+
+/// Refuses a count no garment cuts.
+///
+/// Zero is the one whole number that is not a count: a piece the garment cuts
+/// none of is a piece that does not belong on the table, and a printed sheet
+/// that asks for none of it is a sheet nobody can act on.
+pub(crate) fn check_quantity(quantity: u32) -> Result<(), DocError> {
+    if quantity == 0 {
+        return Err(DocError::CutQuantity);
+    }
+    Ok(())
+}
+
 impl Winding {
     /// The direction a closed contour of this signed area runs in.
     ///
@@ -186,80 +272,4 @@ impl Default for Grain {
 }
 
 #[cfg(test)]
-mod tests {
-    #![allow(clippy::float_cmp, reason = "a grain stores the angle it was given")]
-
-    use super::*;
-
-    fn keys() -> Vec<PointKey> {
-        (0..4).map(|index| PointKey::new(index, 0)).collect()
-    }
-
-    #[test]
-    fn a_polygon_is_all_straight_tracts() {
-        let piece = Piece::polygon("Delantero", keys(), Winding::Cw);
-        assert_eq!(piece.contour.len(), 4);
-        assert!(piece.contour.iter().all(|node| node.samples == 1));
-        assert!(
-            piece
-                .contour
-                .iter()
-                .all(|node| node.segment == Segment::Line)
-        );
-        assert_eq!(piece.grain, Grain::VERTICAL);
-    }
-
-    #[test]
-    fn a_node_is_found_by_its_point_never_by_an_index() {
-        let keys = keys();
-        let piece = Piece::polygon("Delantero", keys.clone(), Winding::Cw);
-        assert_eq!(piece.node_index(keys[2]), Some(2));
-        assert_eq!(piece.node_index(PointKey::new(9, 0)), None);
-    }
-
-    #[test]
-    fn a_handle_is_cited_by_the_piece_that_holds_its_tract() {
-        let keys = keys();
-        let mut piece = Piece::polygon("Delantero", keys.clone(), Winding::Cw);
-        let handle = PointKey::new(7, 0);
-        piece.contour[1].segment = Segment::Cubic {
-            out: handle,
-            into: keys[3],
-        };
-        assert!(piece.cites(handle));
-        assert!(!piece.cites(PointKey::new(8, 0)));
-        assert_eq!(piece.node_index(handle), None);
-    }
-
-    #[test]
-    fn only_a_bending_tract_needs_more_than_one_sample() {
-        let mut node = ContourNode::line(PointKey::new(0, 0));
-        assert!(node.takes_samples(1));
-        assert!(node.takes_samples(SAMPLES.1));
-        assert!(!node.takes_samples(0));
-        assert!(!node.takes_samples(SAMPLES.1 + 1));
-
-        node.segment = Segment::Cubic {
-            out: PointKey::new(4, 0),
-            into: PointKey::new(5, 0),
-        };
-        assert!(!node.takes_samples(1));
-        assert!(node.takes_samples(SAMPLES.0));
-        assert!(!node.takes_samples(u16::MAX));
-    }
-
-    #[test]
-    fn only_an_arranged_piece_asks_for_the_placement_s_format() {
-        let mut piece = Piece::polygon("Delantero", keys(), Winding::Cw);
-        assert_eq!(piece.placement, None);
-        assert_eq!(piece.format_version(), crate::json::VERSION);
-        piece.placement = Some(Placement::new(3.0, -1.5));
-        assert_eq!(piece.format_version(), crate::json::VERSION_PLACED);
-    }
-
-    #[test]
-    fn a_clockwise_contour_on_the_page_has_a_positive_area() {
-        assert_eq!(Winding::of_area(5230.39), Winding::Cw);
-        assert_eq!(Winding::of_area(-1.0), Winding::Ccw);
-    }
-}
+mod tests;

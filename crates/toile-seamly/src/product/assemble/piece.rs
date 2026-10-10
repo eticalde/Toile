@@ -70,7 +70,11 @@ pub(super) fn place(
         name: piece.name.clone(),
         contour,
         winding,
-        grain: Grain::default(),
+        grain: grain(piece.grain),
+        seam_allowance: piece.seam_allowance,
+        quantity: piece.quantity,
+        letter: (!piece.letter.is_empty()).then(|| piece.letter.clone()),
+        labels: piece.labels.clone(),
         placement,
     };
     let applied = Command::AddPiece {
@@ -97,7 +101,24 @@ pub(super) fn place(
         notches,
         internal,
         placement: piece.placement,
+        grain: piece.grain,
     })
+}
+
+/// The grain the file declares, or the vertical a piece with no grain line is
+/// left on.
+///
+/// Seamly measures the angle counter-clockwise on a page whose y grows
+/// downward and the document measures it from x toward y, which is down the
+/// page, so the sign turns over. The half turn is folded away because a grain
+/// is the direction the warp runs and not an arrow along it: `90`, the angle
+/// Seamly writes for a grain line straight up the piece, is the document's
+/// vertical, straight down it, and the two name one cloth.
+fn grain(degrees: Option<f64>) -> Grain {
+    match degrees {
+        None => Grain::default(),
+        Some(degrees) => Grain::Angle((-degrees).rem_euclid(180.0).to_radians()),
+    }
 }
 
 /// The name each corner shows: its construction point's, when it is one.

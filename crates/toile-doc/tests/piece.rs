@@ -96,6 +96,49 @@ fn a_piece_drawn_with_a_dead_point_is_refused() {
     );
 }
 
+/// A piece arrives whole from the Seamly importer, which hands this command
+/// what a `.sm2d` declared without looking at it. Before this gate the writer
+/// could put a width or a count on paper that `Doc::from_json` refuses for
+/// ever: `toile seamly` exited 0, left three files on disk, and the pattern
+/// could not be opened again.
+#[test]
+fn a_piece_cut_by_numbers_no_piece_is_cut_by_is_refused_at_the_door() {
+    let mut doc = block::trouser_front();
+    let knee = node(&doc, "rodilla_lat");
+    let whole = |mend: fn(&mut Piece)| {
+        let mut piece = Piece::polygon("Vista", [knee], Winding::Cw);
+        mend(&mut piece);
+        Command::AddPiece {
+            identity: Identity::New,
+            piece,
+        }
+    };
+
+    for (what, mend) in [
+        (
+            "negative",
+            (|p: &mut Piece| p.seam_allowance = Some(-1.5)) as fn(&mut Piece),
+        ),
+        ("infinite", |p: &mut Piece| {
+            p.seam_allowance = Some(f64::INFINITY);
+        }),
+        ("not a number", |p: &mut Piece| {
+            p.seam_allowance = Some(f64::NAN);
+        }),
+    ] {
+        assert_eq!(
+            whole(mend).apply(&mut doc),
+            Err(DocError::SeamAllowance),
+            "a {what} allowance"
+        );
+    }
+    assert_eq!(
+        whole(|p| p.quantity = 0).apply(&mut doc),
+        Err(DocError::CutQuantity)
+    );
+    assert_eq!(doc.pieces.len(), 1, "not one of them reached the table");
+}
+
 /// A point the same piece cites at two seats cannot be taken out from under
 /// the surviving one: the removal is refused with the piece named, the same
 /// treatment a citation from another piece gets.

@@ -141,6 +141,15 @@ fn along_the_band(out: &mut String, frame: &Frame, down: f64, joint: &str) {
 
 /// One registration cross, named after the two sheets the joint holds together,
 /// lower number first, so that both of them print the same name for it.
+///
+/// The name opens at the end of the arm and not beside the middle of the cross,
+/// so that it stays inside the band it names. A name hanging out of the band is
+/// a name the neighbour's paper covers part of once the two sheets are lapped,
+/// and the paper outside the band is where the pieces' own words are laid out,
+/// so it is a name a cutting instruction can be printed over — on Carta, the
+/// owner's back panel printed one over the last digit of seven of them. A ream
+/// caps a pile at five hundred sheets, so the longest name a joint can carry is
+/// eight characters, which fits inside a band from here.
 fn cross(out: &mut String, frame: &Frame, [across, down]: [f64; 2], joint: &str) {
     let mut path = String::new();
     segment(
@@ -156,7 +165,7 @@ fn cross(out: &mut String, frame: &Frame, [across, down]: [f64; 2], joint: &str)
     let _ = writeln!(out, "{path}S");
     show(
         out,
-        frame.page(across + 1.0, down - ARM - 1.0),
+        frame.page(across - ARM, down - ARM - 1.0),
         CAPTION,
         joint,
     );

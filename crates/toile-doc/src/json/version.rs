@@ -76,6 +76,22 @@ pub const VERSION_HUNG: u32 = 8;
 /// open at all.
 pub const VERSION_DARTED: u32 = 9;
 
+/// The format version of a document in which a piece says how it is cut out.
+///
+/// Under the dart's rule it takes the next number, and one number carries all
+/// four of the fields that say it — the seam allowance, the count, the letter
+/// and the lines of the label. They enter the format together, so no build
+/// will ever exist that reads one of them and loses the other three, and the
+/// rule asks for a number per reader that could lose a field rather than per
+/// field. What a build that reads version 9 loses is the lot, in silence, and
+/// the allowance is the one that costs cloth: the piece comes back saying it
+/// is cut on the line it is sewn on, so whoever cuts it cuts a piece an
+/// allowance short at every edge and two short across every seam. The count
+/// goes with it, and a mirrored pair is cut once; and so do the lines its
+/// author wrote, which are the only place a pattern says what its numbers are
+/// for.
+pub const VERSION_CUT: u32 = 10;
+
 impl Doc {
     /// The format version this document is written in.
     ///
@@ -125,6 +141,7 @@ mod tests {
             VERSION_FOLDED,
             VERSION_HUNG,
             VERSION_DARTED,
+            VERSION_CUT,
         ];
         for (at, number) in numbers.iter().enumerate() {
             assert_eq!(*number, at as u32 + 1, "version {at}");

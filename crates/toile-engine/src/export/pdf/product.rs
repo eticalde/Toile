@@ -43,6 +43,14 @@ pub struct Pile {
     /// More than one where the pieces were small enough to share the paper,
     /// and every sheet of the pile then carries a part of every one of them.
     pub pieces: Vec<Laid>,
+    /// How many times a sheet of the pile had no room for what a piece on it
+    /// says about itself.
+    ///
+    /// A block that could only go on top of a node name or inside another
+    /// piece's cut line is left off that sheet: a line printed without saying
+    /// whose it is is worse than one printed a sheet less often. Counted, and
+    /// not warned about once: what decides is how many out of how many sheets.
+    pub unsaid: usize,
 }
 
 impl Pile {
@@ -109,6 +117,12 @@ impl Printed {
     #[must_use]
     pub fn pieces(&self) -> usize {
         self.piles.iter().map(|pile| pile.pieces.len()).sum()
+    }
+
+    /// How many blocks of words the whole print left off a sheet.
+    #[must_use]
+    pub fn unsaid(&self) -> usize {
+        self.piles.iter().map(|pile| pile.unsaid).sum()
     }
 
     /// How much paper the same pieces would have taken one pile each.
@@ -258,14 +272,14 @@ fn written(draft: &Draft, laid: &[Placed], paper: Paper) -> (Vec<String>, Pile) 
         .collect();
     // Every node of every piece is inside the box the grid is built from, so a
     // pile of pieces that resolve always lands on at least one sheet.
-    let streams: Vec<String> = grid
-        .places()
-        .iter()
-        .map(|place| {
-            let frame = Frame::new(paper, grid.corner(place.cell));
-            content(&frame, &grid, &inks, place)
-        })
-        .collect();
+    let mut streams: Vec<String> = Vec::new();
+    let mut unsaid = 0;
+    for place in &grid.places() {
+        let frame = Frame::new(paper, grid.corner(place.cell));
+        let (stream, missed) = content(&frame, &grid, &inks, place);
+        streams.push(stream);
+        unsaid += missed;
+    }
     let pieces = laid
         .iter()
         .zip(&inks)
@@ -280,6 +294,7 @@ fn written(draft: &Draft, laid: &[Placed], paper: Paper) -> (Vec<String>, Pile) 
         sheets: streams.len(),
         grid: grid.counts(),
         pieces,
+        unsaid,
     };
     (streams, pile)
 }

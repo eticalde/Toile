@@ -2,7 +2,7 @@ use eframe::egui::{self, Id};
 use toile_engine::draft::{Axis, Binding, Command, Draft, PieceKey, PointKey, SyntaxError};
 
 use super::super::curve;
-use super::super::state::{Field, FieldEdit, State};
+use super::super::state::{Cut, Field, FieldEdit, State};
 use super::cite::Cite;
 use crate::theme::Theme;
 use crate::widgets::{Editable, Edited, formula_row};
@@ -181,6 +181,23 @@ fn unparsed(of: &Field, text: &str) -> Option<String> {
         Field::Along(_) => match text.parse::<f64>() {
             Ok(value) if (0.0..=100.0).contains(&value) => None,
             _ => Some("un porcentaje entre 0 y 100".to_owned()),
+        },
+        // A letter and a line of a label are what somebody wrote on the paper:
+        // there is nothing in them to parse, so there is nothing to refuse.
+        Field::Cut(_, Cut::Letter | Cut::Label(_)) => None,
+        // The two numbers answer to the document's own gates, said here in
+        // Spanish so the refusal lands under the box instead of in the status
+        // bar after a round trip: zero of a piece is not a count, and a width
+        // of cloth outside the line is finite and not negative. An empty box
+        // is the piece cut on its own line, which is no number at all.
+        Field::Cut(_, Cut::Quantity) => match text.parse::<u32>() {
+            Ok(count) if count > 0 => None,
+            _ => Some("un entero desde 1".to_owned()),
+        },
+        Field::Cut(_, Cut::Allowance) if text.is_empty() => None,
+        Field::Cut(_, Cut::Allowance) => match text.parse::<f64>() {
+            Ok(width) if width.is_finite() && width >= 0.0 => None,
+            _ => Some("centímetros, o vacío para neta".to_owned()),
         },
         Field::Coordinate(..) | Field::Variable(_) => {
             let fault: SyntaxError = Binding::parse(text).err()?;

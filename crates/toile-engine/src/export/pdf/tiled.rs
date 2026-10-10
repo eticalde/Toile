@@ -1,3 +1,5 @@
+use super::super::metric;
+use super::super::units::{CAPTION, MARGIN};
 use super::grid::{OVERLAP, cell};
 use super::paper::points;
 use super::read::{path_of, streams_of};
@@ -180,6 +182,68 @@ fn the_same_tiled_piece_writes_the_same_sheets_twice() {
     let once = piece_to_pdf(&draft, piece, A4).expect("it tiles");
     let again = piece_to_pdf(&draft, piece, A4).expect("it tiles");
     assert_eq!(once, again);
+}
+
+/// A joint's name fits inside the band the joint is, which is the band's whole
+/// job: it is the only paper both sheets carry.
+///
+/// A name that runs out of it is a name the neighbour's paper covers part of
+/// once the sheets are lapped, and it stands on the paper the piece's own words
+/// are laid out on, where a cutting instruction can be printed over it. Either
+/// way a person reads `C17-1` for `C17-18`, tapes the wrong pair and finds out
+/// at the cutting table.
+///
+/// Measured on a pile of twenty sheets, because a joint between two sheets of
+/// one digit fits wherever it is put and the names that do not are the ones
+/// with two.
+#[test]
+fn every_name_of_a_joint_fits_inside_the_band_it_names() {
+    let (draft, piece) = rectangle(60.0, 100.0);
+    let printed = piece_to_pdf(&draft, piece, A4).expect("a long piece tiles");
+    assert_eq!(printed.piles[0].grid, [4, 5]);
+    let [wide, _] = cell(A4);
+    let (half, left) = (points(OVERLAP / 2.0), points(MARGIN + OVERLAP / 2.0));
+    let right = points(MARGIN + wide - OVERLAP / 2.0);
+    let mut seen = 0;
+    for page in &streams_of(&printed.bytes) {
+        for (at, name) in column_joints(page) {
+            // Which band a name stands in is the one it is nearer: a sheet of
+            // the middle columns laps one on either side.
+            let middle = if (at - left).abs() < (at - right).abs() {
+                left
+            } else {
+                right
+            };
+            // Measured the way the sheet lays type out, with the widths of the
+            // font it names rather than with so much per character.
+            let room = points(metric::wide(CAPTION, &name));
+            assert!(at >= middle - half, "«{name}» opens outside its band");
+            assert!(at + room <= middle + half, "«{name}» runs out of its band");
+            seen += 1;
+        }
+    }
+    assert!(seen >= 40, "{seen} column joints on twenty sheets");
+}
+
+/// Every name of a joint between two columns on one sheet, and where it opens
+/// across the page, in points.
+///
+/// Read as a program would: the one word of the line that is a parenthesised
+/// `C`, two whole numbers and the hyphen between them.
+fn column_joints(stream: &str) -> Vec<(f64, String)> {
+    let digits = |text: &str| !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_digit());
+    stream
+        .lines()
+        .filter_map(|line| {
+            let word: Vec<&str> = line.split_whitespace().collect();
+            let shown = word.get(7)?.strip_prefix("(C")?.strip_suffix(')')?;
+            let (low, high) = shown.split_once('-')?;
+            if !digits(low) || !digits(high) {
+                return None;
+            }
+            Some((word[4].parse().ok()?, format!("C{shown}")))
+        })
+        .collect()
 }
 
 /// Where across the page each mark of one joint is written, in points.

@@ -124,6 +124,13 @@ pub(crate) fn add_piece(
     if naming == Naming::Checked && doc.piece_named(&piece.name).is_some() {
         return Err(DocError::DuplicatePieceName(piece.name));
     }
+    // The third door, and the one the product actually builds pieces through.
+    // A `.sm2d` is as much a file as a `.toile`: the importer hands what it
+    // read straight to this command, so without these two the writer could put
+    // a width or a count on paper that the reader refuses for ever — exit 0,
+    // three files on disk, and a pattern nobody can open again.
+    crate::piece::check_allowance(piece.seam_allowance)?;
+    crate::piece::check_quantity(piece.quantity)?;
     for point in cited(&piece) {
         if doc.points.get(point).is_none() {
             return Err(DocError::stale(point));

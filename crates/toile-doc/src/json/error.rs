@@ -58,6 +58,9 @@ pub enum FormatError {
     /// A dart whose record no longer describes the contour it names.
     #[error("the pattern carries a dart its contour does not: {0}")]
     Dart(#[source] DocError),
+    /// A piece cut by numbers no piece is cut by.
+    #[error("the pattern cuts a piece by numbers no piece is cut by: {0}")]
+    Cut(#[source] DocError),
 }
 
 impl FormatError {

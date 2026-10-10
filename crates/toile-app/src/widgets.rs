@@ -12,7 +12,7 @@ pub use control::{
     cycle, cycle_named, readout,
 };
 use eframe::egui::CornerRadius;
-pub use field::{Editable, Edited, field_row, formula_row};
+pub use field::{Editable, Edited, field_row, formula_row, typed_row};
 pub use panel::{
     alert_note, footer_note, list_row_icon, list_row_named, plain_note, section, section_with,
     tree_row,

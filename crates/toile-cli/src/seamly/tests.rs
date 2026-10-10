@@ -152,7 +152,9 @@ fn migrating_writes_the_product_its_report_and_its_drawing_and_never_overwrites(
     let summary = lines.first().expect("a first line").clone();
     assert!(summary.starts_with("10 piezas"), "{summary}");
     assert!(summary.contains("25 líneas internas"), "{summary}");
-    assert!(summary.contains("formato 6"), "{summary}");
+    // What the pieces say about being cut out is the newest thing the product
+    // carries, so it is the version the file asks for.
+    assert!(summary.contains("formato 10"), "{summary}");
     let report = input.with_file_name("Baggy Jeans [Muller] - importado a Toile.md");
     let svg = input.with_extension("svg");
     let text = std::fs::read_to_string(&report).expect("the report is written");
@@ -166,8 +168,18 @@ fn migrating_writes_the_product_its_report_and_its_drawing_and_never_overwrites(
         "sin contar la firma que Seamly",
         "## Líneas internas (25)",
         "No quedó ningún trayecto interno fuera del producto.",
+        "## Cómo se corta cada pieza",
+        "| PRETINA | C | 1 | 1.5 | vertical | PRETINA / cortar 1 al doblez c.b. |",
+        "| SOLAPA TRASERA | J | 2 | 1 | vertical | SOLAPA TRASERA / cortar 2 + entretela |",
+        "| TIRA PASACINTOS | F | 1 | neta | vertical |",
+        "Ninguna de las 10 piezas escribe un ángulo de hilo",
     ] {
         assert!(text.contains(needle), "the report lacks {needle}");
+    }
+    // The report is what the owner reads after importing, so a sentence that
+    // outlived what it described is worse than no sentence.
+    for gone in ["El producto va neto", "ni un ángulo escrito", "van netas"] {
+        assert!(!text.contains(gone), "the report still says «{gone}»");
     }
     stale_lengths(&text);
     comments_by_place_only(&text);
@@ -179,7 +191,9 @@ fn migrating_writes_the_product_its_report_and_its_drawing_and_never_overwrites(
     let written = std::fs::read_to_string(&output).expect("the product is written");
     let doc = Doc::from_json(&written).expect("a Toile file");
     assert_eq!((doc.pieces.len(), doc.lines.iter().count()), (10, 25));
-    drawn_lines(&std::fs::read_to_string(&svg).expect("drawn"), &doc);
+    let drawing = std::fs::read_to_string(&svg).expect("drawn");
+    drawn_lines(&drawing, &doc);
+    cut_out(&drawing);
     let again = migrate(&asked).expect_err("nothing is written twice");
     assert!(again.contains("ya existe"), "{again}");
     assert_eq!(
@@ -187,6 +201,27 @@ fn migrating_writes_the_product_its_report_and_its_drawing_and_never_overwrites(
         written
     );
     std::fs::remove_dir_all(root).expect("the scratch folder goes");
+}
+
+/// What the owner's own pieces say about being cut out, in the drawing written
+/// beside the product.
+///
+/// Three of his ten: the panel cut in mirrored pairs, the strip cut net — the
+/// question he went back to his notes for twice — and the flap whose label and
+/// whose count disagree, where the drawing shows both without choosing.
+fn cut_out(drawing: &str) {
+    for said in [
+        ">A · «DELANTERO»</text>",
+        ">Cortar 2 · margen 1.5 cm por fuera del contorno</text>",
+        ">cortar 2 espejadas</text>",
+        ">F · «TIRA PASACINTOS»</text>",
+        ">Cortar 1 · sin margen: corta por el contorno</text>",
+        ">J · «SOLAPA TRASERA»</text>",
+        ">Cortar 2 · margen 1 cm por fuera del contorno</text>",
+        ">cortar 2 + entretela</text>",
+    ] {
+        assert!(drawing.contains(said), "the drawing lacks {said}");
+    }
 }
 
 /// The report's table of stale lengths lists the six splines whose written

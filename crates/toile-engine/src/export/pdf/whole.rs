@@ -180,9 +180,10 @@ fn one_piece_asked_for_by_name_never_shares_its_paper() {
         "{page}"
     );
     assert!(!page.contains(&literal("TIRA CADENA")), "{page}");
-    // And no name beside the outline: with one piece on the sheet the legend's
-    // own title already says which it is.
-    assert!(!page.contains(&literal("«PRETINA»")), "{page}");
+    // And its own name beside its outline, even though the legend's title says
+    // it too: the legend is in the band this sheet tells a person to trim off,
+    // and what is left after that has to still name the piece it is.
+    assert!(page.contains(&literal("«PRETINA»")), "{page}");
 }
 
 /// Two pieces under one name are two piles a person cannot separate, since the

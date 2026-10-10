@@ -22,6 +22,7 @@ fn shared(names: &[&str], first_page: usize, sheets: usize, grid: [usize; 2]) ->
                 alone: sheets,
             })
             .collect(),
+        unsaid: 0,
     }
 }
 
@@ -65,6 +66,24 @@ fn a_print_missing_a_piece_says_how_many_of_how_many_it_has() {
         paper(&short, "A4"),
         "producto · 1 de 2 piezas · 12 hojas de A4 · escala 1:1"
     );
+}
+
+/// A label with nowhere to go is counted on its pile's line and said again
+/// under the piles, because it is the one thing a person cannot see on the
+/// paper: the sheet looks finished, and the question it does not answer is the
+/// one asked at the cutting table.
+#[test]
+fn a_label_with_no_room_on_its_sheet_is_counted_and_not_hushed() {
+    let mut pile_of = paper_of("Delantero", 1, 12, [2, 6]);
+    pile_of.unsaid = 2;
+    let said = pile(&pile_of);
+    assert!(said.contains("2 rótulos sin sitio en su hoja"), "{said}");
+    let printed = print(vec![pile_of]);
+    let aviso = unsaid(&printed).expect("two labels went unsaid");
+    assert!(aviso.contains("2 rótulos de pieza sin sitio"), "{aviso}");
+    assert!(aviso.contains("no el rótulo"), "{aviso}");
+    // And a print that said everything says nothing about it.
+    assert_eq!(unsaid(&print(vec![paper_of("Cuadro", 1, 1, [1, 1])])), None);
 }
 
 /// The pages of the file are what a print dialogue asks for, and the one thing

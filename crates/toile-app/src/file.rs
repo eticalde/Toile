@@ -223,7 +223,7 @@ mod tests {
         let read = Doc::from_json(&written).expect("what the program wrote it can read");
         assert_eq!(read.to_canonical_json(), written);
         let draft = Draft::from_doc(read).expect("the example resolves");
-        let drawing = export::to_svg(&draft).expect("the example draws");
+        let drawing = export::to_svg(&draft).expect("the example draws").text;
         assert!(drawing.contains("<svg"), "{drawing}");
     }
 

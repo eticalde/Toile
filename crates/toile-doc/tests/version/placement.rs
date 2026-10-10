@@ -3,7 +3,7 @@ use toile_doc::Doc;
 use super::{EMPTY, SHIPPED, header, linked, restamped, rewritten, shaped};
 
 /// The end of the first piece of the shipped block, where a placement goes.
-const FIRST_PIECE_END: &str = "\"radians\": 1.5707963267948966\n          }\n        }";
+pub(super) const FIRST_PIECE_END: &str = "\"radians\": 1.5707963267948966\n          }\n        }";
 
 /// The same place with the piece arranged on the overview, in canonical form.
 const FIRST_PIECE_PLACED: &str = "\"radians\": 1.5707963267948966

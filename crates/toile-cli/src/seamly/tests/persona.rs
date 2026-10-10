@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use toile_doc::{FORMAT_VERSION_INTERNAL, Origin, Persona, Snapshot};
+use toile_doc::{FORMAT_VERSION_CUT, Origin, Persona, Snapshot};
 use toile_engine::draft::Doc;
 
 use super::super::args::{Asked, Wanted, parse};
@@ -59,7 +59,9 @@ fn a_person_is_filed_as_the_app_files_her_and_the_product_carries_her_link() {
 
     let written = std::fs::read_to_string(&output).expect("the product is written");
     let doc = Doc::from_json(&written).expect("a Toile file");
-    assert_eq!(doc.format_version(), FORMAT_VERSION_INTERNAL);
+    // The pieces carry what their author wrote about cutting them, which is
+    // the newest thing in the file and so the version it asks for.
+    assert_eq!(doc.format_version(), FORMAT_VERSION_CUT);
     assert_eq!(doc.to_canonical_json(), written);
     let body = doc.measures().expect("one body");
     assert_eq!(body.name, "Etienne");

@@ -1,4 +1,4 @@
-use toile_doc::{Doc, FORMAT_VERSION_INTERNAL, Persona, Snapshot};
+use toile_doc::{Doc, FORMAT_VERSION_CUT, Persona, Snapshot};
 
 use super::product;
 
@@ -35,10 +35,10 @@ fn a_linked_product_carries_the_person_fingerprint_and_asks_for_the_link_version
         persona.current().map(Snapshot::fingerprint).as_ref()
     );
     assert_eq!(origin.fnv, body.fingerprint());
-    // The link no longer decides the version: the pattern's internal lines
-    // already ask for a higher one, and the stamp is the highest anything in
-    // the document needs.
-    assert_eq!(product.doc.format_version(), FORMAT_VERSION_INTERNAL);
+    // The link no longer decides the version: what the pieces say about being
+    // cut out already asks for a higher one, and the stamp is the highest
+    // anything in the document needs.
+    assert_eq!(product.doc.format_version(), FORMAT_VERSION_CUT);
     let written = product.doc.to_canonical_json();
     assert_eq!(
         Doc::from_json(&written).map(|d| d.to_canonical_json()),

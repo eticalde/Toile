@@ -1,6 +1,6 @@
 use super::super::drawn::Inked;
 use super::paper::points_of_cm;
-use super::read::{step, stream_of};
+use super::read::{anchor_of, clip_of, step, stream_of};
 use super::text::literal;
 use super::{A4, piece_to_pdf};
 use crate::draft::{
@@ -208,27 +208,10 @@ fn every_name_is_set_inside_the_clip_that_shows_it() {
     let (draft, piece) = marked();
     let printed = piece_to_pdf(&draft, piece, A4).expect("the marked piece prints");
     let stream = stream_of(&printed.bytes);
-    let (clip, _) = stream.split_once(" re W n").expect("the sheet clips");
-    let corner: Vec<f64> = clip
-        .rsplit('\n')
-        .next()
-        .expect("the clip is one line")
-        .split_whitespace()
-        .filter_map(|word| word.parse().ok())
-        .collect();
-    let [left, low, wide, tall] = <[f64; 4]>::try_from(corner).expect("four operands");
+    let [left, low, wide, tall] = clip_of(&stream);
     let mut seen = 0;
     for name in ["A", "B", "C", "D"] {
-        let said = format!("{} Tj", literal(name));
-        let before = stream.split(&said).next().expect("the name is written");
-        let anchor: Vec<f64> = before
-            .rsplit("BT\n")
-            .next()
-            .expect("the name opens a text object")
-            .split_whitespace()
-            .filter_map(|word| word.parse().ok())
-            .collect();
-        let (x, y) = (anchor[anchor.len() - 2], anchor[anchor.len() - 1]);
+        let [x, y] = anchor_of(&stream, &literal(name));
         assert!(
             x >= left && x <= left + wide && y >= low && y <= low + tall,
             "«{name}» is set at {x},{y}, outside the clip {left},{low} {wide}×{tall}"

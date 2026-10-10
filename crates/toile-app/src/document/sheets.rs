@@ -38,12 +38,12 @@ impl crate::App {
             self.file.warn(why, revision);
             return;
         }
-        // A file that went out short of a piece, or with two piles a person
-        // cannot separate, is reported as something wrong even though it was
-        // written: they are about to cut a garment, and the panel they cannot
-        // find is the one they will look for last.
+        // A file that went out short of a piece, short of a label, or with two
+        // piles a person cannot separate, is reported as something wrong even
+        // though it was written: they are about to cut a garment, and the panel
+        // they cannot find is the one they will look for last.
         let said = wrote(&printed, paper.name);
-        if printed.left_out.is_empty() && printed.twinned().is_empty() {
+        if printed.left_out.is_empty() && printed.twinned().is_empty() && printed.unsaid() == 0 {
             self.file.say(said, revision);
         } else {
             self.file.warn(said, revision);
@@ -51,12 +51,18 @@ impl crate::App {
     }
 }
 
-/// What was written, what was left out of it, and what a person will not be
-/// able to tell apart on the table.
+/// What was written, what was left out of it, which sheets went out without
+/// their piece's own words, and what a person will not be able to tell apart on
+/// the table.
 ///
 /// The paper is named here because the sheets themselves only say it once they
 /// are printed: this is the one place the choice is confirmed while the ream is
 /// still in the drawer.
+///
+/// And the labels are counted here because the owner prints from this button
+/// and not from the terminal: the sheet that could not fit a piece's words
+/// carries its outline and says nothing, so a count that only the command line
+/// printed is a count he never sees.
 fn wrote(printed: &Printed, paper: &str) -> String {
     let mut said = format!(
         "PDF a escala real · {} en {} de {paper}",
@@ -68,6 +74,13 @@ fn wrote(printed: &Printed, paper: &str) -> String {
             said,
             " · sin imprimir: {}",
             quoted(&names(&printed.left_out))
+        );
+    }
+    if printed.unsaid() > 0 {
+        let _ = write!(
+            said,
+            " · {} sin sitio en su hoja: esa hoja lleva el contorno y no el rótulo",
+            plural(printed.unsaid(), "rótulo de pieza", "rótulos de pieza")
         );
     }
     if !printed.twinned().is_empty() {
@@ -144,6 +157,7 @@ mod tests {
                 inked: export::Inked::default(),
                 alone: 1,
             }],
+            unsaid: 0,
         }
     }
 
@@ -183,6 +197,23 @@ mod tests {
             "A4",
         );
         assert!(said.contains("sin imprimir: «Manga»"), "{said}");
+    }
+
+    /// A sheet that went out without its piece's own words says so here, which
+    /// is the only door the owner uses: the command line said it already, and
+    /// he prints from the button.
+    #[test]
+    fn the_labels_a_print_could_not_fit_are_counted_in_the_notice() {
+        let mut held = pile("Delantero", 1);
+        held.unsaid = 3;
+        let said = wrote(&print(vec![held], vec![]), "A4");
+        assert!(
+            said.contains("3 rótulos de pieza sin sitio en su hoja"),
+            "{said}"
+        );
+        // And a print that fitted every one of them says nothing about them.
+        let clean = wrote(&print(vec![pile("Delantero", 1)], vec![]), "A4");
+        assert!(!clean.contains("sin sitio"), "{clean}");
     }
 
     /// Two piles under one name cannot be separated on the table, and the

@@ -1,9 +1,10 @@
+use super::super::lands;
 use super::super::units::{MARGIN, box_of, centimetres};
 use super::pack::Placed;
 use super::paper::Paper;
 use super::place::{Joins, Place};
 use super::plane::Plane;
-use super::{SheetError, lands, legend};
+use super::{SheetError, legend};
 
 /// How wide the band two neighbouring sheets both carry, in millimetres.
 ///
@@ -60,8 +61,6 @@ pub(super) struct Cloth {
     cut: Vec<[f64; 2]>,
     /// Where its every other place reaches that plane.
     plane: Plane,
-    /// Where the box around it opens on the plane, in millimetres.
-    place: [f64; 2],
     /// What it measures, in millimetres.
     size: [f64; 2],
 }
@@ -75,11 +74,6 @@ impl Cloth {
     /// One place of the piece on the plane, in millimetres.
     pub(super) fn onto(&self, at: [f64; 2]) -> [f64; 2] {
         self.plane.onto(at)
-    }
-
-    /// Where the box around it opens on the plane, in millimetres.
-    pub(super) fn place(&self) -> [f64; 2] {
-        self.place
     }
 
     /// What it measures, in millimetres.
@@ -244,7 +238,6 @@ fn laid_out(piece: &Placed, low: [f64; 2], spare: f64) -> Cloth {
     Cloth {
         cut,
         plane,
-        place,
         size: piece.size,
     }
 }

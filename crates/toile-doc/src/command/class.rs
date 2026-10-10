@@ -85,6 +85,13 @@ impl Command {
             | Command::RenameMannequin { .. }
             | Command::RenamePiece { .. }
             | Command::SetGrain { .. }
+            // What a piece says about being cut out is read off the paper and
+            // by nothing else: no contour is offset by the allowance, and no
+            // mesh is cut twice because the count says two.
+            | Command::SetSeamAllowance { .. }
+            | Command::SetQuantity { .. }
+            | Command::SetLetter { .. }
+            | Command::SetLabels { .. }
             // Where a piece sits on the overview is layout: no contour, mesh
             // or drape is derived from it.
             | Command::PlacePiece { .. }

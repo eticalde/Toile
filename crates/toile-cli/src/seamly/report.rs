@@ -11,7 +11,7 @@ mod body;
 mod inner;
 /// The spline lengths the file wrote, beside the curves'.
 mod lengths;
-/// The pieces, and what the product has no place for.
+/// Everything the report says about the pieces.
 mod pieces;
 
 /// Where the import read from and wrote to.
@@ -63,6 +63,7 @@ pub fn write(product: &Product, check: &Check, files: &Files<'_>, comments: &[Co
     directions(&mut out, product);
     lengths::lengths(&mut out, product, check);
     pieces::pieces(&mut out, product);
+    pieces::cut(&mut out, product);
     inner::lines(&mut out, product);
     pieces::missing(&mut out, product, comments);
     out
@@ -156,7 +157,10 @@ fn rules(out: &mut String) {
          4/3·tan(θ/4)·r. Una curva con las dos manijas en cero es la recta que traza.",
         "Cada curva se aplana en el menor número de muestras que la deja a menos de una décima \
          de milímetro de sí misma, como el bloque de pantalón de Toile.",
-        "Las piezas van netas, sin margen de costura, recorridas en el orden de Seamly.",
+        "Las piezas se recorren en el orden de Seamly. Cada una se queda con lo que el patrón \
+         dice para cortarla —el margen de costura, cuántas, la letra, el rótulo y el ángulo del \
+         hilo—, pero el contorno sigue siendo la línea de costura: desplazarlo por el margen es \
+         otra cosa y todavía no se hace.",
     ] {
         let _ = writeln!(out, "- {line}");
     }

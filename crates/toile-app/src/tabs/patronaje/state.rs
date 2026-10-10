@@ -1,7 +1,11 @@
+/// A field of the inspector somebody is writing in, with the text it holds
+/// before whatever is in it parses.
+mod field;
 mod selection;
 
+pub use field::{Cut, Field, FieldEdit};
 pub use selection::Selection;
-use toile_engine::draft::{Axis, PieceKey, PointKey, VariableKey};
+use toile_engine::draft::PieceKey;
 
 use super::gesture::{Ask, Gesture};
 use super::inspector::Grip;
@@ -45,37 +49,6 @@ pub enum Scope {
     Product,
     /// The piece in front alone, in its own coordinates, with every tool.
     Piece,
-}
-
-/// A field of the inspector somebody is writing in.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Field {
-    /// One coordinate of one node.
-    Coordinate(PointKey, Axis),
-    /// How finely the tract leaving one node is flattened.
-    Samples(PointKey),
-    /// How far along the tract leaving one node its notch is cut.
-    ///
-    /// Named for the tract and not for the mark, the way the row is: the panel
-    /// edits the first notch the chosen tract carries.
-    Along(PointKey),
-    /// One measurement of the body the pattern resolves against.
-    Measure(String),
-    /// One of the pattern's own quantities.
-    Variable(VariableKey),
-}
-
-/// The text a field holds while it is being written, before it parses.
-///
-/// The buffer lives here and not in the document, which is what lets a field
-/// paint the fault in what has been typed so far without the geometry ever
-/// seeing it.
-#[derive(Debug, Clone, PartialEq)]
-pub struct FieldEdit {
-    /// The field the text belongs to.
-    pub of: Field,
-    /// What has been typed into it.
-    pub buffer: String,
 }
 
 /// What the drafting tab remembers between frames.
@@ -180,10 +153,26 @@ impl State {
         if self.tool == Tool::Sew {
             self.tool = Tool::Select;
         }
-        self.active = Some(piece);
+        self.front(piece);
         self.scope = Scope::Piece;
         self.choose(Selection::None);
         self.frame = true;
+    }
+
+    /// Puts `piece` in front, letting go of a cut row half written on another.
+    ///
+    /// What a piece says about being cut out is typed into rows the panel draws
+    /// for the piece in front, so a box half written belongs to that piece.
+    /// Kept, its text would come back the next time that piece is in front,
+    /// and the first click in and out of the box would write something nobody
+    /// confirmed — which is the rule `choose` keeps for the rows of a node.
+    pub fn front(&mut self, piece: PieceKey) {
+        self.active = Some(piece);
+        if let Some(Field::Cut(of, _)) = self.editing.as_ref().map(|edit| &edit.of)
+            && *of != piece
+        {
+            self.editing = None;
+        }
     }
 
     /// Takes the sewing tool in hand, going back to the whole product for it.
@@ -241,13 +230,15 @@ impl State {
     /// `overview` choose through here, so a change of scope lets go of the
     /// same rows. A measurement or a variable is on the panel over any scope
     /// and any selection, so its box keeps its text and its usual contract:
-    /// whatever takes the focus off it confirms it.
+    /// whatever takes the focus off it confirms it. So is what a piece says
+    /// about being cut out, which is the piece's own answer rather than the
+    /// selection's.
     pub fn choose(&mut self, selection: Selection) {
         self.selection = selection;
         let shown = match self.editing.as_ref().map(|edit| &edit.of) {
             Some(Field::Coordinate(point, _)) => self.selection.only() == Some(*point),
             Some(Field::Samples(node) | Field::Along(node)) => self.selection.edge() == Some(*node),
-            Some(Field::Measure(_) | Field::Variable(_)) | None => true,
+            Some(Field::Cut(..) | Field::Measure(_) | Field::Variable(_)) | None => true,
         };
         if !shown {
             self.editing = None;

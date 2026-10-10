@@ -1,6 +1,6 @@
-use toile_doc::{LineKind, Winding};
+use toile_doc::{Grain, LineKind, Piece, Winding};
 use toile_seamly::{
-    Carried, Evaluation, Frozen, Measurements, Pattern, Refusal, SplineLength, import,
+    Carried, Error, Evaluation, Frozen, Measurements, Pattern, Refusal, SplineLength, import,
 };
 
 use super::{distance, resolve};
@@ -41,6 +41,7 @@ const PATTERN: &str = r##"<?xml version="1.0" encoding="UTF-8"?>
         <pieces>
             <piece id="20" name="CUT" seamAllowance="false" width="0" version="2">
                 <data letter="A" quantity="1" onFold="false"/>
+                <grainline arrows="2" length="10" mx="0" my="0" rotation="90" visible="true"/>
                 <nodes>
                     <node idObject="11" type="NodePoint"/>
                     <node idObject="12" type="NodePoint"/>
@@ -49,8 +50,12 @@ const PATTERN: &str = r##"<?xml version="1.0" encoding="UTF-8"?>
                 </nodes>
                 <iPaths><record path="18"/><record path="19"/></iPaths>
             </piece>
-            <piece id="21" name="ARC" seamAllowance="false" width="0" version="2">
-                <data letter="B" quantity="1" onFold="false"/>
+            <piece id="21" name="ARC" seamAllowance="true" width="1.2" version="2">
+                <data letter="B" quantity="4" onFold="false">
+                    <line alignment="4" bold="true" italic="false" sfIncrement="4" text="ARC"/>
+                    <line alignment="4" bold="false" italic="false" sfIncrement="2" text="al bies"/>
+                </data>
+                <grainline arrows="0" length="" mx="0" my="0" rotation="45" visible="false"/>
                 <nodes>
                     <node idObject="17" type="NodeArc" reverse="0"/>
                 </nodes>
@@ -171,4 +176,56 @@ fn a_path_of_one_place_is_reported_and_a_cut_one_is_a_slit_between_two_corners()
         [Some("A".to_owned()), Some("C".to_owned())],
         "{held:?}"
     );
+}
+
+/// A grain line the file writes an angle on reaches the piece, drawn or not,
+/// and a piece with no grain line at all keeps the document's vertical.
+///
+/// Seamly measures the angle counter-clockwise on a page whose y grows
+/// downward and the document from x toward y, which is down the page, so `90`
+/// — the angle Seamly writes for a grain line straight up the piece — is the
+/// document's vertical, straight down it. The half turn is folded away
+/// because a grain is the direction the warp runs and not an arrow along it.
+#[test]
+fn the_grain_angle_the_file_writes_reaches_the_piece_and_a_hidden_one_counts() {
+    let (pattern, body) = inputs(80.0);
+    let product = import(&pattern, &body, "sintético").expect("the pattern imports");
+    let grain = |name: &str| {
+        let key = product.doc.piece_named(name).expect("imported");
+        product.doc.pieces.get(key).expect("live").grain
+    };
+    assert_eq!(grain("CUT"), Grain::VERTICAL);
+    assert_eq!(grain("ARC"), Grain::Angle(135.0_f64.to_radians()));
+    let reported: Vec<Option<f64>> = product.report.pieces.iter().map(|p| p.grain).collect();
+    assert_eq!(reported, [Some(90.0), Some(45.0)]);
+
+    // The arc piece says all four things about being cut out; the cut one says
+    // only its letter, and its label has no lines at all.
+    let held = |name: &str| {
+        let key = product.doc.piece_named(name).expect("imported");
+        product.doc.pieces.get(key).expect("live").clone()
+    };
+    let arc = held("ARC");
+    assert_eq!(arc.seam_allowance, Some(1.2));
+    assert_eq!(arc.quantity, 4);
+    assert_eq!(arc.letter.as_deref(), Some("B"));
+    assert_eq!(arc.labels, ["ARC", "al bies"]);
+    let cut = held("CUT");
+    assert_eq!(cut.seam_allowance, None);
+    assert_eq!(cut.quantity, Piece::CUT_ONCE);
+    assert_eq!(cut.labels, Vec::<String>::new());
+    assert!(cut.says_how_it_is_cut(), "it carries a letter");
+}
+
+/// An angle Seamly wrote as a formula is refused out loud: reading it would
+/// need the body, and a guess at it would be an invented grain.
+#[test]
+fn a_grain_angle_written_as_a_formula_is_refused_rather_than_guessed_at() {
+    let xml = PATTERN.replace(r#"rotation="45""#, r#"rotation="angleLine_A_B""#);
+    let error = Pattern::parse(&xml).unwrap_err();
+    assert!(matches!(error, Error::Unsupported { .. }), "{error}");
+    let message = error.to_string();
+    for needle in ["rotation=\"angleLine_A_B\"", "no plain angle"] {
+        assert!(message.contains(needle), "{message}");
+    }
 }

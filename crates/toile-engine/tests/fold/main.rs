@@ -99,7 +99,7 @@ fn the_mesher_is_handed_the_whole_cloth() {
 #[test]
 fn the_exported_sheet_is_the_cloth_and_carries_both_halves_of_a_mark() {
     let (folded, _) = drafted(true);
-    let drawing = to_svg(&folded).expect("the band draws");
+    let drawing = to_svg(&folded).expect("the band draws").text;
     // The far edge of the mirrored half, in millimetres: 36 cm mirrored about
     // 83.5 lands at 131.
     assert!(drawing.contains("1310.00"), "{drawing}");
@@ -116,7 +116,7 @@ fn the_exported_sheet_is_the_cloth_and_carries_both_halves_of_a_mark() {
 
     // Drawn whole, the same mark is on the sheet once and only once.
     let (drawn, _) = drafted(false);
-    let flat = to_svg(&drawn).expect("the band draws");
+    let flat = to_svg(&drawn).expect("the band draws").text;
     assert_eq!(flat.matches("M 500.00 70.00").count(), 1, "{flat}");
     assert!(!flat.contains("1170.00"), "{flat}");
 }

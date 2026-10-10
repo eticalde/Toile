@@ -41,6 +41,7 @@ fn piece(node: Node<'_, '_>, index: &mut Index) -> Result<Piece, Error> {
         quantity: 1,
         on_fold: false,
         labels: Vec::new(),
+        grain: None,
         outline: Vec::new(),
         internal_paths: Vec::new(),
         placement,
@@ -58,12 +59,7 @@ fn piece(node: Node<'_, '_>, index: &mut Index) -> Result<Piece, Error> {
                     piece.internal_paths.push(path);
                 }
             }
-            "grainline" => {
-                let mut attrs = Attrs::new(child);
-                attrs.expect("visible", "false")?;
-                attrs.ignore(&["arrows", "length", "rotation"]);
-                attrs.finish()?;
-            }
+            "grainline" => piece.grain = grainline(child)?,
             "patternInfo" => {
                 let mut attrs = Attrs::new(child);
                 attrs.ignore(&["fontSize", "height", "visible", "width", "rotation"]);
@@ -74,6 +70,36 @@ fn piece(node: Node<'_, '_>, index: &mut Index) -> Result<Piece, Error> {
     }
     index.insert(id, Kind::Piece, &at)?;
     Ok(piece)
+}
+
+/// The angle a grain line declares, in degrees, when it declares one.
+///
+/// A piece nobody put a grain line on keeps the element with an empty
+/// rotation, which is the absence of an angle and not an angle of zero.
+/// Whether Seamly draws the arrow, how long it draws it and which ends it
+/// barbs are the drawing's business, the way a line's colour is: the warp runs
+/// the way it runs whether or not the piece shows it. An angle Seamly wrote as
+/// a formula is refused out loud, because reading it would need the body and
+/// guessing at it would be inventing the grain.
+fn grainline(node: Node<'_, '_>) -> Result<Option<f64>, Error> {
+    let mut attrs = Attrs::new(node);
+    attrs.ignore(&["arrows", "length", "visible"]);
+    let Some(raw) = attrs.opt("rotation").filter(|raw| !raw.is_empty()) else {
+        attrs.finish()?;
+        return Ok(None);
+    };
+    let degrees = raw
+        .parse::<f64>()
+        .ok()
+        .filter(|degrees| degrees.is_finite())
+        .ok_or_else(|| {
+            unsupported(
+                node,
+                format!("`rotation=\"{raw}\"`, which is no plain angle"),
+            )
+        })?;
+    attrs.finish()?;
+    Ok(Some(degrees))
 }
 
 /// A layout offset of the piece; a piece the file never moved writes none.

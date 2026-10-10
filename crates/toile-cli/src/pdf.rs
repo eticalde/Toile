@@ -78,6 +78,7 @@ fn whole(draft: &Draft, asked: &Asked, paper: Paper) -> Result<(Printed, Vec<Str
     said.extend(printed.piles.iter().map(said::pile));
     said.push(said::drawn(&printed.inked()));
     said.extend(said::saved(&printed));
+    said.extend(said::unsaid(&printed));
     said.extend(said::twinned(&printed));
     Ok((printed, said))
 }

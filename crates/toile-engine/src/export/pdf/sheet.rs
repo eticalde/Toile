@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use super::super::units::{CUT, DRAWN, MARGIN, number};
 use super::grid::Grid;
-use super::ink::Ink;
+use super::ink::{Ink, Over};
 use super::paper::{Paper, points};
 use super::place::Place;
 use super::{grid, ink, join, legend};
@@ -78,10 +78,11 @@ impl Frame {
 /// make at a glance is the line to cut from everything else, and on a sheet
 /// carrying two pieces it has to make it twice.
 ///
-/// A piece is named on the sheet only where the sheet carries more than one.
-/// With one piece the legend's own title says which it is, and a second name on
-/// the paper would say the same thing over the drawing.
-pub(super) fn content(frame: &Frame, grid: &Grid, inks: &[Ink], place: &Place) -> String {
+/// Every piece says its own handle and how it is cut out beside its own
+/// outline, whether it shares the sheet or not — the legend says some of it
+/// too, and the legend is in the band a tiled sheet is trimmed of. How many of
+/// those blocks the sheet had no room for goes back with the stream.
+pub(super) fn content(frame: &Frame, grid: &Grid, inks: &[Ink], place: &Place) -> (String, usize) {
     let mut out = String::new();
     let _ = writeln!(out, "{} w", number(points(CUT)));
     out.push_str("q\n");
@@ -89,12 +90,15 @@ pub(super) fn content(frame: &Frame, grid: &Grid, inks: &[Ink], place: &Place) -
     for cloth in grid.cloths() {
         cut(&mut out, frame, cloth.cut());
     }
+    // Every piece's marks before any piece's words, and not one piece whole at
+    // a time: a block has to give way to the node names of this cell, and
+    // names it is written before are names it cannot see.
+    let mut taken = Vec::new();
     for (cloth, ink) in grid.cloths().iter().zip(inks) {
         ink::marks(&mut out, frame, cloth, ink);
-        if inks.len() > 1 {
-            ink::named(&mut out, frame, cloth, ink);
-        }
+        taken.extend(ink::named(&mut out, frame, cloth, ink));
     }
+    let unsaid = words(&mut out, frame, grid, inks, place, &taken);
     out.push_str("Q\n");
     // At the weight of a mark and not of a cut. The square is the one shape on
     // the sheet the legend tells a person to measure and not to cut, so a
@@ -104,7 +108,48 @@ pub(super) fn content(frame: &Frame, grid: &Grid, inks: &[Ink], place: &Place) -
     legend::square(&mut out);
     join::marks(&mut out, frame, place);
     legend::says(&mut out, frame, inks, grid.size(), place);
-    out
+    (out, unsaid)
+}
+
+/// What every piece on the sheet says about itself, and how many of them found
+/// nowhere to say it.
+///
+/// Each piece is told the outlines of the others so that its own words never
+/// end up inside one of them, where the paper would no longer say whose they
+/// are.
+///
+/// And each block it places joins the list the next one keeps off, in the same
+/// shape the node names arrive in. Two pieces of one sheet whose boxes open at
+/// the same height want the same corner of it, and a list that only ever held
+/// the names would let the second one print over the first.
+fn words(
+    out: &mut String,
+    frame: &Frame,
+    grid: &Grid,
+    inks: &[Ink],
+    place: &Place,
+    named: &[[f64; 4]],
+) -> usize {
+    let mut taken = named.to_vec();
+    let mut unsaid = 0;
+    for (rank, (cloth, ink)) in grid.cloths().iter().zip(inks).enumerate() {
+        let others: Vec<&[[f64; 2]]> = grid
+            .cloths()
+            .iter()
+            .enumerate()
+            .filter(|&(other, _)| other != rank)
+            .map(|(_, cloth)| cloth.cut())
+            .collect();
+        let over = Over {
+            taken: &taken,
+            others: &others,
+        };
+        match ink::says(out, frame, cloth, ink, place, &over) {
+            Some(held) => taken.extend(held),
+            None => unsaid += 1,
+        }
+    }
+    unsaid
 }
 
 /// The page held to its own cell.

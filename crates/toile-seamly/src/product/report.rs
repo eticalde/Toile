@@ -136,6 +136,9 @@ pub struct PieceNote {
     pub internal: Vec<InternalNote>,
     /// The layout offset the file gives the piece.
     pub placement: Xy,
+    /// The angle of its grain line in the file's degrees, `None` when the file
+    /// writes none and the piece is left on the document's vertical.
+    pub grain: Option<f64>,
 }
 
 /// A notch of the pattern.

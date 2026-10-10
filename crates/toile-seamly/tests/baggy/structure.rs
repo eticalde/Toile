@@ -2,6 +2,106 @@ use toile_seamly::{NodeKind, SplineLength};
 
 use super::{BODY, PATTERN, body, evaluate, pattern};
 
+/// One row of `CUT`: a piece's name, its letter, how many to cut, the seam
+/// allowance in centimetres, whether the label says on the fold, and the
+/// second line of its label.
+type Cut = (
+    &'static str,
+    &'static str,
+    u32,
+    Option<f64>,
+    bool,
+    &'static str,
+);
+
+/// What the owner's file says about cutting out each of its ten pieces, read
+/// off `<piece>` and its `<data>`.
+///
+/// `None` is a piece the file cuts on its own line, which it writes as
+/// `seamAllowance="false"` and not as a width of nothing: the `width` beside
+/// it is `0` on both of them. The first line of every label is the piece's
+/// own name, which the test asserts rather than repeating here. The phrase is
+/// never read for a number: `SOLAPA TRASERA` says two where the garment wants
+/// four, and both of those are its author's.
+const CUT: [Cut; 10] = [
+    ("DELANTERO", "A", 2, Some(1.5), false, "cortar 2 espejadas"),
+    (
+        "TRASERO + CANESU",
+        "B",
+        2,
+        Some(1.5),
+        false,
+        "cortar 2 - separar canesu",
+    ),
+    (
+        "PRETINA",
+        "C",
+        1,
+        Some(1.5),
+        true,
+        "cortar 1 al doblez c.b.",
+    ),
+    ("BOLSA PILL DELANTERA", "D", 2, Some(1.0), false, "cortar 2"),
+    ("BOLSA PILL TRASERA", "E", 2, Some(1.0), false, "cortar 2"),
+    (
+        "TIRA PASACINTOS",
+        "F",
+        1,
+        None,
+        false,
+        "cortar 1 - doblar en tercios",
+    ),
+    (
+        "VISTA BRAGUETA",
+        "G",
+        2,
+        Some(1.0),
+        false,
+        "ojales - cortar 2",
+    ),
+    (
+        "PANEL BOTONES",
+        "H",
+        1,
+        Some(1.0),
+        false,
+        "cortar 1 - doblar",
+    ),
+    ("TIRA CADENA", "I", 1, None, false, "al bies - repetir"),
+    (
+        "SOLAPA TRASERA",
+        "J",
+        2,
+        Some(1.0),
+        false,
+        "cortar 2 + entretela",
+    ),
+];
+
+/// Every piece's letter, count, allowance, fold and label, as the file writes
+/// them and in file order; and not one of the ten writes a grain angle.
+#[test]
+fn the_ten_pieces_say_how_they_are_cut_out_exactly_as_the_owner_wrote_it() {
+    let pattern = pattern();
+    let pieces: Vec<_> = pattern.blocks.iter().flat_map(|b| &b.pieces).collect();
+    assert_eq!(pieces.len(), CUT.len());
+    for (piece, (name, letter, quantity, allowance, on_fold, phrase)) in pieces.iter().zip(CUT) {
+        assert_eq!(piece.name, name);
+        assert_eq!(piece.letter, letter, "{name}");
+        assert_eq!(piece.quantity, quantity, "{name}");
+        assert_eq!(piece.seam_allowance, allowance, "{name}");
+        assert_eq!(piece.on_fold, on_fold, "{name}");
+        assert_eq!(piece.labels, [name, phrase], "{name}");
+        assert_eq!(piece.grain, None, "{name}");
+    }
+    let net: Vec<&str> = CUT
+        .iter()
+        .filter(|row| row.3.is_none())
+        .map(|row| row.0)
+        .collect();
+    assert_eq!(net, ["TIRA PASACINTOS", "TIRA CADENA"]);
+}
+
 #[test]
 fn the_owner_pattern_reads_into_ten_blocks_of_one_piece_each() {
     let pattern = pattern();

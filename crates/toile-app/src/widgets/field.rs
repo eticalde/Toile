@@ -106,6 +106,35 @@ pub fn formula_row(ui: &mut Ui, theme: &Theme, id: Id, row: &Editable<'_>) -> Ed
     written
 }
 
+/// Label on the left, an editable mono box on the right, nothing under it.
+///
+/// For a row with nothing to say about itself. The `note` and the `fault` of
+/// an `Editable` are not drawn here, so a row whose text can be refused
+/// belongs in `formula_row`, where the refusal has a line to be said on. What
+/// this buys is height: a list of rows under one heading says its rule once
+/// under the lot of them, and the room the repeated lines would take is room
+/// the section below loses off the bottom of the glass.
+pub fn typed_row(ui: &mut Ui, theme: &Theme, id: Id, row: &Editable<'_>) -> Edited {
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), FIELD_H), Sense::hover());
+    let name = ui.painter().layout_no_wrap(
+        row.label.to_owned(),
+        FontId::proportional(12.0),
+        theme.ink_soft,
+    );
+    let boxed = Rect::from_min_max(
+        pos2(rect.left() + gutter(name.size().x), rect.center().y - 11.0),
+        pos2(rect.right() - PAD, rect.center().y + 11.0),
+    );
+    let at = pos2(rect.left() + PAD, boxed.center().y - name.size().y / 2.0);
+    ui.painter().galley(at, name, theme.ink_soft);
+    let written = edit_box(ui, theme, id, boxed, row);
+    // `ui.put` rewinds the cursor to the bottom of the box it placed, and that
+    // box is shorter than the row; taking the whole row again leaves the next
+    // one under this row instead of inside it.
+    ui.allocate_rect(rect, Sense::hover());
+    written
+}
+
 /// Where the box of a row begins, measured from the row's left edge.
 ///
 /// After the name, never under it. The box is painted over whatever the name

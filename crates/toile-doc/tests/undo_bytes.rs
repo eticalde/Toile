@@ -32,6 +32,14 @@ const SOURCES: [&str; 6] = [
 /// The names a drawn label is written from; they collide on purpose.
 const NAMES: [&str; 4] = ["A", "B", "cadera_lat", "punto_medio"];
 
+/// The lines a drawn label of a piece is written from.
+const LINES: [&str; 4] = [
+    "cortar 2 espejadas",
+    "cortar 1 al doblez c.b.",
+    "cortar 2 + entretela",
+    "al bies - repetir",
+];
+
 struct Draw {
     state: u64,
 }
@@ -78,7 +86,7 @@ fn command(draw: &mut Draw, doc: &Doc) -> Command {
     let bodies: Vec<MannequinKey> = doc.mannequins.keys().collect();
     let point = draw.pick(&points);
     let piece = draw.pick(&doc.piece_keys());
-    match draw.below(10) {
+    match draw.below(14) {
         0 => Command::MovePoint {
             point,
             to: [draw.binding(), draw.binding()],
@@ -116,9 +124,29 @@ fn command(draw: &mut Draw, doc: &Doc) -> Command {
             point,
             to: draw.below(2) == 0,
         },
-        _ => Command::PlacePiece {
+        9 => Command::PlacePiece {
             piece,
             to: (draw.below(3) > 0).then(|| Placement::new(draw.number(), draw.number())),
+        },
+        // Drawn from the numbers a person types, zero and the margins of a
+        // real pattern among them, so a refused edit is part of the sweep.
+        10 => Command::SetSeamAllowance {
+            piece,
+            to: (draw.below(4) > 0).then(|| draw.below(4) as f64 / 2.0),
+        },
+        11 => Command::SetQuantity {
+            piece,
+            to: draw.below(4) as u32,
+        },
+        12 => Command::SetLetter {
+            piece,
+            to: (draw.below(4) > 0).then(|| draw.pick(&NAMES).to_owned()),
+        },
+        _ => Command::SetLabels {
+            piece,
+            to: (0..draw.below(3))
+                .map(|_| draw.pick(&LINES).to_owned())
+                .collect(),
         },
     }
 }

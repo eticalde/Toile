@@ -104,7 +104,7 @@ fn migrate(asked: &Asked) -> Result<Vec<String>, String> {
     }
     create::file(output, product.doc.to_canonical_json().as_bytes())?;
     create::file(&report_path, text.as_bytes())?;
-    create::file(&svg_path, svg.as_bytes())?;
+    create::file(&svg_path, svg.text.as_bytes())?;
     written.extend([output.to_owned(), report_path, svg_path]);
     let person = persona
         .as_ref()

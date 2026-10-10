@@ -69,6 +69,12 @@ pub struct Piece {
     pub on_fold: bool,
     /// The label's text lines.
     pub labels: Vec<String>,
+    /// The angle of its grain line in degrees, as the file writes an angle:
+    /// zero east, counter-clockwise on a page whose y grows downward.
+    ///
+    /// `None` when the file writes none, which is a piece whose author never
+    /// placed a grain line on it rather than one cut along the x axis.
+    pub grain: Option<f64>,
     /// The outline, in walking order.
     pub outline: Vec<PathNode>,
     /// The internal paths drawn on it.

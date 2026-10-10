@@ -111,9 +111,16 @@ fn the_waistband_carries_its_two_notches_at_the_corners_the_file_cuts_them() {
     assert_eq!(at, ["wb_cf", "wb_side"]);
 }
 
+/// The grain is the vertical because the file says nothing else: all ten
+/// `<grainline>` elements carry an empty rotation, which is a piece nobody
+/// put a grain line on and not an angle to read.
 #[test]
 fn every_piece_runs_clockwise_on_the_vertical_grain_where_the_overview_lays_it() {
     let product = product();
+    let written = pattern();
+    let read = written.blocks.iter().flat_map(|block| &block.pieces);
+    assert!(read.clone().all(|piece| piece.grain.is_none()));
+    assert_eq!(read.count(), 10);
     for (_, piece) in product.doc.pieces.iter() {
         assert_eq!(piece.winding, Winding::Cw, "{}", piece.name);
         assert_eq!(piece.grain, Grain::VERTICAL);
@@ -126,6 +133,7 @@ fn every_piece_runs_clockwise_on_the_vertical_grain_where_the_overview_lays_it()
             "the owner never moved {}",
             note.name
         );
+        assert_eq!(note.grain, None, "the owner drew no grain on {}", note.name);
     }
 }
 
@@ -200,4 +208,62 @@ fn every_internal_path_seam_allowance_and_label_is_reported() {
             .iter()
             .all(|n| n.kind == "slit" && n.length == 0.5)
     );
+}
+
+/// Nothing the file says about cutting a piece out is dropped on the way into
+/// the document: the allowance, the count, the letter and the label's lines
+/// arrive as the file writes them, and the report keeps saying the same.
+///
+/// The numbers are the owner's own, measured off the fixture: the waistband
+/// is cut once at 1.5 cm, the two strips are cut on their line, and the back
+/// flap's label says two where the garment wants four — the document holds
+/// the phrase and the count side by side and reads neither into the other.
+#[test]
+fn the_document_keeps_what_the_file_says_about_cutting_each_piece_out() {
+    let product = product();
+    let written = pattern();
+    for piece in written.blocks.iter().flat_map(|block| &block.pieces) {
+        let key = product.doc.piece_named(&piece.name).expect("imported");
+        let held = product.doc.pieces.get(key).expect("live");
+        assert_eq!(held.seam_allowance, piece.seam_allowance, "{}", piece.name);
+        assert_eq!(held.quantity, piece.quantity, "{}", piece.name);
+        assert_eq!(held.letter.as_deref(), Some(piece.letter.as_str()));
+        assert_eq!(held.labels, piece.labels, "{}", piece.name);
+        assert!(held.says_how_it_is_cut(), "{}", piece.name);
+    }
+    let cut = |name: &str| {
+        let key = product.doc.piece_named(name).expect("imported");
+        let held = product.doc.pieces.get(key).expect("live");
+        (
+            held.letter.clone(),
+            held.quantity,
+            held.seam_allowance,
+            held.labels.clone(),
+        )
+    };
+    assert_eq!(
+        cut("PRETINA"),
+        (
+            Some("C".to_owned()),
+            1,
+            Some(1.5),
+            vec!["PRETINA".to_owned(), "cortar 1 al doblez c.b.".to_owned()]
+        )
+    );
+    assert_eq!(
+        cut("SOLAPA TRASERA"),
+        (
+            Some("J".to_owned()),
+            2,
+            Some(1.0),
+            vec![
+                "SOLAPA TRASERA".to_owned(),
+                "cortar 2 + entretela".to_owned()
+            ]
+        )
+    );
+    for strip in ["TIRA PASACINTOS", "TIRA CADENA"] {
+        let (_, quantity, allowance, _) = cut(strip);
+        assert_eq!((quantity, allowance), (1, None), "{strip}");
+    }
 }

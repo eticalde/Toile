@@ -54,57 +54,99 @@ fn winding(winding: Winding) -> &'static str {
     }
 }
 
-/// Everything the pattern says that the product has no place for.
+/// What each piece says about being cut out, which the product keeps.
+pub fn cut(out: &mut String, product: &Product) {
+    let report = &product.report;
+    let _ = writeln!(out, "## Cómo se corta cada pieza\n");
+    let _ = writeln!(
+        out,
+        "La pieza del producto lleva su letra, cuántas se cortan, el margen de costura en \
+         centímetros, el hilo y las líneas de su rótulo tal como están escritas en el patrón. El \
+         contorno sigue siendo la línea de costura que dibuja Seamly: el papel dice el margen y \
+         todavía nada desplaza la línea por él.\n"
+    );
+    let _ = writeln!(
+        out,
+        "| pieza | letra | cortar | margen (cm) | hilo | rótulo |\n|---|---|---:|---:|---|---|"
+    );
+    for piece in &report.pieces {
+        let margin = piece
+            .seam_allowance
+            .map_or("neta".to_owned(), |width| format!("{width}"));
+        let _ = writeln!(
+            out,
+            "| {} | {} | {} | {margin} | {} | {} |",
+            piece.name,
+            piece.letter,
+            piece.quantity,
+            grain(piece),
+            piece.labels.join(" / ")
+        );
+    }
+    let _ = writeln!(out);
+    let _ = writeln!(
+        out,
+        "El rótulo va entero y sin leer: lo que dice el rótulo y el número que el archivo declara \
+         salen los dos del mismo patrón, y el producto sostiene los dos sin elegir cuál cree.\n"
+    );
+    let written = report.pieces.iter().filter(|p| p.grain.is_some()).count();
+    let _ = writeln!(
+        out,
+        "{}\n",
+        if written == 0 {
+            format!(
+                "Ninguna de las {} piezas escribe un ángulo de hilo —su `<grainline>` va con la \
+                 rotación vacía—, así que todas quedan con el hilo vertical de Toile. El ángulo \
+                 que el archivo escriba, el producto lo guarda.",
+                report.pieces.len()
+            )
+        } else {
+            format!(
+                "{written} de las {} piezas escriben el ángulo de su hilo y el producto lo guarda; \
+                 las demás quedan con el hilo vertical de Toile.",
+                report.pieces.len()
+            )
+        }
+    );
+}
+
+/// The grain a piece is cut on, as the file writes it or as Toile leaves it.
+fn grain(piece: &PieceNote) -> String {
+    piece
+        .grain
+        .map_or("vertical".to_owned(), |degrees| format!("{degrees}°"))
+}
+
+/// What the pattern says that the product has no place for, or only half of.
 pub fn missing(out: &mut String, product: &Product, comments: &[Comment]) {
     let report = &product.report;
     let _ = writeln!(out, "## Lo que Toile todavía no guarda\n");
     let _ = writeln!(
         out,
-        "Nada de esto entra al producto. Queda anotado aquí para que no se pierda.\n"
+        "Nada de esto entra al producto, salvo donde el párrafo diga lo contrario. Queda anotado \
+         aquí para que no se pierda.\n"
     );
-    let _ = writeln!(out, "### Márgenes, cantidades y rótulos\n");
-    let _ = writeln!(
-        out,
-        "El producto va neto: sin margen de costura, sin cantidad a cortar y sin rótulo.\n"
-    );
-    let _ = writeln!(
-        out,
-        "| pieza | letra | cortar | margen (cm) | al doblez | rótulo |\n|---|---|---:|---:|---|---|"
-    );
-    for piece in &report.pieces {
-        let margin = piece
-            .seam_allowance
-            .map_or("—".to_owned(), |w| format!("{w}"));
-        let fold = if piece.on_fold { "sí" } else { "no" };
-        let _ = writeln!(
-            out,
-            "| {} | {} | {} | {margin} | {fold} | {} |",
-            piece.name,
-            piece.letter,
-            piece.quantity,
-            piece.labels.join(" / ")
-        );
-    }
-    let _ = writeln!(out);
     folds(out, &report.pieces);
     notches(out, &report.pieces);
     strokes(out, &report.pieces);
     let _ = writeln!(out, "### Hilo y posición\n");
     let _ = writeln!(
         out,
-        "- Ninguna pieza del patrón tiene su línea de hilo visible ni un ángulo escrito, así que \
-         todas quedan con el hilo vertical de Toile."
+        "- Del `<grainline>` el producto se queda con el ángulo; el largo con que Seamly dibuja la \
+         flecha y las puntas que le pone no, que son del dibujo y no del patrón."
     );
     let bias: Vec<String> = report
         .pieces
         .iter()
+        .filter(|p| p.grain.is_none())
         .filter(|p| p.labels.iter().any(|l| l.to_lowercase().contains("bies")))
         .map(|p| p.name.clone())
         .collect();
     if !bias.is_empty() {
         let _ = writeln!(
             out,
-            "- El rótulo de {} dice que se corta al bies: su hilo hay que girarlo a mano.",
+            "- El rótulo de {} dice que se corta al bies y el archivo no le escribe ángulo: su \
+             hilo hay que girarlo a mano.",
             super::list(&bias)
         );
     }

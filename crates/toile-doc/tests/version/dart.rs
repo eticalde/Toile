@@ -1,6 +1,6 @@
 use toile_doc::{
-    Command, Dart, DartWedge, Doc, FORMAT_VERSION_DARTED, FoldDirection, FormatError, History,
-    Identity, Point, PointKey, SeamKey, WedgeNode, block,
+    Command, Dart, DartWedge, Doc, FORMAT_VERSION_DARTED, FoldDirection, History, Identity, Point,
+    PointKey, SeamKey, WedgeNode, block,
 };
 
 use super::elastic::elasticated;
@@ -149,35 +149,4 @@ fn a_dart_cut_and_undone_takes_the_file_to_version_9_and_back() {
     assert_eq!(doc.format_version(), 1, "the stamp is the content's");
     history.redo(&mut doc).expect("every slot is open again");
     assert_eq!(doc.to_canonical_json(), file);
-}
-
-/// A build cannot know what a later field means, so it refuses the file for its
-/// version rather than open it and drop that field on the next save.
-#[test]
-fn a_version_10_document_is_refused_loudly() {
-    for later in [
-        restamped(SHIPPED, 10),
-        restamped(&shaped(2), 10),
-        placed(SHIPPED, 10),
-        elasticated(10),
-        lined(10),
-        folded(10),
-        hung(10),
-        darted(10),
-    ] {
-        let error = Doc::from_json(&later).expect_err("this build reads up to version 9");
-        assert_eq!(
-            error,
-            FormatError::UnknownVersion {
-                found: 10,
-                newest: 9
-            }
-        );
-        assert!(
-            error
-                .to_string()
-                .contains("version 10; this build reads versions 1 to 9"),
-            "{error}"
-        );
-    }
 }

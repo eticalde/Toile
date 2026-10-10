@@ -149,6 +149,14 @@ pub enum DocError {
         Elastic::MAX_RATIO
     )]
     ElasticRatio,
+    /// A seam allowance that is negative, or not finite. Cloth outside the
+    /// drawn line, so a width below zero takes cloth off a piece.
+    #[error("a seam allowance is a width of cloth outside the line, so it starts at zero")]
+    SeamAllowance,
+    /// A count of zero, which is a piece on the table that the garment never
+    /// cuts and a printed sheet nobody can act on.
+    #[error("a piece is cut at least once, so its count cannot be zero")]
+    CutQuantity,
     /// A strength under the floor an elastic is written at, or not finite.
     #[error(
         "an elastic pulls with a finite strength of at least {}",
