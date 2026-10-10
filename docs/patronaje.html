@@ -230,9 +230,10 @@ pre.si{border-left-color:var(--chalk)}
   text-transform:uppercase;color:var(--muted);display:block;margin-bottom:.35rem;
 }
 .rule p:first-of-type{font-weight:600;margin-top:0}
-.tag-ok,.tag-no{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;padding:.16em .55em;border-radius:2px;white-space:nowrap}
+.tag-ok,.tag-no,.tag-half{font-family:var(--mono);font-size:.64rem;letter-spacing:.1em;text-transform:uppercase;padding:.16em .55em;border-radius:2px;white-space:nowrap}
 .tag-ok{background:var(--chip-bg);color:var(--chalk)}
 .tag-no{background:var(--thread-bg);color:var(--thread)}
+.tag-half{background:rgba(106,116,128,.12);color:var(--muted);border:1px dashed currentColor;padding:.1em .5em}
 
 /* ---------- la frase de la fase ---------- */
 blockquote.frase{
@@ -614,10 +615,10 @@ raya           = (cadera / 4 + holgura_cadera - extension_tiro) / 2</code></pre>
       <tr><td>F2</td><td>Se puede editar</td><td class="wrap">Arrastra con snap, escribe fórmulas, teclea medidas exactas, deshace</td><td><span class="tag-ok">hecha</span></td></tr>
       <tr><td>F3</td><td>El patrón sale de la app</td><td class="wrap">Guarda <code>.toile</code>, lo reabre, exporta SVG 1:1</td><td><span class="tag-ok">hecha</span></td></tr>
       <tr><td>F4</td><td>Curvas</td><td class="wrap">Tiro y cadera dejan de ser chaflanes</td><td><span class="tag-ok">hecha</span></td></tr>
-      <tr><td>F5</td><td>Topología</td><td class="wrap">Agrega y borra puntos, y dibuja piezas nuevas, sin resetear el drapeado</td><td><span class="tag-no">pendiente</span></td></tr>
-      <tr><td>F6</td><td>Dos piezas y una costura</td><td class="wrap">El trasero, cosido al delantero, drapea como prenda</td><td><span class="tag-no">pendiente</span></td></tr>
-      <tr><td>F7</td><td>Piquetes, pinza, hilo</td><td class="wrap">Cierra el MVP del inventario</td><td><span class="tag-no">pendiente</span></td></tr>
-      <tr><td>F8</td><td>Simetría y líneas internas</td><td class="wrap">Media pieza con doblez, y trayectos internos con tipo de línea</td><td><span class="tag-no">pendiente</span></td></tr>
+      <tr><td>F5</td><td>Topología</td><td class="wrap">Agrega y borra puntos, y dibuja piezas nuevas, sin resetear el drapeado</td><td><span class="tag-ok">hecha</span></td></tr>
+      <tr><td>F6</td><td>Dos piezas y una costura</td><td class="wrap">El trasero, cosido al delantero, drapea como prenda</td><td><span class="tag-ok">hecha</span></td></tr>
+      <tr><td>F7</td><td>Piquetes, pinza, hilo</td><td class="wrap">Cierra el MVP del inventario. Piquete y pinza llegaron; el hilo se guarda, se exporta y se dibuja, y ningún gesto lo escribe</td><td><span class="tag-half">a medias</span></td></tr>
+      <tr><td>F8</td><td>Simetría y líneas internas</td><td class="wrap">Media pieza con doblez, y trayectos internos con tipo de línea</td><td><span class="tag-ok">hecha</span></td></tr>
     </tbody>
   </table></div>
 
@@ -632,7 +633,7 @@ raya           = (cadera / 4 + holgura_cadera - extension_tiro) / 2</code></pre>
     <li><strong>F3</strong> — JSON canónico sobre el modelo entero, guardar y abrir, export SVG a escala real, y <code>assets/pantalon-base.toile</code> congelado.</li>
   </ul>
 
-  <p>Y lo que queda: F5 trae el remallado <strong>en sombra</strong> —el worker nace con la primera fase que crea topología, y la ruta síncrona jamás se envía a producción—; F6 monta el trasero y la primera costura, y quita el <code>#[ignore]</code> al test que la espera desde F2; F7 cierra el MVP del inventario con piquetes, pinza e hilo; F8 añade simetría y líneas internas.</p>
+  <p>Y lo que quedaba llegó, salvo media fase. F5 trajo el remallado <strong>en sombra</strong> —el worker vive en <code>session/remesh.rs</code> y la ruta síncrona nunca se envió a producción—; F6 montó el trasero, la primera costura y su golden propio; F8 añadió el doblez al eje y los trayectos internos con sus seis tipos. De F7 llegaron el piquete y la pinza; <strong>el hilo no</strong>: se guarda en el documento, se exporta y se dibuja con su flecha, y ningún gesto de la aplicación lo escribe.</p>
 </section>
 
 <section id="contradicciones">
@@ -765,6 +766,13 @@ raya           = (cadera / 4 + holgura_cadera - extension_tiro) / 2</code></pre>
     <b>Enmienda · 2026-09-15 · Todas las piezas, y cada una</b>
     <p>La mesa ya no enseña sólo la pieza activa. Un producto abre en la <strong>vista general</strong>: todas sus piezas a la vez, cada una arrastrable, con su posición guardada en el documento (<a href="./maniqui.html#formato">PLAN-002 §6</a>, versión 4). Una pieza que nunca se movió se coloca sola, lado a lado, sin escribir nada. Un clic en la lista de la izquierda abre el <strong>detalle</strong> de esa pieza, aislada y con todas las herramientas; se vuelve por la fila «Todas las piezas», por el «Producto» de la ruta del rótulo o con Esc.</p>
     <p>El panel derecho lista las 20 medidas del catálogo —las generales, no las de un cuerpo— con su valor en el cuerpo contra el que resuelve el patrón. Mientras se escribe una fórmula, un clic en un nombre lo inserta donde está el cursor, sin confirmar nada a medio escribir. Sigue pendiente el selector visual desde el maniquí 3D (<a href="https://github.com/eticalde/Toile/issues/47">#47</a>).</p>
+  </div>
+
+  <div class="decision">
+    <b>Enmienda · 2026-10-09 · La tabla de fases decía «pendiente» sobre cuatro fases hechas</b>
+    <p>F5 a F8 aterrizaron entre el 24 y el 26 de septiembre y esta tabla siguió diciendo lo contrario durante dos semanas, porque sesenta commits esperaron un mes sin empujarse. No es una anécdota de calendario: <strong>un documento que miente sobre el estado dirige mal la planificación siguiente</strong>, y dirigió mal la de hoy dos veces antes de que se midiera contra el árbol.</p>
+    <p>La regla que deja escrita: <strong>este plan es buena prueba de intención y mala prueba de estado.</strong> Lo que está hecho lo dice el árbol, y antes de apoyarse en una celda de esta tabla hay que comprobarla con un <code>file:line</code> que se abra.</p>
+    <p>Y queda nombrado el hueco que la corrección destapó, porque es el patrón que más se repite en este repositorio: <strong>el hilo de una pieza es un dato que ningún gesto escribe.</strong> Vive en el documento, cruza el formato, sale en el SVG y en el PDF con su flecha dibujada, y el inspector lo muestra de sólo lectura. El importador de Seamly incluso avisa de que una pieza al bies «hay que girarla a mano», y no hay mano que la gire. La regla 8 de <code>tools/check-style.sh</code> lleva la lista de los comandos que están en esa situación, y esa lista es el inventario de este defecto.</p>
   </div>
 </section>
 

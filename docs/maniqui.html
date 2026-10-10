@@ -309,6 +309,7 @@ blockquote.frase b{
     <li><a href="#golden">10 · El golden que no se mueve</a></li>
     <li><a href="#vestir">11 · Vestir el cuerpo</a></li>
     <li><a href="#revision">12 · Lo que la revisión encontró</a></li>
+    <li><a href="#colocar">13 · Dónde va una pieza en el cuerpo</a></li>
   </ol>
 </nav>
 
@@ -850,6 +851,34 @@ data:   f32 LE, orden (k*ny + j)*nx + i</code></pre>
   </div>
 
   <p>El instrumento que faltaba detrás de todo esto era el mismo en los dos casos: <strong>toda prueba de siembra corría un solo cuerpo</strong>, el adulto de referencia, y el entierro es cosa de la forma del cuerpo — cuánto tiene que alcanzar una costura es cuánto separa el cuerpo sus dos lados. <code>tests/seeding/extremes.rs</code> añade el segundo cuerpo. Queda abierto el otro medio: <code>watch::through_the_drape</code> lee los fotogramas que la simulación <em>publica</em>, uno cada diez substeps, así que un entierro que dure un solo tick le es invisible.</p>
+
+  <hr>
+
+  <h2 id="colocar"><span class="num">§ 13</span>Dónde va una pieza en el cuerpo: tres decisiones más</h2>
+
+  <p>El 2026-10-09 el dueño dijo que una blusa suya drapeaba sobre la cabeza. El vaquero cerraba sus diez piezas a 0,02 mm con el mismo código. La investigación comparó el modelo de colocación de CLO3D contra el de Toile desde su manual público —965 artículos, con fuente por fila y sin una línea de su código, la misma regla de sala limpia que el § 2— y las tres decisiones se tomaron el mismo día. Siguen la numeración.</p>
+
+  <p><strong>Lo primero que hay que decir es que el diagnóstico con el que se empezó era falso, y lo tumbó la medición.</strong> Se dijo que la blusa iba a la cabeza por falta de rumbo. Medida, una blusa de tres paneles <em>no</em> va a la cabeza: se para en <code>pecho_alto</code> con 0,0 mm de error. Sin colgar se va al suelo; colgada de «cintura» se usa con el hombro en la cintura. Lo que sí pone tela en la cabeza es otra cosa, y es de las más grandes del árbol: <code>session/place/strip.rs</code> se rinde ante cualquier pieza con <strong>tres costuras</strong> —una tira de cuello, un canesú, una manga, una pretina—, no hay <code>Layout</code>, y el producto entero cae plano con la coronilla dentro de la tela, 75,6 mm por encima del anillo de la cabeza. El <code>Hang</code> es hoy lo único del árbol que lo rescata. Queda escrito porque la lección se repitió tres veces ese día: <strong>una cifra de un informe no es un hecho hasta que alguien la vuelve a medir.</strong></p>
+
+  <div class="decision">
+    <b>Decisión 18 · Un lugar del cuerpo se nombra con un anillo del catálogo</b>
+    <p>No con volúmenes atados a articulaciones de un esqueleto, que es el modelo de CLO. Un <code>Hang</code> ya nombra el cuerpo por una medida, y el código dice por qué: «una medida es lo único de un cuerpo que el documento puede sostener sin saber sobre qué cuerpo se va a usar». Un patrón colgado de «cintura» sigue colgado de la cintura en cualquier persona.</p>
+    <p><em>Por qué:</em> los volúmenes de CLO cuelgan de dos articulaciones con nombre y compran invariancia de pose, pero exigen un rig que este árbol no tiene, y su propio manual confiesa el precio — «si el orden de las dos articulaciones se invierte, izquierda y derecha se voltean al colocar la pieza». En CLO la lateralidad no es un campo: es un efecto del orden del esqueleto, y la persona se come un defecto silencioso. Y CLO necesita una séptima capa, el <em>Fitting Suit</em> —líneas de circunferencia dibujadas sobre la piel y guardadas dentro del avatar— <strong>porque su colocación no sobrevive a un cambio de cuerpo</strong>. Los anillos del catálogo son eso de nacimiento.</p>
+    <p><em>El límite, dicho:</em> no hay anillo de «bíceps a media altura», así que una manga va a querer el híbrido —anillos ahora, volúmenes cuando llegue el rig— y esta decisión no lo resuelve.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 19 · Una pieza que no declara sitio se coloca igual, y el producto lo dice</b>
+    <p>Ni negarse a drapear hasta que todas tengan sitio, ni adivinarlo por la geometría del patrón. La prenda cae y el producto informa cuántas piezas se colocaron sin sitio declarado, donde una persona lo lea.</p>
+    <p><em>Por qué:</em> negarse es seguro y molesto; adivinar es inventar un dato, que es lo que esta casa no hace. <em>Cómo aplicarla:</em> el aviso va donde el producto ya informa y que una persona abra — la aplicación, que es desde donde se imprime y se drapea, no la terminal. Y con el precedente que <code>note::crossed</code> ya dejó escrito: una caja que se enciende en todos los lanzamientos enseña a dejar de leerla antes del día en que nombra una axila.</p>
+  </div>
+
+  <div class="decision">
+    <b>Decisión 20 · El rumbo se declara en el <code>Hang</code>, no se deriva de las costuras</b>
+    <p>Hoy el rumbo sale del <strong>orden de almacenamiento del documento</strong>: el panel que el archivo guarda primero pone su propio medio en el frente del cuerpo. Medido, eso rota la prenda 44,6° —13,0 cm al pecho— y, si la espalda entra primera, 180,0°: la prenda al revés. Y una blusa botonada con el delantero derecho primero sale <strong>espejada</strong>, que es un fallo que ningún ángulo arregla.</p>
+    <p><em>La forma,</em> elegida por un jurado de tres sobre tres prototipos medidos: un punto del propio tramo que se clava —la <strong>cabeza</strong> del tramo, no su medio, porque el medio se mueve con el ancho de la espalda—, un ángulo en grados desde el centro delantero creciendo hacia la izquierda de quien la lleva, y un sentido de envolvimiento que es un enum de dos palabras y no el signo de un número: «−45 es un rumbo y −1 es un sentido, y un archivo que guarda los dos como números es uno donde un typo pone la blusa del revés sin nada en pantalla que lo diga».</p>
+    <p><em>Medido:</em> un solo rumbo declarado fija la prenda entera en cualquier orden de almacenamiento, cerrada o botonada — de 44,6° y 180° de error a <strong>0,708°</strong>, y ese residuo es la discretización de la malla, no la regla. <em>Lo que se descartó:</em> derivar el rumbo de qué pieza se cose contra cuál. Es más inteligente y más frágil, y cuando falla no da razón.</p>
+  </div>
 
   <hr>
 

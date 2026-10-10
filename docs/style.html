@@ -639,7 +639,7 @@ pub use state::{DistanceConstraints, Seams, State};</code></pre>
   <p>Tipos de error con <code>thiserror</code> en la librería, <code>anyhow</code> en <code>toile-cli</code> y <code>toile-app</code>. Ambos ya están presupuestados en el ADR §2.8.</p>
 </div>
 
-<p>Un <code>expect</code> en una librería convierte un dato de entrada malo en un crash del proceso del usuario. <code>cdt::triangulate</code> hace hoy <code>.expect("vértice inválido")</code>: un contorno con un <code>NaN</code>—perfectamente alcanzable desde un arrastre en la UI— mata la aplicación entera.</p>
+<p>Un <code>expect</code> en una librería convierte un dato de entrada malo en un crash del proceso del usuario. El caso que dio origen a esta regla era <code>cdt::triangulate</code> con un <code>.expect("vértice inválido")</code>: un contorno con un <code>NaN</code> —perfectamente alcanzable desde un arrastre en la UI— mataba la aplicación entera. <strong>Cerrado:</strong> hoy devuelve <code>Result&lt;PieceMesh, MeshError&gt;</code> y la ruta del producto lo propaga con <code>?</code>. La regla se queda porque el modo de fallo no se fue con el sitio.</p>
 
 <div class="rule">
   <b>Excepción</b>
@@ -674,7 +674,7 @@ pub use state::{DistanceConstraints, Seams, State};</code></pre>
   </ul>
 </div>
 
-<p>El patrón <code>Ptr(*mut f32)</code> de <code>xpbd.rs</code> es el caso crítico del repo: su corrección depende por completo de una propiedad que el compilador no ve —que dentro de un color ningún par de constraints comparte vértice— y hoy son <strong>13 bloques sin <code>// SAFETY:</code></strong>. Es exactamente donde el comentario largo se justifica.</p>
+<p>El patrón <code>Ptr(*mut f32)</code> de <code>xpbd.rs</code> es el caso crítico del repo: su corrección depende por completo de una propiedad que el compilador no ve —que dentro de un color ningún par de constraints comparte vértice— y cuando se escribió esta regla eran <strong>13 bloques sin <code>// SAFETY:</code></strong>. Es exactamente donde el comentario largo se justifica. Hoy el lint <code>undocumented_unsafe_blocks</code> lo vigila y el recuento es otro: <code>simd.rs</code> 4 y 4, <code>ptr.rs</code> 8 y 5, <code>parallel.rs</code> 8 y 6 — la diferencia son <code>unsafe fn</code> cuyo contrato vive en su <code># Safety</code>, no bloques a oscuras.</p>
 
 <div class="rule">
   <b>Verificado por</b>

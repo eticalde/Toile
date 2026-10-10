@@ -486,6 +486,14 @@ blockquote.frase b{
       <tr><td>G8</td><td class="wrap">¿Una fila roja bloquea el Probador?</td><td class="wrap">No: el maniquí muestra Δ, el patronaje usa la cinta</td><td><span class="chip">pendiente</span></td></tr>
     </tbody>
   </table></div>
+
+  <div class="decision">
+    <b>Enmienda · 2026-10-09 · Cuatro de las ocho son hechos consumados, y los chips siguen diciendo «pendiente»</b>
+    <p>Las ocho se elevaron y nunca se sellaron. El árbol, mientras tanto, tomó cuatro por su cuenta y en la dirección que el plan recomendaba. <strong>Los chips se dejan como están a propósito</strong> —registran que la decisión no se tomó, que es verdad— pero el estado real conviene escribirlo, porque planificar contra una tabla que dice «pendiente» sobre algo ya construido manda a construirlo dos veces.</p>
+    <p><strong>G1 · embarcado.</strong> <code>toile-anny/src/mesh.rs:13</code> hace <code>include_bytes!("../assets/body.bin")</code> y el asset está commiteado. <strong>G2 · sólo adultos.</strong> <code>phenotype.rs:47</code> dice que ese nivel hornea únicamente las filas de edad adulta, <code>PROVENANCE.txt</code> lo llama <em>adults-only</em>, y el default es 25 años. <strong>G3 · la pose de reposo se aceptó</strong> de hecho: el cuerpo conserva los ≈ 40° y A6 sigue sin empezar. <strong>G7 · la atribución está</strong> en <code>PROVENANCE.txt</code>, con la cabecera CC0 verbatim y el sha256 de las 379 fuentes.</p>
+    <p><strong>Y G5 es el caso que vale mirar, porque es media decisión.</strong> Recomendaba complexión, músculo y proporciones «como sliders con default, <em>no escondidos</em>». Los tres campos existen en <code>toile-doc/src/measure/shape.rs</code> y se guardan en el archivo; <strong>ninguna superficie de <code>toile-app</code> escribe ninguno</strong>, y sus únicos usos son fixtures de test. El diálogo «Nuevo maniquí» pide nombre, sexo, edad y estatura, y para. Así que la mitad del dato se tomó y la mitad del «no escondidos» no: están escondidos del todo. Es el mismo patrón que el hilo de una pieza en <a href="./patronaje.html#fases">PLAN-001</a>, y se sigue en <a href="https://github.com/eticalde/Toile/issues/51">#51</a>.</p>
+    <p>G4 y G8 no se comprobaron contra el árbol en esta pasada y se quedan como estaban.</p>
+  </div>
 </section>
 
 <section id="animacion">
