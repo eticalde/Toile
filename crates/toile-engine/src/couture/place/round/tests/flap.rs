@@ -49,7 +49,8 @@ fn shortfall_of(name: &str, round: &Round) -> f64 {
 fn no_hoop_is_shorter_than_the_cloth_that_height_carries() {
     let (one, two) = (gore(0.60, 0.10, 0.0, 1.00), strap(0.05, 0.20, 1.00));
     let pipes = [&one, &two];
-    let round = Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005).expect("both have widths");
+    let round =
+        Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005, None).expect("both have widths");
     let overlapping = shortfall_of(
         "a gore beside a strap starting a fifth of the way up",
         &round,
@@ -61,7 +62,7 @@ fn no_hoop_is_shorter_than_the_cloth_that_height_carries() {
         strap(0.10, 0.60, 1.00),
     );
     let pipes = [&low, &tall, &high];
-    let round = Round::over(&[(0, 1.0), (1, -1.0), (2, 1.0)], &pipes, true, 0.005)
+    let round = Round::over(&[(0, 1.0), (1, -1.0), (2, 1.0)], &pipes, true, 0.005, None)
         .expect("all three have widths");
     assert!(
         round.whole.at(f64::NEG_INFINITY) >= round.whole.at(f64::INFINITY),
@@ -92,7 +93,8 @@ fn no_hoop_is_shorter_than_the_cloth_that_height_carries() {
 fn below_the_whole_range_the_hoop_never_pinches_inside_the_last_whole_one() {
     let (one, two) = (gore(0.60, 0.10, 0.0, 1.00), strap(0.05, 0.20, 1.00));
     let pipes = [&one, &two];
-    let round = Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005).expect("both have widths");
+    let round =
+        Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005, None).expect("both have widths");
     let lo = round.whole.at(f64::NEG_INFINITY);
     let (from, _) = round.span();
     let last = round.hoop(lo);
@@ -145,7 +147,7 @@ fn no_vertex_is_laid_outside_the_arc_its_own_panel_was_given() {
         strap(0.30, 0.0, 0.50),
     );
     let pipes = [&slanted, &mid, &low];
-    let round = Round::over(&[(0, 1.0), (1, -1.0), (2, 1.0)], &pipes, true, 0.005)
+    let round = Round::over(&[(0, 1.0), (1, -1.0), (2, 1.0)], &pipes, true, 0.005, None)
         .expect("all three have widths");
     let (mut before, mut past) = (0.0f64, 0.0f64);
     for panel in &round.panels {
@@ -185,7 +187,8 @@ fn no_vertex_is_laid_outside_the_arc_its_own_panel_was_given() {
 fn above_the_whole_range_the_piece_left_is_carried_up_and_not_turned() {
     let (tall, short) = (gore(0.30, 0.02, 0.0, 1.10), strap(0.30, 0.0, 1.00));
     let pipes = [&tall, &short];
-    let round = Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005).expect("both have widths");
+    let round =
+        Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005, None).expect("both have widths");
     let hi = round.whole.at(f64::INFINITY);
     let (_, top) = round.span();
     let mut swing = 0.0f64;

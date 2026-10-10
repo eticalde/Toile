@@ -13,7 +13,7 @@ pub use persona::{EXTENSION as PERSONA_EXTENSION, VERSION as PERSONA_VERSION};
 use serde::{Deserialize, Serialize};
 pub use version::{
     VERSION, VERSION_CUT, VERSION_DARTED, VERSION_ELASTIC, VERSION_EXTENDED, VERSION_FOLDED,
-    VERSION_HUNG, VERSION_INTERNAL, VERSION_LINKED, VERSION_PLACED,
+    VERSION_HEADED, VERSION_HUNG, VERSION_INTERNAL, VERSION_LINKED, VERSION_PLACED,
 };
 use writer::Canonical;
 
@@ -73,10 +73,10 @@ impl Doc {
     /// it names, or a piece cut by numbers no piece is cut by.
     pub fn from_json(text: &str) -> Result<Doc, FormatError> {
         let found = stamp(text)?;
-        if !(u64::from(VERSION)..=u64::from(VERSION_CUT)).contains(&found) {
+        if !(u64::from(VERSION)..=u64::from(VERSION_HEADED)).contains(&found) {
             return Err(FormatError::UnknownVersion {
                 found,
-                newest: VERSION_CUT,
+                newest: VERSION_HEADED,
             });
         }
         let loaded: Loaded =

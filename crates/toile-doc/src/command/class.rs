@@ -56,7 +56,8 @@ impl Command {
             // the drape carries on.
             | Command::AddHang { .. }
             | Command::RemoveHang { .. }
-            | Command::SetHangStation { .. } => ChangeClass::Shape,
+            | Command::SetHangStation { .. }
+            | Command::SetHangHeading { .. } => ChangeClass::Shape,
             Command::InsertNode { .. }
             | Command::RemoveNode { .. }
             | Command::SetSegment { .. }

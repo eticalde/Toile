@@ -30,6 +30,7 @@ enum Field<'a> {
     ElasticRatio(ElasticKey),
     ElasticStrength(ElasticKey),
     HangStation(HangKey),
+    HangHeading(HangKey),
     NotchPlace(NotchKey),
     LinePurpose(LineKey),
     LineName(LineKey),
@@ -86,6 +87,7 @@ impl Command {
                 Some(Field::ElasticStrength(*elastic))
             }
             Command::SetHangStation { hang, .. } => Some(Field::HangStation(*hang)),
+            Command::SetHangHeading { hang, .. } => Some(Field::HangHeading(*hang)),
             Command::MoveNotch { notch, .. } => Some(Field::NotchPlace(*notch)),
             Command::SetLineKind { line, .. } => Some(Field::LinePurpose(*line)),
             Command::LabelLine { line, .. } => Some(Field::LineName(*line)),

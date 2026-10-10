@@ -147,6 +147,17 @@ impl Collider {
         &self.belts
     }
 
+    /// The ring `station` names on this body; `None` for a name that is not one
+    /// of its girths, or a body the rings were not cut for.
+    ///
+    /// By name and one at a time, because that is how a garment is hung from
+    /// one: whoever wrote the name is owed a way to see where that ring sits
+    /// and how far round it goes, and nobody outside needs the array or the
+    /// order it is stored in.
+    pub fn belt_at(&self, station: &str) -> Option<&Belt> {
+        super::at_station(&self.belts, station)
+    }
+
     /// Whether a point is under this body's skin.
     ///
     /// The field's own sign, read exactly where and how the solver reads it,

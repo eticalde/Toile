@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::{DocError, EdgeRange, MeasureSet};
 
+mod heading;
+
+pub use heading::{Heading, Sense};
+
 /// A stretch of one piece's contour hung from a station of the measurement
 /// catalogue: the line the garment hangs from, said on the body.
 ///
@@ -26,6 +30,15 @@ pub struct Hang {
     pub at: EdgeRange,
     /// The catalogue girth naming the ring of the body it hangs from.
     pub station: String,
+    /// Which way round that ring the run faces; `None` for a run that says
+    /// where it hangs from and nothing about where it points.
+    ///
+    /// Optional because a height and a heading are two different sentences and
+    /// a person may have only the first to say. It is also what keeps every
+    /// file already on disk as it was: a hang written before this existed reads
+    /// back as a hang with no heading, and saves as the bytes it was read from.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heading: Option<Heading>,
 }
 
 impl Hang {
@@ -36,11 +49,20 @@ impl Hang {
     /// hung from nothing at all.
     pub const WAIST: &'static str = "cintura";
 
-    /// A stretch hung from `station`.
+    /// A stretch hung from `station`, pointing nowhere in particular.
     pub fn new(at: EdgeRange, station: &str) -> Hang {
         Hang {
             at,
             station: station.to_owned(),
+            heading: None,
+        }
+    }
+
+    /// The same stretch, turned to face `heading`.
+    pub fn facing(at: EdgeRange, station: &str, heading: Heading) -> Hang {
+        Hang {
+            heading: Some(heading),
+            ..Hang::new(at, station)
         }
     }
 
@@ -67,7 +89,7 @@ impl Hang {
         if !Hang::names_a_ring(&self.station) {
             return Err(DocError::HangStation(self.station.clone()));
         }
-        Ok(())
+        self.heading.map_or(Ok(()), |heading| heading.check())
     }
 }
 

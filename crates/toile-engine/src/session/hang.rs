@@ -5,6 +5,9 @@ use super::run::edge_bases;
 use crate::body::{Collider, at_station};
 use crate::couture::{hung_at, offsets};
 
+mod heading;
+mod station;
+
 impl Session {
     /// Every hang of the document, read onto the meshes now on the stand and
     /// onto the rings of the body the drape falls on.
@@ -140,6 +143,47 @@ mod tests {
         let session = Session::from_doc(doc, ball).expect("the panel drapes");
         assert!(!session.draft().expect("a document").doc().hangs.is_empty());
         assert!(session.hung().is_empty(), "and nothing is held");
+    }
+
+    /// A product declares its hung lines topmost first, and nothing at all when
+    /// nobody hung it.
+    ///
+    /// Which line is read first matters because it is the one stood on a ring,
+    /// and the two candidates here are a hand's breadth apart on the pattern.
+    /// The document holds the lower one second, so a reader that took the first
+    /// would pass this test by accident — the hems are written in the order
+    /// that catches it. Both come back, because a garment hung from two
+    /// stations goes round two rings.
+    #[test]
+    fn a_product_declares_the_highest_of_its_hung_lines() {
+        let (mut doc, piece) = panel();
+        let at = |l| doc.shows_label(piece, l).expect("the panel names it");
+        let (top, side) = (
+            EdgeRange::between(piece, at("a"), at("b")),
+            EdgeRange::between(piece, at("b"), at("c")),
+        );
+        for (run, station) in [(top, Hang::WAIST), (side, "cadera")] {
+            Command::AddHang {
+                identity: Identity::New,
+                hang: Hang::new(run, station),
+            }
+            .apply(&mut doc)
+            .expect("both ends are nodes of the panel");
+        }
+        let bare = Session::from_doc(panel().0, Collider::demo()).expect("the panel drapes");
+        assert!(bare.declared().is_empty(), "nobody hung it");
+
+        let session = Session::from_doc(doc, Collider::demo()).expect("the panel drapes");
+        let worn = session.declared();
+        let names: Vec<&str> = worn.iter().map(|one| one.station.as_str()).collect();
+        assert_eq!(names, [Hang::WAIST, "cadera"], "topmost first");
+        // The pattern's y runs upward in metres, so the drawn top edge is the
+        // ordinate zero the mesher hands back and the side runs down from it.
+        assert!(worn[0].at.abs() < 1.0e-9, "the top edge, at {}", worn[0].at);
+        // One piece carries both, so both rings name it: which of them it goes
+        // on is the grouping's question and not this reading's.
+        assert_eq!(worn[0].on, [0]);
+        assert_eq!(worn[1].on, [0]);
     }
 
     /// Two hangs that meet on a node hold the vertex there once.

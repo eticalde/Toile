@@ -16,6 +16,7 @@ mod spawn;
 use std::sync::Arc;
 
 pub use error::SessionError;
+pub use place::{Elsewhere, Loose};
 use remesh::Remesher;
 pub use seam::{SeamFault, pair_seam_anchored};
 use slot::Draped;
@@ -60,6 +61,21 @@ pub struct Session {
     /// interface asks every frame, and the answer only changes when something
     /// re-pairs them.
     faults: Vec<(SeamKey, SeamFault)>,
+    /// The station the document declared and the ring the cloth's own size
+    /// points at, when the release had to choose between them.
+    ///
+    /// Kept rather than recomputed per frame, for the reason the seam faults
+    /// are: the interface asks every frame, and this is a reading of the one
+    /// moment a placement is chosen.
+    elsewhere: Option<Elsewhere>,
+    /// The ring the release had to open furthest past its own cloth, when one
+    /// came off much longer than the cloth on it. Kept for the reason the two
+    /// above are, and read in the same place: the bar a person drapes under.
+    loose: Option<Loose>,
+    /// How many sewn pieces the release could not put on the body, as of that
+    /// release. Kept for the reason the two above are, and read in the same
+    /// place: the bar a person drapes under.
+    adrift: usize,
     generation: u64,
     /// The generation the meshes on the table were last installed at, for
     /// telling a snapshot of an old triangulation from one of these meshes.

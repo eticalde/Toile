@@ -1,10 +1,12 @@
 use toile_doc::{
-    Command, Doc, FORMAT_VERSION, FORMAT_VERSION_CUT, FormatError, Piece, PieceKey, block,
+    Command, Doc, FORMAT_VERSION, FORMAT_VERSION_CUT, FORMAT_VERSION_HEADED, FormatError, Piece,
+    PieceKey, block,
 };
 
 use super::dart::darted;
 use super::elastic::elasticated;
 use super::hang::hung;
+use super::heading::headed;
 use super::line::lined;
 use super::placement::{FIRST_PIECE_END, placed};
 use super::symmetry::folded;
@@ -140,30 +142,31 @@ fn the_count_a_file_leaves_out_is_one_and_zero_is_refused() {
 /// A build cannot know what a later field means, so it refuses the file for its
 /// version rather than open it and drop that field on the next save.
 #[test]
-fn a_version_11_document_is_refused_loudly() {
+fn a_version_12_document_is_refused_loudly() {
     for later in [
-        restamped(SHIPPED, 11),
-        restamped(&shaped(2), 11),
-        placed(SHIPPED, 11),
-        elasticated(11),
-        lined(11),
-        folded(11),
-        hung(11),
-        darted(11),
-        cut(SHIPPED, 11),
+        restamped(SHIPPED, 12),
+        restamped(&shaped(2), 12),
+        placed(SHIPPED, 12),
+        elasticated(12),
+        lined(12),
+        folded(12),
+        hung(12),
+        darted(12),
+        cut(SHIPPED, 12),
+        headed(12),
     ] {
-        let error = Doc::from_json(&later).expect_err("this build reads up to version 10");
+        let error = Doc::from_json(&later).expect_err("this build reads up to version 11");
         assert_eq!(
             error,
             FormatError::UnknownVersion {
-                found: 11,
-                newest: FORMAT_VERSION_CUT
+                found: 12,
+                newest: FORMAT_VERSION_HEADED
             }
         );
         assert!(
             error
                 .to_string()
-                .contains("version 11; this build reads versions 1 to 10"),
+                .contains("version 12; this build reads versions 1 to 11"),
             "{error}"
         );
     }

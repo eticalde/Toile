@@ -84,6 +84,15 @@ pub enum DocError {
     /// hold the cloth at.
     #[error("a garment hangs from one of the body's girths, and `{0}` is not one")]
     HangStation(String),
+    /// A pin naming no point of the run it is written on, which is where the
+    /// numbers JSON cannot spell land as well.
+    #[error("a heading pins a point of its own run, so its pin runs from 0 to 1")]
+    HangPin,
+    /// A turn outside the one lap there is. 180 is the centre back and −180
+    /// names that same place, so the lap is half-open and one of the two is the
+    /// spelling a file holds.
+    #[error("a heading turns from the centre front by (-180, 180] degrees")]
+    HangTurn,
     /// An internal line anchored to the contour of a piece it is not drawn on.
     #[error("an internal line is drawn on one piece, and anchors only to it")]
     SplitInternalLine,

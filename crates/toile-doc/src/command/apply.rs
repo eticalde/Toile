@@ -16,7 +16,7 @@ use curve::{set_samples, set_segment};
 use cut::{set_labels, set_letter, set_quantity, set_seam_allowance};
 use dart::{add_dart, declare_dart, remove_dart, undeclare_dart};
 use elastic::{add_elastic, remove_elastic, set_ratio, set_strength};
-use hang::{add_hang, remove_hang, set_station};
+use hang::{add_hang, remove_hang, set_heading, set_station};
 use join::{add_seam, remove_seam};
 use line::{add_line, label_line, remove_line, set_kind};
 use mannequin::{
@@ -117,6 +117,7 @@ impl Command {
             Command::AddHang { identity, hang } => add_hang(doc, identity, hang),
             Command::RemoveHang { hang } => remove_hang(doc, hang),
             Command::SetHangStation { hang, to } => set_station(doc, hang, to),
+            Command::SetHangHeading { hang, to } => set_heading(doc, hang, to),
             Command::AddLine { identity, line } => add_line(doc, identity, *line),
             Command::RemoveLine { line } => remove_line(doc, line),
             Command::SetLineKind { line, to } => set_kind(doc, line, to),

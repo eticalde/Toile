@@ -16,7 +16,13 @@ pub(super) struct Step {
 }
 
 /// Which seams sit on each piece; `None` when one of them cannot be walked.
-pub(super) fn adjacency(sewn: &[Sewn], pieces: usize) -> Option<Vec<Vec<usize>>> {
+///
+/// The seams of one ring and not of the whole product, which is what a third
+/// one on a panel now means: a shirt's back carries two side seams and a collar
+/// seam, and the collar seam is another ring's — see [`super::group::rings`].
+/// Three on one ring is still refused, and still for the reason the chain is a
+/// chain: what that wants is not a turn around one axis.
+pub(super) fn adjacency(sewn: &[&Sewn], pieces: usize) -> Option<Vec<Vec<usize>>> {
     let mut on: Vec<Vec<usize>> = vec![Vec::new(); pieces];
     for (k, one) in sewn.iter().enumerate() {
         if one.sides[0] == one.sides[1] {
@@ -30,7 +36,7 @@ pub(super) fn adjacency(sewn: &[Sewn], pieces: usize) -> Option<Vec<Vec<usize>>>
 
 /// Follows the seams from piece to piece, and says whether the strip closed.
 pub(super) fn walk(
-    sewn: &[Sewn],
+    sewn: &[&Sewn],
     pipes: &[&ShapePipeline],
     on: &[Vec<usize>],
 ) -> Option<(Vec<Step>, bool)> {
@@ -108,7 +114,7 @@ fn step(piece: usize, pipe: &ShapePipeline, entry: f64, exit: f64) -> Option<Ste
 /// its first piece by whichever of its two seams sits further along it — so
 /// that first piece runs with the turn rather than against it. Start at the
 /// other end, or leave by the other seam, and the garment comes out mirrored.
-fn opening(sewn: &[Sewn], on: &[Vec<usize>]) -> Option<(usize, usize)> {
+fn opening(sewn: &[&Sewn], on: &[Vec<usize>]) -> Option<(usize, usize)> {
     let ends: Vec<usize> = (0..on.len()).filter(|&p| on[p].len() == 1).collect();
     match ends.len() {
         0 => {
@@ -129,7 +135,7 @@ fn opening(sewn: &[Sewn], on: &[Vec<usize>]) -> Option<(usize, usize)> {
 }
 
 /// Where a seam runs across one of the two pieces it joins.
-fn at(sewn: &[Sewn], seam: usize, piece: usize) -> Option<f64> {
+fn at(sewn: &[&Sewn], seam: usize, piece: usize) -> Option<f64> {
     let one = sewn.get(seam)?;
     one.sides
         .iter()
@@ -138,7 +144,7 @@ fn at(sewn: &[Sewn], seam: usize, piece: usize) -> Option<f64> {
 }
 
 /// The piece on the other side of a seam.
-fn across_seam(sewn: &[Sewn], seam: usize, piece: usize) -> Option<usize> {
+fn across_seam(sewn: &[&Sewn], seam: usize, piece: usize) -> Option<usize> {
     let one = sewn.get(seam)?;
     let side = one.sides.iter().position(|&p| p == piece)?;
     Some(one.sides[1 - side])

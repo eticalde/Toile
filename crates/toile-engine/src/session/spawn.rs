@@ -57,10 +57,10 @@ pub(super) fn drape_piece(
 /// of the same voxels, so starting a thread over a body already baked copies a
 /// pointer rather than tens of megabytes.
 ///
-/// `around` is the ring the seams and the body put the pieces on, and it
-/// carries its own height. A piece it does not place — a lone panel, which has
-/// no partner to be placed against — is let go exactly as a lone piece is let
-/// go today, flat at the height the body decides.
+/// `around` is the rings the seams and the body put the pieces on, each
+/// carrying its own height. A piece none of them places — a lone panel, which
+/// has no partner to be placed against — is let go exactly as a lone piece is
+/// let go today, flat at the height the body decides.
 ///
 /// The constraints, the seams and the hung runs arrive rather than being
 /// compiled here: each is written over a stretch of contour only the table
@@ -70,7 +70,7 @@ pub(super) fn spawn_sim(
     tris: Vec<u32>,
     cons: DistanceConstraints,
     (seams, hung): (Seams, Vec<Hung>),
-    around: Option<&Layout>,
+    around: &[Layout],
     collider: &Collider,
 ) -> SimHandle {
     let state = couture::drop_all(pipelines, collider.release_height(), around);

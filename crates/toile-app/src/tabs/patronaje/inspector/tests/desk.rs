@@ -6,7 +6,7 @@ use toile_engine::draft::{Doc, PieceKey, PointKey, block};
 use toile_engine::session::Session;
 
 use super::super::super::state::{Scope, Selection, State};
-use super::super::show;
+use super::super::{Read, show};
 use crate::config::Paper;
 use crate::tabs::patronaje::apply;
 use crate::tabs::right_panel;
@@ -66,14 +66,19 @@ impl Desk {
             events,
             ..RawInput::default()
         };
-        let (draft, faults) = (self.session.draft(), self.session.seam_faults());
+        let headless = self.session.headless();
+        let read = Read {
+            faults: self.session.seam_faults(),
+            headless: &headless,
+        };
+        let draft = self.session.draft();
         let (theme, paper) = (&self.theme, self.paper);
         let state = &mut self.state;
         let piece = state.active;
         let mut asked = Vec::new();
         let pass = self.ctx.run_ui(input, |ui| {
             asked = right_panel(ui, theme, |ui| {
-                show(ui, theme, draft, faults, piece, state, paper)
+                show(ui, theme, draft, read, piece, state, paper)
             });
         });
         self.cursor = pass.platform_output.cursor_icon;

@@ -1,6 +1,8 @@
+use std::sync::Arc;
+
 use eframe::egui::{
-    self, Align2, Color32, FontId, Id, Painter, Pos2, Rect, Response, Sense, Shape, Stroke,
-    StrokeKind, Ui, Vec2, pos2, vec2,
+    Color32, FontId, Galley, Id, Painter, Rect, Response, Sense, Shape, Stroke, StrokeKind, Ui,
+    Vec2, pos2, vec2,
 };
 
 use super::{CORNER, PAD};
@@ -8,105 +10,6 @@ use crate::theme::Theme;
 
 /// The smaller glyph a button carries before its label.
 const GLYPH: f32 = 12.0;
-
-/// Caption plus a boxed value: something the app knows, with nothing to press.
-pub fn readout(ui: &mut Ui, theme: &Theme, caption: &str, value: &str, width: f32) {
-    boxed(ui, theme, caption, value, width, None, None);
-}
-
-/// The same box over a value a press takes to the next one in order.
-///
-/// Marked with a cycle and never a chevron. A chevron promises a list to
-/// choose from, this app opens no menu anywhere, and a press here does not
-/// choose: it steps. The mark is what the press really does.
-pub fn cycle(ui: &mut Ui, theme: &Theme, caption: &str, value: &str, width: f32) -> Response {
-    boxed(ui, theme, caption, value, width, Some(cycle_mark), None)
-}
-
-/// The same step under an identity the caller names, so a press aimed from
-/// outside the panel finds the box by what it steps and not by where the rows
-/// above it happened to leave it.
-pub fn cycle_named(
-    ui: &mut Ui,
-    theme: &Theme,
-    id: Id,
-    caption: &str,
-    value: &str,
-    width: f32,
-) -> Response {
-    boxed(ui, theme, caption, value, width, Some(cycle_mark), Some(id))
-}
-
-/// Caption, boxed value, and the mark that says how the box answers a press.
-///
-/// The mark is what carries the click: a box drawn without one senses nothing,
-/// so a control that has nothing to do cannot be pressed and left wondering.
-fn boxed(
-    ui: &mut Ui,
-    theme: &Theme,
-    caption: &str,
-    value: &str,
-    width: f32,
-    mark: Option<fn(&Painter, Pos2, Color32)>,
-    named: Option<Id>,
-) -> Response {
-    ui.horizontal(|ui| {
-        ui.label(
-            egui::RichText::new(caption.to_uppercase())
-                .monospace()
-                .size(10.0)
-                .extra_letter_spacing(1.2)
-                .color(theme.muted),
-        );
-        let live = mark.is_some();
-        let sense = if live { Sense::click() } else { Sense::hover() };
-        // Taking the room and interacting with it are two steps, so a name the
-        // caller gave stands in for the one the layout would have issued.
-        let (auto, rect) = ui.allocate_space(vec2(width, 24.0));
-        let resp = ui.interact(rect, named.unwrap_or(auto), sense);
-        let p = ui.painter();
-        // The border lifts under the pointer only where a press does
-        // something: a box that answers nothing may not brighten as if it did.
-        let edge = if live && resp.hovered() {
-            theme.muted
-        } else {
-            theme.line
-        };
-        p.rect(
-            rect,
-            CORNER,
-            theme.raised,
-            Stroke::new(1.0, edge),
-            StrokeKind::Inside,
-        );
-        p.text(
-            rect.left_center() + vec2(10.0, 0.0),
-            Align2::LEFT_CENTER,
-            value,
-            FontId::proportional(12.0),
-            theme.ink,
-        );
-        if let Some(mark) = mark {
-            mark(p, rect.right_center() - vec2(12.0, 0.0), theme.muted);
-        }
-        resp
-    })
-    .inner
-}
-
-/// A ring left open, with an arrowhead at the head of the turn.
-fn cycle_mark(p: &Painter, centre: Pos2, color: Color32) {
-    let stroke = Stroke::new(1.2, color);
-    let (from, to) = (-45.0_f32, 255.0_f32);
-    let at = |deg: f32| centre + Vec2::angled(deg.to_radians()) * 4.2;
-    let arc: Vec<Pos2> = (0..=14)
-        .map(|i| at(from + (to - from) * i as f32 / 14.0))
-        .collect();
-    p.add(Shape::line(arc, stroke));
-    let tip = at(to);
-    let wing = |turn: f32| tip + Vec2::angled((to + 90.0 + turn).to_radians()) * 3.0;
-    p.add(Shape::line(vec![wing(150.0), tip, wing(-150.0)], stroke));
-}
 
 /// Filled call to action.
 pub fn button_primary(ui: &mut Ui, theme: &Theme, label: &str) -> Response {
@@ -140,16 +43,34 @@ pub fn button_ghost_icon(
     icon(ui.painter(), slot, theme.muted);
 }
 
-/// Lays a dead button out the way a live one is laid out, and hands back its
-/// glyph slot: what separates the two is the border, the ink and the sense,
-/// never the room they take, so one does not shift when the other arrives.
-fn ghost(ui: &mut Ui, theme: &Theme, label: &str, glyph_w: f32) -> Rect {
+/// How wide one dead button is drawn, so a row can ask before laying one out.
+///
+/// Through the same arithmetic [`ghost`] lays it out by, for the reason
+/// [`super::readout_room`] goes through the box's own caption: the three sim
+/// controls sit at the right-hand end of a bar, and a row that guessed at their
+/// width would push them off the window and never know.
+pub fn ghost_icon_room(ui: &Ui, theme: &Theme, label: &str) -> f32 {
+    ghost_label(ui, theme, label, GLYPH).1
+}
+
+/// A dead button's label, laid out, and how wide the button is with it.
+fn ghost_label(ui: &Ui, theme: &Theme, label: &str, glyph_w: f32) -> (Arc<Galley>, f32) {
     let font = FontId::proportional(12.0);
     let text = ui
         .painter()
         .layout_no_wrap(label.to_owned(), font, theme.muted);
     let lead = if glyph_w > 0.0 { glyph_w + 6.0 } else { 0.0 };
-    let size = vec2(text.size().x + lead + 28.0, 26.0);
+    let wide = text.size().x + lead + 28.0;
+    (text, wide)
+}
+
+/// Lays a dead button out the way a live one is laid out, and hands back its
+/// glyph slot: what separates the two is the border, the ink and the sense,
+/// never the room they take, so one does not shift when the other arrives.
+fn ghost(ui: &mut Ui, theme: &Theme, label: &str, glyph_w: f32) -> Rect {
+    let (text, wide) = ghost_label(ui, theme, label, glyph_w);
+    let lead = if glyph_w > 0.0 { glyph_w + 6.0 } else { 0.0 };
+    let size = vec2(wide, 26.0);
     let (rect, _) = ui.allocate_exact_size(size, Sense::hover());
     let left = rect.center().x - f32::midpoint(text.size().x, lead);
     let top = rect.center().y - text.size().y / 2.0;

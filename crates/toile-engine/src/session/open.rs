@@ -102,7 +102,15 @@ impl Session {
         self.mesh_generation = 0;
         let seams = self.resew();
         let hung = self.hung();
-        let around = self.layout();
+        let placed = self.placed();
+        // Kept from the release and not read again: what the two readings of a
+        // station disagreed about is a fact of where this cloth was let go, and
+        // a hang written afterwards pulls the garment from where it is rather
+        // than putting it down somewhere else.
+        self.elsewhere.clone_from(&placed.elsewhere);
+        self.loose.clone_from(&placed.loose);
+        self.adrift = placed.adrift;
+        let around = placed.rings;
         let cons = self.constraints();
         self.handle = (!self.draping.is_empty()).then(|| {
             spawn_sim(
@@ -110,7 +118,7 @@ impl Session {
                 self.tris.clone(),
                 cons,
                 (seams, hung),
-                around.as_ref(),
+                &around,
                 &self.collider,
             )
         });
@@ -147,6 +155,9 @@ fn build(draft: Option<Draft>, collider: Collider) -> Session {
         collider,
         remesher: None,
         faults: Vec::new(),
+        elsewhere: None,
+        loose: None,
+        adrift: 0,
         generation: 0,
         mesh_generation: 0,
         revision: 0,

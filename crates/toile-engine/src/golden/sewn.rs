@@ -41,7 +41,7 @@ pub fn drape_sewn_hash() -> u64 {
     let refs: Vec<&ShapePipeline> = pipes.iter().collect();
     let mut seams = sewn(&draft, &refs);
     let cons = couture::combine_constraints(&refs, COMPLIANCE);
-    let mut state = couture::drop_all(&refs, body.release_height(), None);
+    let mut state = couture::drop_all(&refs, body.release_height(), &[]);
 
     let stage = Stage::around(body.field()).on(body.ground().map_or(Floor::none(), Floor::at));
     for substep in 0..SUBSTEPS {

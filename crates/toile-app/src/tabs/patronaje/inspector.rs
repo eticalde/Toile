@@ -20,7 +20,7 @@ pub(super) mod write;
 use cite::Cite;
 use eframe::egui;
 pub(super) use elastic::Grip;
-use toile_engine::draft::{Axis, Draft, PieceKey, PointKey, SeamKey};
+use toile_engine::draft::{Axis, Draft, HangKey, PieceKey, PointKey, SeamKey};
 use toile_engine::session::SeamFault;
 use write::Asked;
 
@@ -39,6 +39,21 @@ const EMPTY: &str = "Carga una pieza desde el panel Producto para inspeccionarla
 /// Room the footer keeps for itself under the scrolling body.
 const FOOT_H: f32 = 74.0;
 
+/// What the engine read off the cloth, for the sections whose own reading it
+/// would be: the seams it could not pair, and the hangs no heading could turn.
+///
+/// One parameter and not two, because both are the same kind of fact and both
+/// travel the same way down this panel. A section that worked either of them
+/// out for itself would be a second answer to a question the placement has
+/// already answered.
+#[derive(Clone, Copy)]
+pub struct Read<'a> {
+    /// The document seams the engine could not pair onto the cloth.
+    pub faults: &'a [(SeamKey, SeamFault)],
+    /// Every hang whose run pins nothing whatever a person declares on it.
+    pub headless: &'a [HangKey],
+}
+
 /// The right panel: the bindings of whatever is chosen, what the piece in
 /// front is cut to, the names the formulas can read, and the ways out of the
 /// app.
@@ -50,12 +65,12 @@ const FOOT_H: f32 = 74.0;
 /// across the frames of the drag. The names belong to the product and not to a
 /// piece, so a product with no piece drawn yet lists them too. So do the
 /// seams, which are listed over the whole product, where both sides of one
-/// can be seen; `faults` are the ones the engine could not pair onto the cloth.
+/// can be seen; `read` is what the engine had to say about this cloth.
 pub fn show(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: Option<&Draft>,
-    faults: &[(SeamKey, SeamFault)],
+    read: Read<'_>,
     piece: Option<PieceKey>,
     state: &mut State,
     paper: Paper,
@@ -70,12 +85,12 @@ pub fn show(
             if let Some(draft) = draft {
                 let cite = Cite::begin(ui.ctx(), draft.doc(), state);
                 if let Some(piece) = piece {
-                    asked = chosen(ui, theme, draft, piece, (state, &cite), &mut verbs);
+                    asked = chosen(ui, theme, draft, (piece, read), (state, &cite), &mut verbs);
                 } else {
                     unchosen(ui, theme);
                 }
                 if state.scope == Scope::Product && piece.is_some() {
-                    seams::show(ui, theme, draft, faults, (&mut *state, &mut verbs));
+                    seams::show(ui, theme, draft, read.faults, (&mut *state, &mut verbs));
                 }
                 // The lines drawn inside a piece and the darts cut into it are
                 // listed where a piece is open on its own, which is the one
@@ -125,13 +140,13 @@ fn chosen(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: &Draft,
-    piece: PieceKey,
+    (piece, read): (PieceKey, Read<'_>),
     writing: (&mut State, &Cite),
     verbs: &mut Vec<Verb>,
 ) -> Option<Asked> {
     let state = &*writing.0;
     if let Some(from) = state.selection.edge() {
-        return tract(ui, theme, draft, (piece, from), writing, verbs);
+        return tract(ui, theme, draft, (piece, from, read), writing, verbs);
     }
     match state.selection.count() {
         0 => {
@@ -206,11 +221,11 @@ fn tract(
     ui: &mut egui::Ui,
     theme: &Theme,
     draft: &Draft,
-    at: (PieceKey, PointKey),
+    at: (PieceKey, PointKey, Read<'_>),
     writing: (&mut State, &Cite),
     verbs: &mut Vec<Verb>,
 ) -> Option<Asked> {
-    let (piece, from) = at;
+    let (piece, from, read) = at;
     let nodes = draft.points_cm(piece);
     let index = nodes.iter().position(|&(key, _)| key == from)?;
     let to = nodes[(index + 1) % nodes.len()].0;
@@ -223,7 +238,7 @@ fn tract(
     let (state, cite) = writing;
     let asked = write::samples(ui, theme, draft, (piece, from), (&mut *state, cite));
     elastic::show(ui, theme, doc, edge, (&mut *state, &mut *verbs));
-    hang::show(ui, theme, doc, edge, verbs);
+    hang::show(ui, theme, doc, edge, read.headless, verbs);
     let asked = notch::show(ui, theme, doc, (piece, from), (&mut *state, cite), verbs).or(asked);
     fold::show(ui, theme, draft, edge, verbs);
     asked

@@ -28,10 +28,16 @@ fn seam(sides: [usize; 2], at: [f64; 2]) -> Sewn {
     Sewn {
         sides,
         at,
+        ends: [[0.0, 0.0], [0.0, 0.0]],
         a: Vec::new(),
         b: Vec::new(),
         dart: false,
     }
+}
+
+/// The seams as the walk is handed them: one ring's worth, by reference.
+fn ring(sewn: &[Sewn]) -> Vec<&Sewn> {
+    sewn.iter().collect()
 }
 
 /// How far along the strip, in metres of cloth, a pattern abscissa of one piece
@@ -135,8 +141,8 @@ fn tube(side: f64, inseam: f64) -> (Vec<Step>, Vec<(f64, f64)>) {
     // The front carries its inseam at low abscissa and its side seam at high,
     // which is how every one of these patterns is drawn.
     let sewn = [seam([0, 1], [0.60, side]), seam([0, 1], [0.00, inseam])];
-    let joined = adjacency(&sewn, 2).expect("two pieces, two seams");
-    let (steps, closed) = walk(&sewn, &pipes, &joined).expect("the strip closes");
+    let joined = adjacency(&ring(&sewn), 2).expect("two pieces, two seams");
+    let (steps, closed) = walk(&ring(&sewn), &pipes, &joined).expect("the strip closes");
     assert!(closed, "two pieces joined by two seams make a closed tube");
     shut(&steps, &sewn, closed);
     // The strip is opened at the front's side seam and closed at its inseam,
@@ -157,8 +163,8 @@ fn loop_of_three(at: [[f64; 2]; 3], senses: [f64; 3]) {
         seam([1, 2], at[1]),
         seam([2, 0], at[2]),
     ];
-    let joined = adjacency(&sewn, 3).expect("three pieces, three seams");
-    let (steps, closed) = walk(&sewn, &pipes, &joined).expect("the loop closes");
+    let joined = adjacency(&ring(&sewn), 3).expect("three pieces, three seams");
+    let (steps, closed) = walk(&ring(&sewn), &pipes, &joined).expect("the loop closes");
     assert!(closed, "three pieces joined in a ring make a closed strip");
     assert_eq!(steps.iter().map(|s| s.sense).collect::<Vec<_>>(), senses);
     shut(&steps, &sewn, closed);
@@ -228,8 +234,8 @@ fn an_end_piece_is_turned_by_the_cloth_beyond_its_one_seam() {
     let (front, back) = (panel(0.0, 0.60, 0.80), panel(1.00, 0.60, 0.80));
     let pipes = [&front, &back];
     let sewn = [seam([0, 1], [0.60, 1.00])];
-    let joined = adjacency(&sewn, 2).expect("two pieces, one seam");
-    let (steps, closed) = walk(&sewn, &pipes, &joined).expect("the strip walks");
+    let joined = adjacency(&ring(&sewn), 2).expect("two pieces, one seam");
+    let (steps, closed) = walk(&ring(&sewn), &pipes, &joined).expect("the strip walks");
     assert!(!closed, "one seam leaves the strip open at both ends");
     assert_eq!(
         steps.iter().map(|s| s.sense).collect::<Vec<_>>(),
@@ -265,9 +271,9 @@ fn a_piece_whose_two_seams_run_at_one_abscissa_is_refused() {
     let pipes = [&front, &back];
     let middle = 1.30;
     let sewn = [seam([0, 1], [0.60, middle]), seam([0, 1], [0.00, middle])];
-    let joined = adjacency(&sewn, 2).expect("two pieces, two seams");
+    let joined = adjacency(&ring(&sewn), 2).expect("two pieces, two seams");
     assert!(
-        walk(&sewn, &pipes, &joined).is_none(),
+        walk(&ring(&sewn), &pipes, &joined).is_none(),
         "the back's two seams run at one place on it, so it has no sense"
     );
     // A hair either side of that is answered, and answered differently, which
@@ -277,7 +283,7 @@ fn a_piece_whose_two_seams_run_at_one_abscissa_is_refused() {
             seam([0, 1], [0.60, middle]),
             seam([0, 1], [0.00, middle + step]),
         ];
-        let (steps, _) = walk(&sewn, &pipes, &joined).expect("the strip closes");
+        let (steps, _) = walk(&ring(&sewn), &pipes, &joined).expect("the strip closes");
         assert_eq!(steps[1].sense, if step > 0.0 { 1.0 } else { -1.0 });
     }
 }

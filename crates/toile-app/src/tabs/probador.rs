@@ -1,10 +1,12 @@
+mod bar;
 mod icons;
 mod note;
 mod seams;
 
+use bar::{Read, sub_bar};
 use eframe::egui::{self, Align2, FontId, Rect, Sense, Stroke, Vec2, pos2, vec2};
 use eframe::egui_wgpu::RenderState;
-use icons::{check_icon, pause_icon, play_icon, reset_icon, warn_icon};
+use icons::{check_icon, warn_icon};
 use toile_engine::draft::BodyMesh;
 use toile_engine::session::Session;
 
@@ -12,16 +14,10 @@ use crate::pattern;
 use crate::tabs::{UNNAMED, Workspace, right_panel};
 use crate::theme::Theme;
 use crate::viewport::{Avatar, Viewport};
-use crate::widgets::{
-    PAD, alert_note, button_ghost_icon, field_row, footer_note, readout, section_with,
-};
+use crate::widgets::{PAD, alert_note, field_row, footer_note, section_with};
 
 /// Gap between the 2D and 3D halves, in points.
 const SPLIT_GAP: f32 = 12.0;
-const SUBBAR_H: f32 = 44.0;
-/// How wide the box that says what the body is holding up is drawn: enough for
-/// the longest reading it can carry without the words being cut.
-const HUNG_W: f32 = 210.0;
 const SEAM_H: f32 = 28.0;
 const MARK: f32 = 12.0;
 
@@ -72,7 +68,22 @@ pub fn show(ui: &mut egui::Ui, w: &mut Workspace<'_>) {
     // anchor has already answered, and it would cost a walk of the cloth on
     // every frame of every product, hung or not.
     let hanging = note::hanging(w.session.snapshot().hanging);
-    let read = (crossed.as_deref(), hanging.as_deref());
+    // Off the session and not the frame: this one is a fact of the release, and
+    // the release happened before the solver ran a substep.
+    let worn = note::worn(w.session.worn_elsewhere());
+    // Off the session for the same reason, and kept from the same release: what
+    // could not be placed is a fact of the moment the cloth was put down.
+    // And from the same release, for the same reason: how far past its own
+    // cloth a ring had to be opened is decided when the cloth is put down.
+    let loose = note::loose(w.session.loose_ring());
+    let adrift = note::adrift(w.session.adrift());
+    let read = Read {
+        crossed: crossed.as_deref(),
+        hanging: hanging.as_deref(),
+        worn: worn.as_deref(),
+        loose: loose.as_deref(),
+        adrift: adrift.as_deref(),
+    };
     sub_bar(ui, theme, w.session, &body, read);
     right_panel(ui, theme, |ui| inspector(ui, theme, w.session));
     egui::CentralPanel::no_frame().show(ui, |ui| {
@@ -112,63 +123,6 @@ fn standing(session: &Session, mesh: &BodyMesh, theme: &Theme) -> Avatar {
 }
 
 // ── bars and panels ───────────────────────────────────────────────────────
-
-/// The bar over the table: the body being fitted, and the sim controls.
-///
-/// The body is the only one of the three things a fitting names that the
-/// document can answer for. It carries no product name, and the app carries no
-/// fabric at all, so a box for either would read the same two words over every
-/// pattern ever opened. It is a readout and not a picker, because the document
-/// resolves against the body the drafting table chose and this bar has no say.
-///
-/// The three sim controls are drawn dead. The sim thread takes a rest update,
-/// a swapped mesh and a shutdown, and nothing else: there is no pause to ask
-/// for, no resume, and no starting state to go back to. They keep their room
-/// so that the phase which builds them moves nothing on this bar.
-///
-/// `read` is what the register has to say about this drape: where the body
-/// crosses itself, and how near its rings it holds the garment. Either is
-/// `None` when nothing of the kind was measured, and then it takes no room at
-/// all — an empty box reads as a box that failed to fill.
-fn sub_bar(
-    ui: &mut egui::Ui,
-    theme: &Theme,
-    session: &Session,
-    body: &str,
-    read: (Option<&str>, Option<&str>),
-) {
-    egui::Panel::top("probador-subbar")
-        .exact_size(SUBBAR_H)
-        .frame(
-            egui::Frame::new()
-                .fill(theme.panel)
-                .inner_margin(egui::Margin::symmetric(16, 0)),
-        )
-        .show(ui, |ui| {
-            ui.horizontal_centered(|ui| {
-                if let Some(named) = fitted(session) {
-                    readout(ui, theme, "maniquí", named, 150.0);
-                }
-                readout(ui, theme, "cuerpo", body, 170.0);
-                let (crossed, hanging) = read;
-                // In the ink of any other readout: both are things known about
-                // the body, and the body was baked and is draped on all the
-                // same.
-                if let Some(crossed) = crossed {
-                    readout(ui, theme, "cruces", crossed, 190.0);
-                }
-                if let Some(hanging) = hanging {
-                    readout(ui, theme, "colgado", hanging, HUNG_W);
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.spacing_mut().item_spacing.x = 6.0;
-                    button_ghost_icon(ui, theme, "Reiniciar", reset_icon);
-                    button_ghost_icon(ui, theme, "Pausar", pause_icon);
-                    button_ghost_icon(ui, theme, "Simular", play_icon);
-                });
-            });
-        });
-}
 
 /// The seam table of whatever is on the table, and the piece that drapes.
 ///

@@ -7,7 +7,7 @@ use super::placement::placed;
 use super::{EMPTY, SHIPPED, header, linked, restamped, rewritten, shaped};
 
 /// The edit that hangs the shipped block's waistline from the body's waist.
-fn hang(doc: &Doc) -> Command {
+pub(super) fn hang(doc: &Doc) -> Command {
     let front = doc.piece_named(block::FRONT).expect("the block draws one");
     let ends = ["cintura_cf", "cintura_lat"]
         .map(|label| doc.shows_label(front, label).expect("the block names it"));

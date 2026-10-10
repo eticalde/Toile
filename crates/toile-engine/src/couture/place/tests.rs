@@ -26,7 +26,7 @@ fn spire() -> ShapePipeline {
 
 /// The strip walked over `order`, let go at `stand` with the crest at 0.20.
 fn layout(order: &[(usize, f64)], pipes: &[&ShapePipeline], closed: bool, stand: f32) -> Layout {
-    let round = Round::over(order, pipes, closed, 0.005).expect("the pieces have widths");
+    let round = Round::over(order, pipes, closed, 0.005, None).expect("the pieces have widths");
     Layout::on(round, [0.0, 0.0], stand, 0.20, pipes.len())
 }
 
@@ -173,7 +173,7 @@ fn a_product_that_comes_to_a_point_is_placed_to_its_apex() {
     // ordinate puts it: with nothing holding a product up it hangs by its
     // highest line, and for this one that line is the apex. Read as a refusal
     // there, every wrap came out empty and the walk placed no piece at all.
-    let round = Round::over(&[(0, 1.0), (1, -1.0)], &[&pipe, &pipe], true, 0.005)
+    let round = Round::over(&[(0, 1.0), (1, -1.0)], &[&pipe, &pipe], true, 0.005, None)
         .expect("both gores have widths");
     let hangs = Layout::on(round, [0.0, 0.0], 1.0, apex[1], 2);
     assert!(

@@ -2,6 +2,7 @@ use toile_anny::asset::RingId;
 use toile_anny::measure;
 
 use super::BodyMesh;
+use crate::draft::MeasureSet;
 
 /// One of the body's own measurement rings, as a placement reads it.
 ///
@@ -55,6 +56,19 @@ pub(crate) fn at_station<'a>(belts: &'a [Belt], station: &str) -> Option<&'a Bel
     belts.get(super::tape::ring_of(station)? as usize)
 }
 
+/// The catalogue girth that names `belt` on this body; `None` for a belt that
+/// is not one of `belts`.
+///
+/// The one reading that goes the other way, and it asks which of the body's own
+/// rings this *is* rather than which one measures the same. Two rings of equal
+/// girth at equal height are a body a slider can draw, and naming one of them
+/// for the other would print a station nobody wrote.
+pub(crate) fn station_of(belts: &[Belt], belt: &Belt) -> Option<&'static str> {
+    MeasureSet::GIRTHS
+        .into_iter()
+        .find(|name| at_station(belts, name).is_some_and(|ring| std::ptr::eq(ring, belt)))
+}
+
 /// Which ring a garment hanging by `hangs_by` metres of cloth, `widest`
 /// metres round at its fullest and `rise` metres deep is worn at; `None` for
 /// a body that carries no rings.
@@ -105,7 +119,6 @@ mod tests {
     )]
 
     use super::*;
-    use crate::draft::MeasureSet;
 
     /// Heights and girths in the order a body has them, top down.
     fn body() -> Vec<Belt> {
@@ -175,6 +188,31 @@ mod tests {
         assert_eq!(girth("estatura"), None, "a plumb line is not a ring");
         assert_eq!(girth("tiro"), None, "and neither is a length");
         assert_eq!(girth("waist"), None, "nor a name off the catalogue");
+    }
+
+    /// And the same ring answers to its own name when it is asked the other
+    /// way, which is what lets a placement say which ring it chose and which
+    /// one the document had asked for.
+    #[test]
+    fn the_ring_under_a_station_names_that_station_back() {
+        let body: Vec<Belt> = RingId::ALL
+            .iter()
+            .map(|&id| Belt {
+                girth: f64::from(id as u8),
+                height: 0.0,
+                centre: [0.0, 0.0],
+            })
+            .collect();
+        for girth in MeasureSet::GIRTHS {
+            let ring = at_station(&body, girth).expect("every catalogue girth is a ring");
+            assert_eq!(station_of(&body, ring), Some(girth));
+        }
+        let stranger = Belt {
+            girth: 0.0,
+            height: 0.0,
+            centre: [0.0, 0.0],
+        };
+        assert_eq!(station_of(&body, &stranger), None, "not one of this body's");
     }
 
     /// And every girth the catalogue names finds one, which is what the

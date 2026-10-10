@@ -104,9 +104,15 @@ fn table(
         }
         asked
     }));
-    let faults = session.seam_faults();
+    // Both read off the cloth the session is standing on, and read once: the
+    // panel asks the placement rather than working either of them out, so a
+    // section cannot come to disagree with what the garment does.
+    let read = inspector::Read {
+        faults: session.seam_faults(),
+        headless: &session.headless(),
+    };
     let asked = right_panel(ui, theme, |ui| {
-        inspector::show(ui, theme, draft, faults, active, state, paper)
+        inspector::show(ui, theme, draft, read, active, state, paper)
     });
     // The panel brackets its own entries: a field confirmed is one of its own
     // under its own name, and a rail dragged holds one open across frames. A

@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::{
     Axis, Binding, BodyShape, Dart, DartKey, DartWedge, DrawnWedge, EdgeAnchor, Elastic,
-    ElasticKey, Grain, Hang, HangKey, Identity, InternalLine, LineEdit, LineKey, LineKind,
+    ElasticKey, Grain, Hang, HangKey, Heading, Identity, InternalLine, LineEdit, LineKey, LineKind,
     MannequinKey, MeasureSet, Notch, NotchKey, Origin, Piece, PieceKey, Pin, PinKey, Placement,
     Point, PointKey, Seam, SeamKey, SegmentEdit, Symmetry, SymmetryKey, VariableKey,
 };
@@ -124,6 +124,9 @@ pub enum Command {
     RemoveHang { hang: HangKey },
     /// Writes which of the body's rings a stretch hangs from.
     SetHangStation { hang: HangKey, to: String },
+    /// Writes which way round the body a hung stretch faces, or takes the
+    /// heading off and leaves it hanging from the ring alone.
+    SetHangHeading { hang: HangKey, to: Option<Heading> },
     /// Draws a line on a piece that the pattern does not cut.
     ///
     /// The line travels as an edit rather than as an `InternalLine`, for the

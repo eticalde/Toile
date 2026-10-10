@@ -5,8 +5,8 @@ mod stand;
 
 use super::*;
 use crate::draft::{
-    Axis, Binding, Command, Dart, DartWedge, Doc, FoldDirection, Identity, Piece, Point, SeamKey,
-    SegmentEdit, WedgeNode, Winding, block,
+    Axis, Binding, Command, Dart, DartWedge, Doc, FoldDirection, Identity, Piece, Point, PointKey,
+    SeamKey, SegmentEdit, WedgeNode, Winding, block,
 };
 
 /// A blank table adopts the first drawn piece: an empty piece lands, its

@@ -42,8 +42,8 @@ fn skewed(width: f64, slant: f64, lo: f64, hi: f64) -> ShapePipeline {
 fn every_hoop_is_as_long_as_the_cloth_that_height_carries() {
     let (front, back) = (half(0.30), half(0.30));
     let pipes = [&front, &back];
-    let round =
-        Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005).expect("both halves have a width");
+    let round = Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005, None)
+        .expect("both halves have a width");
     for k in 0..=10 {
         let y = -0.50 * f64::from(k) / 10.0;
         let hoop = TAU * round.radius(y);
@@ -67,8 +67,8 @@ fn every_hoop_is_as_long_as_the_cloth_that_height_carries() {
 fn a_closed_strip_comes_back_to_where_it_started() {
     let (front, back) = (half(0.30), half(0.30));
     let pipes = [&front, &back];
-    let round =
-        Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005).expect("both halves have a width");
+    let round = Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005, None)
+        .expect("both halves have a width");
     // Read away from the very top and bottom, where the mesh's boundary
     // cuts the piece's corners and its edge stops being where the drawing
     // put it: the two sides of the centre seam are the pieces' own left
@@ -91,7 +91,8 @@ fn a_closed_strip_comes_back_to_where_it_started() {
 fn room_opens_the_bands_that_asked_and_leans_no_further() {
     let front = half(0.30);
     let pipes = [&front];
-    let mut round = Round::over(&[(0, 1.0)], &pipes, false, 0.005).expect("the half has a width");
+    let mut round =
+        Round::over(&[(0, 1.0)], &pipes, false, 0.005, None).expect("the half has a width");
     let flat = round.radius(-0.25);
     assert!(round.open(&[-0.25], 0.005, 1.0), "the band opened");
     assert!(
@@ -119,7 +120,8 @@ fn room_opens_the_bands_that_asked_and_leans_no_further() {
 fn a_band_already_at_the_ceiling_is_not_opened_again() {
     let front = half(0.30);
     let pipes = [&front];
-    let mut round = Round::over(&[(0, 1.0)], &pipes, false, 0.005).expect("the half has a width");
+    let mut round =
+        Round::over(&[(0, 1.0)], &pipes, false, 0.005, None).expect("the half has a width");
     let mut rounds = 0;
     while round.open(&[-0.25], 0.005, 0.02) {
         rounds += 1;
@@ -133,10 +135,10 @@ fn a_band_already_at_the_ceiling_is_not_opened_again() {
 fn a_piece_outside_the_walk_has_no_turn() {
     let front = half(0.30);
     let pipes = [&front];
-    let round = Round::over(&[(0, 1.0)], &pipes, false, 0.005).expect("the half has a width");
+    let round = Round::over(&[(0, 1.0)], &pipes, false, 0.005, None).expect("the half has a width");
     assert_eq!(round.at(1, [0.0, 0.0]), None);
     assert!(
-        Round::over(&[], &pipes, false, 0.005).is_none(),
+        Round::over(&[], &pipes, false, 0.005, None).is_none(),
         "and a walk with nothing in it is no surface at all"
     );
 }
@@ -147,7 +149,8 @@ fn a_piece_outside_the_walk_has_no_turn() {
 fn inside_the_whole_range_the_hoop_is_exactly_the_cloth() {
     let (one, two) = (gore(0.60, 0.10, 0.0, 1.00), strap(0.05, 0.20, 1.00));
     let pipes = [&one, &two];
-    let round = Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005).expect("both have widths");
+    let round =
+        Round::over(&[(0, 1.0), (1, -1.0)], &pipes, true, 0.005, None).expect("both have widths");
     let (lo, hi) = (
         round.whole.at(f64::NEG_INFINITY),
         round.whole.at(f64::INFINITY),
@@ -165,3 +168,6 @@ fn inside_the_whole_range_the_hoop_is_exactly_the_cloth() {
 
 /// What the surface does above and below the range the strip is whole in.
 mod flap;
+
+/// What a declared heading does to the surface, and what it refuses to do.
+mod pinned;

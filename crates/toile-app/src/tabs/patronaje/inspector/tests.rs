@@ -80,6 +80,7 @@ mod elastic;
 mod exports;
 mod fold;
 mod hang;
+mod heading;
 mod inner;
 mod insert;
 mod listing;

@@ -7,7 +7,7 @@ mod room;
 mod round;
 mod whole;
 
-pub use round::Round;
+pub use round::{Pin, Round};
 
 /// Where one piece's own width runs once the product is rolled round the body.
 #[derive(Debug, Clone, Copy)]
@@ -26,8 +26,8 @@ pub struct Wrap {
     pub sense: f64,
 }
 
-/// Where a sewn product is let go: the surface it is rolled onto, and every
-/// piece's place on it.
+/// Where one ring of a sewn product is let go: the surface it is rolled onto,
+/// and every piece's place on it.
 ///
 /// Rolling is exact along a hoop and not down a meridian. Along a hoop it is
 /// exact by construction — the arc at any ordinate is as long as the cloth
@@ -70,6 +70,11 @@ pub struct Layout {
     pub crest: f64,
     /// One entry per piece, in the order the combined state holds them;
     /// `None` for a piece the seams do not place.
+    ///
+    /// And `None` for a piece of this product that goes round some other ring.
+    /// A shirt's body goes round the chest and its collar round the neck, so a
+    /// product is placed as one of these per declared station, each holding the
+    /// pieces of its own ring alone. Most garments are one.
     pub wraps: Vec<Option<Wrap>>,
     /// The surface the strip is rolled onto, and where the strip lies on it.
     ///

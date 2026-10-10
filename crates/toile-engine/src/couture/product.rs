@@ -28,11 +28,18 @@ pub fn offsets(pipelines: &[&ShapePipeline]) -> Vec<u32> {
 /// exactly as one piece is let go on its own: centred on its own vertices and
 /// released flat at `height`. That second branch is the arithmetic the drape
 /// goldens hash, reached with nothing added to anything.
-pub fn drop_all(pipelines: &[&ShapePipeline], height: f32, around: Option<&Layout>) -> State {
+///
+/// A ring per declared station rather than one for the product, because a
+/// shirt's body goes round the chest and its collar round the neck. The rings
+/// hold disjoint pieces, so the first that answers for a piece is the only one
+/// that can; a product on one ring is the single surface it always was.
+pub fn drop_all(pipelines: &[&ShapePipeline], height: f32, around: &[Layout]) -> State {
     let mut state = State::new(pipelines.iter().map(|pipe| pipe.pos2d.len()).sum());
     let mut base = 0;
     for (at, pipe) in pipelines.iter().enumerate() {
-        let placed = around.is_some_and(|layout| layout.wrap_into(&mut state, base, pipe, at));
+        let placed = around
+            .iter()
+            .any(|layout| layout.wrap_into(&mut state, base, pipe, at));
         if !placed {
             seed::release_into(&mut state, base, pipe, height);
         }
@@ -119,7 +126,7 @@ mod tests {
         axis: [f32; 2],
         stand: f32,
     ) -> Layout {
-        let round = super::super::place::Round::over(order, pipes, true, 0.005)
+        let round = super::super::place::Round::over(order, pipes, true, 0.005, None)
             .expect("the rectangles have widths");
         Layout::on(round, axis, stand, 0.20, pipes.len())
     }
@@ -146,7 +153,7 @@ mod tests {
         assert_eq!(combined.strain_sweeps, alone.strain_sweeps);
 
         assert_eq!(
-            position_hash(&drop_all(&one, DROP_HEIGHT, None)),
+            position_hash(&drop_all(&one, DROP_HEIGHT, &[])),
             position_hash(&drop_state(&pipe, DROP_HEIGHT)),
             "the seeding the drape golden hashes has to come back bit for bit"
         );
@@ -163,7 +170,7 @@ mod tests {
         // shape a lone panel of a product comes out as.
         let empty = placed(&[&pipe, &pipe], &[(1, 1.0)], [0.4, -0.3], 0.9);
         assert_eq!(
-            position_hash(&drop_all(&one, DROP_HEIGHT, Some(&empty))),
+            position_hash(&drop_all(&one, DROP_HEIGHT, std::slice::from_ref(&empty))),
             position_hash(&drop_state(&pipe, DROP_HEIGHT))
         );
     }
@@ -174,7 +181,7 @@ mod tests {
     fn a_placed_piece_is_rolled_onto_the_stand() {
         let pipe = pipeline(0.30, 0.20);
         let around = placed(&[&pipe], &[(0, 1.0)], [0.0, 0.0], DROP_HEIGHT);
-        let state = drop_all(&[&pipe], DROP_HEIGHT, Some(&around));
+        let state = drop_all(&[&pipe], DROP_HEIGHT, std::slice::from_ref(&around));
         for i in 0..state.len() {
             let r = f64::from(state.px[i].hypot(state.pz[i]));
             let asked = around.round.radius(pipe.pos2d[i][1]);
@@ -208,7 +215,7 @@ mod tests {
         assert!(cons.b[edges..].iter().all(|&v| v >= na));
         assert_eq!(cons.rest[edges..], alone.rest[..]);
 
-        let state = drop_all(&both, DROP_HEIGHT, None);
+        let state = drop_all(&both, DROP_HEIGHT, &[]);
         let dropped = drop_state(&back, DROP_HEIGHT);
         assert_eq!(state.len(), front.pos2d.len() + back.pos2d.len());
         assert_eq!(state.px[na as usize..], dropped.px[..]);

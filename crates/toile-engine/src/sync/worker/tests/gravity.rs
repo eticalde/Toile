@@ -39,7 +39,7 @@ fn panel() -> ShapePipeline {
 /// Both halves come from the same release, so at `apart` of zero the sewn
 /// pairs stand in one place and the product is shut before it is let go.
 fn halves(pipe: &ShapePipeline, apart: f32, sewn: bool) -> (State, Seams) {
-    let mut state = couture::drop_all(&[pipe, pipe], HEIGHT, None);
+    let mut state = couture::drop_all(&[pipe, pipe], HEIGHT, &[]);
     let base = pipe.pos2d.len();
     for i in base..state.len() {
         state.px[i] += apart;

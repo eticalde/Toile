@@ -146,3 +146,38 @@ fn a_product_of_one_piece_is_still_let_go_flat() {
     let height = session.collider().release_height();
     assert!(at.iter().all(|p| (p[1] - height).abs() < 1.0e-7));
 }
+
+/// A panel drawn beside a garment and sewn to nothing does not stop the
+/// garment being placed, and is not counted against it.
+///
+/// The limit on the rule that a group nobody declared is placed only where it
+/// is the product: what "the product" counts is the pieces somebody sewed. A
+/// facing not yet sewn on, a pocket bag drawn for later, a second piece
+/// started — every one of those sits on the table beside a garment that is
+/// finished, and the one strip walk never let any of them take it off the
+/// body. Measured by the ring and by the count, because either alone would
+/// pass on a garment let go flat with nothing said about it.
+#[test]
+fn a_panel_sewn_to_nothing_does_not_take_the_garment_off_the_body() {
+    let (plain, _, _) = trousers();
+    let ring = plain.layout().expect("the seams place the product");
+    let mut doc = plain
+        .draft()
+        .expect("the block has a document")
+        .doc()
+        .clone();
+    let corners = [(300.0, 0.0), (340.0, 0.0), (340.0, 50.0), (300.0, 50.0)];
+    let points: Vec<PointKey> = corners
+        .iter()
+        .map(|&(x, y)| doc.points.insert(Point::at(x, y)))
+        .collect();
+    doc.pieces
+        .insert(Piece::polygon("Vista", points, Winding::Cw));
+    let beside = Session::from_doc(doc, Collider::demo()).expect("it drapes too");
+
+    let with = beside.layout().expect("the garment is still placed");
+    assert_eq!(with.stand.to_bits(), ring.stand.to_bits());
+    assert_eq!(with.radius.to_bits(), ring.radius.to_bits());
+    assert_eq!(with.crest.to_bits(), ring.crest.to_bits());
+    assert_eq!(beside.adrift(), 0, "the loose panel is nobody's to place");
+}

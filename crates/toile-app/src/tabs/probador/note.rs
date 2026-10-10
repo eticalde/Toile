@@ -1,5 +1,6 @@
 use toile_engine::body::Station;
 use toile_engine::body::bake::Crossings;
+use toile_engine::session::{Elsewhere, Loose};
 use toile_engine::sync::Hanging;
 
 use crate::fitting::Fitting;
@@ -72,6 +73,60 @@ pub fn hanging(held: Option<Hanging>) -> Option<String> {
         format!("{:.1} cm", gap * 100.0)
     };
     Some(format!("{runs} {run} · {off} del anillo"))
+}
+
+/// Where the product was let go, when the ring it was asked for is not the
+/// ring its own size points at: nothing at all when the two agree.
+///
+/// Both names, because either alone is half the sentence. The declared one won
+/// and the garment is there now, so this is not a complaint — it is the reading
+/// that keeps a garment put down a hand's breadth from where it was drafted
+/// for from being a silence. Quiet on agreement for the reason [`crossed`] is
+/// quiet on a body that only crosses under its soles.
+pub fn worn(elsewhere: Option<&Elsewhere>) -> Option<String> {
+    let Elsewhere { declared, inferred } = elsewhere?;
+    Some(format!("{declared} · inferido {inferred}"))
+}
+
+/// How much bigger than the cloth on it a ring had to be opened, and the ring
+/// it was: nothing at all for a garment let go on a hoop near its own size.
+///
+/// Not a complaint about the placement, which is doing its work: the opening
+/// walk lets a surface out until the person under it is clear. It is the one
+/// symptom of declaring the wrong ring, and the only form that mistake can
+/// reach anybody in — a 40 cm panel hung from this body's waist comes off an
+/// 83.6 cm hoop and covers less than half of it. Quiet for the reason
+/// [`crossed`] is quiet on a body that only crosses under its soles: every
+/// garment this tree places today reads under 1.2×.
+pub fn loose(read: Option<&Loose>) -> Option<String> {
+    let read = read?;
+    let ring = match &read.station {
+        Some(station) => format!(" \u{b7} {station}"),
+        None => String::new(),
+    };
+    Some(format!("{:.1}\u{d7} su tela{ring}", read.hoop / read.cloth))
+}
+
+/// How many pieces of the product the release could not put on the body:
+/// nothing at all when it placed every one of them.
+///
+/// A count and not a verdict, for the reason [`hanging`] gives one. What is
+/// behind it is a ring of the garment one of whose pieces carries three of that
+/// ring's own seams — a shirt's back under a collar nobody said where to put —
+/// and those pieces are let go flat over the person instead of on them. That is
+/// worth a reading: refusing to drape the garment would be worth less, and
+/// saying nothing is how a garment comes to be a metre overhead with the bar
+/// reporting a good day.
+///
+/// Quiet at zero, which is nearly every product and every launch: the document
+/// the app opens is sewn into one chain, so the box takes no room on the bar
+/// until the day a person draws a piece it cannot place.
+pub fn adrift(pieces: usize) -> Option<String> {
+    if pieces == 0 {
+        return None;
+    }
+    let piece = if pieces == 1 { "pieza" } else { "piezas" };
+    Some(format!("{pieces} {piece} sin sitio"))
 }
 
 /// A station as a person names that part of a body.

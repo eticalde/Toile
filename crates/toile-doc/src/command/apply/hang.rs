@@ -1,5 +1,5 @@
 use super::range::stretch;
-use crate::{Applied, ChangeClass, Command, Doc, DocError, Hang, HangKey, Identity};
+use crate::{Applied, ChangeClass, Command, Doc, DocError, Hang, HangKey, Heading, Identity};
 
 /// Hangs a stretch of contour from a station of the body.
 ///
@@ -64,6 +64,37 @@ pub(crate) fn set_station(doc: &mut Doc, hang: HangKey, to: String) -> Result<Ap
     let piece = held.at.head.piece;
     Ok(Applied {
         inverse: Command::SetHangStation { hang, to: from },
+        touched: vec![piece],
+        class: ChangeClass::Shape,
+    })
+}
+
+/// Writes which way round the body a hung stretch faces, or takes the heading
+/// off.
+///
+/// One edit for both, because the heading is one field and `None` is the value
+/// it had before anybody declared one: a second command to clear it would be a
+/// second inverse to keep in step, and the undo of a declaration is the value
+/// that was there.
+pub(crate) fn set_heading(
+    doc: &mut Doc,
+    hang: HangKey,
+    to: Option<Heading>,
+) -> Result<Applied, DocError> {
+    // Before the arena is touched, so a turn outside the one lap there is
+    // leaves the document exactly as it was — stamp included, which is what a
+    // refused edit on a version 8 file turns on.
+    if let Some(heading) = to {
+        heading.check()?;
+    }
+    let held = doc
+        .hangs
+        .get_mut(hang)
+        .ok_or_else(|| DocError::stale(hang))?;
+    let from = std::mem::replace(&mut held.heading, to);
+    let piece = held.at.head.piece;
+    Ok(Applied {
+        inverse: Command::SetHangHeading { hang, to: from },
         touched: vec![piece],
         class: ChangeClass::Shape,
     })

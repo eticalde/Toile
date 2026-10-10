@@ -92,6 +92,19 @@ pub const VERSION_DARTED: u32 = 9;
 /// for.
 pub const VERSION_CUT: u32 = 10;
 
+/// The format version of a document in which a hang says which way round the
+/// body its run faces.
+///
+/// Under the cut's rule it takes the next number, and it takes it
+/// conditionally: the heading is one optional field of a hang, so a document
+/// that hangs without declaring one writes the bytes and the stamp it wrote
+/// before any of this existed. What a build that reads version 10 would lose is
+/// the heading, in silence, and then open the product with the turn starting at
+/// whichever panel it happens to hold first — measured on one three-panel
+/// blouse, 44.6° round with a front stored first and 180.0°, the garment back
+/// to front, with the back. Saving would make that the drawing.
+pub const VERSION_HEADED: u32 = 11;
+
 impl Doc {
     /// The format version this document is written in.
     ///
@@ -110,6 +123,14 @@ impl Doc {
         let folded = (!self.symmetries.is_empty()).then_some(VERSION_FOLDED);
         let hung = (!self.hangs.is_empty()).then_some(VERSION_HUNG);
         let darted = (!self.darts.is_empty()).then_some(VERSION_DARTED);
+        // A hang's own two numbers, because the heading is a field of one and
+        // not an entity of its own: hanging asks for its version, and saying
+        // which way the run faces asks for the later one on top of it.
+        let headed = self
+            .hangs
+            .iter()
+            .any(|(_, hang)| hang.heading.is_some())
+            .then_some(VERSION_HEADED);
         bodies
             .chain(pieces)
             .chain(elastic)
@@ -117,6 +138,7 @@ impl Doc {
             .chain(folded)
             .chain(hung)
             .chain(darted)
+            .chain(headed)
             .max()
             .unwrap_or(VERSION)
     }
@@ -142,6 +164,7 @@ mod tests {
             VERSION_HUNG,
             VERSION_DARTED,
             VERSION_CUT,
+            VERSION_HEADED,
         ];
         for (at, number) in numbers.iter().enumerate() {
             assert_eq!(*number, at as u32 + 1, "version {at}");

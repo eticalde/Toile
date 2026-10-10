@@ -1,9 +1,15 @@
 use std::f64::consts::TAU;
 
+use heading::{into, sense_of};
+
 use super::super::pipeline::ShapePipeline;
 use super::profile::Profile;
 use super::room::Room;
 use super::whole::Whole;
+
+mod heading;
+
+pub use heading::Pin;
 
 /// One piece as the strip crosses it: which way round it runs, and how wide
 /// its cloth is at every ordinate.
@@ -35,6 +41,25 @@ pub struct Round {
     panels: Vec<Panel>,
     /// Whether the strip closes into a tube.
     closed: bool,
+    /// The line of cloth a declared heading fixes, once the walk that carries
+    /// it has been found; `None` for a product that declares none.
+    ///
+    /// Its turn is added as an angle and after the division by the hoop, which
+    /// is why the surface survives a heading at all: the whole of it rotates
+    /// rigidly and every meridian stays one. Added to the walked cloth instead,
+    /// the same declaration would come to a different angle on every hoop —
+    /// 1.0400 m of cloth at the chest against 1.2570 m at the hip — and the
+    /// centre front would spiral down the body.
+    pin: Option<Pin>,
+    /// Which way the turn grows as the walk goes on: `1.0` with it, `-1.0`
+    /// against it.
+    ///
+    /// `1.0` with nothing declared, which is every release there was before a
+    /// heading could be written. It is the pinned piece's own declaration read
+    /// against the direction the seams walk that piece, because those are two
+    /// different facts: a run declared leftward on a panel the walk crosses
+    /// backwards is a strip that has to go round the other way.
+    winds: f64,
     room: Room,
     whole: Whole,
 }
@@ -44,7 +69,7 @@ impl Round {
     ///
     /// `order` is the walk: which piece, and `1.0` or `-1.0` for which way its
     /// rising abscissa runs. `band` is how tall one band of the clearance table
-    /// is.
+    /// is. `pin` is the line a declared heading fixes, or `None`.
     ///
     /// `None` when the walk is empty or a piece of it is too degenerate to have
     /// a width, which is the same answer the strip walk itself gives: the
@@ -54,6 +79,7 @@ impl Round {
         pipes: &[&ShapePipeline],
         closed: bool,
         band: f64,
+        pin: Option<Pin>,
     ) -> Option<Round> {
         let mut panels: Vec<Panel> = Vec::with_capacity(order.len());
         for &(piece, sense) in order {
@@ -64,11 +90,20 @@ impl Round {
             });
         }
         panels.first()?;
+        // A pin on a piece this walk does not carry is dropped here and not
+        // taken into `at`, where it would match no panel: the turn would then
+        // open at a cloth of zero and the garment come out turned by whatever
+        // the storage order gave it — 44.6° measured, in silence — or, with no
+        // zero to be found at all, go to the flat release a metre overhead.
+        let pin = pin.filter(|pin| panels.iter().any(|panel| panel.piece == pin.piece));
+        let winds = pin.map_or(1.0, |pin| pin.leftward * sense_of(&panels, pin.piece));
         let room = Room::over(spanned(&panels), band);
         let whole = Whole::of(panels.iter().map(|panel| panel.cloth.span()));
         Some(Round {
             panels,
             closed,
+            pin,
+            winds,
             room,
             whole,
         })
@@ -152,9 +187,17 @@ impl Round {
         spanned(&self.panels)
     }
 
-    /// The strip as the walk holds it: each piece, and which way round it runs.
+    /// The strip as the surface holds it: each piece, and whether its rising
+    /// abscissa runs with the turn or against it.
+    ///
+    /// The walk's own sense times the way the turn grows, and not the walk's
+    /// alone. A declared heading can send the strip round the other way, and
+    /// then a panel the walk crosses forwards is a panel whose cloth runs
+    /// backwards on the body — which is the question this answers.
     pub(super) fn strip(&self) -> impl Iterator<Item = (usize, f64)> + '_ {
-        self.panels.iter().map(|panel| (panel.piece, panel.sense))
+        self.panels
+            .iter()
+            .map(|panel| (panel.piece, panel.sense * self.winds))
     }
 
     /// Where a pattern point of `piece` lands: the turn it sits at, in radians,
@@ -165,10 +208,10 @@ impl Round {
     /// rather than at the one a ring was sized from: two pieces sharing an
     /// ordinate share the whole turn, however wide either is.
     ///
-    /// The turn opens at the first panel's own middle, read at that ordinate
-    /// rather than once at the crest, so that line comes out a meridian and the
-    /// product faces the same way at every height. Read it once and a strip
-    /// whose pieces do not all reach the crest comes out turned.
+    /// It opens at the pinned line where a heading declares one, and at the
+    /// first panel's own middle where none does — read at the point's own
+    /// ordinate and never once at the crest, so that line comes out a meridian
+    /// and the product faces one way at every height instead of at one.
     ///
     /// All three readings come from [`Round::reach`], so the hoop a point is
     /// divided by is the hoop it is placed on: read the widths at one ordinate
@@ -184,16 +227,13 @@ impl Round {
         let mut found = None;
         for (k, panel) in self.panels.iter().enumerate() {
             let (lo, hi) = self.reach(panel, p[1]);
-            if k == 0 {
-                opens = (hi - lo) / 2.0;
+            match self.pin {
+                Some(pin) if pin.piece == panel.piece => opens = hoop + into(panel, pin.at, lo, hi),
+                None if k == 0 => opens = (hi - lo) / 2.0,
+                _ => {}
             }
             if panel.piece == piece {
-                let into = if panel.sense > 0.0 {
-                    p[0] - lo
-                } else {
-                    hi - p[0]
-                };
-                found = Some(hoop + into);
+                found = Some(hoop + into(panel, p[0], lo, hi));
             }
             hoop += hi - lo;
         }
@@ -202,22 +242,23 @@ impl Round {
         // per vertex per round, and reading the extents again to size the
         // radius doubled what a placement costs for nothing.
         let radius = hoop / TAU + self.room.at(p[1]);
+        let from = self.pin.map_or(0.0, |pin| pin.turn);
         if hoop <= f64::EPSILON {
             // A hoop that has closed has one place on it, and every vertex of
             // that ordinate belongs there: that is what a point is. A gore's
             // apex and a tab's tip are ordinary pattern shapes, and refusing
             // them took the whole piece off the body — one `None` here and
             // `wrap_into` drops the lot to the flat release, 1.2 m up.
-            return Some((0.0, radius));
+            return Some((from, radius));
         }
-        let turn = if self.closed {
+        let along = if self.closed {
             TAU * (walked - opens) / hoop
         } else {
             // An open strip has no whole turn to divide, so its pieces abut at
             // the surface's own size, exactly as they abutted on the cylinder.
             (walked - opens) / radius
         };
-        Some((turn, radius))
+        Some((from + self.winds * along, radius))
     }
 
     /// Opens the bands the given ordinates fall in, none of them past

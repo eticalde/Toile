@@ -1,5 +1,7 @@
 #![allow(missing_docs, reason = "a test crate publishes no API surface")]
 
+/// A blouse of three panels at one height, and which ring it is let go on.
+mod blouse;
 /// The same habits over a body at the edge of what the sliders can draw.
 mod extremes;
 /// Whether a garment's seams met: the one reading that says it fits.
@@ -15,6 +17,8 @@ mod leg;
 mod mismatch;
 /// The same habits over a product of two sewn pieces.
 mod product;
+/// How much bigger than its own cloth every ring this suite places came off.
+mod ring;
 /// The tube skirt an elastic is proved on.
 mod skirt;
 /// The vocabulary every scene here is measured in.

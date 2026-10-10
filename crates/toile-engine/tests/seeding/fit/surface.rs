@@ -55,8 +55,8 @@ fn every_field_of(ring: Layout) -> (f64, f32, f64) {
 /// What is asserted instead is what the rule promises: the line the garment
 /// hangs by is let go on a hoop of its own length, no hoop anywhere is shorter
 /// than the cloth it carries, and the surface stands within the body's own
-/// height rather than over its crown. Which of the body's rings it stands at is
-/// sharper and is not asked here — `Collider::belts` is the crate's own.
+/// height rather than over its crown. Which ring it stands at is sharper, and
+/// `blouse/station.rs` asks it: these two declare no station.
 ///
 /// What is *not* asserted, though the name this test carried said it was: that
 /// nothing is released inside the person. Plenty is, and how far in is printed
